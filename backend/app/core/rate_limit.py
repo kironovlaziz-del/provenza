@@ -10,6 +10,8 @@ Used by /auth/login to slow down brute-force attempts both from a single
 IP and against a single email (in case the attacker rotates IPs).
 """
 
+import os
+
 from fastapi import HTTPException, Request, status
 from redis import Redis
 from redis.exceptions import RedisError
@@ -32,15 +34,30 @@ def _get_redis() -> Redis:
     )
 
 
+# Peers whose forwarding headers we believe: the reverse proxy (nginx) that
+# sits in front of uvicorn. Anything else could set X-Forwarded-For /
+# X-Real-IP to any value and walk around the per-IP limit.
+_TRUSTED_PROXIES = {
+    p.strip() for p in os.getenv("TRUSTED_PROXIES", "127.0.0.1,::1").split(",") if p.strip()
+}
+
+
 def _client_ip(request: Request) -> str:
-    # Trust X-Forwarded-For only if you sit behind a trusted proxy.
-    # For a direct-to-uvicorn deployment, request.client.host is correct.
-    forwarded = request.headers.get("x-forwarded-for")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
-    if request.client:
-        return request.client.host
-    return "unknown"
+    """The client address used for per-IP rate limiting.
+
+    Forwarding headers are honoured ONLY when the TCP peer is a trusted
+    proxy. nginx sets X-Real-IP to $remote_addr, which the client cannot
+    influence; as a fallback we take the LAST X-Forwarded-For entry (the
+    one appended by our proxy), never the first (client-controlled)."""
+    peer = request.client.host if request.client else "unknown"
+    if peer in _TRUSTED_PROXIES:
+        real_ip = (request.headers.get("x-real-ip") or "").strip()
+        if real_ip:
+            return real_ip
+        forwarded = request.headers.get("x-forwarded-for")
+        if forwarded:
+            return forwarded.split(",")[-1].strip()
+    return peer
 
 
 def enforce(
