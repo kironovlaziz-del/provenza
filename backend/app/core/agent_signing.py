@@ -76,3 +76,13 @@ def verify_payload(payload: Dict[str, Any], signature_b64: str, public_key_b64: 
         return True
     except (InvalidSignature, ValueError, Exception):
         return False
+
+
+def content_hash(obj) -> str:
+    """SHA-256 hex of the canonical JSON form of obj (dict, list or None).
+    Used to bind a recorded action to exactly the input/output that was
+    checked and signed, without putting the raw data in the signature."""
+    import hashlib
+    return hashlib.sha256(
+        json.dumps(obj, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()

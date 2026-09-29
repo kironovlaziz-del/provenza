@@ -140,6 +140,8 @@ class ActionCheckResponse(BaseModel):
     reason: str
     incident_type: Optional[str] = None
     policy_id: Optional[int] = None
+    check_id: Optional[str] = None        # single-use token for /actions/record
+    expires_at: Optional[datetime] = None
 
 
 class ActionRecordRequest(BaseModel):
@@ -151,6 +153,8 @@ class ActionRecordRequest(BaseModel):
     output: Optional[Dict[str, Any]] = None
     signature: Optional[str] = None
     duration_ms: Optional[int] = None
+    check_id: Optional[str] = None        # from /actions/check (required for keyed agents)
+    action_capabilities: List[str] = Field(default_factory=list)  # keyless path only
 
 
 class ActionDenyRequest(BaseModel):
@@ -168,6 +172,9 @@ class ActionOut(BaseModel):
     reason: Optional[str]
     duration_ms: Optional[int]
     created_at: datetime
+    check_id: Optional[int] = None
+    signed_payload: Optional[Dict[str, Any]] = None
+    signature: Optional[str] = None
 
     class Config:
         from_attributes = True

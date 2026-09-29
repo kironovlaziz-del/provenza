@@ -7,7 +7,7 @@ Ed25519 private key. Mirrors signed_payload in app/api/agents.py.
 import secrets
 import time
 
-from app.core.agent_signing import sign_payload
+from app.core.agent_signing import content_hash, sign_payload
 
 
 def delegation_body(from_agent, to_agent_id, task, caps, *, chain_id=None,
@@ -34,4 +34,30 @@ def delegation_body(from_agent, to_agent_id, task, caps, *, chain_id=None,
         "nonce": nonce,
         "issued_at": issued_at,
         "signature": sign_payload(payload, from_agent["private_key"]),
+    }
+
+
+def action_record_body(agent, check_id, tool_name, input_data, *, output=None,
+                       chain_id=None, action_type="tool_call", duration_ms=None):
+    """Signed /actions/record body, bound to a check_id. Mirrors
+    signed_payload in record_action_endpoint."""
+    payload = {
+        "check_id": check_id,
+        "agent_id": agent["id"],
+        "chain_id": chain_id,
+        "action_type": action_type,
+        "tool_name": tool_name,
+        "input_sha256": content_hash(input_data),
+        "output_sha256": content_hash(output),
+    }
+    return {
+        "agent_id": agent["id"],
+        "chain_id": chain_id,
+        "action_type": action_type,
+        "tool_name": tool_name,
+        "input": input_data,
+        "output": output,
+        "duration_ms": duration_ms,
+        "check_id": check_id,
+        "signature": sign_payload(payload, agent["private_key"]),
     }

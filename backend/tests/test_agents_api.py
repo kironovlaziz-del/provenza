@@ -13,7 +13,7 @@ import pytest_asyncio
 from httpx import AsyncClient
 
 from tests.conftest import _create_org_with_admin_and_approver, _login, auth_headers
-from tests.delegation_helpers import delegation_body
+from tests.delegation_helpers import action_record_body, delegation_body
 
 
 async def _register_agent(client, token, **over):
@@ -149,10 +149,17 @@ class TestDelegateAndActionsFlow:
             headers=auth_headers(admin_token),
         )
         assert pol.status_code == 200
-        # record an action -> should become pending_approval
+        # check first -> pending_approval + a single-use check_id
+        chk = await client.post(
+            "/api/v1/agents/actions/check",
+            json={"agent_id": agent["id"], "tool_name": "openai.chat", "input": {"model": "gpt-4o-mini"}},
+            headers=auth_headers(admin_token),
+        )
+        assert chk.status_code == 200 and chk.json()["decision"] == "pending_approval"
+        # record the action against that check, signed by the agent
         rec = await client.post(
             "/api/v1/agents/actions/record",
-            json={"agent_id": agent["id"], "tool_name": "openai.chat", "input": {"model": "gpt-4o-mini"}},
+            json=action_record_body(agent, chk.json()["check_id"], "openai.chat", {"model": "gpt-4o-mini"}),
             headers=auth_headers(admin_token),
         )
         assert rec.status_code == 200

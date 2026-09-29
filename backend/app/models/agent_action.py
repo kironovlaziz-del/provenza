@@ -31,6 +31,10 @@ class AgentAction(Base):
     reason = Column(Text)
     signature = Column(Text)
     duration_ms = Column(Integer)
+    # The /actions/check this action was recorded against, and the exact
+    # payload the agent signed - makes the action verifiable offline.
+    check_id = Column(Integer, ForeignKey("agent_action_checks.id"), index=True)
+    signed_payload = Column(JSONB)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
 
 
@@ -52,4 +56,33 @@ class AgentIncident(Base):
     severity = Column(String(20))
     details = Column(JSONB)
     resolved = Column(Boolean, nullable=False, default=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class ActionCheck(Base):
+    """
+    A policy verdict issued by /actions/check, bound to exactly one
+    proposed action (agent, chain, tool, input hash, capabilities). The
+    random token is handed to the agent and must be presented - once, and
+    before expires_at - when the action is recorded. This is what makes
+    "the recorded action is the action that was checked" provable.
+    """
+
+    __tablename__ = "agent_action_checks"
+
+    id = Column(Integer, primary_key=True, index=True)
+    token = Column(String(64), nullable=False, unique=True, index=True)
+    org_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
+    agent_id = Column(Integer, ForeignKey("agents.id"), nullable=False)
+    chain_id = Column(Integer, ForeignKey("delegation_chains.id", ondelete="CASCADE"))
+    action_type = Column(String(50))
+    tool_name = Column(String(100))
+    input_sha256 = Column(String(64), nullable=False)
+    action_capabilities = Column(JSONB)
+    decision = Column(String(20), nullable=False)
+    reason = Column(Text)
+    incident_type = Column(String(50))
+    policy_id = Column(Integer, ForeignKey("agent_policies.id"))
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    used_at = Column(DateTime(timezone=True))
     created_at = Column(DateTime(timezone=True), server_default=func.now())

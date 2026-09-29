@@ -310,7 +310,14 @@ async def check_action_endpoint(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    decision = await AgentAudit(db).check(
+    """
+    Run the policy engine for a proposed action and issue a single-use
+    check_id bound to exactly this action (agent, chain, tool, input hash,
+    capabilities, verdict). /actions/record must present it, so what gets
+    recorded is provably the action that was checked.
+    """
+    audit = AgentAudit(db)
+    decision = await audit.check(
         org_id=current_user.org_id,
         agent_id=data.agent_id,
         chain_id=data.chain_id,
@@ -319,9 +326,20 @@ async def check_action_endpoint(
         input_data=data.input,
         action_capabilities=data.action_capabilities,
     )
+    chk = await audit.issue_check(
+        org_id=current_user.org_id,
+        agent_id=data.agent_id,
+        chain_id=data.chain_id,
+        action_type=data.action_type,
+        tool_name=data.tool_name,
+        input_data=data.input,
+        action_capabilities=data.action_capabilities,
+        decision=decision,
+    )
     return ActionCheckResponse(
         decision=decision.result, reason=decision.reason,
         incident_type=decision.incident_type, policy_id=decision.matched_policy_id,
+        check_id=chk.token, expires_at=chk.expires_at,
     )
 
 
@@ -332,22 +350,69 @@ async def record_action_endpoint(
     current_user: User = Depends(get_current_user),
 ):
     """
-    Check the action against policy AND persist it in one call, so a
-    recorded action always carries its policy verdict and a denial always
-    produces an incident. (A caller that only wants the verdict without
-    recording uses /actions/check.)
+    Persist an action together with its policy verdict.
+
+    Agents with a registered key (every agent created via /register) must:
+      1. call /actions/check first and receive a single-use check_id,
+      2. present that check_id here, for exactly the same action,
+      3. sign {check_id, agent_id, chain_id, action_type, tool_name,
+         input_sha256, output_sha256} with their Ed25519 key.
+    The stored verdict is the one issued at check time. Recording a
+    different action than the checked one raises an `action_mismatch`
+    incident. Keyless agents keep the cooperative path (verdict computed
+    here from the declared capabilities).
     """
+    from fastapi import HTTPException, status as st
+    from app.core.agent_signing import content_hash, verify_payload
+
     audit = AgentAudit(db)
-    decision = await audit.check(
-        org_id=current_user.org_id,
-        agent_id=data.agent_id,
-        chain_id=data.chain_id,
-        action_type=data.action_type,
-        tool_name=data.tool_name,
-        input_data=data.input,
-        action_capabilities=[],
-    )
-    action = await audit.record(
+    agent = await AgentRegistry(db).get_agent(data.agent_id, current_user.org_id)
+
+    if agent.public_key and not data.check_id:
+        raise HTTPException(
+            status_code=st.HTTP_401_UNAUTHORIZED,
+            detail="This agent has a registered public key; record requires a check_id from /actions/check",
+        )
+    if agent.public_key and not data.signature:
+        raise HTTPException(
+            status_code=st.HTTP_401_UNAUTHORIZED,
+            detail="This agent has a registered public key; actions must be signed",
+        )
+
+    check = None
+    signed_payload = None
+    if data.check_id:
+        signed_payload = {
+            "check_id": data.check_id,
+            "agent_id": data.agent_id,
+            "chain_id": data.chain_id,
+            "action_type": data.action_type,
+            "tool_name": data.tool_name,
+            "input_sha256": content_hash(data.input or {}),
+            "output_sha256": content_hash(data.output),
+        }
+        # Verify BEFORE consuming the check, so a forged request cannot
+        # burn a legitimate check_id.
+        if data.signature and not verify_payload(signed_payload, data.signature, agent.public_key or ""):
+            raise HTTPException(status_code=st.HTTP_400_BAD_REQUEST, detail="Invalid action signature")
+        check, decision = await audit.consume_check(
+            current_user.org_id, data.check_id,
+            agent_id=data.agent_id, chain_id=data.chain_id, action_type=data.action_type,
+            tool_name=data.tool_name, input_data=data.input,
+        )
+    else:
+        decision = await audit.check(
+            org_id=current_user.org_id,
+            agent_id=data.agent_id,
+            chain_id=data.chain_id,
+            action_type=data.action_type,
+            tool_name=data.tool_name,
+            input_data=data.input,
+            action_capabilities=data.action_capabilities,
+        )
+
+    verified = bool(check and data.signature)
+    return await audit.record(
         org_id=current_user.org_id,
         agent_id=data.agent_id,
         chain_id=data.chain_id,
@@ -355,11 +420,12 @@ async def record_action_endpoint(
         tool_name=data.tool_name,
         input_data=data.input,
         output_data=data.output,
-        signature=data.signature,
+        signature=data.signature if verified else None,
         duration_ms=data.duration_ms,
         decision=decision,
+        check_id=check.id if check else None,
+        signed_payload=signed_payload if verified else None,
     )
-    return action
 
 
 @router.get("/actions/", response_model=Page[ActionOut])

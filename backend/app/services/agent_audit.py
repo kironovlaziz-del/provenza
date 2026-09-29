@@ -2,6 +2,8 @@
 # Licensed under the Apache License, Version 2.0.
 # Part of Provenza — https://github.com/kironovlaziz-del/provenza
 
+import secrets
+from datetime import datetime, timedelta, timezone
 from typing import List, Optional, Tuple
 
 from fastapi import HTTPException, status
@@ -10,7 +12,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.agent import Agent, AgentPolicy
 from app.models.delegation import DelegationChain, DelegationHop
-from app.models.agent_action import AgentAction, AgentIncident
+from app.models.agent_action import AgentAction, AgentIncident, ActionCheck
+from app.core.agent_signing import content_hash
 from app.services.agent_policy_engine import (
     check_action,
     AgentView,
@@ -18,7 +21,11 @@ from app.services.agent_policy_engine import (
     ActionContext,
     ALLOWED,
     DENIED,
+    Decision,
 )
+
+# How long a /actions/check verdict stays usable for /actions/record.
+CHECK_TTL_SECONDS = 300
 
 
 class AgentAudit:
@@ -118,6 +125,8 @@ class AgentAudit:
         signature: Optional[str],
         duration_ms: Optional[int],
         decision=None,
+        check_id: Optional[int] = None,
+        signed_payload: Optional[dict] = None,
     ) -> AgentAction:
         """
         Persist an action row. If a Decision is supplied, its verdict and
@@ -138,6 +147,8 @@ class AgentAudit:
             reason=decision.reason if decision else None,
             signature=signature,
             duration_ms=duration_ms,
+            check_id=check_id,
+            signed_payload=signed_payload,
         )
         self.db.add(action)
 
@@ -156,6 +167,115 @@ class AgentAudit:
         await self.db.commit()
         await self.db.refresh(action)
         return action
+
+    async def issue_check(
+        self,
+        org_id: int,
+        agent_id: int,
+        chain_id: Optional[int],
+        action_type: Optional[str],
+        tool_name: Optional[str],
+        input_data: dict,
+        action_capabilities: List[str],
+        decision,
+    ) -> ActionCheck:
+        """Persist a verdict as a single-use, short-lived check bound to
+        exactly this action. The returned token is what the agent must
+        present to /actions/record."""
+        chk = ActionCheck(
+            token=secrets.token_urlsafe(32),
+            org_id=org_id,
+            agent_id=agent_id,
+            chain_id=chain_id,
+            action_type=action_type,
+            tool_name=tool_name,
+            input_sha256=content_hash(input_data or {}),
+            action_capabilities=sorted(action_capabilities or []),
+            decision=decision.result,
+            reason=decision.reason,
+            incident_type=decision.incident_type,
+            policy_id=decision.matched_policy_id,
+            expires_at=datetime.now(timezone.utc) + timedelta(seconds=CHECK_TTL_SECONDS),
+        )
+        self.db.add(chk)
+        await self.db.commit()
+        await self.db.refresh(chk)
+        return chk
+
+    async def consume_check(
+        self,
+        org_id: int,
+        token: str,
+        *,
+        agent_id: int,
+        chain_id: Optional[int],
+        action_type: Optional[str],
+        tool_name: Optional[str],
+        input_data: dict,
+    ):
+        """Validate and burn a check token for a recorded action. Returns
+        (check, Decision-from-check-time). Raises 404 unknown / 409 reused /
+        400 expired / 400 mismatch; a mismatch also raises an
+        `action_mismatch` incident, because recording something other than
+        what was checked is exactly the attack this binding exists for."""
+        res = await self.db.execute(
+            select(ActionCheck)
+            .where(ActionCheck.token == token, ActionCheck.org_id == org_id)
+            .with_for_update()
+        )
+        chk = res.scalar_one_or_none()
+        if not chk:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Unknown check_id")
+        if chk.used_at is not None:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="check_id already used")
+        now = datetime.now(timezone.utc)
+        if chk.expires_at <= now:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="check_id expired; call /actions/check again",
+            )
+
+        mismatched = [
+            name for name, checked, recorded in (
+                ("agent_id", chk.agent_id, agent_id),
+                ("chain_id", chk.chain_id, chain_id),
+                ("action_type", chk.action_type, action_type),
+                ("tool_name", chk.tool_name, tool_name),
+                ("input", chk.input_sha256, content_hash(input_data or {})),
+            )
+            if checked != recorded
+        ]
+        chk.used_at = now  # burned either way - no probing with one token
+        if mismatched:
+            self.db.add(
+                AgentIncident(
+                    org_id=org_id,
+                    chain_id=chk.chain_id,
+                    agent_id=chk.agent_id,
+                    incident_type="action_mismatch",
+                    severity="critical",
+                    details={
+                        "check_id": chk.id,
+                        "mismatched": mismatched,
+                        "checked_tool": chk.tool_name,
+                        "recorded_tool": tool_name,
+                        "recorded_by_agent": agent_id,
+                    },
+                )
+            )
+            await self.db.commit()
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Recorded action does not match its check: {', '.join(mismatched)}",
+            )
+
+        decision = Decision(
+            result=chk.decision,
+            reason=chk.reason or "",
+            incident_type=chk.incident_type,
+            matched_policy_id=chk.policy_id,
+        )
+        return chk, decision
 
     async def _get_action(self, action_id: int, org_id: int) -> AgentAction:
         result = await self.db.execute(
