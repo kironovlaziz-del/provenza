@@ -77,6 +77,9 @@ class DelegateRequest(BaseModel):
     chain_id: Optional[int] = None      # None = start a new chain (root delegation)
     signature: Optional[str] = None     # Ed25519 signature by the delegating agent
     expires_in: Optional[int] = None    # seconds
+    # Replay protection - both are part of the signed payload
+    nonce: Optional[str] = Field(default=None, min_length=16, max_length=128)
+    issued_at: Optional[int] = None     # unix seconds, set by the signing agent
 
 
 class DelegateResponse(BaseModel):

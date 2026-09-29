@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Text, Boolean, DateTime, ForeignKey, func
+from sqlalchemy import Column, Integer, String, Text, Boolean, DateTime, ForeignKey, func, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from app.core.database import Base
 
@@ -62,3 +62,18 @@ class DelegationHop(Base):
     signed_payload = Column(JSONB)
     verified = Column(Boolean, nullable=False, default=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class DelegationNonce(Base):
+    # Single-use nonces for signed delegations. The unique constraint makes a
+    # replayed request fail at the database level, even under concurrency.
+    __tablename__ = "delegation_nonces"
+    __table_args__ = (
+        UniqueConstraint("org_id", "from_agent_id", "nonce", name="uq_delegation_nonce"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    org_id = Column(Integer, ForeignKey("organizations.id"), nullable=False)
+    from_agent_id = Column(Integer, ForeignKey("agents.id", ondelete="CASCADE"), nullable=False)
+    nonce = Column(String(128), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False, index=True)

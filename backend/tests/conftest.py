@@ -224,3 +224,57 @@ async def approver_token(client: AsyncClient, org_and_users: dict) -> str:
 
 def auth_headers(token: str) -> dict:
     return {"Authorization": f"Bearer {token}"}
+
+
+# ---------------------------------------------------------------------------
+# Rate limiter isolation.
+# app/core/rate_limit.py talks to the Redis from .env - on a server that is
+# the PRODUCTION Redis. Without this, test logins (a) accumulate counters
+# across runs and hit 429, and (b) write rl:* keys into prod Redis.
+# Each test gets its own in-memory store; the limiter logic itself still runs.
+# ---------------------------------------------------------------------------
+class _FakePipeline:
+    def __init__(self, store):
+        self._store, self._ops = store, []
+
+    def incr(self, key):
+        self._ops.append(("incr", key))
+        return self
+
+    def expire(self, key, seconds, nx=False):
+        self._ops.append(("expire", key))
+        return self
+
+    def execute(self):
+        out = []
+        for op, key in self._ops:
+            if op == "incr":
+                self._store[key] = self._store.get(key, 0) + 1
+                out.append(self._store[key])
+            else:
+                out.append(True)
+        self._ops = []
+        return out
+
+
+class _FakeRedis:
+    def __init__(self, store):
+        self._store = store
+
+    def pipeline(self):
+        return _FakePipeline(self._store)
+
+    def delete(self, *keys):
+        for k in keys:
+            self._store.pop(k, None)
+
+    def close(self):
+        pass
+
+
+@pytest.fixture(autouse=True)
+def _isolated_rate_limit(monkeypatch):
+    from app.core import rate_limit
+    store: dict = {}
+    monkeypatch.setattr(rate_limit, "_get_redis", lambda: _FakeRedis(store))
+    yield store

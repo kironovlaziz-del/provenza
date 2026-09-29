@@ -13,6 +13,7 @@ import pytest_asyncio
 from httpx import AsyncClient
 
 from tests.conftest import _create_org_with_admin_and_approver, _login, auth_headers
+from tests.delegation_helpers import delegation_body
 
 
 async def _register_agent(client, token, **over):
@@ -116,7 +117,7 @@ class TestDelegateAndActionsFlow:
         # legit delegation (subset)
         deleg = await client.post(
             f"/api/v1/agents/{a['id']}/delegate",
-            json={"to_agent_id": b["id"], "task": "t", "delegated_capabilities": ["read"]},
+            json=delegation_body(a, b["id"], "t", ["read"]),
             headers=auth_headers(admin_token),
         )
         assert deleg.status_code == 200, deleg.text
@@ -125,7 +126,7 @@ class TestDelegateAndActionsFlow:
         # escalation is rejected over the wire
         bad = await client.post(
             f"/api/v1/agents/{a['id']}/delegate",
-            json={"to_agent_id": b["id"], "task": "bad", "delegated_capabilities": ["admin"]},
+            json=delegation_body(a, b["id"], "bad", ["admin"]),
             headers=auth_headers(admin_token),
         )
         assert bad.status_code == 403

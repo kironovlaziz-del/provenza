@@ -25,7 +25,7 @@ from app.models.document_chunk import DocumentChunk
 from app.models.discovered_service import DiscoveredService
 from app.models.service_connection import ServiceConnection
 from app.models.agent import Agent, AgentPolicy
-from app.models.delegation import DelegationChain, DelegationHop
+from app.models.delegation import DelegationChain, DelegationHop, DelegationNonce
 from app.models.agent_action import AgentAction, AgentIncident
 
 __all__ = [

@@ -157,6 +157,11 @@ async def kill_agent(
 
 # ========================= Delegation =========================
 
+# Replay protection for signed delegations
+DELEGATION_MAX_AGE_SECONDS = 300     # reject requests older than 5 minutes
+DELEGATION_CLOCK_SKEW_SECONDS = 30   # tolerate small clock drift
+
+
 @router.post("/{agent_id}/delegate", response_model=DelegateResponse)
 async def delegate(
     agent_id: int,
@@ -182,24 +187,75 @@ async def delegate(
         "task": data.task,
         "delegated_capabilities": sorted(data.delegated_capabilities or []),
         "chain_id": data.chain_id,
+        "nonce": data.nonce,
+        "issued_at": data.issued_at,
         "expires_in": data.expires_in,
     }
 
-    # Verify signature (if provided) against the delegating agent's key.
+    from fastapi import HTTPException, status as st
+    from sqlalchemy.exc import IntegrityError
+    from app.models.delegation import DelegationNonce
+
+    from_agent = await registry.get_agent(agent_id, current_user.org_id)
+    now = datetime.now(timezone.utc)
+
+    # 1. An agent with a registered public key MUST sign its delegations.
+    #    Keyless agents remain in cooperative (unsigned) mode.
+    if from_agent.public_key and not data.signature:
+        raise HTTPException(
+            status_code=st.HTTP_401_UNAUTHORIZED,
+            detail="This agent has a registered public key; delegations must be signed",
+        )
+
+    # 2. A signed delegation must carry replay-protection fields.
+    if data.signature and (not data.nonce or data.issued_at is None):
+        raise HTTPException(
+            status_code=st.HTTP_400_BAD_REQUEST,
+            detail="Signed delegations must include nonce and issued_at",
+        )
+
+    # 3. Signature over the canonical payload (which includes nonce + issued_at).
     verified = False
     if data.signature:
-        from_agent = await registry.get_agent(agent_id, current_user.org_id)
         verified = verify_payload(signed_payload, data.signature, from_agent.public_key or "")
         if not verified:
-            from fastapi import HTTPException, status as st
             raise HTTPException(
                 status_code=st.HTTP_400_BAD_REQUEST,
                 detail="Invalid delegation signature",
             )
 
+    # 4. Freshness window: an old signed request cannot be replayed later.
+    if data.issued_at is not None:
+        age = now.timestamp() - data.issued_at
+        if age > DELEGATION_MAX_AGE_SECONDS:
+            raise HTTPException(
+                status_code=st.HTTP_400_BAD_REQUEST,
+                detail=f"Delegation request is stale (issued {int(age)}s ago, max {DELEGATION_MAX_AGE_SECONDS}s)",
+            )
+        if age < -DELEGATION_CLOCK_SKEW_SECONDS:
+            raise HTTPException(
+                status_code=st.HTTP_400_BAD_REQUEST,
+                detail="Delegation issued_at is in the future",
+            )
+
+    # 5. Single-use nonce, enforced by a unique constraint.
+    if data.nonce:
+        db.add(DelegationNonce(org_id=current_user.org_id, from_agent_id=agent_id, nonce=data.nonce))
+        try:
+            await db.flush()
+        except IntegrityError:
+            await db.rollback()
+            raise HTTPException(
+                status_code=st.HTTP_409_CONFLICT,
+                detail="Replayed delegation: nonce already used",
+            )
+
+    # TTL counts from the signed issued_at, not from server receive time,
+    # so a late resend can never extend a delegation's lifetime.
     expires_at = None
     if data.expires_in:
-        expires_at = datetime.now(timezone.utc) + timedelta(seconds=data.expires_in)
+        base = datetime.fromtimestamp(data.issued_at, tz=timezone.utc) if data.issued_at is not None else now
+        expires_at = base + timedelta(seconds=data.expires_in)
 
     chain, hop = await service.delegate(
         org_id=current_user.org_id,
