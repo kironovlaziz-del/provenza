@@ -37,15 +37,18 @@
 
 ## ✨ What makes it different
 
-### 🔐 Verifiable Agent Governance — nobody else does this
+### 🔐 Verifiable Agent Governance
 
-When one AI agent delegates a task to another, the handoff is **signed with Ed25519**.
-Open the live delegation map, click any edge, and **verify the signature right in your
-own browser** — without trusting the server. The server holds only the public key; it
-can verify, never forge.
+When one AI agent delegates a task to another, the handoff is **signed with Ed25519**
+by the delegating agent — together with the delegated capabilities, the TTL, a
+single-use nonce and a timestamp. Open the live delegation map, click any edge, and
+**verify the signature right in your own browser**, without trusting the server.
+Recorded agent actions are signed the same way and bound to the policy check that
+allowed them.
 
-This is the *verifiable accountability* the EU AI Act asks for — made **clickable**.
+This is the kind of *verifiable accountability* the EU AI Act asks for — made **clickable**.
 An auditor confirms who authorized what, and the math checks out on their machine.
+What this does and does not guarantee is spelled out in the [Security Model](#security-model).
 
 <p align="center">
   <img src="docs/hero-graph.svg" width="620" alt="Delegation graph: agents delegate, one is blocked, signatures verified offline">
@@ -90,7 +93,7 @@ An auditor confirms who authorized what, and the math checks out on their machin
 |--|-------|-----|--------------|
 | 🛡️ | **Policy & Prompt Firewall** | everyone | Secrets (cards, keys, IDs) masked before any prompt leaves. Every call logged. Rules built visually — no JSON required. |
 | 👁️ | **Shadow AI Monitor** | unsanctioned AI | Endpoint agent finds local models; browser extension warns before a secret is pasted; passive network discovery — nothing auto-connects. |
-| 🤖 | **Agent Governance** | autonomous agents | Registry with scoped tools & delegation limits; an agent can never grant more than it holds; kill-switch; the live verifiable graph above. |
+| 🤖 | **Agent Governance** | autonomous agents | Registry with scoped tools & delegation limits; delegating more than an agent holds is rejected and raised as an incident; kill-switch; the live verifiable graph above. |
 | 🧠 | **Build your own AI** | MLOps, simplified | Guided wizard, knowledge bases (RAG), train & deploy — for non-technical users. |
 
 ## 🖥️ Governed access to any LLM
@@ -361,9 +364,9 @@ a *target* that groups them for one-command control.
 | Unit | Purpose |
 |------|---------|
 | `ai-ct-docker.service` | `docker compose up -d` (Postgres + Redis) |
-| `ai-ct-backend.service` | FastAPI via uvicorn on port 8000 |
+| `ai-ct-backend.service` | FastAPI via uvicorn on `127.0.0.1:8000` (behind a reverse proxy) |
 | `ai-ct-celery.service` | Celery worker |
-| `ai-ct-frontend.service` | Next.js production server on port 3000 |
+| `ai-ct-frontend.service` | Next.js production server on `127.0.0.1:3000` (behind a reverse proxy) |
 | `ai-ct-agent.service` | Go endpoint agent + network discovery |
 | `ai-ct.target` | Groups all of the above for one-command control |
 
@@ -377,6 +380,13 @@ sudo systemctl start ai-ct.target
 
 `systemctl start ai-ct.target` (and every boot) brings up the whole
 stack in dependency order.
+
+Put a reverse proxy (nginx, Caddy) in front with TLS and keep uvicorn and
+Next.js bound to `127.0.0.1`: they speak plain HTTP and must not be
+reachable from the internet directly. The proxy should set
+`X-Real-IP $remote_addr`; the login rate limiter trusts forwarding
+headers only from peers listed in `TRUSTED_PROXIES` (default
+`127.0.0.1,::1`).
 
 ### Granting the agent CAP_NET_RAW
 
@@ -494,9 +504,52 @@ when `ENVIRONMENT=production`).
 - **Extension privacy** — the browser extension reports only *that*
   sensitive data was detected (type/label), never any fragment of the
   value itself; it does not send full page URLs.
-- **Network isolation** — Postgres and Redis bind to `127.0.0.1`. Only
-  backend (8000) and frontend (3000) are reachable externally.
+- **Network isolation** — Postgres, Redis, the backend (8000) and the
+  frontend (3000) bind to `127.0.0.1`; only the reverse proxy (80/443)
+  is exposed. Forwarding headers are trusted only from `TRUSTED_PROXIES`.
 - **Audit trail** — every mutation writes a row to `ai_audit_logs`.
+
+### Agent governance — guarantees
+
+For agents registered through Provenza (each gets an Ed25519 keypair):
+
+- **Signed delegations.** A delegation from an agent with a registered key
+  must be signed over `{from, to, task, capabilities, chain, expires_in,
+  nonce, issued_at}`. Unsigned or tampered requests are rejected. The
+  signed payload is stored on the hop, so anyone can re-verify it offline.
+- **No replay.** Each delegation nonce is single-use per agent (enforced
+  by a database unique constraint), requests older than 5 minutes are
+  rejected, and the TTL counts from the signed `issued_at` — a late resend
+  cannot extend a delegation.
+- **Capabilities only narrow.** A hop may delegate only a subset of what
+  the delegating agent holds in that chain; a superset is rejected and
+  raised as a `capability_escalation` incident. Depth and TTL are bounded
+  the same way — a child delegation cannot outlive its parent.
+- **What was checked is what gets recorded.** `/actions/check` issues a
+  single-use `check_id` (5 minutes) bound to the agent, chain, tool and a
+  SHA-256 of the input. `/actions/record` must present it for exactly that
+  action and be signed by the agent; a mismatch is rejected and raised as
+  an `action_mismatch` incident. The stored verdict is the one from check
+  time.
+- **Offline-verifiable history.** Hops and recorded actions keep the exact
+  signed payload next to the signature.
+
+### Agent governance — limitations
+
+What this does **not** do, stated plainly:
+
+- **Cooperative, not enforcing.** Provenza sees what agents report to it.
+  An agent (or a compromised host) that calls its tools directly, without
+  `/actions/check` and `/actions/record`, is invisible to it. Enforcement
+  requires Provenza to sit in the call path — a gateway mode where tools
+  are reachable only through it. That is planned, not shipped.
+- **Server-generated keys.** Keypairs are generated at registration; the
+  private key is returned once and only the public key is stored. You
+  trust the server at that moment. Bring-your-own-key is planned.
+- **`/actions/check` is not signed.** The binding to a specific action and
+  the agent's signature are enforced when the action is recorded.
+- **Keyless agents** (created without a key) stay on the unsigned,
+  cooperative path.
 
 ## Training Service
 
