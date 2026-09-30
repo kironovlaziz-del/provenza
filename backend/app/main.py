@@ -22,6 +22,7 @@ from app.api import notification_channels
 from app.api import deployments
 from app.api import dashboard
 from app.api import monitoring
+from app.api import inventory
 
 
 _is_prod = settings.ENVIRONMENT == "production"
@@ -74,6 +75,7 @@ app.include_router(notification_channels.router, prefix=f"{settings.API_V1_STR}/
 app.include_router(deployments.router, prefix=f"{settings.API_V1_STR}/deployments", tags=["deployments"])
 app.include_router(dashboard.router, prefix=f"{settings.API_V1_STR}/dashboard", tags=["dashboard"])
 app.include_router(monitoring.router, prefix=f"{settings.API_V1_STR}/deployments", tags=["monitoring"])
+app.include_router(inventory.router, prefix=f"{settings.API_V1_STR}/inventory", tags=["inventory"])
 
 
 

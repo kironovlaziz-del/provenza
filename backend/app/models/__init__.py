@@ -27,6 +27,7 @@ from app.models.service_connection import ServiceConnection
 from app.models.agent import Agent, AgentPolicy
 from app.models.delegation import DelegationChain, DelegationHop, DelegationNonce
 from app.models.agent_action import AgentAction, AgentIncident, ActionCheck
+from app.models.ai_system import AISystem, AISystemDataLink
 
 __all__ = [
     "Organization",

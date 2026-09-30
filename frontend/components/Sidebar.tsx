@@ -19,6 +19,7 @@ const NAV = [
   {
     sectionKey: "sidebar.sections.management",
     items: [
+      { href: "/inventory", labelKey: "sidebar.nav.inventory" },
       { href: "/policies", labelKey: "sidebar.nav.policies" },
       { href: "/use-cases", labelKey: "sidebar.nav.use_cases" },
       { href: "/providers", labelKey: "sidebar.nav.providers" },
