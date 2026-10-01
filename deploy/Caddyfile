@@ -1,0 +1,45 @@
+# Provenza reverse proxy. TLS certificates are obtained automatically for
+# PROVENZA_DOMAIN (use "localhost" for a local install with a self-signed one).
+{
+	servers {
+		protocols h1 h2 h3
+	}
+}
+
+{$PROVENZA_DOMAIN} {
+	encode zstd gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+		-Server
+	}
+
+	# API, agent gateway and health check -> FastAPI. flush_interval -1 lets
+	# the live streams (Server-Sent Events) through without buffering.
+	@api path /api/* /health
+	handle @api {
+		request_body {
+			max_size 200MB
+		}
+		reverse_proxy backend:8000 {
+			flush_interval -1
+			transport http {
+				read_timeout 0
+			}
+		}
+	}
+
+	# Everything else -> web UI.
+	handle {
+		reverse_proxy frontend:3000
+	}
+
+	log {
+		output stdout
+		format json
+	}
+}

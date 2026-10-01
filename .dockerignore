@@ -29,3 +29,15 @@ frontend/.turbo
 ai-control-tower.zip
 all_code.txt
 source_dump.txt
+
+# production images (deploy/) build from the repository root
+*.zip
+**/*.log
+**/apply_*.py
+frontend/theme_block.css
+backend/tests
+backend/celerybeat-schedule
+backend/.pytest_cache
+deploy/.env
+deploy/backups
+docs

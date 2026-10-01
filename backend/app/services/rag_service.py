@@ -523,6 +523,10 @@ class RAGService:
                     collection, document, new_chunk_texts, provider
                 )
 
+            # ASI06: scan the new chunks; poisoned ones are quarantined in enforce mode
+            from app.services.memory_guard import MemoryGuard
+            await MemoryGuard(self.db).scan_document(org_id, document)
+
             document.status = "ready"
             document.chunk_count = len(new_chunk_texts)
             collection.document_count = (collection.document_count or 0) + 1
@@ -653,7 +657,13 @@ class RAGService:
         self, collection_id: int, org_id: int, question: str, top_k: int = DEFAULT_TOP_K
     ) -> List[ScoredChunk]:
         collection = await self.get_collection(collection_id, org_id)
-        chunks = await self._all_chunks(collection_id)
+        # AI Inventory: a retired knowledge base no longer answers
+        from app.services.inventory_service import ensure_collection_not_retired
+        await ensure_collection_not_retired(self.db, org_id, collection_id)
+        # ASI06: quarantined / revoked chunks never reach a prompt. Filtered here,
+        # not in _all_chunks: TF-IDF refits must still see the whole corpus.
+        chunks = [c for c in await self._all_chunks(collection_id)
+                  if (getattr(c, "trust_status", None) or "trusted") == "trusted"]
         if not chunks:
             return []
 

@@ -221,7 +221,8 @@ class ApprovalService:
             # minute and would block the HTTP response otherwise.
             from app.core.celery_app import celery_app
 
-            celery_app.send_task("request.process", args=[request.id, org_id])
+            from app.services.queue_ttl import enqueue_request
+            await enqueue_request(self.db, request, org_id)
 
         return approval
 

@@ -55,6 +55,7 @@ class ActionContext:
     input_data: Dict[str, Any] = field(default_factory=dict)
     # the capabilities this action requires/claims (subset check target)
     action_capabilities: List[str] = field(default_factory=list)
+    violation: Optional[str] = None  # set by argument rules (ASI02)
 
 
 @dataclass
@@ -70,6 +71,7 @@ class AgentView:
 @dataclass
 class ChainView:
     max_depth_reached: int = 0
+    status: str = "active"  # chain status: active, tripped, violated, terminated, completed
     granted_capabilities: List[str] = field(default_factory=list)
     delegation_expires_at: object = None  # datetime or None; None = no time bound
 
@@ -103,6 +105,16 @@ def evaluate_custom_rule(rule: Dict[str, Any], ctx: ActionContext) -> str:
     everything.
     """
     tool = ctx.tool_name
+    ctx.violation = None
+    arg_verdict = "ok"
+    if "argument_rules" in rule:
+        # ASI02: constraints on WHAT a tool is called with, not just which tool
+        from app.services.argument_rules import evaluate_argument_rules
+        arg_verdict, ctx.violation = evaluate_argument_rules(
+            rule.get("argument_rules") or [], tool, ctx.input_data or {}
+        )
+        if arg_verdict == "deny":
+            return "deny"
     if "deny_tools" in rule:
         if tool in set(rule.get("deny_tools") or []):
             return "deny"
@@ -115,6 +127,8 @@ def evaluate_custom_rule(rule: Dict[str, Any], ctx: ActionContext) -> str:
     if "require_approval_tools" in rule:
         if tool in set(rule.get("require_approval_tools") or []):
             return "approval"
+    if arg_verdict == "approval":
+        return "approval"
     return "ok"
 
 
@@ -127,6 +141,13 @@ def check_action(
     # 0. agent must be active
     if agent.status != "active":
         return Decision(DENIED, f"Agent is {agent.status}, not active", "policy_violation")
+
+    # 0b. the chain must be active. No new incident here: the chain is already
+    # stopped, and an incident per refused call would only create a storm.
+    if chain.status == "tripped":
+        return Decision(DENIED, "Chain halted by the circuit breaker (ASI08); an admin must resume it", None)
+    if chain.status != "active":
+        return Decision(DENIED, f"Chain is {chain.status}; no further actions are allowed", None)
 
     # 1. tool allowlist
     if ctx.tool_name and ctx.tool_name not in set(agent.allowed_tools or []):
@@ -178,7 +199,8 @@ def check_action(
             if verdict == "deny":
                 return Decision(
                     DENIED,
-                    f"Blocked by policy '{policy.get('name', policy.get('id'))}'",
+                    f"Blocked by policy '{policy.get('name', policy.get('id'))}'"
+                    + (f": {ctx.violation}" if ctx.violation else ""),
                     "policy_violation",
                     matched_policy_id=policy.get("id"),
                 )
@@ -187,6 +209,7 @@ def check_action(
                 approval_reason = (
                     f"Action requires human approval per policy "
                     f"'{policy.get('name', policy.get('id'))}'"
+                    + (f": {ctx.violation}" if ctx.violation else "")
                 )
 
     if approval_policy_id is not None:

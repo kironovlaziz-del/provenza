@@ -142,7 +142,7 @@ async def connect_ldap(
         existing.bind_dn = creds.bind_dn
         existing.base_dn = info.get("base_dn")
         existing.username = creds.username
-        existing.bind_password_encrypted = encrypt_secret(creds.password)
+        existing.bind_password_encrypted = encrypt_secret(creds.password, org_id=existing.org_id)
         existing.info = info
         existing.last_verified_at = now
         existing.last_error = None
@@ -157,7 +157,7 @@ async def connect_ldap(
             bind_dn=creds.bind_dn,
             base_dn=info.get("base_dn"),
             username=creds.username,
-            bind_password_encrypted=encrypt_secret(creds.password),
+            bind_password_encrypted=encrypt_secret(creds.password, org_id=org_id),
             info=info,
             last_verified_at=now,
             created_by=connected_by,

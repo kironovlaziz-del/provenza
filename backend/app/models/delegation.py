@@ -27,6 +27,13 @@ class DelegationChain(Base):
     max_depth_reached = Column(Integer, nullable=False, default=0)
     started_at = Column(DateTime(timezone=True), server_default=func.now())
     completed_at = Column(DateTime(timezone=True))
+    # ASI08 circuit breaker: when/why the chain tripped, and when an admin resumed it
+    breaker_tripped_at = Column(DateTime(timezone=True))
+    breaker_reset_at = Column(DateTime(timezone=True))
+    breaker_details = Column(JSONB)
+    # ASI01: a tool output in this chain carried a prompt injection
+    tainted_at = Column(DateTime(timezone=True))
+    taint_details = Column(JSONB)
 
 
 class DelegationHop(Base):

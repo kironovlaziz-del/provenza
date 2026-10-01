@@ -1,0 +1,187 @@
+# Provenza - production self-hosted stack.
+#
+#   cd deploy
+#   ./scripts/init-env.sh            # creates .env with generated secrets
+#   docker compose up -d --build     # migrations run before the API starts
+#   docker compose run --rm -it backend create-admin --org "Provenza" --email admin@provenza.example.com
+#
+# Only the reverse proxy (Caddy, ports 80/443) is reachable from outside.
+# Postgres and Redis live on an internal network with no route to the host.
+# See deploy/README.md for upgrades, backups and restores.
+
+name: provenza
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "20m"
+    max-file: "5"
+
+x-hardening: &hardening
+  restart: unless-stopped
+  logging: *logging
+  security_opt:
+    - no-new-privileges:true
+
+x-backend: &backend
+  <<: *hardening
+  image: ${PROVENZA_IMAGE_PREFIX:-provenza}/backend:${PROVENZA_VERSION:-local}
+  build:
+    context: ..
+    dockerfile: deploy/backend.Dockerfile
+  env_file: .env
+  environment:
+    ENVIRONMENT: production
+    POSTGRES_HOST: postgres
+    POSTGRES_PORT: "5432"
+    REDIS_HOST: redis
+    REDIS_PORT: "6379"
+    CORS_ORIGINS: https://${PROVENZA_DOMAIN:?set PROVENZA_DOMAIN in deploy/.env}
+  read_only: true
+  tmpfs:
+    - /tmp:size=512m
+  cap_drop: [ALL]
+  volumes:
+    - app-data:/app/data
+  networks: [data]
+
+services:
+  postgres:
+    <<: *hardening
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-provenza}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in deploy/.env}
+      POSTGRES_DB: ${POSTGRES_DB:-provenza}
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+    shm_size: 256mb
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks: [data]
+    deploy:
+      resources:
+        limits: { memory: "${POSTGRES_MEMORY:-1g}" }
+
+  redis:
+    <<: *hardening
+    image: redis:7-alpine
+    # AOF keeps queued Celery tasks across restarts; noeviction keeps Redis
+    # from silently dropping tasks under memory pressure.
+    command: ["sh", "-c", "exec redis-server --requirepass \"$$REDIS_PASSWORD\" --appendonly yes --maxmemory ${REDIS_MAXMEMORY:-256mb} --maxmemory-policy noeviction"]
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?set REDIS_PASSWORD in deploy/.env}
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" --no-auth-warning ping | grep -q PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks: [data]
+
+  migrate:
+    <<: *backend
+    command: ["migrate"]
+    restart: "no"
+    depends_on:
+      postgres: { condition: service_healthy }
+
+  backend:
+    <<: *backend
+    command: ["api"]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
+    networks: [data, web]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=4).status == 200 else 1)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+    deploy:
+      resources:
+        limits: { memory: "${BACKEND_MEMORY:-2g}" }
+
+  worker:
+    <<: *backend
+    command: ["worker"]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A app.core.celery_app inspect ping -d celery@$$HOSTNAME --timeout 10 | grep -q pong"]
+      interval: 60s
+      timeout: 20s
+      retries: 3
+      start_period: 60s
+    deploy:
+      resources:
+        limits: { memory: "${WORKER_MEMORY:-2g}" }
+
+  beat:
+    <<: *backend
+    command: ["beat"]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
+    volumes:
+      - app-data:/app/data
+      - beat-state:/app/run
+
+  frontend:
+    <<: *hardening
+    image: ${PROVENZA_IMAGE_PREFIX:-provenza}/web:${PROVENZA_VERSION:-local}
+    build:
+      context: ..
+      dockerfile: deploy/frontend.Dockerfile
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m
+      - /app/.next/cache:size=256m,uid=1000,gid=1000
+    cap_drop: [ALL]
+    networks: [web]
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/login').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    deploy:
+      resources:
+        limits: { memory: "${FRONTEND_MEMORY:-512m}" }
+
+  caddy:
+    <<: *hardening
+    image: caddy:2-alpine
+    ports:
+      - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
+      - "${HTTPS_PORT:-443}:443/udp"
+    environment:
+      PROVENZA_DOMAIN: ${PROVENZA_DOMAIN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      backend: { condition: service_healthy }
+      frontend: { condition: service_healthy }
+    networks: [web]
+
+networks:
+  web: {}
+  data:
+    internal: true
+
+volumes:
+  pg-data: {}
+  redis-data: {}
+  app-data: {}
+  beat-state: {}
+  caddy-data: {}
+  caddy-config: {}

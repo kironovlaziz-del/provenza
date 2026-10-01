@@ -30,6 +30,7 @@ export default function AgentPoliciesPage() {
     if (Array.isArray(rules.deny_tools)) parts.push(`deny ${(rules.deny_tools as string[]).length}`);
     if (Array.isArray(rules.allow_only_tools)) parts.push(`allowlist ${(rules.allow_only_tools as string[]).length}`);
     if (Array.isArray(rules.require_approval_tools)) parts.push(`approval ${(rules.require_approval_tools as string[]).length}`);
+    if (Array.isArray(rules.argument_rules)) parts.push(`args ${(rules.argument_rules as unknown[]).length}`);
     if (Array.isArray(rules.deny_action_types)) parts.push(`deny-types ${(rules.deny_action_types as string[]).length}`);
     return parts.join(" · ") || "—";
   }

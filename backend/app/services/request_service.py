@@ -80,7 +80,7 @@ class RequestService:
         # The raw prompt is only ever stored Fernet-encrypted, and never
         # returned by the API. Anything downstream (UI, provider call,
         # audit log metadata) uses masked_input_text instead.
-        encrypted_raw = encrypt_secret(data.input_text) if data.input_text else None
+        encrypted_raw = encrypt_secret(data.input_text, org_id=org_id) if data.input_text else None
 
         if firewall_result.blocked:
             request = AIRequest(
@@ -124,7 +124,8 @@ class RequestService:
             # the status to "completed" or "failed" when it finishes.
             from app.core.celery_app import celery_app
 
-            celery_app.send_task("request.process", args=[request.id, org_id])
+            from app.services.queue_ttl import enqueue_request
+            await enqueue_request(self.db, request, org_id)
 
         return request
 

@@ -1,4 +1,5 @@
-from fastapi import Depends, Header, HTTPException, status
+from typing import Optional
+from fastapi import Depends, Header, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,12 +13,35 @@ from app.models.user import User, UserRole
 from app.models.ingestion_source import IngestionSource
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
+# auto_error=False: a request may authenticate with an agent key instead
+oauth2_scheme_optional = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login", auto_error=False)
 
 
 async def get_current_user(
-    token: str = Depends(oauth2_scheme),
+    request: Request,
+    token: Optional[str] = Depends(oauth2_scheme_optional),
+    x_agent_key: Optional[str] = Header(None, alias="X-Agent-Key"),
     db: AsyncSession = Depends(get_db),
 ) -> User:
+    """A user session (Bearer JWT) or an agent (X-Agent-Key). An agent is
+    accepted only on agent-acting endpoints, only as itself, and runs on
+    behalf of its accountable human - see app/services/agent_identity.py."""
+    from app.services.agent_identity import authenticate_agent_request, enforce_user_session_policy
+
+    if x_agent_key:
+        return await authenticate_agent_request(request, db, x_agent_key)
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="auth.invalid_token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    user = await _user_from_token(token, db)
+    await enforce_user_session_policy(request, db, user)
+    return user
+
+
+async def _user_from_token(token: str, db: AsyncSession) -> User:
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="auth.invalid_token",
@@ -66,7 +90,14 @@ def require_role(*allowed: UserRole):
     """
     allowed_values = [r.value for r in allowed]
 
-    async def checker(current_user: User = Depends(get_current_user)) -> User:
+    async def checker(request: Request, current_user: User = Depends(get_current_user)) -> User:
+        # an agent key never carries a human role
+        if getattr(request.state, "agent", None) is not None:
+            raise api_error(
+                status.HTTP_403_FORBIDDEN,
+                "rbac.insufficient_role",
+                allowed=allowed_values,
+            )
         if current_user.role not in allowed_values:
             raise api_error(
                 status.HTTP_403_FORBIDDEN,

@@ -20,6 +20,10 @@ from app.services.request_service import RequestService
 async def _process_request_async(request_id: int, org_id: int) -> None:
     async with CelerySessionLocal() as db:
         try:
+            # one claim per request: a redelivered or stale task never reaches the provider
+            from app.services.queue_ttl import claim_for_processing
+            if not await claim_for_processing(db, request_id, org_id):
+                return
             await RequestService(db).process_request(request_id, org_id)
         except Exception:
             # Mark the request as failed so the UI does not spin forever.

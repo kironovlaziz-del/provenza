@@ -23,6 +23,7 @@ export default function AgentMapPage() {
           <span><span style={{ color: "#94a3b8" }}>●</span> {t("agent_map.legend_suspended")}</span>
           <span><span style={{ color: "#2f9e63" }}>—</span> {t("agent_map.legend_verified")}</span>
           <span><span style={{ color: "#dc2626" }}>┈</span> {t("agent_map.legend_violated_edge")}</span>
+          <span><span style={{ color: "#d97706" }}>┈</span> ⚡ {t("agent_map.legend_tripped")}</span>
         </div>
       </div>
     </>

@@ -37,6 +37,11 @@ export interface DelegationHopT {
 }
 
 export interface DelegationChainT {
+  breaker_tripped_at?: string | null;
+  breaker_reset_at?: string | null;
+  breaker_details?: Record<string, unknown> | null;
+  tainted_at?: string | null;
+  taint_details?: Record<string, unknown> | null;
   id: number;
   org_id: number;
   root_agent_id: number;
@@ -113,6 +118,7 @@ export interface GraphEdgeT {
   verified: boolean;
   chain_status: string;
   is_violation: boolean;
+  is_tripped?: boolean;
 }
 
 export interface GovernanceGraphT {

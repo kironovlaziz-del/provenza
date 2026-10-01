@@ -257,6 +257,9 @@ async def delegate(
         base = datetime.fromtimestamp(data.issued_at, tz=timezone.utc) if data.issued_at is not None else now
         expires_at = base + timedelta(seconds=data.expires_in)
 
+    if data.chain_id is not None:
+        from app.services.circuit_breaker import CircuitBreaker
+        await CircuitBreaker(db).evaluate(current_user.org_id, data.chain_id)
     chain, hop = await service.delegate(
         org_id=current_user.org_id,
         from_agent_id=agent_id,
@@ -316,6 +319,15 @@ async def check_action_endpoint(
     capabilities, verdict). /actions/record must present it, so what gets
     recorded is provably the action that was checked.
     """
+    if data.chain_id is not None:
+        # ASI08: trip the chain first if prior events crossed a threshold,
+        # so this very request is already refused
+        from app.services.circuit_breaker import CircuitBreaker
+        await CircuitBreaker(db).evaluate(current_user.org_id, data.chain_id)
+    # ASI10: score the agent against its behavioural baseline first, so a
+    # quarantine decided now already applies to this very request
+    from app.services.behavior_monitor import BehaviorMonitor
+    await BehaviorMonitor(db).evaluate(current_user.org_id, data.agent_id, data.tool_name)
     audit = AgentAudit(db)
     decision = await audit.check(
         org_id=current_user.org_id,
@@ -325,6 +337,8 @@ async def check_action_endpoint(
         tool_name=data.tool_name,
         input_data=data.input,
         action_capabilities=data.action_capabilities,
+        tool_version=data.tool_version,
+        tool_digest=data.tool_digest,
     )
     chk = await audit.issue_check(
         org_id=current_user.org_id,
@@ -412,7 +426,7 @@ async def record_action_endpoint(
         )
 
     verified = bool(check and data.signature)
-    return await audit.record(
+    action = await audit.record(
         org_id=current_user.org_id,
         agent_id=data.agent_id,
         chain_id=data.chain_id,
@@ -426,6 +440,15 @@ async def record_action_endpoint(
         check_id=check.id if check else None,
         signed_payload=signed_payload if verified else None,
     )
+    # ASI01: an instruction hidden in the tool output (indirect injection);
+    # before the breaker, so it already counts the new incident
+    from app.services.injection_guard import InjectionGuard
+    await InjectionGuard(db).scan_output(current_user.org_id, data.agent_id, data.chain_id,
+                                         getattr(action, "id", None), data.tool_name, data.output)
+    if data.chain_id is not None:
+        from app.services.circuit_breaker import CircuitBreaker
+        await CircuitBreaker(db).evaluate(current_user.org_id, data.chain_id)
+    return action
 
 
 @router.get("/actions/", response_model=Page[ActionOut])
@@ -443,18 +466,45 @@ async def list_actions(
     return Page(items=items, total=total, skip=pagination.skip, limit=pagination.limit)
 
 
-@router.post("/actions/{action_id}/approve", response_model=ActionOut)
-async def approve_action(
+from app.schemas.agent import ApprovalDecision  # noqa: E402  (ASI09)
+from app.services.agent_approval_service import AgentApprovalService  # noqa: E402
+
+
+@router.get("/approvals/pending")
+async def pending_approvals(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role(UserRole.admin, UserRole.approver)),
+):
+    """Actions waiting for a human, oldest first. Expired ones are denied first."""
+    return await AgentApprovalService(db).pending(current_user.org_id)
+
+
+@router.get("/actions/{action_id}/review")
+async def review_action(
     action_id: int,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_role(UserRole.admin, UserRole.approver)),
 ):
-    action = await AgentAudit(db).approve_action(action_id, current_user.org_id)
+    """Everything a reviewer needs, with server-verified facts kept apart from
+    text written by agents (ASI09)."""
+    return await AgentApprovalService(db).review(current_user.org_id, action_id, current_user)
+
+
+@router.post("/actions/{action_id}/approve", response_model=ActionOut)
+async def approve_action(
+    action_id: int,
+    data: ApprovalDecision,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role(UserRole.admin, UserRole.approver)),
+):
+    service = AgentApprovalService(db)
+    result = await service.approve(current_user.org_id, action_id, current_user,
+                                   data.input_sha256, data.confirmation)
     await AuditService(db).log(
         current_user.org_id, current_user.id, "agent_action", action_id, "approved",
-        {"tool": action.tool_name},
+        {"input_sha256": data.input_sha256, **result},
     )
-    return action
+    return await service._action(current_user.org_id, action_id)
 
 
 @router.post("/actions/{action_id}/deny", response_model=ActionOut)
@@ -464,15 +514,12 @@ async def deny_action(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_role(UserRole.admin, UserRole.approver)),
 ):
-    action = await AgentAudit(db).deny_action(action_id, current_user.org_id, data.reason)
+    service = AgentApprovalService(db)
+    await service.deny(current_user.org_id, action_id, current_user, None, data.reason)
     await AuditService(db).log(
-        current_user.org_id, current_user.id, "agent_action", action_id, "denied",
-        {"tool": action.tool_name, "reason": data.reason},
+        current_user.org_id, current_user.id, "agent_action", action_id, "denied", {"reason": data.reason},
     )
-    return action
-
-
-# ========================= Agent policies =========================
+    return await service._action(current_user.org_id, action_id)
 
 @router.post("/policies/", response_model=AgentPolicyOut)
 async def create_agent_policy(

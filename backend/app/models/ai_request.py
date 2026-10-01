@@ -36,4 +36,8 @@ class AIRequest(Base):
     # workers/request_tasks.py) so the UI can show what went wrong.
     error_message = Column(Text)
 
+    # When the request was handed to the worker queue (creation or approval);
+    # the queue TTL is measured from here - see app/services/queue_ttl.py
+    enqueued_at = Column(DateTime(timezone=True))
+
     created_at = Column(DateTime(timezone=True), server_default=func.now())

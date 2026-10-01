@@ -21,7 +21,7 @@ class ProviderService:
             risk_score=data.risk_score,
             base_url=data.base_url,
             default_model=data.default_model,
-            api_key_encrypted=encrypt_secret(data.api_key) if data.api_key else None,
+            api_key_encrypted=encrypt_secret(data.api_key, org_id=org_id) if data.api_key else None,
         )
         self.db.add(provider)
         await self.db.commit()
@@ -84,7 +84,7 @@ class ProviderService:
             provider.default_model = data.default_model
         if data.api_key is not None:
             # empty string clears the stored credential, anything else replaces it
-            provider.api_key_encrypted = encrypt_secret(data.api_key) if data.api_key else None
+            provider.api_key_encrypted = encrypt_secret(data.api_key, org_id=provider.org_id) if data.api_key else None
 
         await self.db.commit()
         await self.db.refresh(provider)

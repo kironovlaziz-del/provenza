@@ -23,6 +23,19 @@ from app.api import deployments
 from app.api import dashboard
 from app.api import monitoring
 from app.api import inventory
+from app.api import breaker
+from app.api import tool_registry
+from app.api import behavior
+from app.api import injection
+from app.api import code_exec
+from app.api import memory
+from app.api import a2a
+from app.api import agent_identity
+from app.api import gateway
+from app.api import queue_ttl
+from app.api import byok
+from app.api import compliance
+from app.api import observability
 
 
 _is_prod = settings.ENVIRONMENT == "production"
@@ -76,6 +89,19 @@ app.include_router(deployments.router, prefix=f"{settings.API_V1_STR}/deployment
 app.include_router(dashboard.router, prefix=f"{settings.API_V1_STR}/dashboard", tags=["dashboard"])
 app.include_router(monitoring.router, prefix=f"{settings.API_V1_STR}/deployments", tags=["monitoring"])
 app.include_router(inventory.router, prefix=f"{settings.API_V1_STR}/inventory", tags=["inventory"])
+app.include_router(breaker.router, prefix=f"{settings.API_V1_STR}/agent-breaker", tags=["agent-governance"])
+app.include_router(tool_registry.router, prefix=f"{settings.API_V1_STR}/tool-registry", tags=["agent-governance"])
+app.include_router(behavior.router, prefix=f"{settings.API_V1_STR}/agent-behavior", tags=["agent-governance"])
+app.include_router(injection.router, prefix=f"{settings.API_V1_STR}/injection", tags=["agent-governance"])
+app.include_router(code_exec.router, prefix=f"{settings.API_V1_STR}/code-exec", tags=["agent-governance"])
+app.include_router(memory.router, prefix=f"{settings.API_V1_STR}/memory", tags=["agent-governance"])
+app.include_router(a2a.router, prefix=f"{settings.API_V1_STR}/a2a", tags=["agent-governance"])
+app.include_router(agent_identity.router, prefix=f"{settings.API_V1_STR}/agent-identity", tags=["agent-governance"])
+app.include_router(gateway.router, prefix=f"{settings.API_V1_STR}/gateway", tags=["gateway"])
+app.include_router(queue_ttl.router, prefix=f"{settings.API_V1_STR}/queue", tags=["requests"])
+app.include_router(byok.router, prefix=f"{settings.API_V1_STR}/byok", tags=["security"])
+app.include_router(compliance.router, prefix=f"{settings.API_V1_STR}/compliance", tags=["compliance"])
+app.include_router(observability.router, prefix=f"{settings.API_V1_STR}/observability", tags=["agents"])
 
 
 

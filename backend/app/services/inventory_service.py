@@ -35,6 +35,7 @@ from app.models.dataset import Dataset
 from app.models.document_collection import DocumentCollection
 from app.models.model_deployment import ModelDeployment
 from app.models.prediction_log import PredictionLog
+from app.models.rag_query_log import RagQueryLog
 from app.models.shadow_ai_sighting import ShadowAISighting
 from app.models.training_job import TrainingJob
 from app.models.user import User
@@ -56,6 +57,22 @@ def _stage_for(source_status: Optional[str]) -> str:
     # Something that already runs IS in production - even if nobody assessed it.
     # That gap is exactly what the "attention" flags surface.
     return "retired" if (source_status or "").lower() in INACTIVE_SOURCE_STATUSES else "production"
+
+
+
+async def ensure_collection_not_retired(db: AsyncSession, org_id: int, collection_id: int) -> None:
+    """A knowledge base whose inventory entry is retired no longer answers questions."""
+    retired = (await db.execute(
+        select(AISystem.id).where(
+            AISystem.org_id == org_id, AISystem.kind == "rag_app",
+            AISystem.source_key == f"rag:{collection_id}", AISystem.lifecycle_stage == "retired",
+        ).limit(1)
+    )).scalar_one_or_none()
+    if retired:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="This knowledge base is retired in the AI Inventory; move it back to an active stage to use it",
+        )
 
 
 class InventoryService:
@@ -278,8 +295,57 @@ class InventoryService:
                                     detail="A system with an unacceptable (EU AI Act Art. 5) risk tier cannot go to production")
         previous = system.lifecycle_stage
         system.lifecycle_stage = stage
+        self.last_source_change = None
+        if stage == "retired" and previous != "retired":
+            # retiring an entry stops what it describes - otherwise the inventory
+            # says "retired" while the agent / connection / model keeps working
+            self.last_source_change = await self._stop_source(system)
         await self.db.commit()
         return previous
+
+    @staticmethod
+    def _collection_ids(system: AISystem, with_links: bool = True) -> List[int]:
+        ids = []
+        if (system.source_key or "").startswith("rag:"):
+            try:
+                ids.append(int(system.source_key.split(":", 1)[1]))
+            except ValueError:
+                pass
+        if with_links:
+            ids += [l.collection_id for l in (system.data_links or [])
+                    if l.relation == "accesses" and l.collection_id is not None]
+        return sorted(set(ids))
+
+    async def _stop_source(self, system: AISystem) -> Optional[dict]:
+        """Stop what a retired entry describes. Never restarts anything: going
+        back from "retired" is a separate, deliberate action on the source."""
+        if system.kind == "agent" and system.agent_id:
+            agent = (await self.db.execute(
+                select(Agent).where(Agent.id == system.agent_id, Agent.org_id == system.org_id)
+            )).scalar_one_or_none()
+            if agent is not None and agent.status != "retired":
+                before, agent.status = agent.status, "retired"
+                return {"agent_id": agent.id, "from": before, "to": "retired"}
+        elif system.kind == "llm_provider" and system.provider_id:
+            provider = (await self.db.execute(
+                select(AIProvider).where(AIProvider.id == system.provider_id, AIProvider.org_id == system.org_id)
+            )).scalar_one_or_none()
+            if provider is not None and provider.status == "active":
+                before, provider.status = provider.status, "inactive"
+                return {"provider_id": provider.id, "from": before, "to": "inactive"}
+        elif system.kind == "model" and system.deployment_id:
+            dep = (await self.db.execute(
+                select(ModelDeployment).where(ModelDeployment.id == system.deployment_id,
+                                              ModelDeployment.org_id == system.org_id)
+            )).scalar_one_or_none()
+            if dep is not None and dep.status == "active":
+                before, dep.status = dep.status, "archived"
+                return {"deployment_id": dep.id, "from": before, "to": "archived"}
+        elif system.kind == "rag_app":
+            ids = self._collection_ids(system, with_links=False)
+            if ids:
+                return {"collection_ids": ids, "effect": "questions refused while retired"}
+        return None
 
     async def confirm_risk(self, system_id: int, org_id: int, user_id: int,
                            tier: str, justification: Optional[str]) -> Optional[str]:
@@ -431,6 +497,26 @@ class InventoryService:
                 select(func.max(PredictionLog.created_at)).where(
                     PredictionLog.org_id == org_id, PredictionLog.deployment_id == system.deployment_id)
             )).scalar_one()
+
+        elif system.kind == "rag_app" and self._collection_ids(system):
+            source = "rag_query_logs"
+            ids = self._collection_ids(system)
+            base = (RagQueryLog.org_id == org_id, RagQueryLog.collection_id.in_(ids))
+            row = (await self.db.execute(
+                select(func.count(), func.count().filter(RagQueryLog.kind == "chat"),
+                       func.count().filter(RagQueryLog.matches == 0), func.avg(RagQueryLog.latency_ms),
+                       func.count(func.distinct(RagQueryLog.user_id)))
+                .where(*base, RagQueryLog.created_at >= since)
+            )).one()
+            total = row[0]
+            counts = {"questions": total, "chats": row[1], "no_context": row[2], "distinct_users": row[4]}
+            if row[3] is not None:
+                rates["avg_latency_ms"] = round(float(row[3]), 1)
+            last = (await self.db.execute(select(func.max(RagQueryLog.created_at)).where(*base))).scalar_one()
+            if total:
+                rates["no_context_rate"] = round(row[2] / total, 3)
+                if total >= MIN_EVENTS_FOR_RATE and rates["no_context_rate"] > HIGH_RATE_THRESHOLD:
+                    signals.append("often_no_context")
 
         elif system.kind == "shadow" and system.shadow_tool:
             source = "shadow_ai_sightings"

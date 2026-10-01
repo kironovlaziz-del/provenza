@@ -32,9 +32,12 @@ const STATUS_CLASS: Record<string, string> = {
   inactive: "pill-neutral",
   dismissed: "pill-neutral",
   suspended: "pill-critical",
+  quarantined: "pill-critical",
   queued: "pill-neutral",
   running: "pill-medium",
   failed: "pill-critical",
+  expired: "pill-neutral",
+  processing: "pill-medium",
   cancelled: "pill-neutral",
 };
 

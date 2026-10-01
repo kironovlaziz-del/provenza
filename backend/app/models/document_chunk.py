@@ -29,4 +29,6 @@ class DocumentChunk(Base):
     chunk_index = Column(Integer, nullable=False)
     text = Column(Text, nullable=False)
     embedding = Column(JSONB, nullable=False)
+    # ASI06: only "trusted" chunks are returned by retrieval
+    trust_status = Column(String(20), nullable=False, default="trusted", server_default="trusted")
     created_at = Column(DateTime(timezone=True), server_default=func.now())

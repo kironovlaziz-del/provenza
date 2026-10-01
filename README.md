@@ -229,6 +229,22 @@ collectors/discovery/      network discovery (DNS SRV, mDNS, LLMNR,
 - ~4 GB RAM minimum for CPU-only training; 16+ GB and a GPU for
   transformer fine-tuning
 
+## 🏭 Production self-hosting (Docker)
+
+One `docker compose` stack with PostgreSQL, Redis, migrations, API, worker,
+scheduler, web UI and Caddy (automatic HTTPS). No demo data, no default
+secrets, only ports 80/443 exposed, non-root read-only containers, health
+checks, backups and restores.
+
+```bash
+cd deploy
+./scripts/init-env.sh provenza.example.com
+docker compose up -d --build
+docker compose run --rm -it backend create-admin --org "Provenza" --email admin@provenza.example.com
+```
+
+Full guide: [deploy/README.md](deploy/README.md).
+
 ## ⚡ Try it in 2 minutes (Docker)
 
 The fastest way to see it running — the whole stack (database, backend with
@@ -237,7 +253,7 @@ auto-migrations, workers, and frontend) in one command:
 ```bash
 git clone https://github.com/kironovlaziz-del/provenza.git
 cd provenza
-docker compose -f docker-compose.full.yml up --build
+docker compose -f docker-compose.dev.yml up --build
 ```
 
 Then open **http://localhost:3000** and log in:

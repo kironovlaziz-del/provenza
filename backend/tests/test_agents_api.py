@@ -140,7 +140,7 @@ class TestDelegateAndActionsFlow:
         assert chk.status_code == 200 and chk.json()["decision"] == "denied"
 
     @pytest.mark.asyncio
-    async def test_pending_approval_flow_over_api(self, client, admin_token):
+    async def test_pending_approval_flow_over_api(self, client, admin_token, approver_token):
         agent = (await _register_agent(client, admin_token, name="worker")).json()
         # policy requiring approval for openai.chat
         pol = await client.post(
@@ -166,10 +166,15 @@ class TestDelegateAndActionsFlow:
         action_id = rec.json()["id"]
         assert rec.json()["policy_check_result"] == "pending_approval"
         # approve it
+        # ASI09: the reviewer sees the exact arguments and approves their hash
+        review = await client.get(f"/api/v1/agents/actions/{action_id}/review", headers=auth_headers(approver_token))
+        assert review.status_code == 200, review.text
         appr = await client.post(
-            f"/api/v1/agents/actions/{action_id}/approve", headers=auth_headers(admin_token)
+            f"/api/v1/agents/actions/{action_id}/approve",
+            json={"input_sha256": review.json()["verified"]["input_sha256"]},
+            headers=auth_headers(approver_token),
         )
-        assert appr.status_code == 200 and appr.json()["policy_check_result"] == "allowed"
+        assert appr.status_code == 200 and appr.json()["policy_check_result"] == "allowed", appr.text
 
 
 class TestPolicyRBAC:

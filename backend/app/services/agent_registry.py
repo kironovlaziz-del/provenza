@@ -105,7 +105,7 @@ class AgentRegistry:
                 select(DelegationChain).where(
                     DelegationChain.org_id == org_id,
                     DelegationChain.root_agent_id == agent_id,
-                    DelegationChain.status == "active",
+                    DelegationChain.status.in_(("active", "tripped")),
                 )
             )
             for chain in result.scalars().all():

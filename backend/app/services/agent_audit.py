@@ -45,11 +45,14 @@ class AgentAudit:
         if chain_id is None:
             return ChainView(max_depth_reached=0, granted_capabilities=list(agent.capabilities or []))
         result = await self.db.execute(
-            select(DelegationChain).where(DelegationChain.id == chain_id)
+            select(DelegationChain).where(
+                DelegationChain.id == chain_id, DelegationChain.org_id == agent.org_id
+            )
         )
         chain = result.scalar_one_or_none()
         if not chain:
-            return ChainView(max_depth_reached=0, granted_capabilities=list(agent.capabilities or []))
+            # an unknown chain, or one belonging to another organization
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Delegation chain not found")
         # capabilities granted to this agent within the chain
         hop_result = await self.db.execute(
             select(DelegationHop)
@@ -65,6 +68,7 @@ class AgentAudit:
         expiry = hop.expires_at if hop else None
         return ChainView(
             max_depth_reached=chain.max_depth_reached or 0,
+            status=chain.status,
             granted_capabilities=granted,
             delegation_expires_at=expiry,
         )
@@ -93,6 +97,8 @@ class AgentAudit:
         tool_name: Optional[str],
         input_data: dict,
         action_capabilities: List[str],
+        tool_version: Optional[str] = None,
+        tool_digest: Optional[str] = None,
     ):
         """Run the policy engine for a proposed action. Returns the
         Decision (does not persist - use record() for that)."""
@@ -111,7 +117,20 @@ class AgentAudit:
             action_capabilities=action_capabilities or [],
         )
         policies = await self._custom_policies(org_id, agent_id)
-        return check_action(agent_view, chain_view, ctx, policies)
+        decision = check_action(agent_view, chain_view, ctx, policies)
+        # ASI04: Tool Registry (also records usage when the policy already denied)
+        from app.services.supply_chain import SupplyChain
+        supply = await SupplyChain(self.db).verify(org_id, agent_id, tool_name, tool_version, tool_digest)
+        if decision.result == DENIED:
+            return decision
+        if supply is not None:
+            return supply
+        # ASI01: injected instructions in the arguments, tainted chain
+        from app.services.injection_guard import InjectionGuard
+        decision = await InjectionGuard(self.db).apply(org_id, agent_id, chain_id, tool_name, input_data, decision)
+        # ASI05: shell / eval / SQL / traversal shapes in the arguments, code tools
+        from app.services.code_exec_guard import CodeExecGuard
+        return await CodeExecGuard(self.db).apply(org_id, agent_id, chain_id, tool_name, input_data, decision)
 
     async def record(
         self,

@@ -149,7 +149,7 @@ async def change_stage(
     previous = await service.set_stage(system_id, current_user.org_id, data.stage)
     await AuditService(db).log(
         current_user.org_id, current_user.id, "ai_system", system_id, "stage_changed",
-        {"from": previous, "to": data.stage},
+        {"from": previous, "to": data.stage, "source": service.last_source_change},
     )
     return await service.get(system_id, current_user.org_id)
 

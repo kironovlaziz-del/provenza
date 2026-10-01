@@ -11,6 +11,7 @@ real credentials and a warning is raised on every encryption call.
 """
 
 import warnings
+from typing import Optional
 from functools import lru_cache
 
 from cryptography.fernet import Fernet, InvalidToken
@@ -39,11 +40,23 @@ def _get_fernet() -> Fernet:
     return Fernet(key.encode())
 
 
-def encrypt_secret(plaintext: str) -> str:
+def encrypt_secret(plaintext: str, org_id: Optional[int] = None) -> str:
+    """With org_id, an organization that enabled BYOK gets its own data key
+    (app/core/keyring.py); otherwise the server key, as before."""
+    if org_id is not None:
+        from app.core import keyring
+
+        key_id = keyring.active_key_for(org_id)
+        if key_id is not None:
+            return keyring.encrypt_for_key(key_id, plaintext)
     return _get_fernet().encrypt(plaintext.encode()).decode()
 
 
 def decrypt_secret(ciphertext: str) -> str:
+    if ciphertext.startswith("pvz2:"):  # organization key (BYOK)
+        from app.core import keyring
+
+        return keyring.decrypt_v2(ciphertext)
     try:
         return _get_fernet().decrypt(ciphertext.encode()).decode()
     except InvalidToken as exc:

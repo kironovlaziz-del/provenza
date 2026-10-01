@@ -48,6 +48,12 @@ celery_app.conf.beat_schedule = {
         "task": "discovery.reverify_connections",
         "schedule": crontab(minute=17, hour="*/6"),  # 00:17, 06:17, 12:17, 18:17 UTC
     },
+    # Request pipeline time limits: expire queued / unanswered requests, fail
+    # requests whose worker was lost, wipe raw prompts past retention.
+    "sweep-request-queue": {
+        "task": "requests.sweep",
+        "schedule": crontab(minute="*/5"),
+    },
 }
 
 from app.workers import (  # noqa: E402,F401
@@ -55,6 +61,8 @@ from app.workers import (  # noqa: E402,F401
     training_tasks,
     telemetry_tasks,
     discovery_tasks,
+    queue_tasks,
+    byok_tasks,
 )
 
 

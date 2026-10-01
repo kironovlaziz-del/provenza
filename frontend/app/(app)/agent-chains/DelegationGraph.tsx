@@ -25,6 +25,7 @@ const POLL_MS = 5000;
 const COL = {
   active: "#3b82f6",      // bright blue
   violation: "#ef4444",   // bright red
+  tripped: "#f59e0b",     // amber - halted by the circuit breaker
   suspended: "#64748b",   // slate
   retired: "#475569",
   verifiedEdge: "#22c55e", // green
@@ -97,8 +98,8 @@ export function DelegationGraph({ height = 520 }: { height?: number }) {
       .attr("cursor", "pointer")
       .on("click", (_evt, d) => setSelectedEdge(d as GraphEdgeT));
     linkEnter.merge(linkSel as any)
-      .attr("stroke", (d) => (d.is_violation ? COL.violation : d.verified ? COL.verifiedEdge : COL.edge))
-      .attr("stroke-dasharray", (d) => (d.is_violation ? "6 4" : "none"))
+      .attr("stroke", (d) => (d.chain_status === "tripped" ? COL.tripped : d.is_violation ? COL.violation : d.verified ? COL.verifiedEdge : COL.edge))
+      .attr("stroke-dasharray", (d) => (d.chain_status === "tripped" ? "2 4" : d.is_violation ? "6 4" : "none"))
       .attr("opacity", (d) => (d.chain_status === "terminated" ? 0.35 : 0.9));
 
     // ---- particles (one per active edge, animated along the line) ----
@@ -380,6 +381,12 @@ function EdgeInspector({ edge, onClose }: { edge: GraphEdgeT; onClose: () => voi
       </div>
       {edge.is_violation && (
         <div style={{ color: "#ef4444", fontWeight: 600, marginTop: 6 }}>⚠ Violated chain</div>
+      )}
+      {edge.chain_status === "tripped" && (
+        <div style={{ color: "#f59e0b", fontWeight: 600, marginTop: 6 }}>
+          ⚡ Halted by the circuit breaker —{" "}
+          <a href="/agent-breaker" style={{ color: "#fbbf24" }}>review</a>
+        </div>
       )}
 
       <div style={{ marginTop: 10, borderTop: "1px solid #334155", paddingTop: 10 }}>

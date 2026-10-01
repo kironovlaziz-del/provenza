@@ -159,7 +159,7 @@ async def governed_chat(
     if active_policy_rules.get("effect") == "require_approval" and not fw.blocked:
         db.add(AIRequest(
             org_id=current_user.org_id, user_id=current_user.id, provider_id=provider.id,
-            input_text_encrypted=encrypt_secret(data.message),
+            input_text_encrypted=encrypt_secret(data.message, org_id=current_user.org_id),
             masked_input_text=fw.masked_text, status="pending_approval",
             purpose="playground_chat", firewall_flags=fw.flags,
         ))
@@ -173,7 +173,7 @@ async def governed_chat(
         # log the blocked attempt too
         db.add(AIRequest(
             org_id=current_user.org_id, user_id=current_user.id, provider_id=provider.id,
-            input_text_encrypted=encrypt_secret(data.message), status="blocked",
+            input_text_encrypted=encrypt_secret(data.message, org_id=current_user.org_id), status="blocked",
             purpose="playground_chat", firewall_flags=fw.flags,
         ))
         await db.commit()
@@ -195,7 +195,7 @@ async def governed_chat(
     # 3. log to Usage Registry
     db.add(AIRequest(
         org_id=current_user.org_id, user_id=current_user.id, provider_id=provider.id,
-        input_text_encrypted=encrypt_secret(data.message),
+        input_text_encrypted=encrypt_secret(data.message, org_id=current_user.org_id),
         masked_input_text=safe_message, status="completed",
         purpose="playground_chat", firewall_flags=fw.flags,
     ))

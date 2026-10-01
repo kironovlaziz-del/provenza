@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from datetime import datetime
 from typing import Optional, List, Dict, Any
 
@@ -115,6 +115,11 @@ class ChainOut(BaseModel):
     max_depth_reached: int
     started_at: datetime
     completed_at: Optional[datetime]
+    breaker_tripped_at: Optional[datetime] = None
+    breaker_reset_at: Optional[datetime] = None
+    breaker_details: Optional[Dict[str, Any]] = None
+    tainted_at: Optional[datetime] = None  # ASI01: injected tool output in this chain
+    taint_details: Optional[Dict[str, Any]] = None
 
     class Config:
         from_attributes = True
@@ -133,6 +138,9 @@ class ActionCheckRequest(BaseModel):
     tool_name: str
     input: Dict[str, Any] = Field(default_factory=dict)
     action_capabilities: List[str] = Field(default_factory=list)
+    # ASI04: reported by the agent's runtime, compared with the Tool Registry pins
+    tool_version: Optional[str] = Field(default=None, max_length=100)
+    tool_digest: Optional[str] = Field(default=None, max_length=100)
 
 
 class ActionCheckResponse(BaseModel):
@@ -188,6 +196,15 @@ class AgentPolicyCreate(BaseModel):
     rules: Dict[str, Any] = Field(default_factory=dict)
     priority: int = 100
     enabled: bool = True
+
+    @field_validator("rules")
+    @classmethod
+    def _validate_argument_rules(cls, v):
+        # catch broken regexes / unknown ops at save time, not during an agent's action
+        from app.services.argument_rules import validate_argument_rules
+        if isinstance(v, dict) and "argument_rules" in v:
+            validate_argument_rules(v["argument_rules"])
+        return v
 
 
 class AgentPolicyOut(BaseModel):
@@ -247,3 +264,9 @@ class GovernanceGraph(BaseModel):
     nodes: List[GraphNode] = Field(default_factory=list)
     edges: List[GraphEdge] = Field(default_factory=list)
     generated_at: datetime
+
+
+class ApprovalDecision(BaseModel):
+    """ASI09: the reviewer approves the exact arguments they saw."""
+    input_sha256: str = Field(min_length=64, max_length=64)
+    confirmation: Optional[str] = Field(default=None, max_length=255)

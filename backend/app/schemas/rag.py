@@ -33,6 +33,7 @@ class DocumentOut(BaseModel):
     status: str
     error_message: Optional[str]
     chunk_count: int
+    trust_status: Optional[str] = None
     created_at: datetime
 
     class Config:

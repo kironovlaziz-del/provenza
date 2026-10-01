@@ -151,7 +151,12 @@ async def query_collection(
     """Retrieval only, no LLM call - useful for debugging what a
     collection would surface for a given question."""
     service = RAGService(db)
+    import time as _time
+    from app.services.rag_query_log import log_rag_query
+    _started = _time.monotonic()
     matches = await service.query(collection_id, current_user.org_id, data.question, data.top_k)
+    await log_rag_query(db, current_user.org_id, collection_id, current_user.id, "query", data.question,
+                        matches, _started, top_k=data.top_k)
     return RAGQueryResponse(
         matches=[
             RAGSourceChunk(
@@ -175,6 +180,9 @@ async def chat_with_collection(
         if data.few_shot_examples
         else None
     )
+    import time as _time
+    from app.services.rag_query_log import log_rag_query
+    _started = _time.monotonic()
     answer, matches = await service.chat(
         collection_id,
         current_user.org_id,
@@ -183,6 +191,8 @@ async def chat_with_collection(
         data.top_k,
         few_shot_examples=few_shot,
     )
+    await log_rag_query(db, current_user.org_id, collection_id, current_user.id, "chat", data.message,
+                        matches, _started, top_k=data.top_k, provider_id=data.provider_id)
     return RAGChatResponse(
         answer=answer,
         sources=[

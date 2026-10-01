@@ -28,6 +28,20 @@ from app.models.agent import Agent, AgentPolicy
 from app.models.delegation import DelegationChain, DelegationHop, DelegationNonce
 from app.models.agent_action import AgentAction, AgentIncident, ActionCheck
 from app.models.ai_system import AISystem, AISystemDataLink
+from app.models.breaker import AgentBreakerSettings
+from app.models.tool_registry import SupplyChainSettings, ToolRegistryEntry
+from app.models.approval import AgentActionApproval
+from app.models.behavior import AgentAnomaly, AgentBaseline, BehaviorSettings
+from app.models.injection import InjectionDetection, InjectionSettings
+from app.models.code_exec import CodeExecDetection, CodeExecSettings
+from app.models.memory import MemoryEntry, MemorySettings
+from app.models.a2a import A2AChannel, A2AMessage, A2ASettings
+from app.models.agent_identity import AgentIdentitySettings
+from app.models.gateway import GatewayCall, GatewayRoute, GatewaySettings
+from app.models.queue_ttl import QueueSettings, QueueSweep
+from app.models.org_key import ByokJob, OrgKey
+from app.models.rag_query_log import RagQueryLog
+from app.models.compliance import ComplianceAttestation, ComplianceReport
 
 __all__ = [
     "Organization",
@@ -66,4 +80,5 @@ __all__ = [
     "AgentIncident",
 ]
 
-
+# live agent events (after-commit session hook)
+import app.core.obs_hooks  # noqa: E402,F401

@@ -1,4 +1,5 @@
 from sqlalchemy import Column, Integer, String, BigInteger, DateTime, ForeignKey, Text, func
+from sqlalchemy.dialects.postgresql import JSONB
 from app.core.database import Base
 
 
@@ -21,3 +22,8 @@ class Document(Base):
     chunk_count = Column(Integer, nullable=False, default=0)
     uploaded_by = Column(Integer, ForeignKey("users.id"))
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+    # ASI06: trusted, quarantined (a poisoned chunk was found), revoked (by an admin)
+    trust_status = Column(String(20), nullable=False, default="trusted", server_default="trusted")
+    trust_details = Column(JSONB)
+    trust_changed_by = Column(Integer, ForeignKey("users.id"))
+    trust_changed_at = Column(DateTime(timezone=True))

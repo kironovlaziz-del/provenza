@@ -1038,3 +1038,125 @@ tbody tr.clickable:hover {
     grid-template-columns: 1fr !important;
   }
 }
+
+/* ==== provenza-ui: theme + sidebar (managed block, re-applied by apply_ui.py) ==== */
+
+/* Dark is the default; light only when data-theme="light" is set. */
+:root:not([data-theme="light"]) {
+  color-scheme: dark;
+  --bg-app: #1d1e24;
+  --bg-panel: #25262e;
+  --bg-sidebar: #16171c;
+  --bg-sidebar-hover: #22242c;
+  --bg-sidebar-active: #1e2a4a;
+  --text-primary: #dfe5ef;
+  --text-muted: #98a2b3;
+  --text-inverse: #eef0f5;
+  --text-inverse-muted: #8a8fa3;
+  --border: #343741;
+  --border-strong: #4a4e5a;
+  --accent: #3987e5;
+  --accent-dim: #1e2a4a;
+  --accent-hover: #5a9cf0;
+  --risk-low: #3fb950;
+  --risk-low-bg: rgba(63, 185, 80, 0.14);
+  --risk-medium: #d29922;
+  --risk-medium-bg: rgba(210, 153, 34, 0.14);
+  --risk-high: #f0883e;
+  --risk-high-bg: rgba(240, 136, 62, 0.14);
+  --risk-critical: #f85149;
+  --risk-critical-bg: rgba(248, 81, 73, 0.14);
+  --status-neutral: #98a2b3;
+  --status-neutral-bg: rgba(152, 162, 179, 0.14);
+}
+
+/* Form controls and generic surfaces in dark mode: many pages set them by
+   element, not through variables. */
+:root:not([data-theme="light"]) input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+:root:not([data-theme="light"]) select,
+:root:not([data-theme="light"]) textarea {
+  background-color: #1d1e24;
+  color: var(--text-primary);
+  border-color: var(--border);
+}
+:root:not([data-theme="light"]) input::placeholder,
+:root:not([data-theme="light"]) textarea::placeholder { color: #69707d; }
+:root:not([data-theme="light"]) option { background: #25262e; color: var(--text-primary); }
+:root:not([data-theme="light"]) th { color: var(--text-muted); }
+:root:not([data-theme="light"]) tr:hover td { background-color: rgba(255, 255, 255, 0.02); }
+:root:not([data-theme="light"]) code,
+:root:not([data-theme="light"]) pre { background-color: #16171c; color: #c9d1d9; border-color: var(--border); }
+:root:not([data-theme="light"]) a:not(.sidebar-link):not(.btn):not(.sidebar-icon-link) { color: #6aa9ff; }
+:root:not([data-theme="light"]) ::-webkit-scrollbar { width: 10px; height: 10px; }
+:root:not([data-theme="light"]) ::-webkit-scrollbar-thumb { background: #3a3d47; border-radius: 5px; border: 2px solid transparent; background-clip: content-box; }
+:root:not([data-theme="light"]) ::-webkit-scrollbar-track { background: transparent; }
+:root:not([data-theme="light"]) [style*="background:#fff"],
+:root:not([data-theme="light"]) [style*="background: #fff"],
+:root:not([data-theme="light"]) [style*="background:white"],
+:root:not([data-theme="light"]) [style*="background: rgb(255, 255, 255)"],
+:root:not([data-theme="light"]) [style*="background-color: rgb(255, 255, 255)"],
+:root:not([data-theme="light"]) [style*="background: white"],
+:root:not([data-theme="light"]) [style*="background: rgb(248, 250, 252)"],
+:root:not([data-theme="light"]) [style*="background: rgb(249, 250, 251)"],
+:root:not([data-theme="light"]) [style*="background: rgb(245, 246, 248)"] {
+  background: var(--bg-panel) !important;
+  color: var(--text-primary);
+}
+
+/* ---------------------------------------------------------------- sidebar */
+.sidebar { width: 248px; transition: width 0.15s ease; border-right: 1px solid #23252d; }
+.sidebar.narrow { width: 60px; }
+.sidebar.narrow .sidebar-brand { padding: 16px 0; display: flex; justify-content: center; }
+.sidebar-brand-mini {
+  width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center;
+  background: linear-gradient(135deg, #22d3ee, #3987e5); color: #0b1020; font-weight: 800;
+}
+.sidebar-search {
+  display: flex; align-items: center; gap: 6px; margin: 10px 10px 4px; padding: 0 8px;
+  background: #1f2129; border: 1px solid #2c2f3a; border-radius: 6px; color: var(--text-inverse-muted);
+}
+.sidebar-search input {
+  flex: 1; min-width: 0; border: none !important; outline: none; background: transparent !important;
+  color: var(--text-inverse) !important; padding: 7px 0; font-size: 12.5px;
+}
+.sidebar-search button { background: none; border: none; color: var(--text-inverse-muted); cursor: pointer; font-size: 15px; padding: 0 2px; }
+.sidebar-expand { display: flex; justify-content: flex-end; gap: 10px; padding: 2px 14px 4px; }
+.sidebar-expand button { background: none; border: none; padding: 0; cursor: pointer; font-size: 11px; color: var(--text-inverse-muted); }
+.sidebar-expand button:hover { color: var(--text-inverse); }
+.sidebar-nav { padding: 4px 0 12px; }
+.sidebar-group { margin: 2px 0; }
+button.sidebar-section {
+  display: flex; align-items: center; gap: 9px; width: calc(100% - 16px); margin: 0 8px; padding: 8px 10px;
+  background: none; border: none; border-radius: 6px; cursor: pointer; text-align: left;
+  font-size: 11.5px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--text-inverse-muted);
+}
+button.sidebar-section:hover { background: var(--bg-sidebar-hover); color: var(--text-inverse); }
+.sidebar-group.has-active > button.sidebar-section { color: #cfd9ff; }
+.sidebar-section-label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sidebar-count {
+  font-size: 10.5px; font-weight: 500; letter-spacing: 0; color: var(--text-inverse-muted);
+  background: #22242c; border-radius: 9px; padding: 0 6px; line-height: 17px;
+}
+.sidebar-chevron { display: inline-flex; transition: transform 0.15s ease; }
+.sidebar-chevron.open { transform: rotate(90deg); }
+.sidebar-items { margin: 2px 0 6px 21px; border-left: 1px solid #2a2d38; padding-left: 4px; }
+.sidebar-items .sidebar-link { margin: 1px 8px 1px 4px; padding: 6px 10px; font-size: 13px; }
+.sidebar-link.active { box-shadow: inset 2px 0 0 #3987e5; }
+.sidebar-icon-link {
+  display: flex; justify-content: center; align-items: center; margin: 4px 10px; height: 38px; border-radius: 8px;
+  color: var(--text-inverse-muted); text-decoration: none;
+}
+.sidebar-icon-link:hover { background: var(--bg-sidebar-hover); color: var(--text-inverse); }
+.sidebar-icon-link.active { background: var(--bg-sidebar-active); color: #cfd9ff; }
+.sidebar-empty { padding: 12px 18px; font-size: 12px; color: var(--text-inverse-muted); }
+.sidebar-tools { display: flex; gap: 6px; margin-top: 10px; }
+.sidebar-tools.col { flex-direction: column; align-items: center; }
+.sidebar-tools button {
+  display: inline-flex; align-items: center; justify-content: center; background: none; border: 1px solid #2c3040;
+  color: var(--text-inverse-muted); padding: 6px 8px; border-radius: 6px; cursor: pointer; font-size: 12px;
+}
+.sidebar-tools button:last-child { flex: 1; justify-content: flex-start; }
+.sidebar-tools.col button:last-child { flex: none; }
+.sidebar-tools button:hover { color: var(--text-inverse); border-color: #3a3f52; }
+.sidebar.narrow .sidebar-footer { padding: 10px 6px; }
+/* ==== end provenza-ui ==== */

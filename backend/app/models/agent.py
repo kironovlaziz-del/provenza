@@ -41,6 +41,12 @@ class Agent(Base):
 
     status = Column(String(20), nullable=False, default="active")  # active, suspended, retired
     api_key_hash = Column(String(64), nullable=False, unique=True, index=True)
+    # agent identity: key lifecycle (rotation keeps the previous key valid for a grace period)
+    previous_api_key_hash = Column(String(64), index=True)
+    previous_key_expires_at = Column(DateTime(timezone=True))
+    api_key_rotated_at = Column(DateTime(timezone=True))
+    api_key_revoked_at = Column(DateTime(timezone=True))
+    api_key_last_used_at = Column(DateTime(timezone=True))
     public_key = Column(Text)  # Ed25519 public key (base64), for signature verification
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())

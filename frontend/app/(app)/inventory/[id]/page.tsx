@@ -19,12 +19,21 @@ import {
   updateSystem,
 } from "@/lib/inventory_api";
 import {
+  addCollectionLink,
+  listCollectionOptions,
+  listUseCaseOptions,
+  listUserOptions,
+  updateSystemRefs,
+  type Option,
+} from "@/lib/inventory_options";
+import {
   LIFECYCLE_STAGES,
   RISK_TIERS,
   type AISystemT,
   type DataLinkT,
   type DataRelation,
   type InventoryMeta,
+  type LifecycleStage,
   type RiskTier,
   type SystemMetrics,
 } from "@/lib/inventory_types";
@@ -38,6 +47,8 @@ const SOURCE_PAGE: Record<string, string> = {
 };
 
 const FLAG_GROUPS = ["prohibited", "safety", "transparency", "modifiers"] as const;
+
+type LinkTarget = "external" | "dataset" | "collection";
 
 function sameSet(a: string[], b: string[]) {
   return a.length === b.length && [...a].sort().join("|") === [...b].sort().join("|");
@@ -53,7 +64,10 @@ export default function InventorySystemPage() {
 
   const [system, setSystem] = useState<AISystemT | null>(null);
   const [meta, setMeta] = useState<InventoryMeta | null>(null);
-  const [datasets, setDatasets] = useState<{ id: number; name: string }[]>([]);
+  const [datasets, setDatasets] = useState<Option[]>([]);
+  const [collections, setCollections] = useState<Option[]>([]);
+  const [users, setUsers] = useState<Option[]>([]);
+  const [useCases, setUseCases] = useState<Option[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -61,21 +75,27 @@ export default function InventorySystemPage() {
   const [windowDays, setWindowDays] = useState(30);
 
   const [details, setDetails] = useState({ name: "", description: "", business_owner: "" });
+  const [refs, setRefs] = useState({ owner_user_id: "", use_case_id: "" });
   const [domain, setDomain] = useState("general");
   const [flags, setFlags] = useState<string[]>([]);
   const [tier, setTier] = useState<RiskTier>("minimal");
   const [justification, setJustification] = useState("");
   const [link, setLink] = useState({
     relation: "accesses" as DataRelation,
-    target: "external" as "external" | "dataset",
+    target: "external" as LinkTarget,
     external_name: "",
     dataset_id: "",
+    collection_id: "",
     contains_pii: false,
   });
 
   const apply = useCallback((s: AISystemT) => {
     setSystem(s);
     setDetails({ name: s.name, description: s.description ?? "", business_owner: s.business_owner ?? "" });
+    setRefs({
+      owner_user_id: s.owner_user_id != null ? String(s.owner_user_id) : "",
+      use_case_id: s.use_case_id != null ? String(s.use_case_id) : "",
+    });
     setDomain(s.domain);
     setFlags(s.risk_flags ?? []);
     setTier((s.suggested_risk_tier ?? "minimal") as RiskTier);
@@ -89,7 +109,14 @@ export default function InventorySystemPage() {
       .catch((e) => setError(apiErrorMessage(e, t("inventory.load_failed", "Could not load the inventory."))));
     getInventoryMeta().then(setMeta).catch(() => undefined);
     listDatasetOptions().then(setDatasets).catch(() => undefined);
+    listCollectionOptions().then(setCollections).catch(() => undefined);
+    listUseCaseOptions().then(setUseCases).catch(() => undefined);
   }, [id, apply, t]);
+
+  useEffect(() => {
+    // the user list is admin-only; others just see the owner's id
+    if (isAdmin) listUserOptions().then(setUsers).catch(() => undefined);
+  }, [isAdmin]);
 
   useEffect(() => {
     if (!Number.isFinite(id)) return;
@@ -128,6 +155,9 @@ export default function InventorySystemPage() {
   const suggested = s.suggested_risk_tier ?? null;
   const needsJustification = tier !== suggested;
   const inputsChanged = domain !== s.domain || !sameSet(flags, s.risk_flags ?? []);
+  const refsChanged =
+    refs.owner_user_id !== (s.owner_user_id != null ? String(s.owner_user_id) : "") ||
+    refs.use_case_id !== (s.use_case_id != null ? String(s.use_case_id) : "");
   const prodBlockedReason = !s.confirmed_risk_tier
     ? t("inventory.detail.prod_needs_confirmation", "Confirm the risk tier before moving to production.")
     : s.confirmed_risk_tier === "unacceptable"
@@ -140,7 +170,37 @@ export default function InventorySystemPage() {
     (l.dataset_id != null
       ? datasets.find((d) => d.id === l.dataset_id)?.name ??
         t("inventory.detail.dataset_label", { id: l.dataset_id, defaultValue: `Dataset #${l.dataset_id}` })
-      : t("inventory.detail.collection_label", { id: l.collection_id, defaultValue: `Knowledge base #${l.collection_id}` }));
+      : collections.find((c) => c.id === l.collection_id)?.name ??
+        t("inventory.detail.collection_label", { id: l.collection_id, defaultValue: `Knowledge base #${l.collection_id}` }));
+
+  // what retiring this entry will stop (mirrors InventoryService._stop_source)
+  const retireEffect: string | null = !s.source_key
+    ? null
+    : s.kind === "agent"
+      ? t("inventory.detail.retire_agent", "The agent is retired too: its key stops working and every action it attempts is refused.")
+      : s.kind === "llm_provider"
+        ? t("inventory.detail.retire_provider", "The connection is disabled: requests, the gateway and the playground stop using it.")
+        : s.kind === "model"
+          ? t("inventory.detail.retire_model", "The deployment is archived: it stops serving predictions.")
+          : s.kind === "rag_app"
+            ? t("inventory.detail.retire_rag", "The knowledge base stops answering questions until the entry is moved back to an active stage.")
+            : null;
+
+  function moveTo(stage: LifecycleStage) {
+    if (stage === "retired" && retireEffect) {
+      const ok = window.confirm(
+        `${t("inventory.detail.retire_confirm", "Retire this system?")}\n\n${retireEffect}\n\n${t(
+          "inventory.detail.retire_no_restart",
+          "Moving it back later does not restart the source; that is done on its own page.",
+        )}`,
+      );
+      if (!ok) return;
+    }
+    run(() => changeStage(s.id, stage), t("inventory.detail.saved", "Saved"));
+  }
+
+  const ownerName = (uid: number | null | undefined) =>
+    uid == null ? "—" : users.find((u) => u.id === uid)?.name ?? `#${uid}`;
 
   return (
     <>
@@ -175,6 +235,10 @@ export default function InventorySystemPage() {
             <div>
               <div className="hint-text">{t("inventory.domain", "Domain")}</div>
               <strong>{domainLabel(s.domain)}</strong>
+            </div>
+            <div>
+              <div className="hint-text">{t("inventory.detail.owner_user", "Owner")}</div>
+              <strong>{ownerName(s.owner_user_id)}</strong>
             </div>
             <div>
               <div className="hint-text">{t("inventory.detail.source", "Source")}</div>
@@ -218,8 +282,8 @@ export default function InventorySystemPage() {
               {metrics.source === null ? (
                 <p className="hint-text" style={{ margin: 0 }}>
                   {t(
-                    "inventory.metrics.no_source",
-                    "No activity source is linked to this system. Activity is tracked for agents, LLM providers, deployed models and shadow-AI tools.",
+                    "inventory.metrics.no_source_v2",
+                    "No activity source is linked to this system. Activity is tracked for agents, LLM providers, deployed models, knowledge bases and shadow-AI tools.",
                   )}
                 </p>
               ) : (
@@ -298,10 +362,10 @@ export default function InventorySystemPage() {
                 <div>
                   <div className="hint-text">&nbsp;</div>
                   <span className="hint-text">
-                    {t("inventory.detail.confirmed_by", {
-                      id: s.risk_confirmed_by,
+                    {t("inventory.detail.confirmed_by_name", {
+                      name: ownerName(s.risk_confirmed_by),
                       date: new Date(s.risk_confirmed_at).toLocaleString(),
-                      defaultValue: `Confirmed by user #${s.risk_confirmed_by} on ${new Date(s.risk_confirmed_at).toLocaleString()}`,
+                      defaultValue: `Confirmed by ${ownerName(s.risk_confirmed_by)} on ${new Date(s.risk_confirmed_at).toLocaleString()}`,
                     })}
                   </span>
                 </div>
@@ -478,7 +542,7 @@ export default function InventorySystemPage() {
                     className={`btn btn-sm${current ? " btn-primary" : ""}`}
                     disabled={!isAdmin || busy || current || blocked}
                     title={blocked ? prodBlockedReason ?? undefined : undefined}
-                    onClick={() => run(() => changeStage(s.id, stage), t("inventory.detail.saved", "Saved"))}
+                    onClick={() => moveTo(stage)}
                   >
                     {t(`inventory.stages.${stage}`, stage)}
                   </button>
@@ -487,6 +551,19 @@ export default function InventorySystemPage() {
             </div>
             {prodBlockedReason && s.lifecycle_stage !== "production" && (
               <p className="hint-text" style={{ marginBottom: 0 }}>{prodBlockedReason}</p>
+            )}
+            {retireEffect && s.lifecycle_stage !== "retired" && (
+              <p className="hint-text" style={{ marginBottom: 0, fontSize: 12 }}>
+                {t("inventory.detail.retire_hint", "Retiring:")} {retireEffect}
+              </p>
+            )}
+            {s.lifecycle_stage === "retired" && retireEffect && (
+              <p className="hint-text" style={{ marginBottom: 0, fontSize: 12 }}>
+                {t(
+                  "inventory.detail.retired_note",
+                  "Moving the entry back does not restart the source; re-enable it on its own page.",
+                )}
+              </p>
             )}
           </div>
         </div>
@@ -548,6 +625,63 @@ export default function InventorySystemPage() {
                 {t("inventory.detail.save", "Save")}
               </button>
             )}
+
+            <div style={{ borderTop: "1px solid var(--border, #334155)", paddingTop: 12, marginTop: 16 }}>
+              <h3 style={{ fontSize: 14, margin: "0 0 8px" }}>{t("inventory.detail.refs_title", "Accountability")}</h3>
+              <div className="form-row">
+                <div className="field">
+                  <label htmlFor="d-owner-user">{t("inventory.detail.owner_user", "Owner")}</label>
+                  {isAdmin ? (
+                    <select id="d-owner-user" value={refs.owner_user_id} onChange={(e) => setRefs({ ...refs, owner_user_id: e.target.value })}>
+                      <option value="">—</option>
+                      {users.map((u) => (
+                        <option key={u.id} value={u.id}>{u.name}</option>
+                      ))}
+                      {refs.owner_user_id && !users.some((u) => String(u.id) === refs.owner_user_id) && (
+                        <option value={refs.owner_user_id}>#{refs.owner_user_id}</option>
+                      )}
+                    </select>
+                  ) : (
+                    <div>{ownerName(s.owner_user_id)}</div>
+                  )}
+                </div>
+                <div className="field">
+                  <label htmlFor="d-use-case">{t("inventory.detail.use_case", "Use case")}</label>
+                  <select
+                    id="d-use-case"
+                    disabled={!isAdmin}
+                    value={refs.use_case_id}
+                    onChange={(e) => setRefs({ ...refs, use_case_id: e.target.value })}
+                  >
+                    <option value="">—</option>
+                    {useCases.map((u) => (
+                      <option key={u.id} value={u.id}>{u.name}</option>
+                    ))}
+                    {refs.use_case_id && !useCases.some((u) => String(u.id) === refs.use_case_id) && (
+                      <option value={refs.use_case_id}>#{refs.use_case_id}</option>
+                    )}
+                  </select>
+                </div>
+              </div>
+              {isAdmin && (
+                <button
+                  className="btn btn-primary btn-sm"
+                  disabled={busy || !refsChanged}
+                  onClick={() =>
+                    run(
+                      () =>
+                        updateSystemRefs(s.id, {
+                          owner_user_id: refs.owner_user_id ? Number(refs.owner_user_id) : null,
+                          use_case_id: refs.use_case_id ? Number(refs.use_case_id) : null,
+                        }),
+                      t("inventory.detail.saved", "Saved"),
+                    )
+                  }
+                >
+                  {t("inventory.detail.save", "Save")}
+                </button>
+              )}
+            </div>
           </div>
         </div>
 
@@ -567,32 +701,34 @@ export default function InventorySystemPage() {
             {s.data_links.length === 0 ? (
               <p className="hint-text">{t("inventory.detail.data_empty", "No data links yet.")}</p>
             ) : (
-              <table style={{ marginBottom: 12 }}>
-                <thead>
-                  <tr>
-                    <th>{t("inventory.detail.relation", "Relation")}</th>
-                    <th>{t("inventory.detail.target", "Data")}</th>
-                    <th>{t("inventory.detail.pii", "Personal data")}</th>
-                    {isAdmin && <th />}
-                  </tr>
-                </thead>
-                <tbody>
-                  {s.data_links.map((l) => (
-                    <tr key={l.id}>
-                      <td>{t(`inventory.detail.relations.${l.relation}`, l.relation)}</td>
-                      <td>{linkTarget(l)}</td>
-                      <td>{l.contains_pii ? t("inventory.detail.yes", "Yes") : t("inventory.detail.no", "No")}</td>
-                      {isAdmin && (
-                        <td>
-                          <button className="btn btn-sm" disabled={busy} onClick={() => run(() => removeDataLink(s.id, l.id))}>
-                            {t("inventory.detail.remove", "Remove")}
-                          </button>
-                        </td>
-                      )}
+              <div style={{ maxHeight: 320, overflowY: "auto", marginBottom: 12 }}>
+                <table>
+                  <thead>
+                    <tr>
+                      <th>{t("inventory.detail.relation", "Relation")}</th>
+                      <th>{t("inventory.detail.target", "Data")}</th>
+                      <th>{t("inventory.detail.pii", "Personal data")}</th>
+                      {isAdmin && <th />}
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {s.data_links.map((l) => (
+                      <tr key={l.id}>
+                        <td>{t(`inventory.detail.relations.${l.relation}`, l.relation)}</td>
+                        <td>{linkTarget(l)}</td>
+                        <td>{l.contains_pii ? t("inventory.detail.yes", "Yes") : t("inventory.detail.no", "No")}</td>
+                        {isAdmin && (
+                          <td>
+                            <button className="btn btn-sm" disabled={busy} onClick={() => run(() => removeDataLink(s.id, l.id))}>
+                              {t("inventory.detail.remove", "Remove")}
+                            </button>
+                          </td>
+                        )}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             )}
 
             {isAdmin && (
@@ -612,19 +748,18 @@ export default function InventorySystemPage() {
                   </div>
                   <div className="field">
                     <label htmlFor="l-type">{t("inventory.detail.target_type", "Data source")}</label>
-                    <select
-                      id="l-type"
-                      value={link.target}
-                      onChange={(e) => setLink({ ...link, target: e.target.value as "external" | "dataset" })}
-                    >
+                    <select id="l-type" value={link.target} onChange={(e) => setLink({ ...link, target: e.target.value as LinkTarget })}>
                       <option value="external">{t("inventory.detail.target_external", "External source")}</option>
                       <option value="dataset" disabled={datasets.length === 0}>
                         {t("inventory.detail.target_dataset", "Dataset")}
                       </option>
+                      <option value="collection" disabled={collections.length === 0}>
+                        {t("inventory.detail.target_collection", "Knowledge base")}
+                      </option>
                     </select>
                   </div>
                   <div className="field">
-                    {link.target === "external" ? (
+                    {link.target === "external" && (
                       <>
                         <label htmlFor="l-ext">{t("inventory.detail.external_name", "Name of the source")}</label>
                         <input
@@ -634,17 +769,25 @@ export default function InventorySystemPage() {
                           onChange={(e) => setLink({ ...link, external_name: e.target.value })}
                         />
                       </>
-                    ) : (
+                    )}
+                    {link.target === "dataset" && (
                       <>
                         <label htmlFor="l-ds">{t("inventory.detail.dataset", "Dataset")}</label>
-                        <select
-                          id="l-ds"
-                          value={link.dataset_id}
-                          onChange={(e) => setLink({ ...link, dataset_id: e.target.value })}
-                        >
+                        <select id="l-ds" value={link.dataset_id} onChange={(e) => setLink({ ...link, dataset_id: e.target.value })}>
                           <option value="">—</option>
                           {datasets.map((d) => (
                             <option key={d.id} value={d.id}>{d.name}</option>
+                          ))}
+                        </select>
+                      </>
+                    )}
+                    {link.target === "collection" && (
+                      <>
+                        <label htmlFor="l-col">{t("inventory.detail.collection", "Knowledge base")}</label>
+                        <select id="l-col" value={link.collection_id} onChange={(e) => setLink({ ...link, collection_id: e.target.value })}>
+                          <option value="">—</option>
+                          {collections.map((c) => (
+                            <option key={c.id} value={c.id}>{c.name}</option>
                           ))}
                         </select>
                       </>
@@ -664,18 +807,25 @@ export default function InventorySystemPage() {
                   className="btn btn-primary btn-sm"
                   disabled={
                     busy ||
-                    (link.target === "external" ? !link.external_name.trim() : !link.dataset_id)
+                    (link.target === "external"
+                      ? !link.external_name.trim()
+                      : link.target === "dataset"
+                        ? !link.dataset_id
+                        : !link.collection_id)
                   }
                   onClick={() =>
                     run(async () => {
-                      const updated = await addDataLink(s.id, {
-                        relation: link.relation,
-                        contains_pii: link.contains_pii,
-                        ...(link.target === "external"
-                          ? { external_name: link.external_name.trim() }
-                          : { dataset_id: Number(link.dataset_id) }),
-                      });
-                      setLink({ ...link, external_name: "", dataset_id: "", contains_pii: false });
+                      const updated =
+                        link.target === "collection"
+                          ? await addCollectionLink(s.id, Number(link.collection_id), link.relation, link.contains_pii)
+                          : await addDataLink(s.id, {
+                              relation: link.relation,
+                              contains_pii: link.contains_pii,
+                              ...(link.target === "external"
+                                ? { external_name: link.external_name.trim() }
+                                : { dataset_id: Number(link.dataset_id) }),
+                            });
+                      setLink({ ...link, external_name: "", dataset_id: "", collection_id: "", contains_pii: false });
                       return updated;
                     })
                   }

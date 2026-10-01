@@ -80,6 +80,7 @@ class GovernanceGraphService:
                     "verified": bool(h.verified),
                     "chain_status": cstatus,
                     "is_violation": cstatus == "violated",
+                    "is_tripped": cstatus == "tripped",
                 }
             )
 
