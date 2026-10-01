@@ -1,7 +1,7 @@
 # Runtime deps for the isolated training container. Kept separate from the
 # backend's requirements.txt so the backend image stays small and this
 # image can be updated independently.
-transformers==4.47.1
+transformers==5.10.1
 peft==0.14.0
 datasets==3.2.0
 accelerate==1.2.1
@@ -15,6 +15,6 @@ redis==5.2.1
 celery==5.4.0
 pydantic==2.10.4
 pydantic-settings==2.7.0
-cryptography==44.0.0
+cryptography==50.0.0
 httpx==0.28.1
 spacy==3.8.2
