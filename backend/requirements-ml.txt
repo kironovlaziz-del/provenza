@@ -11,11 +11,11 @@
 # Pinned to versions that are known to work together and expose the
 # TrainingArguments.use_cpu flag (>=4.44) plus the new device handling.
 
-torch==2.5.1
-transformers==4.47.1
+torch==2.13.0
+transformers==5.10.1
 datasets==3.2.0
-accelerate==1.2.1
-sentencepiece==0.2.0
+accelerate==1.15.0
+sentencepiece==0.2.1
 safetensors==0.4.5
 tokenizers==0.21.0
 huggingface-hub==0.27.0
