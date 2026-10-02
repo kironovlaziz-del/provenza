@@ -2401,6 +2401,10 @@
       "a2a_message": "A2A xabarlari",
       "delegation_hop": "Delegatsiyalar",
       "incident_created": "Insidentlar"
-    }
+    },
+    "load_older": "eskiroq hodisalarni yuklash",
+    "loading_older": "yuklanmoqda…",
+    "start_of_window": "tanlangan davr boshi",
+    "no_events_window": "tanlangan davrda agent faolligi yo'q"
   }
 }

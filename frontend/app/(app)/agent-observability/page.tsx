@@ -48,8 +48,9 @@ function colorFor(dim: string, key: string): string {
   return slotOf.get(id)!;
 }
 
-const WINDOWS = [15, 60, 360, 1440, 10080];
-const TERM_MAX = 2000;
+const WINDOWS = [15, 60, 360, 1440, 10080, 43200];
+const TERM_MAX = 5000;
+const PAGE = 200;
 const fmtWin = (m: number) => (m < 60 ? `${m}m` : m < 1440 ? `${m / 60}h` : `${m / 1440}d`);
 const fmtNum = (v: number | null | undefined) =>
   v == null ? "—" : v >= 1e6 ? `${(v / 1e6).toFixed(1)}M` : v >= 1e4 ? `${(v / 1e3).toFixed(1)}k` : `${Math.round(v * 10) / 10}`;
@@ -356,8 +357,12 @@ function Terminal(props: {
   setPaused: (p: boolean) => void;
   onClear: () => void;
   state: StreamState;
+  windowLabel: string;
+  hasMore: boolean;
+  loadingMore: boolean;
+  onLoadMore: () => void;
 }) {
-  const { events, names, isAdmin, paused, setPaused, onClear, state } = props;
+  const { events, names, isAdmin, paused, setPaused, onClear, state, windowLabel, hasMore, loadingMore, onLoadMore } = props;
   const { t } = useTranslation();
   const boxRef = useRef<HTMLDivElement>(null);
   const [follow, setFollow] = useState(true);
@@ -422,7 +427,22 @@ function Terminal(props: {
           const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 30;
           if (atBottom !== follow) setFollow(atBottom);
         }}>
-        {shown.length === 0 && <div style={{ color: "#6e7681" }}>$ {t("obs.waiting", "waiting for agent activity…")}</div>}
+        {events.length > 0 && (
+          <div style={{ color: "#6e7681", marginBottom: 6 }}>
+            {hasMore ? (
+              <span className="lk" style={{ marginLeft: 0 }} onClick={() => !loadingMore && onLoadMore()}>
+                {loadingMore ? t("obs.loading_older", "loading…") : `↑ ${t("obs.load_older", "load older events")}`}
+              </span>
+            ) : (
+              <span>— {t("obs.start_of_window", "start of the selected window")} ({windowLabel}) —</span>
+            )}
+          </div>
+        )}
+        {shown.length === 0 && (
+          <div style={{ color: "#6e7681" }}>
+            $ {t("obs.no_events_window", "no agent activity in the selected window")} ({windowLabel}). {t("obs.waiting", "waiting for agent activity…")}
+          </div>
+        )}
         {shown.map((e) => {
           const k = `${e.type}:${e.id}`;
           const [tag, tagColor] = TAG[e.type] ?? [e.type, "#cccccc"];
@@ -504,6 +524,8 @@ export default function AgentObservabilityPage() {
   const [stream, setStream] = useState<{ state: StreamState; detail?: string }>({ state: "connecting" });
   const [error, setError] = useState<string | null>(null);
   const [auto, setAuto] = useState(true);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const pausedRef = useRef(paused);
   pausedRef.current = paused;
 
@@ -542,14 +564,17 @@ export default function AgentObservabilityPage() {
     return () => clearInterval(id);
   }, [load, auto, minutes]);
 
-  // terminal: backfill + live stream with masked content; reopens when filters change
+  // terminal: backfill of the selected window + live stream with masked
+  // content; reopens when the filters or the window change
   useEffect(() => {
     let cancelled = false;
     setTerm([]);
     setHeld([]);
-    getObsEvents(filters, 60, 200, true)
+    setHasMore(false);
+    getObsEvents(filters, minutes, PAGE, true)
       .then((evs) => {
         if (cancelled) return;
+        setHasMore(evs.length === PAGE);
         setTerm((cur) => {
           const seen = new Set(cur.map((e) => `${e.type}:${e.id}`));
           return [...evs.slice().reverse().filter((e) => !seen.has(`${e.type}:${e.id}`)), ...cur].slice(-TERM_MAX);
@@ -571,7 +596,29 @@ export default function AgentObservabilityPage() {
       cancelled = true;
       close();
     };
-  }, [filters, t]);
+  }, [filters, minutes, t]);
+
+  // page back through the window: events older than the oldest one shown
+  async function loadOlder() {
+    const oldest = term[0];
+    if (!oldest || loadingMore) return;
+    setLoadingMore(true);
+    try {
+      const evs = await getObsEvents(filters, minutes, PAGE, true, oldest.ts);
+      setTerm((cur) => {
+        const seen = new Set(cur.map((e) => `${e.type}:${e.id}`));
+        const older = evs.slice().reverse().filter((e) => !seen.has(`${e.type}:${e.id}`));
+        const merged = [...older, ...cur];
+        if (merged.length >= TERM_MAX) setHasMore(false);
+        return merged.slice(0, TERM_MAX);
+      });
+      if (evs.length < PAGE) setHasMore(false);
+    } catch (e) {
+      setError(obsError(e, t("obs.load_failed", "Could not load data.")));
+    } finally {
+      setLoadingMore(false);
+    }
+  }
 
   function setPausedAndFlush(p: boolean) {
     if (!p) {
@@ -703,7 +750,8 @@ export default function AgentObservabilityPage() {
 
       <h2>{t("obs.sec_terminal", "Live activity")}</h2>
       <Terminal events={term} names={names} isAdmin={isAdmin} paused={paused} setPaused={setPausedAndFlush}
-        onClear={() => { setTerm([]); setHeld([]); }} state={stream.state} />
+        onClear={() => { setTerm([]); setHeld([]); setHasMore(false); }} state={stream.state}
+        windowLabel={fmtWin(minutes)} hasMore={hasMore} loadingMore={loadingMore} onLoadMore={loadOlder} />
       {paused && held.length > 0 && (
         <div style={{ color: "var(--muted)", marginTop: 6 }}>{held.length} {t("obs.new", "new")} — {t("obs.paused_hint", "press Resume")}</div>
       )}

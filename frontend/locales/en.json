@@ -2401,6 +2401,10 @@
       "a2a_message": "A2A messages",
       "delegation_hop": "Delegations",
       "incident_created": "Incidents"
-    }
+    },
+    "load_older": "load older events",
+    "loading_older": "loading…",
+    "start_of_window": "start of the selected window",
+    "no_events_window": "no agent activity in the selected window"
   }
 }
