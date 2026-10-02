@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "@/lib/auth";
 import { Sidebar } from "@/components/Sidebar";
+import { SystemHealthBanner } from "@/components/SystemHealthBanner";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -32,7 +33,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="shell">
       <Sidebar />
-      <div className="main">{children}</div>
+      <div className="main"><SystemHealthBanner />{children}</div>
     </div>
   );
 }

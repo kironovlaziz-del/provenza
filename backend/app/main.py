@@ -36,6 +36,7 @@ from app.api import queue_ttl
 from app.api import byok
 from app.api import compliance
 from app.api import observability
+from app.api import system
 
 
 _is_prod = settings.ENVIRONMENT == "production"
@@ -102,6 +103,7 @@ app.include_router(queue_ttl.router, prefix=f"{settings.API_V1_STR}/queue", tags
 app.include_router(byok.router, prefix=f"{settings.API_V1_STR}/byok", tags=["security"])
 app.include_router(compliance.router, prefix=f"{settings.API_V1_STR}/compliance", tags=["compliance"])
 app.include_router(observability.router, prefix=f"{settings.API_V1_STR}/observability", tags=["agents"])
+app.include_router(system.router, prefix=f"{settings.API_V1_STR}/system", tags=["system"])
 
 
 

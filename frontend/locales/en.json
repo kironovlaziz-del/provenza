@@ -103,7 +103,8 @@
       "queue_ttl": "Queue & Retention",
       "encryption_keys": "Encryption Keys",
       "compliance": "Compliance",
-      "agent_observability": "Agent observability"
+      "agent_observability": "Agent observability",
+      "system_status": "System status"
     },
     "logout": "Sign out",
     "role_admin": "admin",
@@ -2411,5 +2412,32 @@
     "loading_older": "loading…",
     "start_of_window": "start of the selected window",
     "no_events_window": "no agent activity in the selected window"
+  },
+  "health": {
+    "title": "System status",
+    "overall": "Overall",
+    "status_ok": "OK",
+    "status_degraded": "Degraded",
+    "status_down": "Down",
+    "ok": "OK",
+    "fail": "FAIL",
+    "checked": "checked",
+    "recheck": "Check again",
+    "load_failed": "Could not load the system status.",
+    "hint": "The web app can look fine while background work has stopped. This page checks each part behind it: database, Redis, the Celery workers that process requests, sweeps and training, and Celery beat that schedules them.",
+    "database": "Database (PostgreSQL)",
+    "redis": "Redis (task queue and live events)",
+    "queued": "queued tasks",
+    "workers": "Celery workers",
+    "no_workers": "No worker answers.",
+    "beat": "Celery beat (scheduled jobs)",
+    "beat_never": "No heartbeat recorded yet.",
+    "beat_last": "last heartbeat",
+    "ago": "ago",
+    "expected": "expected every",
+    "banner_down": "Background processing is down",
+    "banner_degraded": "Background processing needs attention",
+    "details": "Details",
+    "dismiss": "Dismiss"
   }
 }

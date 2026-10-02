@@ -124,7 +124,10 @@ const NAV: Group[] = [
       { href: "/provider-chat", labelKey: "sidebar.nav.provider_chat" },
     ],
   },
-  { sectionKey: "sidebar.sections.settings", icon: "settings", items: [{ href: "/notifications", labelKey: "sidebar.nav.notifications" }] },
+  { sectionKey: "sidebar.sections.settings", icon: "settings", items: [
+      { href: "/notifications", labelKey: "sidebar.nav.notifications" },
+      { href: "/system-status", labelKey: "sidebar.nav.system_status", adminOnly: true },
+    ] },
 ];
 
 const OPEN_KEY = "pvz.sidebar.open";

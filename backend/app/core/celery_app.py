@@ -40,6 +40,11 @@ celery_app.conf.update(
 from celery.schedules import crontab  # noqa: E402
 
 celery_app.conf.beat_schedule = {
+    # liveness of the schedule -> queue -> worker path (System status page)
+    "system-heartbeat": {
+        "task": "system.heartbeat",
+        "schedule": 60.0,
+    },
     # Re-verify every stored service connection (AD/LDAP bind, DNS reach)
     # a few times a day, so the UI reflects whether saved credentials
     # still work. Staggered to a quiet minute rather than exactly on the
@@ -63,6 +68,7 @@ from app.workers import (  # noqa: E402,F401
     discovery_tasks,
     queue_tasks,
     byok_tasks,
+    system_tasks,
 )
 
 

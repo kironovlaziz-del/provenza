@@ -103,7 +103,8 @@
       "queue_ttl": "Navbat va saqlash",
       "encryption_keys": "Shifrlash kalitlari",
       "compliance": "Muvofiqlik",
-      "agent_observability": "Agentlar monitoringi"
+      "agent_observability": "Agentlar monitoringi",
+      "system_status": "Tizim holati"
     },
     "logout": "Chiqish",
     "role_admin": "administrator",
@@ -2411,5 +2412,32 @@
     "loading_older": "yuklanmoqda…",
     "start_of_window": "tanlangan davr boshi",
     "no_events_window": "tanlangan davrda agent faolligi yo'q"
+  },
+  "health": {
+    "title": "Tizim holati",
+    "overall": "Umumiy",
+    "status_ok": "Yaxshi",
+    "status_degraded": "Muammo bor",
+    "status_down": "Ishlamayapti",
+    "ok": "OK",
+    "fail": "XATO",
+    "checked": "tekshirildi",
+    "recheck": "Qayta tekshirish",
+    "load_failed": "Tizim holatini yuklab bo'lmadi.",
+    "hint": "Veb-ilova yaxshi ko'rinsa ham, fon ishlari to'xtagan bo'lishi mumkin. Bu sahifa har bir qismni tekshiradi: ma'lumotlar bazasi, Redis, so'rovlar, tozalash va o'qitishni bajaradigan Celery workerlar hamda ularni rejalashtiradigan Celery beat.",
+    "database": "Ma'lumotlar bazasi (PostgreSQL)",
+    "redis": "Redis (vazifalar navbati va jonli hodisalar)",
+    "queued": "navbatdagi vazifalar",
+    "workers": "Celery workerlar",
+    "no_workers": "Hech bir worker javob bermayapti.",
+    "beat": "Celery beat (rejalashtirilgan ishlar)",
+    "beat_never": "Hali yurak urishi qayd etilmagan.",
+    "beat_last": "oxirgi yurak urishi",
+    "ago": "oldin",
+    "expected": "kutilgan oraliq",
+    "banner_down": "Fon ishlari to'xtagan",
+    "banner_degraded": "Fon ishlarida muammo bor",
+    "details": "Batafsil",
+    "dismiss": "Yopish"
   }
 }
