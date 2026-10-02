@@ -4,6 +4,8 @@ import { api } from "./api";
 export interface IdentitySettings {
   require_agent_key: boolean;
   rotation_grace_minutes: number;
+  /** Every agent must sign with Ed25519 + ML-DSA-65 (post-quantum hybrid). */
+  require_pq_signatures: boolean;
   source?: "default" | "org";
 }
 
@@ -34,6 +36,7 @@ export async function saveIdentitySettings(s: IdentitySettings) {
   const { data } = await api.put("/agent-identity/settings", {
     require_agent_key: s.require_agent_key,
     rotation_grace_minutes: s.rotation_grace_minutes,
+    require_pq_signatures: s.require_pq_signatures,
   });
   return data;
 }

@@ -1,6 +1,10 @@
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
+
+from app.core.agent_signing import (
+    SCHEME_CLASSIC, SCHEME_HYBRID, key_fingerprint, normalize_pq_public_key, normalize_public_key,
+)
 from datetime import datetime
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Literal
 
 
 # ---- Agents ----
@@ -15,6 +19,71 @@ class AgentCreate(BaseModel):
     allowed_tools: Optional[List[str]] = None
     allowed_models: Optional[List[str]] = None
     max_delegation_depth: int = 3
+    # The agent's own Ed25519 public key (base64 of the 32 raw bytes). Given,
+    # the server never holds the private key and cannot sign as the agent.
+    # Omitted, a keypair is generated here and the private key returned once.
+    public_key: Optional[str] = None
+    # Hybrid post-quantum key: the agent's ML-DSA-65 public key (base64 of the
+    # 1952 raw bytes), registered together with public_key.
+    pq_public_key: Optional[str] = None
+    # Only when the server generates the keys: "hybrid" adds an ML-DSA-65 pair.
+    key_scheme: Literal["ed25519", "hybrid"] = "ed25519"
+
+    @field_validator("public_key")
+    @classmethod
+    def _public_key(cls, v: Optional[str]) -> Optional[str]:
+        # None = generate one here; an empty string is a mistake, not a choice.
+        return None if v is None else normalize_public_key(v)
+
+    @field_validator("pq_public_key")
+    @classmethod
+    def _pq_public_key(cls, v: Optional[str]) -> Optional[str]:
+        return None if v is None else normalize_pq_public_key(v)
+
+    @model_validator(mode="after")
+    def _pair(self):
+        if self.pq_public_key and not self.public_key:
+            raise ValueError("pq_public_key comes with public_key: a hybrid key is Ed25519 + ML-DSA-65")
+        if self.public_key and self.key_scheme == "hybrid" and not self.pq_public_key:
+            raise ValueError("key_scheme 'hybrid' with your own key needs pq_public_key (ML-DSA-65) as well")
+        return self
+
+
+class SigningKeyIn(BaseModel):
+    """Register (or replace) the agent's own key: Ed25519, plus ML-DSA-65 for
+    a hybrid (post-quantum) key."""
+    public_key: str
+    pq_public_key: Optional[str] = None
+
+    @field_validator("public_key")
+    @classmethod
+    def _public_key(cls, v: str) -> str:
+        return normalize_public_key(v)
+
+    @field_validator("pq_public_key")
+    @classmethod
+    def _pq_public_key(cls, v: Optional[str]) -> Optional[str]:
+        return None if v is None else normalize_pq_public_key(v)
+
+
+class SigningKeyOut(BaseModel):
+    id: int
+    public_key: str
+    pq_public_key: Optional[str] = None
+    fingerprint: str
+    origin: str
+    scheme: str = SCHEME_CLASSIC
+    created_by: Optional[int]
+    created_at: datetime
+    retired_at: Optional[datetime]
+
+    @model_validator(mode="after")
+    def _scheme(self):
+        self.scheme = SCHEME_HYBRID if self.pq_public_key else SCHEME_CLASSIC
+        return self
+
+    class Config:
+        from_attributes = True
 
 
 class AgentUpdate(BaseModel):
@@ -43,8 +112,19 @@ class AgentOut(BaseModel):
     max_delegation_depth: int
     status: str
     public_key: Optional[str]
+    pq_public_key: Optional[str] = None   # ML-DSA-65 half of a hybrid key
+    key_origin: Optional[str] = None      # agent | server
+    key_fingerprint: Optional[str] = None  # "SHA256:..." over the key(s)
+    signature_scheme: Optional[str] = None  # ed25519 | ed25519+ml-dsa-65
     created_at: datetime
     updated_at: Optional[datetime]
+
+    @model_validator(mode="after")
+    def _fingerprint(self):
+        self.key_fingerprint = key_fingerprint(self.public_key, self.pq_public_key)
+        if self.public_key:
+            self.signature_scheme = SCHEME_HYBRID if self.pq_public_key else SCHEME_CLASSIC
+        return self
 
     class Config:
         from_attributes = True
@@ -53,7 +133,10 @@ class AgentOut(BaseModel):
 class AgentCreated(AgentOut):
     # Secrets shown ONCE at registration; never returned again.
     api_key: str
-    private_key: str
+    # Only when the server generated the keypair; None for an agent-held key.
+    private_key: Optional[str] = None
+    # ML-DSA-65 seed (the private key), server-generated hybrid keys only.
+    pq_private_key: Optional[str] = None
 
 
 # ---- Kill switch ----
@@ -76,6 +159,8 @@ class DelegateRequest(BaseModel):
     delegated_capabilities: List[str] = Field(default_factory=list)
     chain_id: Optional[int] = None      # None = start a new chain (root delegation)
     signature: Optional[str] = None     # Ed25519 signature by the delegating agent
+    # ML-DSA-65 signature over the same bytes - required for hybrid agents
+    pq_signature: Optional[str] = Field(default=None, max_length=6000)
     expires_in: Optional[int] = None    # seconds
     # Replay protection - both are part of the signed payload
     nonce: Optional[str] = Field(default=None, min_length=16, max_length=128)
@@ -160,6 +245,7 @@ class ActionRecordRequest(BaseModel):
     input: Dict[str, Any] = Field(default_factory=dict)
     output: Optional[Dict[str, Any]] = None
     signature: Optional[str] = None
+    pq_signature: Optional[str] = Field(default=None, max_length=6000)  # hybrid agents
     duration_ms: Optional[int] = None
     check_id: Optional[str] = None        # from /actions/check (required for keyed agents)
     action_capabilities: List[str] = Field(default_factory=list)  # keyless path only

@@ -67,6 +67,15 @@ export default function AgentIdentityPage() {
       );
       if (!ok) return;
     }
+    if (form.require_pq_signatures && !data.settings.require_pq_signatures) {
+      const ok = window.confirm(
+        t(
+          "identity.confirm_require_pq",
+          "Require post-quantum signatures? Agents without a hybrid key (Ed25519-only or no signing key) will have their delegations, actions and messages refused until they get one.",
+        ),
+      );
+      if (!ok) return;
+    }
     run(() => saveIdentitySettings(form), t("identity.saved", "Saved"));
   }
 
@@ -219,6 +228,16 @@ export default function AgentIdentityPage() {
                 <strong>{t("identity.require", "Require agent keys")}</strong>
                 <span className="hint-text" style={{ display: "block", fontSize: 12 }}>
                   {t("identity.require_hint", "A user's session can no longer call check, record, delegate, messages, memory or the gateway in an agent's name. The UI keeps working.")}
+                </span>
+              </span>
+            </label>
+            <label style={{ display: "flex", gap: 10, alignItems: "flex-start", marginBottom: 14 }}>
+              <input type="checkbox" checked={!!form.require_pq_signatures} disabled={!isAdmin}
+                onChange={(e) => setForm({ ...form, require_pq_signatures: e.target.checked })} style={{ width: "auto", marginTop: 3 }} />
+              <span>
+                <strong>{t("identity.require_pq", "Require post-quantum signatures")}</strong>
+                <span className="hint-text" style={{ display: "block", fontSize: 12 }}>
+                  {t("identity.require_pq_hint", "New agents and key changes must use the hybrid Ed25519 + ML-DSA-65 scheme; agents without a hybrid key (Ed25519-only or no signing key) cannot delegate, record actions or send messages until they get one.")}
                 </span>
               </span>
             </label>

@@ -41,6 +41,8 @@ class A2ASendIn(BaseModel):
     # sender signed, not over a re-serialised model
     envelope: Dict[str, Any]
     signature: str = Field(min_length=1, max_length=200)
+    # ML-DSA-65 over the same envelope bytes - required when the sender has a hybrid key
+    pq_signature: Optional[str] = Field(default=None, max_length=6000)
     payload: Any
 
     @model_validator(mode="after")

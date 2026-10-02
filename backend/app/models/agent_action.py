@@ -35,6 +35,9 @@ class AgentAction(Base):
     # payload the agent signed - makes the action verifiable offline.
     check_id = Column(Integer, ForeignKey("agent_action_checks.id"), index=True)
     signed_payload = Column(JSONB)
+    signer_public_key = Column(Text)  # key that verified `signature` (survives key changes)
+    pq_signature = Column(Text)          # ML-DSA-65 signature (hybrid signers)
+    signer_pq_public_key = Column(Text)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
 
 

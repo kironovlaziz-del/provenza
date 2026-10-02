@@ -6,6 +6,48 @@ this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **Agent-held signing keys.** An agent can register its own Ed25519 public
+  key (at registration or later via `POST /agents/{id}/signing-key`); the
+  server never holds the private key. Server-generated keys remain as a
+  quick start and are labelled `key_origin: "server"`. Every key is kept in
+  a history with the period it was current.
+- **Weak keys are refused.** Public keys must be canonical points of the
+  Ed25519 prime-order subgroup; small-order keys (for which a fixed
+  signature verifies every message) are rejected at registration and never
+  count as valid - on the server, in the browser and in the offline tool. A
+  key the server generated cannot later be registered as agent-held, and a
+  key belongs to one agent only.
+- **Signature evidence that does not depend on the server.** Verification
+  endpoints for delegations and recorded actions return the exact signed
+  text, the key that verified it and its fingerprint; the delegation map
+  verifies over those bytes and computes the fingerprint in the browser,
+  and offers the evidence as a download. `tools/provenza_sign.py`
+  (keygen / fingerprint / sign / verify) and an OpenSSL recipe check it
+  offline. Specification: `docs/agent-signing.md`.
+
+- **Post-quantum hybrid signatures (Ed25519 + ML-DSA-65).** An agent key can
+  be hybrid: delegations, recorded actions and agent-to-agent messages carry
+  an ML-DSA-65 (FIPS 204) signature next to the Ed25519 one, over the same
+  canonical bytes, and are valid only if both verify. Hybrid keys can be
+  agent-held (`provenza_sign.py keygen --hybrid`) or server-generated
+  (`key_scheme: "hybrid"`); the fingerprint covers both keys. The browser
+  verifies ML-DSA with a bundled library (`@noble/post-quantum`, no CDN);
+  the offline tool and an OpenSSL 3.5 recipe check both halves. The new
+  organization setting `require_pq_signatures` refuses Ed25519-only keys
+  and stops agents without a hybrid key from delegating, recording actions
+  and sending messages until they get one.
+
+### Fixed
+
+- **Browser verification of non-ASCII payloads.** The browser now checks the
+  exact signed bytes, and its canonical JSON matches the server's byte for
+  byte (`\uXXXX` escaping, keys sorted at every level), so delegations with
+  Cyrillic or Uzbek text no longer show as "signature does not match".
+- **Key changes no longer break old signatures** — each signed record keeps
+  the public key that verified it.
+
 ### Security
 
 - **Self-service sign-up is off by default.** `POST /users/register` (new

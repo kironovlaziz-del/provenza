@@ -48,6 +48,9 @@ class DelegationService:
         chain_id: Optional[int],
         expires_at=None,
         signed_payload: Optional[dict] = None,
+        signer_public_key: Optional[str] = None,
+        pq_signature: Optional[str] = None,
+        signer_pq_public_key: Optional[str] = None,
     ) -> Tuple[DelegationChain, DelegationHop]:
         """
         Record one delegation hop, creating the chain if this is the root
@@ -157,6 +160,9 @@ class DelegationService:
             expires_at=expires_at,
             signature=signature,
             signed_payload=signed_payload,
+            signer_public_key=signer_public_key if signature else None,
+            pq_signature=pq_signature if signature else None,
+            signer_pq_public_key=signer_pq_public_key if signature else None,
             verified=bool(signature),  # API layer verifies before calling; stored result
         )
         self.db.add(hop)

@@ -24,7 +24,7 @@ from app.models.rag_document import Document
 from app.models.document_chunk import DocumentChunk
 from app.models.discovered_service import DiscoveredService
 from app.models.service_connection import ServiceConnection
-from app.models.agent import Agent, AgentPolicy
+from app.models.agent import Agent, AgentPolicy, AgentSigningKey
 from app.models.delegation import DelegationChain, DelegationHop, DelegationNonce
 from app.models.agent_action import AgentAction, AgentIncident, ActionCheck
 from app.models.ai_system import AISystem, AISystemDataLink
@@ -74,6 +74,7 @@ __all__ = [
     "ServiceConnection",
     "Agent",
     "AgentPolicy",
+    "AgentSigningKey",
     "DelegationChain",
     "DelegationHop",
     "AgentAction",

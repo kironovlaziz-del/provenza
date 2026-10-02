@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta, timezone
-from typing import Optional
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends
 from sqlalchemy import select
@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.pagination import PaginationParams
-from app.core.agent_signing import verify_payload
+from app.core.agent_signing import verify_agent_signature, verify_payload
 from app.schemas.pagination import Page
 from app.schemas.agent import (
     AgentCreate, AgentUpdate, AgentOut, AgentCreated,
@@ -15,9 +15,10 @@ from app.schemas.agent import (
     DelegateRequest, DelegateResponse, ChainOut, ChainDetail, HopOut,
     ActionCheckRequest, ActionCheckResponse, ActionRecordRequest, ActionDenyRequest, ActionOut,
     AgentPolicyCreate, AgentPolicyOut, AgentIncidentOut,
-    GovernanceGraph,
+    GovernanceGraph, SigningKeyIn, SigningKeyOut,
 )
 from app.services.agent_registry import AgentRegistry
+from app.services.agent_identity import pq_signature_required
 from app.services.delegation_service import DelegationService
 from app.services.agent_audit import AgentAudit
 from app.services.governance_graph_service import GovernanceGraphService
@@ -48,6 +49,7 @@ async def register_agent(
         **AgentOut.model_validate(agent).model_dump(),
         api_key=raw_key,
         private_key=private_key,
+        pq_private_key=registry.generated_pq_private_key,
     )
 
 
@@ -58,10 +60,11 @@ async def hop_verification(
     current_user: User = Depends(get_current_user),
 ):
     """
-    Returns everything needed to verify a hop's signature OFFLINE in the
-    browser: the exact signed payload, the Ed25519 signature, and the
-    delegating agent's public key. The client can confirm the delegation
-    was authorized by that agent without trusting this server.
+    Evidence for verifying a hop's signature without this server: the exact
+    signed text, the Ed25519 signature and the public key that verified it,
+    with that key's fingerprint and origin. A verifier checks the signature
+    over `signed_message` and compares the fingerprint (computed on its own
+    side) with the one the agent's owner holds - see docs/agent-signing.md.
     """
     from fastapi import HTTPException, status as st
     from app.models.delegation import DelegationHop
@@ -75,18 +78,113 @@ async def hop_verification(
     if not hop:
         raise HTTPException(status_code=st.HTTP_404_NOT_FOUND, detail="Hop not found")
 
-    # delegating agent's public key
     reg = AgentRegistry(db)
     from_agent = await reg.get_agent(hop.from_agent_id, current_user.org_id)
+    return await _evidence(db, "delegation_hop", hop.id, from_agent, hop.signed_payload, hop.signature,
+                           hop.signer_public_key, bool(hop.verified),
+                           pq_signature=hop.pq_signature, signer_pq_public_key=hop.signer_pq_public_key)
 
+
+async def _evidence(db, kind: str, record_id: int, agent, signed_payload, signature, signer_public_key,
+                    server_verified: bool, pq_signature=None, signer_pq_public_key=None) -> dict:
+    """One self-contained, offline-verifiable evidence object (also what the
+    UI offers as a download)."""
+    from app.core.agent_signing import canonical_text, key_fingerprint, scheme_of
+    from app.models.agent import AgentSigningKey
+
+    # Only the key recorded when the signature was verified - never "the
+    # agent's current key", which may not be the one that signed.
+    key = signer_public_key
+    origin = None
+    if key:
+        row = (await db.execute(
+            select(AgentSigningKey).where(AgentSigningKey.public_key == key)
+            .order_by(AgentSigningKey.created_at.desc()).limit(1)
+        )).scalar_one_or_none()
+        origin = row.origin if row else agent.key_origin
     return {
-        "hop_id": hop.id,
-        "has_signature": bool(hop.signature),
-        "signed_payload": hop.signed_payload,     # canonical dict that was signed
-        "signature": hop.signature,               # base64 Ed25519
-        "public_key": from_agent.public_key,      # base64 Ed25519 public key
-        "server_verified": bool(hop.verified),
+        "format": "provenza-signature-evidence/1",
+        "record": kind,
+        "record_id": record_id,
+        "hop_id": record_id if kind == "delegation_hop" else None,
+        "agent_id": agent.id,
+        "agent_name": agent.name,
+        "has_signature": bool(signature),
+        # "ed25519", or "ed25519+ml-dsa-65" (hybrid: BOTH signatures must verify)
+        "algorithm": scheme_of(signer_pq_public_key) if key else None,
+        "signed_payload": signed_payload,
+        # The exact ASCII text that was signed (canonical JSON). Verify the
+        # signature over these bytes; do not re-serialize signed_payload.
+        "signed_message": canonical_text(signed_payload) if signed_payload is not None else None,
+        "signature": signature,
+        "public_key": key,
+        "pq_signature": pq_signature if signer_pq_public_key else None,
+        "pq_public_key": signer_pq_public_key,
+        # over the raw Ed25519 key, followed by the raw ML-DSA-65 key if hybrid
+        "key_fingerprint": key_fingerprint(key, signer_pq_public_key),
+        # The server's statement about where the key was made: "agent" = the
+        # agent registered only the public key; "server" = generated here at
+        # registration. A claim, like server_verified - not something a
+        # verifier can check from the evidence itself.
+        "key_origin": origin,
+        "server_verified": server_verified,
     }
+
+
+@router.get("/actions/{action_id}/verification")
+async def action_verification(
+    action_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Same evidence as for a delegation hop, for a recorded agent action."""
+    from fastapi import HTTPException, status as st
+    from app.models.agent_action import AgentAction
+
+    action = (await db.execute(
+        select(AgentAction).where(AgentAction.id == action_id, AgentAction.org_id == current_user.org_id)
+    )).scalar_one_or_none()
+    if not action:
+        raise HTTPException(status_code=st.HTTP_404_NOT_FOUND, detail="Action not found")
+    agent = await AgentRegistry(db).get_agent(action.agent_id, current_user.org_id)
+    return await _evidence(db, "agent_action", action.id, agent, action.signed_payload, action.signature,
+                           action.signer_public_key,
+                           bool(action.signature and action.signed_payload and action.signer_public_key),
+                           pq_signature=action.pq_signature, signer_pq_public_key=action.signer_pq_public_key)
+
+
+@router.post("/{agent_id}/signing-key", response_model=AgentOut)
+async def set_signing_key(
+    agent_id: int,
+    data: SigningKeyIn,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role(UserRole.admin)),
+):
+    """
+    Register the agent's own public key - Ed25519, plus ML-DSA-65 for a
+    hybrid post-quantum key (the agent keeps the private keys; the server
+    never sees them). Replaces the current key - e.g. moving
+    off a server-generated one. Records already signed keep verifying with
+    the key that signed them; the change is audited with both fingerprints.
+    """
+    agent, previous = await AgentRegistry(db).set_signing_key(agent_id, current_user.org_id,
+                                                              data.public_key, current_user.id,
+                                                              pq_public_key=data.pq_public_key)
+    await AuditService(db).log(
+        current_user.org_id, current_user.id, "agent", agent.id, "signing_key_set",
+        {"previous_fingerprint": previous, "fingerprint": AgentOut.model_validate(agent).key_fingerprint},
+    )
+    return agent
+
+
+@router.get("/{agent_id}/signing-keys", response_model=List[SigningKeyOut])
+async def list_signing_keys(
+    agent_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Every signing key the agent has had, newest first."""
+    return await AgentRegistry(db).signing_keys(agent_id, current_user.org_id)
 
 
 @router.get("/graph", response_model=GovernanceGraph)
@@ -207,6 +305,11 @@ async def delegate(
             detail="This agent has a registered public key; delegations must be signed",
         )
 
+    # 1b. With require_pq_signatures on, only a hybrid key may delegate
+    #     (an Ed25519-only key or no key at all is refused).
+    if await pq_signature_required(db, from_agent):
+        raise HTTPException(status_code=st.HTTP_403_FORBIDDEN, detail="agent.pq_required")
+
     # 2. A signed delegation must carry replay-protection fields.
     if data.signature and (not data.nonce or data.issued_at is None):
         raise HTTPException(
@@ -217,7 +320,9 @@ async def delegate(
     # 3. Signature over the canonical payload (which includes nonce + issued_at).
     verified = False
     if data.signature:
-        verified = verify_payload(signed_payload, data.signature, from_agent.public_key or "")
+        # Ed25519 AND, for a hybrid agent, ML-DSA-65 over the same bytes
+        verified = verify_agent_signature(signed_payload, data.signature, data.pq_signature,
+                                          from_agent.public_key, from_agent.pq_public_key)
         if not verified:
             raise HTTPException(
                 status_code=st.HTTP_400_BAD_REQUEST,
@@ -270,6 +375,9 @@ async def delegate(
         chain_id=data.chain_id,
         expires_at=expires_at,
         signed_payload=signed_payload if data.signature else None,
+        signer_public_key=from_agent.public_key if data.signature else None,
+        pq_signature=data.pq_signature if data.signature and from_agent.pq_public_key else None,
+        signer_pq_public_key=from_agent.pq_public_key if data.signature else None,
     )
     from_agent = await registry.get_agent(agent_id, current_user.org_id)
     remaining = max(from_agent.max_delegation_depth - hop.depth, 0)
@@ -392,6 +500,8 @@ async def record_action_endpoint(
             status_code=st.HTTP_401_UNAUTHORIZED,
             detail="This agent has a registered public key; actions must be signed",
         )
+    if await pq_signature_required(db, agent):
+        raise HTTPException(status_code=st.HTTP_403_FORBIDDEN, detail="agent.pq_required")
 
     check = None
     signed_payload = None
@@ -407,7 +517,8 @@ async def record_action_endpoint(
         }
         # Verify BEFORE consuming the check, so a forged request cannot
         # burn a legitimate check_id.
-        if data.signature and not verify_payload(signed_payload, data.signature, agent.public_key or ""):
+        if data.signature and not verify_agent_signature(signed_payload, data.signature, data.pq_signature,
+                                                         agent.public_key, agent.pq_public_key):
             raise HTTPException(status_code=st.HTTP_400_BAD_REQUEST, detail="Invalid action signature")
         check, decision = await audit.consume_check(
             current_user.org_id, data.check_id,
@@ -439,6 +550,9 @@ async def record_action_endpoint(
         decision=decision,
         check_id=check.id if check else None,
         signed_payload=signed_payload if verified else None,
+        signer_public_key=agent.public_key if verified else None,
+        pq_signature=data.pq_signature if verified and agent.pq_public_key else None,
+        signer_pq_public_key=agent.pq_public_key if verified else None,
     )
     # ASI01: an instruction hidden in the tool output (indirect injection);
     # before the breaker, so it already counts the new incident

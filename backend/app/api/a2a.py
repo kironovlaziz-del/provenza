@@ -47,7 +47,8 @@ async def send(
     current_user: User = Depends(get_current_user),
 ):
     """Register a signed message before handing it to the recipient. Deliver only if deliver=true."""
-    return await A2AGuard(db).send(current_user.org_id, data.envelope, data.signature, data.payload)
+    return await A2AGuard(db).send(current_user.org_id, data.envelope, data.signature, data.payload,
+                                   pq_signature=data.pq_signature)
 
 
 @router.post("/receive")

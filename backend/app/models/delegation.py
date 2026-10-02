@@ -67,6 +67,12 @@ class DelegationHop(Base):
     # a payload field like chain_id (null at root-signing time, a real id
     # afterwards) would make the signature impossible to re-verify.
     signed_payload = Column(JSONB)
+    # The public key the signature was verified with, kept on the record so
+    # it stays verifiable after the agent changes its key.
+    signer_public_key = Column(Text)
+    # hybrid signers: the ML-DSA-65 signature over the same bytes, and the key
+    pq_signature = Column(Text)
+    signer_pq_public_key = Column(Text)
     verified = Column(Boolean, nullable=False, default=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 

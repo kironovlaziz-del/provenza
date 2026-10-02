@@ -30,7 +30,7 @@ from fastapi import HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.agent_signing import content_hash, verify_payload
+from app.core.agent_signing import content_hash, verify_agent_signature
 from app.models.agent import Agent, AgentPolicy
 from app.models.agent_action import AgentAction, AgentIncident
 from app.models.ai_system import AISystem
@@ -128,8 +128,10 @@ class AgentApprovalService:
         signature = {"present": bool(action.signature and action.signed_payload),
                      "valid": False, "covers_these_arguments": False}
         if signature["present"]:
-            signature["valid"] = bool(agent.public_key) and verify_payload(
-                action.signed_payload, action.signature, agent.public_key)
+            key = action.signer_public_key or agent.public_key
+            pq_key = action.signer_pq_public_key if action.signer_public_key else agent.pq_public_key
+            signature["valid"] = bool(key) and verify_agent_signature(
+                action.signed_payload, action.signature, action.pq_signature, key, pq_key)
             signature["covers_these_arguments"] = (action.signed_payload or {}).get("input_sha256") == input_sha
 
         # chain context - facts from the server, plus text the agents wrote
