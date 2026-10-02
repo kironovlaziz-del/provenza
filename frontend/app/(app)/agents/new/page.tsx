@@ -7,6 +7,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { Form } from "@/components/Form";
 import { registerAgent } from "@/lib/agent_api";
 import type { AgentCreated } from "@/lib/agent_types";
+import { translateApiError } from "@/lib/errors";
 
 // small helper: comma/space separated string -> string[]
 function toList(s: string): string[] {
@@ -28,6 +29,15 @@ export default function NewAgentPage() {
   const [created, setCreated] = useState<AgentCreated | null>(null);
   const [copiedKey, setCopiedKey] = useState(false);
   const [copiedPriv, setCopiedPriv] = useState(false);
+  // "agent": the agent keeps its own private key (recommended);
+  // "server": quick start, the server generates the pair and shows it once.
+  const [keyMode, setKeyMode] = useState<"agent" | "server">("agent");
+  const [publicKey, setPublicKey] = useState("");
+  // Hybrid = Ed25519 + ML-DSA-65: both signatures are required, so a forgery
+  // needs to break both (ML-DSA resists quantum attacks on elliptic curves).
+  const [hybrid, setHybrid] = useState(true);
+  const [pqPublicKey, setPqPublicKey] = useState("");
+  const [copiedPq, setCopiedPq] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -42,19 +52,25 @@ export default function NewAgentPage() {
         allowed_tools: toList(tools),
         allowed_models: toList(models),
         max_delegation_depth: depth,
+        public_key: keyMode === "agent" ? publicKey.trim() : undefined,
+        pq_public_key: keyMode === "agent" && hybrid ? pqPublicKey.replace(/\s+/g, "") : undefined,
+        key_scheme: keyMode === "server" ? (hybrid ? "hybrid" : "ed25519") : undefined,
       });
       setCreated(agent);
-    } catch {
-      setError(t("agents.register_failed"));
+    } catch (err) {
+      const detail = (err as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail;
+      const msg = Array.isArray(detail) && detail[0]?.msg ? String(detail[0].msg).replace(/^Value error, /, "") : null;
+      setError(msg ?? translateApiError(detail, t, t("agents.register_failed")));
     } finally {
       setSubmitting(false);
     }
   }
 
-  async function copy(text: string, which: "key" | "priv") {
+  async function copy(text: string, which: "key" | "priv" | "pq") {
     try {
       await navigator.clipboard.writeText(text);
       if (which === "key") setCopiedKey(true);
+      else if (which === "pq") setCopiedPq(true);
       else setCopiedPriv(true);
     } catch {
       /* clipboard may be unavailable; value is still visible */
@@ -83,16 +99,43 @@ export default function NewAgentPage() {
                 </div>
               </div>
 
-              <div className="field" style={{ marginTop: 12 }}>
-                <label>{t("agents.private_key")}</label>
-                <div className="form-row" style={{ alignItems: "center" }}>
-                  <code className="mono" style={{ wordBreak: "break-all", flex: 1 }}>{created.private_key}</code>
-                  <button type="button" className="btn btn-sm" onClick={() => copy(created.private_key, "priv")}>
-                    {copiedPriv ? t("agents.copied") : t("agents.copy")}
-                  </button>
+              {created.private_key ? (
+                <div className="field" style={{ marginTop: 12 }}>
+                  <label>{t("agents.private_key")}</label>
+                  <div className="form-row" style={{ alignItems: "center" }}>
+                    <code className="mono" style={{ wordBreak: "break-all", flex: 1 }}>{created.private_key}</code>
+                    <button type="button" className="btn btn-sm" onClick={() => copy(created.private_key ?? "", "priv")}>
+                      {copiedPriv ? t("agents.copied") : t("agents.copy")}
+                    </button>
+                  </div>
+                  <p className="hint-text" style={{ marginTop: 6 }}>{t("agents.private_key_note")}</p>
+                  {created.pq_private_key && (
+                    <>
+                      <label style={{ marginTop: 12 }}>{t("agents.pq_private_key")}</label>
+                      <div className="form-row" style={{ alignItems: "center" }}>
+                        <code className="mono" style={{ wordBreak: "break-all", flex: 1 }}>{created.pq_private_key}</code>
+                        <button type="button" className="btn btn-sm" onClick={() => copy(created.pq_private_key ?? "", "pq")}>
+                          {copiedPq ? t("agents.copied") : t("agents.copy")}
+                        </button>
+                      </div>
+                      <p className="hint-text" style={{ marginTop: 6 }}>{t("agents.pq_private_key_note")}</p>
+                    </>
+                  )}
+                  <p className="hint-text" style={{ marginTop: 6 }}>{t("agents.key_server_note")}</p>
                 </div>
-                <p className="hint-text" style={{ marginTop: 6 }}>{t("agents.private_key_note")}</p>
-              </div>
+              ) : (
+                <p className="hint-text" style={{ marginTop: 12 }}>{t("agents.key_agent_note")}</p>
+              )}
+              {created.key_fingerprint && (
+                <div className="field" style={{ marginTop: 12 }}>
+                  <label>{t("agents.key_fingerprint")}</label>
+                  <code className="mono" style={{ wordBreak: "break-all" }}>{created.key_fingerprint}</code>
+                  <p className="hint-text" style={{ marginTop: 6 }}>
+                    {t("agents.scheme")}: {created.pq_public_key ? t("agents.scheme_hybrid") : t("agents.scheme_classic")}
+                  </p>
+                  <p className="hint-text" style={{ marginTop: 6 }}>{t("agents.key_fingerprint_hint")}</p>
+                </div>
+              )}
 
               <button className="btn btn-primary" style={{ marginTop: 18 }} onClick={() => router.push("/agents")}>
                 {t("agents.done")}
@@ -146,6 +189,51 @@ export default function NewAgentPage() {
               <div className="field">
                 <label>{t("agents.max_depth")}</label>
                 <input type="number" min={0} max={10} value={depth} onChange={(e) => setDepth(Number(e.target.value))} />
+              </div>
+              <div className="field">
+                <label>{t("agents.signing_key")}</label>
+                <label style={{ display: "flex", gap: 8, alignItems: "center", fontWeight: 400 }}>
+                  <input type="radio" name="keymode" checked={keyMode === "agent"} onChange={() => setKeyMode("agent")} style={{ width: "auto" }} />
+                  {t("agents.key_mode_agent")}
+                </label>
+                <label style={{ display: "flex", gap: 8, alignItems: "center", fontWeight: 400 }}>
+                  <input type="radio" name="keymode" checked={keyMode === "server"} onChange={() => setKeyMode("server")} style={{ width: "auto" }} />
+                  {t("agents.key_mode_server")}
+                </label>
+                {keyMode === "agent" && (
+                  <>
+                    <input
+                      className="mono"
+                      required
+                      value={publicKey}
+                      onChange={(e) => setPublicKey(e.target.value)}
+                      placeholder={t("agents.public_key_placeholder")}
+                      style={{ marginTop: 6 }}
+                    />
+                    <p className="hint-text">{t("agents.public_key_hint")}</p>
+                  </>
+                )}
+                <label style={{ display: "flex", gap: 8, alignItems: "flex-start", fontWeight: 400, marginTop: 8 }}>
+                  <input type="checkbox" checked={hybrid} onChange={(e) => setHybrid(e.target.checked)} style={{ width: "auto", marginTop: 3 }} />
+                  <span>
+                    {t("agents.hybrid")}
+                    <span className="hint-text" style={{ display: "block", fontSize: 12 }}>{t("agents.hybrid_hint")}</span>
+                  </span>
+                </label>
+                {keyMode === "agent" && hybrid && (
+                  <>
+                    <textarea
+                      className="mono"
+                      required
+                      rows={4}
+                      value={pqPublicKey}
+                      onChange={(e) => setPqPublicKey(e.target.value)}
+                      placeholder={t("agents.pq_public_key_placeholder")}
+                      style={{ marginTop: 6, fontSize: 11, wordBreak: "break-all" }}
+                    />
+                    <p className="hint-text">{t("agents.pq_public_key_hint")}</p>
+                  </>
+                )}
               </div>
               {error && <p className="error-text">{error}</p>}
               <button className="btn btn-primary" type="submit" disabled={submitting}>

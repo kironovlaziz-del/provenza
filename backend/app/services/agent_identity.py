@@ -40,7 +40,7 @@ from app.models.agent_action import AgentIncident
 from app.models.agent_identity import AgentIdentitySettings
 from app.models.user import User
 
-DEFAULTS = {"require_agent_key": False, "rotation_grace_minutes": 60}
+DEFAULTS = {"require_agent_key": False, "rotation_grace_minutes": 60, "require_pq_signatures": False}
 LAST_USED_RESOLUTION = timedelta(minutes=1)
 IMPERSONATION_INCIDENT = "agent_impersonation_attempt"
 
@@ -111,7 +111,16 @@ async def org_settings(db: AsyncSession, org_id: int) -> dict:
     if not row:
         return {**DEFAULTS, "source": "default"}
     return {"require_agent_key": row.require_agent_key, "rotation_grace_minutes": row.rotation_grace_minutes,
-            "source": "org"}
+            "require_pq_signatures": bool(row.require_pq_signatures), "source": "org"}
+
+
+async def pq_signature_required(db: AsyncSession, agent: Agent) -> bool:
+    """True when the organization requires hybrid (Ed25519 + ML-DSA-65)
+    signatures and this agent has no hybrid key - an Ed25519-only key, or no
+    signing key at all (whose records would be unsigned)."""
+    if agent.public_key and agent.pq_public_key:
+        return False
+    return bool((await org_settings(db, agent.org_id)).get("require_pq_signatures"))
 
 
 async def _accountable_user(db: AsyncSession, agent: Agent) -> Optional[User]:
@@ -205,11 +214,13 @@ class AgentIdentityService:
         if row is None:
             row = AgentIdentitySettings(org_id=org_id)
             self.db.add(row)
+        current = before or DEFAULTS
+        values = {k: (current[k] if values.get(k) is None else values[k]) for k in DEFAULTS}
         for k in DEFAULTS:
             setattr(row, k, values[k])
         row.updated_by = user_id
         await self.db.commit()
-        return before, {k: values[k] for k in DEFAULTS}
+        return before, values
 
     async def rotate(self, org_id: int, agent_id: int) -> dict:
         agent = await self._agent(org_id, agent_id)

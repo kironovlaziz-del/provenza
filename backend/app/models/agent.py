@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Text, Boolean, DateTime, ForeignKey, func
+from sqlalchemy import Column, Integer, String, Text, Boolean, DateTime, ForeignKey, Index, func, text
 from sqlalchemy.dialects.postgresql import JSONB
 from app.core.database import Base
 
@@ -13,9 +13,11 @@ class Agent(Base):
     Authentication mirrors IngestionSource: a machine identity with a
     hashed API key (never a user JWT), plus - unique to agents - an
     Ed25519 public key used to verify the signatures the agent puts on
-    its delegations and actions. The private key lives only with the
-    agent (returned once at registration); the server stores only the
-    public half.
+    its delegations and actions. The server stores only public keys. With
+    key_origin "agent" the agent generated the pair itself and the server
+    never saw the private key; with "server" it was generated here and
+    returned once (quick start). Every key the agent has used is kept in
+    agent_signing_keys.
 
     The permission fields (allowed_tools / allowed_models / capabilities)
     are the ground truth the policy engine checks every action against,
@@ -47,10 +49,38 @@ class Agent(Base):
     api_key_rotated_at = Column(DateTime(timezone=True))
     api_key_revoked_at = Column(DateTime(timezone=True))
     api_key_last_used_at = Column(DateTime(timezone=True))
-    public_key = Column(Text)  # Ed25519 public key (base64), for signature verification
+    public_key = Column(Text)  # current Ed25519 public key (base64), for signature verification
+    key_origin = Column(String(10))  # "agent" (agent-held private key) | "server" (generated here)
+    # ML-DSA-65 public key (base64). Set = hybrid agent: every signature must
+    # be Ed25519 AND ML-DSA-65 over the same bytes (core/agent_signing.py).
+    pq_public_key = Column(Text)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+
+class AgentSigningKey(Base):
+    """Every Ed25519 public key an agent has signed with, and when it was
+    current. Signed records carry their own signer_public_key, so this is
+    the timeline an auditor reads ("which key was valid when"), not what
+    verification depends on."""
+
+    __tablename__ = "agent_signing_keys"
+    __table_args__ = (
+        # at most one current key per agent
+        Index("uq_agent_signing_keys_current", "agent_id", unique=True, postgresql_where=text("retired_at IS NULL")),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    org_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
+    agent_id = Column(Integer, ForeignKey("agents.id", ondelete="CASCADE"), nullable=False, index=True)
+    public_key = Column(Text, nullable=False)
+    pq_public_key = Column(Text)  # ML-DSA-65 half of a hybrid key
+    fingerprint = Column(String(60), nullable=False)
+    origin = Column(String(10), nullable=False)  # agent | server
+    created_by = Column(Integer, ForeignKey("users.id"))
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    retired_at = Column(DateTime(timezone=True))
 
 
 class AgentPolicy(Base):

@@ -19,5 +19,8 @@ class AgentIdentitySettings(Base):
     require_agent_key = Column(Boolean, nullable=False, default=False)
     # after a rotation the previous key keeps working this long (0 = immediately invalid)
     rotation_grace_minutes = Column(Integer, nullable=False, default=60)
+    # when on, agents must have a hybrid key (Ed25519 + ML-DSA-65): no new
+    # agent or key change without the post-quantum half
+    require_pq_signatures = Column(Boolean, nullable=False, default=False)
     updated_by = Column(Integer, ForeignKey("users.id"))
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

@@ -15,13 +15,30 @@ export interface Agent {
   max_delegation_depth: number;
   status: string; // active, suspended, retired
   public_key?: string | null;
+  pq_public_key?: string | null;
+  key_origin?: "agent" | "server" | null;
+  key_fingerprint?: string | null;
+  signature_scheme?: "ed25519" | "ed25519+ml-dsa-65" | null;
   created_at: string;
   updated_at?: string | null;
 }
 
 export interface AgentCreated extends Agent {
-  api_key: string;      // shown once
-  private_key: string;  // shown once
+  api_key: string;              // shown once
+  private_key?: string | null;  // shown once, only when the server generated the keypair
+  pq_private_key?: string | null;  // ML-DSA-65 seed, shown once, server-generated hybrid only
+}
+
+export interface SigningKeyT {
+  id: number;
+  public_key: string;
+  pq_public_key?: string | null;
+  scheme?: "ed25519" | "ed25519+ml-dsa-65";
+  fingerprint: string;
+  origin: "agent" | "server";
+  created_by?: number | null;
+  created_at: string;
+  retired_at?: string | null;
 }
 
 export interface DelegationHopT {

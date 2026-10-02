@@ -46,11 +46,12 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.agent_signing import content_hash, verify_payload
+from app.core.agent_signing import content_hash, verify_agent_signature
 from app.models.a2a import A2AChannel, A2AMessage, A2ASettings
 from app.models.agent import Agent
 from app.models.agent_action import AgentIncident
 from app.models.delegation import DelegationChain, DelegationHop
+from app.services.agent_identity import pq_signature_required
 
 MODES = ("off", "monitor", "enforce")
 DEFAULTS = {"mode": "monitor", "allow_same_chain": True, "max_age_seconds": 300, "message_ttl_seconds": 3600}
@@ -174,7 +175,8 @@ class A2AGuard:
                                   details=details, **extra))
 
     # ------------------------------------------------------------------ send
-    async def send(self, org_id: int, envelope: Dict[str, Any], signature: str, payload: Any) -> dict:
+    async def send(self, org_id: int, envelope: Dict[str, Any], signature: str, payload: Any,
+                   pq_signature: Optional[str] = None) -> dict:
         cfg = await self.settings(org_id)
         mode = cfg["mode"]
         enforce = mode == "enforce"
@@ -204,7 +206,9 @@ class A2AGuard:
                 reasons.append("sender has no registered public key")
             else:
                 try:
-                    sig_ok = verify_payload(envelope, signature, src.public_key)
+                    # Ed25519 AND, for a hybrid sender, ML-DSA-65
+                    sig_ok = verify_agent_signature(envelope, signature, pq_signature,
+                                                    src.public_key, src.pq_public_key)
                 except Exception:  # noqa: BLE001 - a malformed signature is just invalid
                     sig_ok = False
                 if not sig_ok:
@@ -233,6 +237,10 @@ class A2AGuard:
             )).scalar_one_or_none()
             if seen:
                 hard.append("nonce already used (replay)")
+
+        # An organization policy, not a guard setting: it holds in every mode.
+        if await pq_signature_required(self.db, src):
+            hard.append("this organization requires post-quantum (hybrid) signatures; the sender has no hybrid key")
 
         poisoned = False
         if mode != "off" and not hard:

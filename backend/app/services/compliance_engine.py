@@ -85,6 +85,8 @@ async def collect_facts(db: AsyncSession, org_id: int) -> dict:
         Agent.org_id == org_id, Agent.status != "retired")), 0)
     f["agents_without_signing_key"] = await _safe(count(select(func.count()).select_from(Agent).where(
         Agent.org_id == org_id, Agent.status != "retired", Agent.public_key.is_(None))), 0)
+    f["agents_without_pq_key"] = await _safe(count(select(func.count()).select_from(Agent).where(
+        Agent.org_id == org_id, Agent.status != "retired", Agent.pq_public_key.is_(None))), 0)
     f["providers"] = await _safe(count(select(func.count()).select_from(AIProvider).where(AIProvider.org_id == org_id)), 0)
 
     rules = await _safe(db.execute(select(AgentPolicy.rules).where(
@@ -128,8 +130,10 @@ async def collect_facts(db: AsyncSession, org_id: int) -> dict:
 
     async def identity():
         from app.services.agent_identity import org_settings
-        return (await org_settings(db, org_id))["require_agent_key"]
-    f["require_agent_key"] = await _safe(identity(), None)
+        return await org_settings(db, org_id)
+    ident = await _safe(identity(), None)
+    f["require_agent_key"] = ident["require_agent_key"] if ident else None
+    f["require_pq_signatures"] = ident.get("require_pq_signatures") if ident else None
 
     async def retention():
         from app.services.queue_ttl import org_settings
@@ -362,7 +366,10 @@ def c_identity(f) -> Result:
     if na:
         return na
     e = [ev("agent key required", "yes" if f["require_agent_key"] else "no", "/agent-identity"),
-         ev("agents without signing key", f["agents_without_signing_key"], "/agent-identity")]
+         ev("agents without signing key", f["agents_without_signing_key"], "/agent-identity"),
+         ev("post-quantum (Ed25519 + ML-DSA-65) signatures required",
+            "yes" if f.get("require_pq_signatures") else "no", "/agent-identity"),
+         ev("agents without a post-quantum key", f.get("agents_without_pq_key"), "/agent-identity")]
     if f["require_agent_key"] and not f["agents_without_signing_key"]:
         return "pass", "Agents act only as themselves, with their own keys", e
     return "partial", "Agent keys exist but are optional, or some agents cannot sign", e

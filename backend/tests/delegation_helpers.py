@@ -1,13 +1,22 @@
 """
 Builds a signed /delegate request body exactly the way a real agent must:
 canonical payload (incl. nonce + issued_at) signed with the agent's
-Ed25519 private key. Mirrors signed_payload in app/api/agents.py.
+Ed25519 private key and, for a hybrid agent (one that has a
+"pq_private_key"), also with its ML-DSA-65 key over the same bytes.
+Mirrors signed_payload in app/api/agents.py.
 """
 
 import secrets
 import time
 
-from app.core.agent_signing import content_hash, sign_payload
+from app.core.agent_signing import content_hash, sign_payload, sign_payload_pq
+
+
+def _sign(agent, payload, body):
+    body["signature"] = sign_payload(payload, agent["private_key"])
+    if agent.get("pq_private_key"):
+        body["pq_signature"] = sign_payload_pq(payload, agent["pq_private_key"])
+    return body
 
 
 def delegation_body(from_agent, to_agent_id, task, caps, *, chain_id=None,
@@ -25,7 +34,7 @@ def delegation_body(from_agent, to_agent_id, task, caps, *, chain_id=None,
         "nonce": nonce,
         "issued_at": issued_at,
     }
-    return {
+    return _sign(from_agent, payload, {
         "to_agent_id": to_agent_id,
         "task": task,
         "delegated_capabilities": caps,
@@ -33,8 +42,7 @@ def delegation_body(from_agent, to_agent_id, task, caps, *, chain_id=None,
         "expires_in": expires_in,
         "nonce": nonce,
         "issued_at": issued_at,
-        "signature": sign_payload(payload, from_agent["private_key"]),
-    }
+    })
 
 
 def action_record_body(agent, check_id, tool_name, input_data, *, output=None,
@@ -50,7 +58,7 @@ def action_record_body(agent, check_id, tool_name, input_data, *, output=None,
         "input_sha256": content_hash(input_data),
         "output_sha256": content_hash(output),
     }
-    return {
+    return _sign(agent, payload, {
         "agent_id": agent["id"],
         "chain_id": chain_id,
         "action_type": action_type,
@@ -59,5 +67,4 @@ def action_record_body(agent, check_id, tool_name, input_data, *, output=None,
         "output": output,
         "duration_ms": duration_ms,
         "check_id": check_id,
-        "signature": sign_payload(payload, agent["private_key"]),
-    }
+    })

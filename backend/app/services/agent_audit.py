@@ -146,6 +146,9 @@ class AgentAudit:
         decision=None,
         check_id: Optional[int] = None,
         signed_payload: Optional[dict] = None,
+        signer_public_key: Optional[str] = None,
+        pq_signature: Optional[str] = None,
+        signer_pq_public_key: Optional[str] = None,
     ) -> AgentAction:
         """
         Persist an action row. If a Decision is supplied, its verdict and
@@ -168,6 +171,9 @@ class AgentAudit:
             duration_ms=duration_ms,
             check_id=check_id,
             signed_payload=signed_payload,
+            signer_public_key=signer_public_key if signature else None,
+            pq_signature=pq_signature if signature else None,
+            signer_pq_public_key=signer_pq_public_key if signature else None,
         )
         self.db.add(action)
 

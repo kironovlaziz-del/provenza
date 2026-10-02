@@ -2,8 +2,9 @@
 
 import React, { useEffect, useRef, useState, useCallback } from "react";
 import * as d3 from "d3";
-import { getGovernanceGraph, getHopVerification } from "@/lib/agent_api";
-import { verifyHopSignature, type VerifyResult } from "@/lib/ed25519_verify";
+import { useTranslation } from "react-i18next";
+import { getGovernanceGraph, getHopVerification, type HopVerification } from "@/lib/agent_api";
+import { downloadEvidence, SCHEME_HYBRID, verifyEvidence, type VerifyResult } from "@/lib/ed25519_verify";
 import type { GraphNodeT, GraphEdgeT } from "@/lib/agent_types";
 
 // d3 mutates node/link objects with x/y/vx/vy; extend the API types.
@@ -316,22 +317,42 @@ export function DelegationGraph({ height = 520 }: { height?: number }) {
   );
 }
 
-// Panel shown when an edge is clicked: capabilities + offline signature
-// verification via WebCrypto (Ed25519) - proves the delegation was
-// signed by the delegating agent without trusting the server.
+// Panel shown when an edge is clicked: capabilities + signature check in the
+// browser. The browser verifies the signature over the exact signed bytes and
+// computes the signer key fingerprint itself; independence from the server
+// comes from comparing that fingerprint with the agent owner's.
 function EdgeInspector({ edge, onClose }: { edge: GraphEdgeT; onClose: () => void }) {
+  const { t } = useTranslation();
   const [verifying, setVerifying] = useState(false);
   const [result, setResult] = useState<VerifyResult | null>(null);
+  const [evidence, setEvidence] = useState<HopVerification | null>(null);
+  const [signed, setSigned] = useState<Record<string, unknown> | null>(null);
 
   async function handleVerify() {
     setVerifying(true);
     setResult(null);
+    setSigned(null);
     try {
       const v = await getHopVerification(edge.id);
-      const r = await verifyHopSignature(v.signed_payload, v.signature, v.public_key);
+      setEvidence(v);
+      let r = await verifyEvidence(v);
+      if (r.status === "verified" && v.signed_message) {
+        // Only what was signed is shown, and the map must agree with it: the
+        // edge's endpoints and capabilities come from other columns that a
+        // signature does not protect.
+        const msg = JSON.parse(v.signed_message) as Record<string, unknown>;
+        const caps = Array.isArray(msg.delegated_capabilities) ? (msg.delegated_capabilities as string[]) : [];
+        const same =
+          v.record_id === edge.id &&
+          msg.from_agent_id === edge.from_agent_id &&
+          msg.to_agent_id === edge.to_agent_id &&
+          JSON.stringify([...caps].sort()) === JSON.stringify([...edge.delegated_capabilities].sort());
+        if (same) setSigned(msg);
+        else r = { ...r, status: "failed", message: t("agent_map.sig_map_mismatch") };
+      }
       setResult(r);
     } catch {
-      setResult({ status: "error", message: "Could not load verification data." });
+      setResult({ status: "error", message: t("agent_map.sig_load_failed") });
     } finally {
       setVerifying(false);
     }
@@ -339,15 +360,65 @@ function EdgeInspector({ edge, onClose }: { edge: GraphEdgeT; onClose: () => voi
 
   function renderResult() {
     if (!result) return null;
-    const map: Record<string, { color: string; text: string }> = {
-      verified: { color: "#22c55e", text: "✓ Verified in your browser (offline)" },
-      failed: { color: "#ef4444", text: "✗ Signature does NOT match — tampered or wrong key" },
-      unsupported: { color: "#f59e0b", text: "⚠ Your browser can't do Ed25519 offline verification" },
-      no_signature: { color: "#94a3b8", text: "No signature recorded on this hop" },
-      error: { color: "#ef4444", text: "Error: " + (result.status === "error" ? result.message : "") },
+    const color: Record<string, string> = {
+      verified: "#22c55e", failed: "#ef4444", unsupported: "#f59e0b", no_signature: "#94a3b8", error: "#ef4444",
     };
-    const r = map[result.status];
-    return <div style={{ marginTop: 8, color: r.color, fontWeight: 600, fontSize: 12 }}>{r.text}</div>;
+    return (
+      <div style={{ marginTop: 8, fontSize: 12 }}>
+        <div style={{ color: color[result.status], fontWeight: 600 }}>
+          {t(`agent_map.sig_${result.status}`)}
+          {result.status !== "verified" && result.message ? ` — ${result.message}` : ""}
+        </div>
+        {result.scheme && result.status === "verified" && (
+          <div style={{ color: "#94a3b8", marginTop: 4 }}>
+            {t("agent_map.sig_scheme")}:{" "}
+            <span style={{ color: "#e2e8f0" }}>
+              {result.scheme === SCHEME_HYBRID ? t("agent_map.sig_scheme_hybrid") : t("agent_map.sig_scheme_classic")}
+            </span>
+          </div>
+        )}
+        {signed && (
+          <div style={{ marginTop: 8 }}>
+            <div style={{ color: "#94a3b8" }}>{t("agent_map.sig_signed_content")}</div>
+            <div className="mono" style={{ fontSize: 11, wordBreak: "break-word" }}>
+              {t("agent_map.sig_task")}: {String(signed.task ?? "—")}
+              <br />
+              {t("agent_map.sig_caps")}: {Array.isArray(signed.delegated_capabilities) ? (signed.delegated_capabilities as string[]).join(", ") || "—" : "—"}
+              {typeof signed.issued_at === "number" && (
+                <>
+                  <br />
+                  {t("agent_map.sig_issued")}: {new Date((signed.issued_at as number) * 1000).toLocaleString()}
+                </>
+              )}
+            </div>
+          </div>
+        )}
+        {result.fingerprint && (
+          <div style={{ marginTop: 8 }}>
+            <div style={{ color: "#94a3b8" }}>{t("agent_map.sig_fingerprint")}</div>
+            <code className="mono" style={{ fontSize: 11, wordBreak: "break-all", color: "#e2e8f0" }}>{result.fingerprint}</code>
+            <div style={{ color: "#94a3b8", marginTop: 4 }}>{t("agent_map.sig_compare")}</div>
+          </div>
+        )}
+        {evidence?.key_origin === "server" && result.status === "verified" && (
+          <div style={{ color: "#f59e0b", marginTop: 6 }}>{t("agent_map.sig_server_key")}</div>
+        )}
+        {evidence?.key_origin === "agent" && result.status === "verified" && (
+          <div style={{ color: "#94a3b8", marginTop: 6 }}>{t("agent_map.sig_agent_key")}</div>
+        )}
+        {evidence && evidence.has_signature && (
+          <button
+            onClick={() => downloadEvidence(evidence, `provenza-delegation-${edge.id}-evidence.json`)}
+            style={{
+              marginTop: 8, background: "none", border: "1px solid #334155", color: "#e2e8f0",
+              borderRadius: 6, padding: "4px 10px", fontSize: 12, cursor: "pointer", width: "100%",
+            }}
+          >
+            {t("agent_map.sig_download")}
+          </button>
+        )}
+      </div>
+    );
   }
 
   return (
@@ -398,7 +469,7 @@ function EdgeInspector({ edge, onClose }: { edge: GraphEdgeT; onClose: () => voi
             padding: "6px 12px", fontSize: 12, cursor: "pointer", width: "100%",
           }}
         >
-          {verifying ? "Verifying…" : "🔐 Verify signature offline"}
+          {verifying ? t("agent_map.sig_verifying") : t("agent_map.sig_verify")}
         </button>
         {renderResult()}
       </div>
