@@ -128,7 +128,6 @@ jobs:
     name: Security scan
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    continue-on-error: true
 
     defaults:
       run:
@@ -149,10 +148,14 @@ jobs:
           python -m pip install --upgrade pip
           pip install bandit[toml] pip-audit
 
+      # Blocking: medium/high findings fail the PR. A false positive gets a
+      # `# nosec <test id>` with the reason on the line, not a skip here.
       - name: Bandit (static analysis)
         run: |
-          bandit -r app -ll -x app/tests -f txt || true
+          bandit -r app -ll -f txt
 
+      # Informational: a new upstream CVE should not block unrelated PRs;
+      # Dependabot opens the fixes.
       - name: pip-audit (dependency vulnerabilities)
         run: |
           pip-audit -r requirements.txt || true
