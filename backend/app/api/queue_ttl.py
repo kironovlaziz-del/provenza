@@ -26,7 +26,7 @@ async def overview(db: AsyncSession = Depends(get_db),
 @router.put("/settings")
 async def update_settings(data: QueueSettingsIn, db: AsyncSession = Depends(get_db),
                           current_user: User = Depends(require_role(UserRole.admin))):
-    before, after = await queue_ttl.save_settings(db, current_user.org_id, data.model_dump(), current_user.id)
+    before, after = await queue_ttl.save_settings(db, current_user.org_id, data.model_dump(exclude_unset=True), current_user.id)
     await AuditService(db).log(current_user.org_id, current_user.id, "queue_settings", 0, "settings_updated",
                                {"before": before, "after": after})
     return after
