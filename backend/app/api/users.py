@@ -1,8 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from typing import List
+from app.core import rate_limit
+from app.core.config import settings
 from app.core.database import get_db
+from app.core.errors import api_error
 from app.core.pagination import PaginationParams
 from app.core.security import get_password_hash, verify_password
 from app.schemas.pagination import Page
@@ -22,17 +25,33 @@ from app.api.deps import get_current_user, require_role
 
 router = APIRouter()
 
+# Self-service sign-up throttle (only reachable with ALLOW_PUBLIC_SIGNUP).
+SIGNUP_IP_LIMIT = 5
+SIGNUP_WINDOW_SECONDS = 3600
+
 
 @router.post("/register", response_model=UserOut)
 async def register(
     user_data: UserCreate,
+    request: Request,
     db: AsyncSession = Depends(get_db),
 ):
     """
-    Public endpoint: creates a new organization and its first user.
-    The first user is always an admin, regardless of what role was sent
-    in the payload.
+    Self-service sign-up: creates a new organization and its first user,
+    always an admin regardless of the role sent in the payload.
+
+    Disabled unless ALLOW_PUBLIC_SIGNUP is set (see core/config.py); when
+    enabled it is throttled per client IP.
     """
+    if not settings.ALLOW_PUBLIC_SIGNUP:
+        raise api_error(status.HTTP_403_FORBIDDEN, "auth.signup_disabled")
+    rate_limit.enforce(
+        request,
+        scope="signup",
+        limit=SIGNUP_IP_LIMIT,
+        window_seconds=SIGNUP_WINDOW_SECONDS,
+    )
+
     # The slug must be free - it is the org's public identifier.
     result = await db.execute(
         select(Organization).where(Organization.slug == user_data.org_slug)

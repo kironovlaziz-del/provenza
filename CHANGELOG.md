@@ -6,6 +6,51 @@ this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Security
+
+- **Self-service sign-up is off by default.** `POST /users/register` (new
+  organization + admin) answers 403 unless `ALLOW_PUBLIC_SIGNUP=true`, and
+  is throttled per IP when enabled. `GET /auth/config` tells the UI.
+- **SSRF guard for every admin-supplied URL** — AI providers, gateway
+  upstreams, model listing, Vault Transit, webhooks. The address is
+  resolved, checked and connected to in one step (no DNS rebinding);
+  private and loopback targets need `OUTBOUND_PRIVATE_ALLOWLIST`,
+  link-local/metadata is never allowed; redirects are not followed and
+  upstream error bodies are no longer echoed to the caller.
+- **Use cases are governed objects.** Creating or changing one needs the
+  admin role; the linked policy version must be an approved version of the
+  caller's organization; a request whose link does not resolve fails
+  closed (409). Incidents can only reference the organization's requests.
+- **Production refuses placeholder JWT keys** — anything that looks like an
+  example value (including the one `backend/.env.example` used to ship) or
+  is not random enough; the Docker entrypoint runs the same check.
+- **Discovery cannot be used to capture directory credentials.** Only
+  gateway/endpoint collector keys may report services; a report never
+  moves a known service to another port; the connect wizard must confirm
+  the host and port it showed; LDAP binds always use TLS (LDAPS or
+  StartTLS) with certificate validation, optionally against an in-house CA;
+  reported hosts must be bare hostnames or IPs.
+
+### Upgrade notes
+
+- **Sign-up closes.** Add users by invitation; create organizations with
+  `scripts/create_admin.py`. Set `ALLOW_PUBLIC_SIGNUP=true` only for a demo.
+- **Internal targets need the allowlist.** An in-house Vault (BYOK), a local
+  model server (Ollama, vLLM), internal webhooks or custom providers on a
+  private address stop working until listed in `OUTBOUND_PRIVATE_ALLOWLIST`.
+  For BYOK this matters most: an unreachable Vault means encrypted data
+  cannot be read. The allowlist is server-wide (every organization).
+- **Egress proxies.** `HTTP(S)_PROXY` is no longer honoured for these calls;
+  set `OUTBOUND_PROXY` instead.
+- **LDAP connections need TLS.** A directory connected over plain port 389
+  must offer StartTLS with a certificate the server trusts (or reconnect it
+  with your CA); until then its re-verification reports an error.
+- **Use cases** linked to a draft (unapproved) policy version now refuse new
+  requests with `request.policy_version_invalid`; approve the version or
+  re-link the use case.
+- **Production `SECRET_KEY`** must not look like a placeholder - generate one
+  with `python3 -c "import secrets; print(secrets.token_urlsafe(48))"`.
+
 ## [0.2.1] - 2026-09-19
 
 ### Added

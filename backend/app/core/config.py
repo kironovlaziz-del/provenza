@@ -5,6 +5,34 @@ from pydantic import model_validator
 from pydantic_settings import BaseSettings
 
 
+# Fragments that only appear in placeholder / example / test keys. A real
+# key comes from a random generator and contains none of them.
+_PLACEHOLDER_FRAGMENTS = (
+    "change", "example", "default", "placeholder", "your-", "your_",
+    "secret-key", "secret_key", "not-for-production", "do-not-use", "replace",
+)
+
+
+def secret_key_problems(key: str) -> list[str]:
+    """Why `key` is not fit to sign production JWTs (empty list = fine).
+
+    Anyone who knows the key can mint a token for any user of any
+    organization, so a key copied from documentation or an example file
+    is as good as no key."""
+    problems: list[str] = []
+    if len(key) < 32:
+        problems.append("SECRET_KEY is shorter than 32 characters - too weak for HS256.")
+    low = key.lower()
+    if any(f in low for f in _PLACEHOLDER_FRAGMENTS):
+        problems.append(
+            "SECRET_KEY looks like a placeholder from an example file. Generate one with "
+            "'python3 -c \"import secrets; print(secrets.token_urlsafe(48))\"'."
+        )
+    elif len(set(key)) < 8:
+        problems.append("SECRET_KEY is not random enough (too few distinct characters).")
+    return problems
+
+
 class Settings(BaseSettings):
     PROJECT_NAME: str = "AI Control Tower"
     API_V1_STR: str = "/api/v1"
@@ -23,6 +51,26 @@ class Settings(BaseSettings):
     # "*" together with allow_credentials=True - browsers reject it and it
     # lets any site make authenticated requests as the logged-in user.
     CORS_ORIGINS: str = "http://localhost:3000,http://127.0.0.1:3000"
+
+    # Self-service sign-up: POST /users/register creates a NEW organization
+    # and makes the caller its admin. Off by default - on a company's own
+    # instance anyone who can reach the site would otherwise get an admin
+    # account. Create the first admin with scripts/create_admin.py and add
+    # teammates by invitation; turn this on only for a public demo/SaaS.
+    ALLOW_PUBLIC_SIGNUP: bool = False
+
+    # Outbound calls to user-configured URLs (AI providers, gateway
+    # upstreams, Vault Transit, webhooks) are refused when the target is a
+    # private, loopback or reserved address - see core/outbound.py. List
+    # your own internal services here to allow them, comma-separated
+    # hostnames, IPs or CIDRs: "vault.corp.local,10.20.0.0/16,127.0.0.1".
+    # Link-local addresses (cloud metadata) are never allowed. The list is
+    # server-wide: every organization's admins can reach what is listed.
+    OUTBOUND_PRIVATE_ALLOWLIST: str = ""
+    # Egress proxy for those same outbound calls, when the network requires
+    # one (e.g. "http://proxy.corp.local:3128"). HTTP(S)_PROXY environment
+    # variables are deliberately NOT used - see core/outbound.py.
+    OUTBOUND_PROXY: str = ""
 
 
     # Database
@@ -132,15 +180,7 @@ class Settings(BaseSettings):
 
         problems: list[str] = []
 
-        if self.SECRET_KEY == "your-secret-key-change-in-production":
-            problems.append(
-                "SECRET_KEY is still the default. Generate a long random string "
-                "and set it in backend/.env before deploying."
-            )
-        if len(self.SECRET_KEY) < 32:
-            problems.append(
-                "SECRET_KEY is shorter than 32 characters - too weak for HS256."
-            )
+        problems.extend(secret_key_problems(self.SECRET_KEY))
         if not self.ENCRYPTION_KEY:
             problems.append(
                 "ENCRYPTION_KEY is empty. Generate one with "

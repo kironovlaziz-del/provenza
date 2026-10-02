@@ -7,6 +7,7 @@ import { useTranslation } from "react-i18next";
 import { useAuth } from "@/lib/auth";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { translateApiError } from "@/lib/errors";
+import { getAuthConfig } from "@/lib/api";
 import { Logo } from "@/components/Logo";
 
 const LAST_ORG_KEY = "ai_ct_last_org";
@@ -19,6 +20,13 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [signupEnabled, setSignupEnabled] = useState(false);
+
+  useEffect(() => {
+    getAuthConfig()
+      .then((c) => setSignupEnabled(c.signup_enabled))
+      .catch(() => setSignupEnabled(false));
+  }, []);
 
   // Pre-fill the last used slug for convenience.
   useEffect(() => {
@@ -95,9 +103,11 @@ export default function LoginPage() {
           </button>
         </form>
         <ExtensionBanner />
-        <p className="auth-switch">
-          {t("auth.no_account")} <Link href="/register">{t("auth.register_link")}</Link>
-        </p>
+        {signupEnabled && (
+          <p className="auth-switch">
+            {t("auth.no_account")} <Link href="/register">{t("auth.register_link")}</Link>
+          </p>
+        )}
       </div>
     </div>
   );

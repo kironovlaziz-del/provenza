@@ -448,6 +448,9 @@ unprivileged methods only.
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | JWT lifetime, default 30 |
 | `ENVIRONMENT` / `DEBUG` | `production` disables `/docs` and enforces non-default secrets |
 | `CORS_ORIGINS` | Comma-separated allowed origins for the frontend |
+| `ALLOW_PUBLIC_SIGNUP` | Default `false`. When `true`, anyone who can reach the site can create an organization and become its admin. Create the first admin with `scripts/create_admin.py` instead. |
+| `OUTBOUND_PRIVATE_ALLOWLIST` | Internal hosts that AI-provider, Vault and webhook calls may reach (hostnames, IPs, CIDRs). Private and loopback targets are refused otherwise; cloud metadata (link-local) always is. Server-wide. |
+| `OUTBOUND_PROXY` | Egress proxy for those calls when the network requires one (`HTTP(S)_PROXY` is ignored for them) |
 | `SMTP_*` | Optional email notifications. If `SMTP_HOST` is empty, email is skipped — webhooks still work. |
 | `DATASETS_DIR` / `MODELS_DIR` | Where uploads and trained artifacts are stored |
 | `RAG_DOCUMENTS_DIR` / `RAG_VECTORIZERS_DIR` | RAG document and vectorizer storage |

@@ -15,6 +15,8 @@ from typing import Any, Dict, Optional, Tuple
 
 import httpx
 
+from app.core.outbound import error_detail, guarded_async_client
+
 DEFAULT_TIMEOUT = httpx.Timeout(60.0, connect=10.0)
 
 # One shared client for the lifetime of the process. httpx.AsyncClient is
@@ -25,7 +27,9 @@ _http_client: Optional[httpx.AsyncClient] = None
 def _get_client() -> httpx.AsyncClient:
     global _http_client
     if _http_client is None:
-        _http_client = httpx.AsyncClient(
+        # Guarded: base URLs are admin-supplied, so private/internal targets
+        # are refused at connect time (core/outbound.py).
+        _http_client = guarded_async_client(
             timeout=DEFAULT_TIMEOUT,
             limits=httpx.Limits(
                 max_keepalive_connections=20,
@@ -106,7 +110,7 @@ async def _call_openai_compatible(
         raise ProviderCallError(f"Network error calling provider: {exc}") from exc
 
     if resp.status_code >= 400:
-        raise ProviderCallError(f"Provider returned {resp.status_code}: {resp.text[:300]}")
+        raise ProviderCallError(f"Provider returned {error_detail(resp)}")
 
     data = resp.json()
     try:
@@ -136,7 +140,7 @@ async def _call_anthropic(
         raise ProviderCallError(f"Network error calling provider: {exc}") from exc
 
     if resp.status_code >= 400:
-        raise ProviderCallError(f"Provider returned {resp.status_code}: {resp.text[:300]}")
+        raise ProviderCallError(f"Provider returned {error_detail(resp)}")
 
     data = resp.json()
     try:
@@ -155,7 +159,7 @@ async def _call_custom(api_key: str, base_url: str, prompt: str) -> Tuple[str, D
         raise ProviderCallError(f"Network error calling provider: {exc}") from exc
 
     if resp.status_code >= 400:
-        raise ProviderCallError(f"Provider returned {resp.status_code}: {resp.text[:300]}")
+        raise ProviderCallError(f"Provider returned {error_detail(resp)}")
 
     data = resp.json()
     # Note: values like 0 or "" are valid responses - do not use `or`,

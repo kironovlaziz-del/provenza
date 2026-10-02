@@ -92,3 +92,13 @@ async def test_incident_not_found_returns_404(client, org_and_users, admin_token
         "/api/v1/incidents/999999", headers=auth_headers(admin_token)
     )
     assert resp.status_code == 404
+
+
+async def test_incident_cannot_reference_another_organizations_request(client, org_and_users, admin_token):
+    resp = await client.post(
+        "/api/v1/incidents/",
+        json={"severity": "low", "category": "policy_violation", "summary": "x", "request_id": 987654},
+        headers=auth_headers(admin_token),
+    )
+    assert resp.status_code == 422
+    assert resp.json()["detail"] == "incident.request_not_found"

@@ -15,12 +15,12 @@ Defense is in two layers, because neither alone is enough:
    private/loopback/link-local IPs. This gives the user an immediate,
    clear error for the obvious cases.
 
-2. assert_safe_webhook_target() - called RIGHT BEFORE the request is
-   sent. Resolves the hostname to its actual IP(s) and refuses if any
-   resolve into a blocked range. This is the layer that matters most: it
-   catches a hostname that looked innocent at create time but resolves
-   to an internal address (including deliberate DNS rebinding, where the
-   name resolves differently between validation and send).
+2. Send time - the layer that matters most. Webhooks are posted with
+   core.outbound.guarded_client, which resolves the host, checks every
+   address and connects to that same checked address in one step, so a
+   name that looked innocent at create time, or is repointed later (DNS
+   rebinding), is still refused. assert_safe_webhook_target() below is
+   the older stand-alone check, kept for callers that need only a yes/no.
 """
 
 from __future__ import annotations
@@ -36,22 +36,13 @@ class WebhookURLError(ValueError):
 
 
 def _ip_is_blocked(ip: ipaddress._BaseAddress) -> bool:
-    """True if this IP must never be a webhook target. Covers loopback,
-    private ranges, link-local (incl. 169.254.169.254 metadata),
-    unspecified (0.0.0.0), reserved and multicast - for both IPv4 and
-    IPv6, and IPv4-mapped IPv6 addresses."""
-    # Unwrap IPv4-mapped IPv6 (e.g. ::ffff:127.0.0.1) so it's judged as
-    # the IPv4 address it really targets.
-    if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped is not None:
-        ip = ip.ipv4_mapped
-    return (
-        ip.is_private
-        or ip.is_loopback
-        or ip.is_link_local
-        or ip.is_unspecified
-        or ip.is_reserved
-        or ip.is_multicast
-    )
+    """True if this IP must never be a webhook target: loopback, private,
+    link-local (incl. 169.254.169.254 metadata), unspecified, reserved and
+    multicast, IPv4 and IPv6, IPv4-mapped IPv6 unwrapped. One policy for
+    every outbound call - an operator's OUTBOUND_PRIVATE_ALLOWLIST applies
+    here too (core/outbound.py)."""
+    from app.core.outbound import ip_allowed
+    return not ip_allowed(ip)
 
 
 def validate_webhook_url(url: str) -> str:

@@ -13,11 +13,16 @@ import {
   updateUseCase,
 } from "@/lib/api";
 import type { Policy, PolicyVersion, RiskLevel, UseCase } from "@/lib/types";
+import { useAuth } from "@/lib/auth";
+import { translateApiError } from "@/lib/errors";
 
 export default function UseCaseDetailPage() {
   const params = useParams<{ id: string }>();
   const useCaseId = Number(params.id);
   const { t, i18n } = useTranslation();
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const [useCase, setUseCase] = useState<UseCase | null>(null);
   const [loading, setLoading] = useState(true);
@@ -57,12 +62,20 @@ export default function UseCaseDetailPage() {
     listPolicyVersions(Number(selectedPolicyId)).then(setVersions);
   }, [selectedPolicyId]);
 
+  function showError(err: unknown) {
+    const detail = (err as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail;
+    setActionError(translateApiError(detail, t, t("use_cases.save_failed")));
+  }
+
   async function handleSave() {
     setSaving(true);
+    setActionError(null);
     try {
       const updated = await updateUseCase(useCaseId, { risk_level: riskLevel, status });
       setUseCase(updated);
       setSavedAt(Date.now());
+    } catch (err) {
+      showError(err);
     } finally {
       setSaving(false);
     }
@@ -71,11 +84,14 @@ export default function UseCaseDetailPage() {
   async function handleLinkPolicyVersion() {
     if (!selectedVersionId) return;
     setLinking(true);
+    setActionError(null);
     try {
       const updated = await updateUseCase(useCaseId, {
         approved_policy_version_id: Number(selectedVersionId),
       });
       setUseCase(updated);
+    } catch (err) {
+      showError(err);
     } finally {
       setLinking(false);
     }
@@ -127,6 +143,10 @@ export default function UseCaseDetailPage() {
           </div>
         </div>
 
+        {actionError && <p className="error-text" style={{ marginBottom: 16 }}>{actionError}</p>}
+
+        {isAdmin && (
+        <>
         <div className="panel" style={{ marginBottom: 20 }}>
           <div className="panel-header">
             <h2>{t("use_cases.detail.edit_title")}</h2>
@@ -205,7 +225,8 @@ export default function UseCaseDetailPage() {
                 >
                   <option value="">{t("use_cases.detail.version_placeholder")}</option>
                   {versions.map((v) => (
-                    <option key={v.id} value={v.id}>
+                    // Only an approved version may govern requests (the server enforces it too).
+                    <option key={v.id} value={v.id} disabled={!v.approved_at}>
                       v{v.version} (#{v.id}){" "}
                       {v.approved_at
                         ? t("use_cases.detail.version_approved")
@@ -226,6 +247,8 @@ export default function UseCaseDetailPage() {
             </button>
           </div>
         </div>
+        </>
+        )}
       </div>
     </>
   );

@@ -1,16 +1,40 @@
-from pydantic import BaseModel
+import ipaddress
+import re
 from datetime import datetime
-from typing import Optional, Dict, Any, List
+from typing import Any, Dict, List, Optional
+
+from pydantic import BaseModel, Field, field_validator
+
+_HOSTNAME = re.compile(r"^(?=.{1,253}$)(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*\.?$")
+
+
+def is_bare_host(v: str) -> bool:
+    """A DNS name or a literal IPv4/IPv6 address - nothing else."""
+    try:
+        ipaddress.ip_address(v)
+        return True
+    except ValueError:
+        return bool(_HOSTNAME.match(v or ""))
 
 
 # ---- Discovery ingestion (from the sniffer/agent discovery layer) ----
 
 class DiscoveredServiceIn(BaseModel):
-    service_type: str
-    host: str
-    port: Optional[int] = None
+    service_type: str = Field(max_length=50)
+    # A bare hostname or IP. No scheme or port: libraries such as ldap3 read
+    # "ldap://host:389" out of the host string and would override the TLS
+    # mode and port chosen by the server.
+    host: str = Field(max_length=253)
+    port: Optional[int] = Field(default=None, ge=1, le=65535)
     discovered_via: str
     details: Optional[Dict[str, Any]] = None
+
+    @field_validator("host")
+    @classmethod
+    def _bare_host(cls, v: str) -> str:
+        if not is_bare_host(v):
+            raise ValueError("host must be a bare hostname or IP address (no scheme, port or path)")
+        return v
 
 
 class DiscoveryReportRequest(BaseModel):
@@ -61,6 +85,13 @@ class ServiceConnectRequest(BaseModel):
     base_dn: Optional[str] = None
     api_token: Optional[str] = None
     extra: Optional[Dict[str, Any]] = None
+    # The host and port the admin saw in the wizard; required for services
+    # that receive credentials (see DiscoveryService.connect_service).
+    expected_host: Optional[str] = None
+    expected_port: Optional[int] = None
+    # LDAP/AD: PEM of the CA that issued the directory's certificate, when it
+    # is an in-house CA the server does not already trust. TLS is mandatory.
+    tls_ca_pem: Optional[str] = Field(default=None, max_length=20000)
 
 
 class ServiceIgnoreRequest(BaseModel):

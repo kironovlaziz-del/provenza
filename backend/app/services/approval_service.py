@@ -5,7 +5,7 @@ from typing import List, Optional
 from app.models.ai_approval import AIApproval
 from app.models.ai_request import AIRequest
 from app.models.ai_use_case import AIUseCase
-from app.models.ai_policy import AIPolicyVersion
+from app.models.ai_policy import AIPolicy, AIPolicyVersion
 from app.models.user import User, UserRole
 from app.schemas.approval import ApprovalCreate, ApprovalDecision
 
@@ -36,8 +36,11 @@ class ApprovalService:
         # 1. Policy-driven approver
         if use_case and use_case.approved_policy_version_id:
             result = await self.db.execute(
-                select(AIPolicyVersion).where(
-                    AIPolicyVersion.id == use_case.approved_policy_version_id
+                select(AIPolicyVersion)
+                .join(AIPolicy, AIPolicy.id == AIPolicyVersion.policy_id)
+                .where(
+                    AIPolicyVersion.id == use_case.approved_policy_version_id,
+                    AIPolicy.org_id == org_id,
                 )
             )
             policy_version = result.scalar_one_or_none()

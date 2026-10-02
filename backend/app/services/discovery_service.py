@@ -11,8 +11,10 @@ from app.schemas.discovery import (
     DiscoveredServiceIn,
     ServiceConnectRequest,
 )
+from app.core.errors import api_error
 from app.services.discovery_connect_handlers import (
     CONNECT_HANDLERS,
+    CREDENTIAL_SERVICE_TYPES,
     ServiceConnectError,
     verify_connection,
 )
@@ -25,7 +27,7 @@ class DiscoveryService:
     # ---- ingestion from the discovery layer -------------------------------
 
     async def report_services(
-        self, org_id: int, services: List[DiscoveredServiceIn]
+        self, org_id: int, services: List[DiscoveredServiceIn], reported_by: Optional[str] = None
     ) -> Tuple[int, int]:
         """
         Upsert discovered services. Re-discovering the same
@@ -36,6 +38,12 @@ class DiscoveryService:
 
         Crucially this ONLY records observations - it never initiates any
         connection. connect_status stays "discovered" until an admin acts.
+
+        Telemetry never moves a known service: the host+type pair is the
+        identity, and a different port in a later report is recorded in
+        details["reported_port"] instead of replacing the port an admin may
+        already have connected (otherwise a collector key could downgrade a
+        domain controller from 636 to a cleartext port).
         """
         new_count = 0
         updated_count = 0
@@ -53,9 +61,14 @@ class DiscoveryService:
 
             if existing:
                 existing.last_seen_at = now
-                existing.port = svc.port if svc.port is not None else existing.port
-                if svc.details:
-                    existing.details = svc.details
+                details = dict(svc.details or existing.details or {})
+                if svc.port is not None and existing.port is None and existing.connect_status == "discovered":
+                    existing.port = svc.port
+                elif svc.port is not None and svc.port != existing.port:
+                    details["reported_port"] = svc.port
+                if reported_by:
+                    details["reported_by"] = reported_by
+                existing.details = details
                 existing.discovered_via = svc.discovered_via
                 updated_count += 1
             else:
@@ -66,7 +79,7 @@ class DiscoveryService:
                         host=svc.host,
                         port=svc.port,
                         discovered_via=svc.discovered_via,
-                        details=svc.details,
+                        details={**(svc.details or {}), **({"reported_by": reported_by} if reported_by else {})},
                         connect_status="discovered",
                         first_seen_at=now,
                         last_seen_at=now,
@@ -136,6 +149,15 @@ class DiscoveryService:
         message rather than pretending it worked.
         """
         svc = await self._get(service_id, org_id)
+
+        # Credentials go only to the address the admin looked at: the
+        # wizard echoes the host and port it displayed, and a record that
+        # changed in between (or a client that did not confirm) is refused.
+        if svc.service_type in CREDENTIAL_SERVICE_TYPES:
+            if creds.expected_host is None:
+                raise api_error(status.HTTP_422_UNPROCESSABLE_ENTITY, "discovery.confirm_target_required")
+            if creds.expected_host != svc.host or creds.expected_port != svc.port:
+                raise api_error(status.HTTP_409_CONFLICT, "discovery.target_changed")
 
         handler = CONNECT_HANDLERS.get(svc.service_type)
         if handler is None:

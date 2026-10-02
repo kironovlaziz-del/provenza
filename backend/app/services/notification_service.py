@@ -20,7 +20,7 @@ from typing import Any, Dict, List, Optional
 
 import httpx
 
-from app.core.ssrf import assert_safe_webhook_target, WebhookURLError
+from app.core.outbound import OutboundBlocked, guarded_client
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
@@ -51,18 +51,23 @@ def _send_email(target: str, subject: str, message: str) -> None:
         logger.exception("Failed to send email notification to %s", target)
 
 
+def _webhook_client() -> httpx.Client:
+    # SSRF guard in the connection layer (core/outbound.py): the address is
+    # resolved, checked and connected to in one step, so a host that
+    # resolves to an internal address - or is repointed after creation,
+    # DNS rebinding included - is refused.
+    return guarded_client(timeout=10.0)
+
+
 def _send_webhook(target: str, subject: str, message: str, metadata: Optional[Dict[str, Any]]) -> None:
-    # SSRF guard: resolve and check the target right before sending, so a
-    # host that resolves to an internal address (or was repointed after
-    # creation) is refused even though it passed create-time validation.
     try:
-        assert_safe_webhook_target(target)
-    except WebhookURLError:
-        logger.warning("Refusing webhook to unsafe target %s (SSRF guard)", target)
-        return
-    try:
-        with httpx.Client(timeout=10.0) as client:
+        with _webhook_client() as client:
             client.post(target, json={"subject": subject, "message": message, "metadata": metadata or {}})
+    except httpx.ConnectError as exc:
+        if isinstance(exc.__cause__, OutboundBlocked) or "Outbound connection refused" in str(exc):
+            logger.warning("Refusing webhook to unsafe target %s (SSRF guard)", target)
+        else:
+            logger.exception("Failed to send webhook notification to %s", target)
     except httpx.HTTPError:
         logger.exception("Failed to send webhook notification to %s", target)
 

@@ -105,6 +105,12 @@ export async function login(orgSlug: string, email: string, password: string) {
   return data;
 }
 
+/** Public: what the sign-in screens may offer (self-service sign-up is off by default). */
+export async function getAuthConfig(): Promise<{ signup_enabled: boolean }> {
+  const { data } = await api.get<{ signup_enabled: boolean }>("/auth/config");
+  return data;
+}
+
 export async function register(payload: {
   email: string;
   password: string;
@@ -1002,6 +1008,11 @@ export async function connectDiscoveredService(
     base_dn?: string;
     api_token?: string;
     extra?: Record<string, unknown>;
+    /** The host/port shown to the admin; the server refuses if the record changed. */
+    expected_host?: string;
+    expected_port?: number | null;
+    /** LDAP/AD: PEM of an in-house CA that issued the directory's certificate. */
+    tls_ca_pem?: string;
   }
 ) {
   const { data } = await api.post<DiscoveredService>(`/discovery/${id}/connect`, creds);

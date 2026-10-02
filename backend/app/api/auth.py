@@ -21,6 +21,12 @@ LOGIN_EMAIL_LIMIT = 5
 LOGIN_WINDOW_SECONDS = 300
 
 
+@router.get("/config")
+async def auth_config():
+    """Public, unauthenticated: what the sign-in screens may offer."""
+    return {"signup_enabled": settings.ALLOW_PUBLIC_SIGNUP}
+
+
 @router.post("/login", response_model=Token)
 async def login(
     user_data: UserLogin,
