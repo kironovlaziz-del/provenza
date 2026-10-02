@@ -1,7 +1,8 @@
 from typing import Optional
 from fastapi import Depends, Header, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
-from jose import JWTError, jwt
+import jwt
+from jwt import PyJWTError as JWTError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from datetime import datetime, timezone
@@ -49,7 +50,10 @@ async def _user_from_token(token: str, db: AsyncSession) -> User:
     )
     try:
         payload = jwt.decode(
-            token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM]
+            token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM],
+            # tokens issued before the switch to PyJWT carry a numeric "sub";
+            # it is checked below (required, must be an integer id)
+            options={"verify_sub": False},
         )
         user_id: str = payload.get("sub")
         if user_id is None:
@@ -57,7 +61,11 @@ async def _user_from_token(token: str, db: AsyncSession) -> User:
     except JWTError:
         raise credentials_exception
 
-    result = await db.execute(select(User).where(User.id == int(user_id)))
+    try:
+        uid = int(user_id)
+    except (TypeError, ValueError):
+        raise credentials_exception
+    result = await db.execute(select(User).where(User.id == uid))
     user = result.scalar_one_or_none()
     if user is None:
         raise credentials_exception
