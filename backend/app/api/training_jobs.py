@@ -4,7 +4,8 @@ from starlette.background import BackgroundTask
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List
 from pathlib import Path
-from jose import jwt, JWTError
+import jwt
+from jwt import PyJWTError as JWTError
 import os
 import asyncio
 import json
