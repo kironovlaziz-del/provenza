@@ -451,7 +451,8 @@
       "link_button": "Tanlangan versiyani bog'lash",
       "linking": "Bog'lanmoqda…",
       "loading": "Yuklanmoqda…"
-    }
+    },
+    "save_failed": "Foydalanish holatini saqlab bo'lmadi."
   },
   "providers": {
     "title": "Vendor Risk Desk",
@@ -914,7 +915,9 @@
     "login_link": "Kirish",
     "failed": "Tashkilotni yaratib bo'lmadi.",
     "org_slug": "Tashkilot identifikatori",
-    "org_slug_hint": "Kichik lotin harflari, raqamlar, defis. Kirishda ishlatiladi."
+    "org_slug_hint": "Kichik lotin harflari, raqamlar, defis. Kirishda ishlatiladi.",
+    "disabled_title": "Ro'yxatdan o'tish yopiq",
+    "disabled_text": "Ushbu Provenza serverida yangi tashkilotlarni administrator yaratadi. Sizni taklif qilishini administratordan so'rang."
   },
   "deployments": {
     "title": "Deployment Manager",
@@ -972,7 +975,16 @@
     "deployment.model_unavailable": "Asosiy model artefakti mavjud emas.",
     "deployment.tabular_not_chat": "Bu deployment jadval modeli ({{task_type}}) va chat uchun ishlatilmaydi.",
     "deployment.name_not_found": "'{{name}}' nomli faol deployment topilmadi.",
-    "deployment.no_active_traffic": "'{{name}}' nomli barcha deploymentlarning traffic weight nolga teng."
+    "deployment.no_active_traffic": "'{{name}}' nomli barcha deploymentlarning traffic weight nolga teng.",
+    "auth.signup_disabled": "Bu serverda mustaqil ro'yxatdan o'tish o'chirilgan.",
+    "use_case.policy_version_not_found": "Bu siyosat versiyasi tashkilotingizda mavjud emas.",
+    "use_case.policy_version_not_approved": "Faqat tasdiqlangan siyosat versiyasini bog'lash mumkin. Avval versiyani tasdiqlang.",
+    "use_case.owner_not_found": "Egasi tashkilotingiz foydalanuvchisi bo'lishi kerak.",
+    "request.policy_version_invalid": "Ushbu foydalanish holati tashkilotingiz uchun yaroqsiz siyosat versiyasiga bog'langan. Administrator uni qayta bog'lashi kerak.",
+    "incident.request_not_found": "Bu so'rov tashkilotingizda mavjud emas.",
+    "discovery.confirm_target_required": "Hisob ma'lumotlarini yuborishdan oldin server manzilini tasdiqlang.",
+    "discovery.target_changed": "Oyna ochilgandan keyin bu xizmat manzili o'zgardi. Ro'yxatni yangilab, qayta tekshiring.",
+    "ingestion.scope_denied": "Ushbu kollektor kaliti tarmoq xizmatlari haqida xabar berishga ruxsatga ega emas."
   },
   "playground": {
     "title": "Playground",
@@ -1178,7 +1190,12 @@
     "conn_person_count": "Katalog foydalanuvchilari",
     "conn_none": "Saqlangan ulanish yo'q.",
     "reverify_btn": "Qayta tekshirish",
-    "conn_error": "Oxirgi xato"
+    "conn_error": "Oxirgi xato",
+    "connect_target": "Hisob ma'lumotlari quyidagi manzilga yuboriladi",
+    "connect_target_check": "Ulanishdan oldin bu sizning katalog serveringiz ekanini tekshiring. Xizmatlar haqida kollektorlar xabar beradi va ular xato bo'lishi mumkin.",
+    "field_ca_pem": "CA sertifikati (PEM, ixtiyoriy)",
+    "field_ca_pem_hint": "Ulanish har doim sertifikat tekshiruvi bilan TLS (LDAPS yoki StartTLS) orqali amalga oshiriladi. Katalog sertifikati ichki CA tomonidan berilgan bo'lsa, CA sertifikatingizni qo'ying.",
+    "connect_reported": "\"{{source}}\" kollektori xabar bergan ({{via}} orqali)."
   },
   "extension_banner": {
     "title": "Brauzer himoyasi mavjud",

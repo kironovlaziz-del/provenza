@@ -1,6 +1,8 @@
 from typing import Literal, Optional
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
+
+from app.core.outbound import validate_url
 
 
 class KeyConfigIn(BaseModel):
@@ -16,6 +18,13 @@ class KeyConfigIn(BaseModel):
     key_id: Optional[str] = Field(default=None, max_length=300)
     access_key_id: Optional[str] = Field(default=None, max_length=128)
     secret_access_key: Optional[str] = Field(default=None, max_length=256)
+
+    @field_validator("addr")
+    @classmethod
+    def _addr(cls, v: Optional[str]) -> Optional[str]:
+        # Not a literal internal IP; hostnames are checked at connect time
+        # (core/outbound.py). An in-house Vault goes in OUTBOUND_PRIVATE_ALLOWLIST.
+        return validate_url(v) if v else v
 
     @model_validator(mode="after")
     def _required(self):

@@ -1,8 +1,9 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Optional
 
 from app.core.database import get_db
+from app.core.errors import api_error
 from app.core.pagination import PaginationParams
 from app.schemas.discovery import (
     DiscoveryReportRequest,
@@ -21,6 +22,12 @@ from app.api.deps import get_current_user, require_role, get_ingestion_source
 
 router = APIRouter()
 
+# Ingestion keys allowed to report network services. A browser-extension key
+# ships inside the extension zip every employee installs, so it must not be
+# able to add an "Active Directory server" an admin may later send domain
+# credentials to.
+DISCOVERY_SOURCE_TYPES = {"gateway", "endpoint"}
+
 
 @router.post("/report", response_model=DiscoveryReportResponse)
 async def report_discovery(
@@ -34,8 +41,12 @@ async def report_discovery(
     same as telemetry ingestion. Recording a service here is a read-only
     observation and never triggers a connection.
     """
+    if source.source_type not in DISCOVERY_SOURCE_TYPES:
+        raise api_error(status.HTTP_403_FORBIDDEN, "ingestion.scope_denied")
     service = DiscoveryService(db)
-    new_count, updated_count = await service.report_services(source.org_id, data.services)
+    new_count, updated_count = await service.report_services(
+        source.org_id, data.services, reported_by=source.name
+    )
     return DiscoveryReportResponse(
         received=len(data.services), new_services=new_count, updated_services=updated_count
     )

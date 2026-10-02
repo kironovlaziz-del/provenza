@@ -451,7 +451,8 @@
       "link_button": "Link selected version",
       "linking": "Linking…",
       "loading": "Loading…"
-    }
+    },
+    "save_failed": "Could not save the use case."
   },
   "providers": {
     "title": "Vendor Risk Desk",
@@ -914,7 +915,9 @@
     "login_link": "Sign in",
     "failed": "Could not create organization.",
     "org_slug": "Organization identifier",
-    "org_slug_hint": "Lowercase letters, digits, hyphens. Used in login."
+    "org_slug_hint": "Lowercase letters, digits, hyphens. Used in login.",
+    "disabled_title": "Registration is closed",
+    "disabled_text": "New organizations on this Provenza server are created by its administrator. Ask your administrator to invite you."
   },
   "deployments": {
     "title": "Deployment Manager",
@@ -972,7 +975,16 @@
     "deployment.model_unavailable": "The underlying model artifact is not available.",
     "deployment.tabular_not_chat": "This deployment is a tabular model ({{task_type}}) and cannot be used in chat.",
     "deployment.name_not_found": "No active deployment named '{{name}}'.",
-    "deployment.no_active_traffic": "All deployments named '{{name}}' have zero traffic weight."
+    "deployment.no_active_traffic": "All deployments named '{{name}}' have zero traffic weight.",
+    "auth.signup_disabled": "Self-service registration is disabled on this server.",
+    "use_case.policy_version_not_found": "That policy version does not exist in your organization.",
+    "use_case.policy_version_not_approved": "Only an approved policy version can be linked. Approve the version first.",
+    "use_case.owner_not_found": "The owner must be a user of your organization.",
+    "request.policy_version_invalid": "This use case is linked to a policy version that is not valid for your organization. An admin must re-link it.",
+    "incident.request_not_found": "That request does not exist in your organization.",
+    "discovery.confirm_target_required": "Confirm the server address before sending credentials.",
+    "discovery.target_changed": "This service's address changed after you opened the dialog. Reload the list and check it again.",
+    "ingestion.scope_denied": "This collector key is not allowed to report network services."
   },
   "playground": {
     "title": "Playground",
@@ -1178,7 +1190,12 @@
     "conn_person_count": "Directory users",
     "conn_none": "No stored connection.",
     "reverify_btn": "Re-verify",
-    "conn_error": "Last error"
+    "conn_error": "Last error",
+    "connect_target": "Credentials will be sent to",
+    "connect_target_check": "Check that this is your directory server before you connect. Services are reported by collectors and may be wrong.",
+    "field_ca_pem": "CA certificate (PEM, optional)",
+    "field_ca_pem_hint": "The connection always uses TLS (LDAPS or StartTLS) with certificate validation. Paste your CA if the directory's certificate is issued by an in-house CA.",
+    "connect_reported": "Reported by collector \"{{source}}\" (via {{via}})."
   },
   "extension_banner": {
     "title": "Browser protection available",

@@ -12,6 +12,7 @@ import {
   reverifyServiceConnection,
 } from "@/lib/api";
 import type { DiscoveredService, ServiceConnection } from "@/lib/types";
+import { translateApiError } from "@/lib/errors";
 
 const SERVICE_ICONS: Record<string, string> = {
   dns: "🌐",
@@ -76,6 +77,7 @@ export default function DiscoveryPage() {
   const [connectTarget, setConnectTarget] = useState<DiscoveredService | null>(null);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [caPem, setCaPem] = useState("");
   const [bindDn, setBindDn] = useState("");
   const [baseDn, setBaseDn] = useState("");
   const [apiToken, setApiToken] = useState("");
@@ -104,6 +106,7 @@ export default function DiscoveryPage() {
 
   function openConnect(svc: DiscoveredService) {
     setConnectTarget(svc);
+    setCaPem("");
     setUsername("");
     setPassword("");
     setBindDn("");
@@ -124,6 +127,10 @@ export default function DiscoveryPage() {
         bind_dn: bindDn || undefined,
         base_dn: baseDn || undefined,
         api_token: apiToken || undefined,
+        // Credentials only go to the address shown in this dialog.
+        expected_host: connectTarget.host,
+        expected_port: connectTarget.port ?? null,
+        tls_ca_pem: caPem.trim() || undefined,
       });
       // The backend deliberately reports honest outcomes, including
       // "needs_credentials" when a service type has no connect handler
@@ -135,8 +142,9 @@ export default function DiscoveryPage() {
         setConnectResult(updated.connect_error || t("discovery.connect_failed"));
         refresh();
       }
-    } catch {
-      setConnectResult(t("discovery.connect_failed"));
+    } catch (err) {
+      const detail = (err as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail;
+      setConnectResult(translateApiError(detail, t, t("discovery.connect_failed")));
     } finally {
       setSubmitting(false);
     }
@@ -366,8 +374,24 @@ export default function DiscoveryPage() {
                 </h2>
               </div>
               <div className="panel-body">
-                <p className="hint-text" style={{ marginBottom: 14 }}>
+                <p className="hint-text" style={{ marginBottom: 8 }}>
                   {t("discovery.connect_hint", { host: connectTarget.host })}
+                </p>
+                <p style={{ marginBottom: 14 }}>
+                  {t("discovery.connect_target")}:{" "}
+                  <strong className="mono">
+                    {connectTarget.host}
+                    {connectTarget.port ? `:${connectTarget.port}` : ""}
+                  </strong>
+                  <br />
+                  <span className="hint-text">
+                    {t("discovery.connect_reported", {
+                      source: String(connectTarget.details?.reported_by ?? "—"),
+                      via: connectTarget.discovered_via,
+                    })}
+                  </span>
+                  <br />
+                  <span className="hint-text">{t("discovery.connect_target_check")}</span>
                 </p>
                 <Form onSubmit={handleConnect}>
                   <div className="form-row">
@@ -404,6 +428,19 @@ export default function DiscoveryPage() {
                     <label>{t("discovery.field_api_token")}</label>
                     <input value={apiToken} onChange={(e) => setApiToken(e.target.value)} />
                   </div>
+                  {(connectTarget.service_type === "active_directory" || connectTarget.service_type === "ldap") && (
+                    <div className="field">
+                      <label>{t("discovery.field_ca_pem")}</label>
+                      <textarea
+                        className="mono"
+                        rows={3}
+                        value={caPem}
+                        onChange={(e) => setCaPem(e.target.value)}
+                        placeholder="-----BEGIN CERTIFICATE-----"
+                      />
+                      <span className="hint-text">{t("discovery.field_ca_pem_hint")}</span>
+                    </div>
+                  )}
 
                   {connectResult && (
                     <p className="error-text" style={{ marginTop: 4 }}>

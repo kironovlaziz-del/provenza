@@ -8,10 +8,13 @@ import { PageHeader } from "@/components/PageHeader";
 import { RiskPill, StatusPill } from "@/components/Pill";
 import { createUseCase, listUseCases } from "@/lib/api";
 import type { RiskLevel, UseCase } from "@/lib/types";
+import { useAuth } from "@/lib/auth";
 
 export default function UseCasesPage() {
   const router = useRouter();
   const { t } = useTranslation();
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
   const [useCases, setUseCases] = useState<UseCase[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -51,13 +54,15 @@ export default function UseCasesPage() {
       <PageHeader
         title={t("use_cases.title")}
         actions={
-          <button className="btn btn-primary btn-sm" onClick={() => setShowForm((s) => !s)}>
-            {showForm ? t("use_cases.cancel") : t("use_cases.new")}
-          </button>
+          isAdmin ? (
+            <button className="btn btn-primary btn-sm" onClick={() => setShowForm((s) => !s)}>
+              {showForm ? t("use_cases.cancel") : t("use_cases.new")}
+            </button>
+          ) : undefined
         }
       />
       <div className="content">
-        {showForm && (
+        {isAdmin && showForm && (
           <div className="panel" style={{ marginBottom: 20 }}>
             <div className="panel-header">
               <h2>{t("use_cases.form_title")}</h2>

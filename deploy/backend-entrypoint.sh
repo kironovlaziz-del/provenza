@@ -22,6 +22,16 @@ import os
 from cryptography.fernet import Fernet
 Fernet(os.environ["ENCRYPTION_KEY"].encode())
 PY
+  # The application's own production checks (placeholder-looking keys,
+  # default passwords, ...) - one source of truth, see app/core/config.py.
+  python - <<'PY' || die "configuration rejected - see the reasons above"
+from app.core.config import secret_key_problems
+import os, sys
+problems = secret_key_problems(os.environ.get("SECRET_KEY", ""))
+for p in problems:
+    print("[provenza]   - " + p, file=sys.stderr)
+sys.exit(1 if problems else 0)
+PY
 }
 
 wait_for() {  # host port name

@@ -103,9 +103,7 @@ def test_send_webhook_posts_subject_message_and_metadata(monkeypatch):
             captured["json"] = json
             return httpx.Response(200)
 
-    monkeypatch.setattr(
-        notification_service.httpx, "Client", lambda timeout=10.0: _FakeHTTPClient()
-    )
+    monkeypatch.setattr(notification_service, "_webhook_client", lambda: _FakeHTTPClient())
 
     notification_service._send_webhook(
         "https://example.com/hook", "Subject", "Body text", {"incident_id": 5}
@@ -130,9 +128,7 @@ def test_send_webhook_swallows_http_errors(monkeypatch):
         def post(self, url, json):
             raise httpx.ConnectError("boom")
 
-    monkeypatch.setattr(
-        notification_service.httpx, "Client", lambda timeout=10.0: _FailingHTTPClient()
-    )
+    monkeypatch.setattr(notification_service, "_webhook_client", lambda: _FailingHTTPClient())
 
     # Must not raise.
     notification_service._send_webhook("https://example.com/hook", "s", "m", None)
@@ -152,9 +148,7 @@ def test_send_webhook_defaults_metadata_to_empty_dict(monkeypatch):
             captured["json"] = json
             return httpx.Response(200)
 
-    monkeypatch.setattr(
-        notification_service.httpx, "Client", lambda timeout=10.0: _FakeHTTPClient()
-    )
+    monkeypatch.setattr(notification_service, "_webhook_client", lambda: _FakeHTTPClient())
 
     notification_service._send_webhook("https://example.com/hook", "s", "m", None)
     assert captured["json"]["metadata"] == {}

@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import socket
 from datetime import datetime, timezone
-from typing import Tuple
+from typing import Optional, Tuple
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -31,6 +31,35 @@ class ServiceConnectError(Exception):
     """Raised when a connect attempt fails (bad credentials, unreachable,
     misconfigured). Surfaced to the admin as connect_error - never
     swallowed."""
+
+
+# Service types whose connect handler sends admin-supplied credentials.
+CREDENTIAL_SERVICE_TYPES = {"active_directory", "ldap"}
+
+# Implicit-TLS LDAP ports: LDAPS and the AD Global Catalog over SSL.
+LDAPS_PORTS = {636, 3269}
+
+
+def _ldap_endpoint(host: str, port: int, ca_pem: Optional[str]):
+    """(Server, auto_bind mode) for a bind that never sends the password in
+    clear: LDAPS on 636, StartTLS before the bind on any other port. The
+    certificate is validated against the system trust store, or against
+    `ca_pem` (an in-house CA) when the admin supplied one."""
+    import ssl
+    from ldap3 import ALL, AUTO_BIND_TLS_BEFORE_BIND, AUTO_BIND_NO_TLS, Server, Tls
+
+    # ldap3 parses "ldap://host:port" out of the host string and lets it
+    # override use_ssl/port - so only a bare host is accepted, and the
+    # resulting Server is checked against what we asked for.
+    from app.schemas.discovery import is_bare_host
+    if not is_bare_host(host):
+        raise ServiceConnectError("Invalid directory host: expected a bare hostname or IP address.")
+    tls = Tls(validate=ssl.CERT_REQUIRED, ca_certs_data=ca_pem or None)
+    implicit = port in LDAPS_PORTS
+    server = Server(host, port=port, use_ssl=implicit, tls=tls, get_info=ALL, connect_timeout=8)
+    if bool(getattr(server, "ssl", implicit)) != implicit or getattr(server, "port", port) != port:
+        raise ServiceConnectError("Invalid directory host: it overrides the TLS mode or port.")
+    return server, (AUTO_BIND_NO_TLS if implicit else AUTO_BIND_TLS_BEFORE_BIND)
 
 
 # ---------------------------------------------------------------------------
@@ -59,7 +88,7 @@ async def connect_ldap(
 
     try:
         # Lazy import: ldap3 is only needed when actually connecting AD.
-        from ldap3 import Server, Connection, ALL, SUBTREE
+        from ldap3 import Connection, SUBTREE
         from ldap3.core.exceptions import LDAPException
     except ImportError:
         raise ServiceConnectError(
@@ -68,7 +97,7 @@ async def connect_ldap(
 
     host = svc.host
     port = svc.port or 389
-    use_ssl = port == 636
+    ca_pem = (creds.tls_ca_pem or "").strip() or None
 
     # ldap3 does blocking network I/O; this whole handler is awaited from
     # an async context, but the calls here are synchronous. They are
@@ -76,20 +105,28 @@ async def connect_ldap(
     # running them inline is acceptable rather than pushing to a thread
     # pool. If this ever grows to periodic sync, move it to a worker.
     try:
-        server = Server(host, port=port, use_ssl=use_ssl, get_info=ALL, connect_timeout=8)
+        server, auto_bind = _ldap_endpoint(host, port, ca_pem)
         conn = Connection(
             server,
             user=creds.bind_dn,
             password=creds.password,
-            auto_bind=True,
+            auto_bind=auto_bind,
             receive_timeout=10,
         )
+    except ServiceConnectError:
+        raise
     except LDAPException as exc:
-        raise ServiceConnectError("LDAP bind failed: " + str(exc)[:300])
+        raise ServiceConnectError(
+            "LDAP bind over TLS failed: " + str(exc)[:300]
+            + " - the directory must offer LDAPS (636) or StartTLS with a certificate this"
+            " server trusts; add your CA certificate if it is an in-house one."
+        )
     except Exception as exc:  # noqa: BLE001 - socket errors, DNS, etc.
         raise ServiceConnectError("Could not reach the LDAP server: " + str(exc)[:300])
 
-    info: dict = {}
+    info: dict = {"tls": "ldaps" if port in LDAPS_PORTS else "starttls"}
+    if ca_pem:
+        info["tls_ca_pem"] = ca_pem
     try:
         # base_dn: use what the admin gave, else the server's default
         # naming context (AD advertises this in the root DSE).
@@ -307,7 +344,7 @@ def _verify_ldap(conn) -> Tuple[bool, str]:
     if not conn.bind_dn or not conn.bind_password_encrypted:
         return False, "No stored bind credentials."
     try:
-        from ldap3 import Server, Connection, ALL
+        from ldap3 import Connection
         from ldap3.core.exceptions import LDAPException
     except ImportError:
         return False, "LDAP support is not installed on the server."
@@ -318,11 +355,10 @@ def _verify_ldap(conn) -> Tuple[bool, str]:
         return False, "Stored credentials could not be decrypted."
 
     port = conn.port or 389
-    use_ssl = port == 636
     try:
-        server = Server(conn.host, port=port, use_ssl=use_ssl, get_info=ALL, connect_timeout=8)
+        server, auto_bind = _ldap_endpoint(conn.host, port, (conn.info or {}).get("tls_ca_pem"))
         c = Connection(
-            server, user=conn.bind_dn, password=password, auto_bind=True, receive_timeout=10
+            server, user=conn.bind_dn, password=password, auto_bind=auto_bind, receive_timeout=10
         )
         c.unbind()
         return True, ""

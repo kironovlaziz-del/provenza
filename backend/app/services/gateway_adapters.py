@@ -15,6 +15,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import httpx
 
+from app.core.outbound import error_detail
 from app.services.provider_adapters import ProviderCallError, _get_client
 
 DEFAULT_BASE = {
@@ -41,7 +42,7 @@ async def _post(url: str, headers: Dict[str, str], body: Dict[str, Any]) -> Dict
     except httpx.HTTPError as exc:
         raise ProviderCallError(f"Network error calling provider: {exc}") from exc
     if resp.status_code >= 400:
-        raise ProviderCallError(f"Provider returned {resp.status_code}: {resp.text[:300]}")
+        raise ProviderCallError(f"Provider returned {error_detail(resp)}")
     try:
         return resp.json()
     except ValueError as exc:

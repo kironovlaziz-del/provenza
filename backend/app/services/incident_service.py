@@ -3,7 +3,9 @@ from sqlalchemy import select
 from fastapi import HTTPException, status
 from typing import List
 from datetime import datetime, timezone
+from app.core.errors import api_error
 from app.models.ai_incident import AIIncident
+from app.models.ai_request import AIRequest
 from app.schemas.incident import IncidentCreate, IncidentUpdate
 
 class IncidentService:
@@ -11,6 +13,13 @@ class IncidentService:
         self.db = db
     
     async def create_incident(self, org_id: int, data: IncidentCreate) -> AIIncident:
+        if data.request_id is not None:
+            # The request an incident points at must be this organization's.
+            found = await self.db.scalar(
+                select(AIRequest.id).where(AIRequest.id == data.request_id, AIRequest.org_id == org_id)
+            )
+            if found is None:
+                raise api_error(status.HTTP_422_UNPROCESSABLE_ENTITY, "incident.request_not_found")
         incident = AIIncident(
             org_id=org_id,
             request_id=data.request_id,

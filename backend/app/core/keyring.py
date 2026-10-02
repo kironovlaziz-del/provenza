@@ -91,8 +91,10 @@ def _open_config(public: Dict[str, Any], sealed: Optional[str]) -> Dict[str, Any
 
 
 def _vault_client():
-    import httpx
-    return httpx.Client(timeout=10.0)
+    # Guarded: the Vault address is admin-supplied. An in-house Vault on a
+    # private network must be listed in OUTBOUND_PRIVATE_ALLOWLIST.
+    from app.core.outbound import guarded_client
+    return guarded_client(timeout=10.0)
 
 
 def _vault(cfg: Dict[str, Any], op: str, body: Dict[str, Any]) -> Dict[str, Any]:
@@ -106,7 +108,8 @@ def _vault(cfg: Dict[str, Any], op: str, body: Dict[str, Any]) -> Dict[str, Any]
     except Exception as exc:  # noqa: BLE001
         raise KeyUnavailable(f"Vault unreachable: {exc}") from exc
     if r.status_code >= 400:
-        raise KeyUnavailable(f"Vault refused ({r.status_code}): {r.text[:200]}")
+        from app.core.outbound import error_detail
+        raise KeyUnavailable(f"Vault refused ({error_detail(r)})")
     return r.json().get("data") or {}
 
 

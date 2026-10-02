@@ -48,7 +48,12 @@ be read.
 
 - No demo data and no default credentials: the backend refuses to start if
   `SECRET_KEY`, `ENCRYPTION_KEY`, `POSTGRES_PASSWORD` or `REDIS_PASSWORD` is
-  missing or a well-known default.
+  missing or a well-known default, or if `SECRET_KEY` looks like a placeholder.
+- No self-service sign-up: organizations and their first admin are created
+  with `create-admin`; set `ALLOW_PUBLIC_SIGNUP=true` only for a public demo.
+- Outbound calls to admin-supplied URLs (AI providers, Vault, webhooks) cannot
+  reach private or internal addresses unless they are listed in
+  `OUTBOUND_PRIVATE_ALLOWLIST`; redirects are not followed.
 - Only Caddy publishes ports. PostgreSQL and Redis sit on an internal network.
 - Containers run as non-root users with a read-only root filesystem, no Linux
   capabilities and `no-new-privileges`.
@@ -119,6 +124,9 @@ Every setting is described in [`.env.example`](.env.example). The most common:
 | `API_WORKERS` | 2 | Uvicorn worker processes |
 | `CELERY_CONCURRENCY` | 2 | Parallel background tasks |
 | `PROMPT_FIREWALL_NER_ENABLED` | true | NER-based PII detection |
+| `ALLOW_PUBLIC_SIGNUP` | false | Let anyone create an organization from the sign-up page |
+| `OUTBOUND_PRIVATE_ALLOWLIST` | empty | Internal hosts outbound calls may reach, e.g. an in-house Vault or local model server |
+| `OUTBOUND_PROXY` | empty | Egress proxy for outbound calls, if required |
 | `SMTP_*` | empty | E-mail notifications |
 | `*_MEMORY` | see file | Container memory limits |
 

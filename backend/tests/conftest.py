@@ -29,6 +29,9 @@ os.environ.setdefault("ENVIRONMENT", "development")
 os.environ.setdefault("SECRET_KEY", "test-secret-key-do-not-use-in-production-1234567890")
 os.environ.setdefault("ENCRYPTION_KEY", "")
 os.environ.setdefault("REDIS_PASSWORD", "")
+# Several tests create extra organizations through the sign-up endpoint;
+# tests/test_signup.py covers the default (disabled) behaviour.
+os.environ.setdefault("ALLOW_PUBLIC_SIGNUP", "true")
 
 from app.core.config import settings  # noqa: E402
 from app.core.database import Base, get_db  # noqa: E402

@@ -6,7 +6,8 @@ from app.models.ai_request import AIRequest
 from app.models.ai_response import AIResponse
 from app.models.ai_use_case import AIUseCase
 from app.models.ai_provider import AIProvider
-from app.models.ai_policy import AIPolicyVersion
+from app.models.ai_policy import AIPolicy, AIPolicyVersion
+from app.core.errors import api_error
 from app.schemas.request import RequestCreate
 from app.services import prompt_firewall
 from app.services import provider_adapters
@@ -60,12 +61,21 @@ class RequestService:
 
         policy_version = None
         if use_case.approved_policy_version_id:
+            # Scoped to the organization: a link that does not resolve here
+            # (a stale or foreign id) fails closed rather than silently
+            # running the request with no rules.
             result = await self.db.execute(
-                select(AIPolicyVersion).where(
-                    AIPolicyVersion.id == use_case.approved_policy_version_id
+                select(AIPolicyVersion)
+                .join(AIPolicy, AIPolicy.id == AIPolicyVersion.policy_id)
+                .where(
+                    AIPolicyVersion.id == use_case.approved_policy_version_id,
+                    AIPolicy.org_id == org_id,
                 )
             )
             policy_version = result.scalar_one_or_none()
+            # Unapproved counts as invalid too: a draft must never govern traffic.
+            if policy_version is None or policy_version.approved_at is None:
+                raise api_error(status.HTTP_409_CONFLICT, "request.policy_version_invalid")
 
         rules = (policy_version.rules_json if policy_version else {}) or {}
 

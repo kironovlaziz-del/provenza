@@ -1,10 +1,11 @@
 "use client";
 
 import { ExtensionBanner } from "@/components/ExtensionBanner";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { useTranslation } from "react-i18next";
-import { register } from "@/lib/api";
+import { getAuthConfig, register } from "@/lib/api";
+import { translateApiError } from "@/lib/errors";
 import { useAuth } from "@/lib/auth";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { Logo } from "@/components/Logo";
@@ -32,6 +33,14 @@ export default function RegisterPage() {
   const [slugTouched, setSlugTouched] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  // null while loading; any failure to read the config counts as "closed".
+  const [signupEnabled, setSignupEnabled] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    getAuthConfig()
+      .then((c) => setSignupEnabled(c.signup_enabled))
+      .catch(() => setSignupEnabled(false));
+  }, []);
 
   function update(field: keyof typeof form, value: string) {
     setForm((f) => ({ ...f, [field]: value }));
@@ -54,14 +63,8 @@ export default function RegisterPage() {
       await register({ ...form, role: "admin" } as never);
       await login(form.org_slug, form.email, form.password);
     } catch (err: unknown) {
-      const detail =
-        (err as { response?: { data?: { detail?: string } } })?.response?.data
-          ?.detail;
-      setError(
-        typeof detail === "string"
-          ? detail
-          : t("register.failed"),
-      );
+      const detail = (err as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail;
+      setError(translateApiError(detail, t, t("register.failed")));
       setSubmitting(false);
     }
   }
@@ -71,6 +74,15 @@ export default function RegisterPage() {
       <div className="auth-card">
         <div className="auth-brand" style={{ display: "flex", justifyContent: "center", marginBottom: 8 }}><Logo size="lg" center /></div>
         <LanguageSwitcher variant="light" />
+        {signupEnabled === false ? (
+          <>
+            <h1 className="auth-title">{t("register.disabled_title")}</h1>
+            <p className="hint-text" style={{ textAlign: "center", marginBottom: 16 }}>
+              {t("register.disabled_text")}
+            </p>
+          </>
+        ) : signupEnabled === null ? null : (
+        <>
         <h1 className="auth-title">{t("register.title")}</h1>
         <form onSubmit={handleSubmit}>
           <div className="field">
@@ -141,6 +153,8 @@ export default function RegisterPage() {
             {submitting ? t("register.submitting") : t("register.submit")}
           </button>
         </form>
+        </>
+        )}
         <ExtensionBanner />
         <p className="auth-switch">
           {t("register.already_have")}{" "}

@@ -13,13 +13,14 @@ from app.models.user import UserRole
 from app.models.ai_provider import AIProvider
 from app.core.crypto import decrypt_secret
 from app.services import provider_adapters
+import httpx
+from app.core.outbound import error_detail, guarded_async_client
 from app.services import prompt_firewall
 from app.models.ai_request import AIRequest
 from app.core.crypto import encrypt_secret
 from fastapi import HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy import select
-import httpx
 from app.models.ai_policy import AIPolicy, AIPolicyVersion
 
 router = APIRouter()
@@ -242,12 +243,19 @@ async def list_provider_models(
 
     url = base.rstrip("/") + "/models"
     try:
-        async with httpx.AsyncClient(timeout=20) as client:
+        async with guarded_async_client(timeout=20) as client:
             resp = await client.get(url, headers={"Authorization": f"Bearer {api_key}"})
-            resp.raise_for_status()
-            data = resp.json()
-    except Exception as e:
+    except (httpx.HTTPError, httpx.InvalidURL) as e:
         raise HTTPException(status_code=502, detail=f"Could not list models: {e}")
+    if resp.status_code >= 400:
+        raise HTTPException(status_code=502, detail=f"Could not list models: provider returned {error_detail(resp)}")
+    try:
+        data = resp.json()
+    except ValueError:
+        raise HTTPException(status_code=502, detail="Could not list models: the provider did not return JSON")
+    if not isinstance(data, dict):
+        raise HTTPException(status_code=502, detail="Could not list models: unexpected response shape")
 
-    models = sorted(m.get("id") for m in data.get("data", []) if m.get("id"))
+    items = data.get("data") if isinstance(data.get("data"), list) else []
+    models = sorted(str(m["id"]) for m in items if isinstance(m, dict) and m.get("id"))
     return {"models": models}

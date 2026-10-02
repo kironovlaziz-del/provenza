@@ -7,8 +7,8 @@ from app.schemas.use_case import UseCaseCreate, UseCaseOut, UseCaseUpdate
 from app.schemas.pagination import Page
 from app.services.use_case_service import UseCaseService
 from app.services.audit_service import AuditService
-from app.models.user import User
-from app.api.deps import get_current_user
+from app.models.user import User, UserRole
+from app.api.deps import get_current_user, require_role
 
 router = APIRouter()
 
@@ -16,7 +16,10 @@ router = APIRouter()
 async def create_use_case(
     data: UseCaseCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    # A use case decides which policy version (and so which approval and
+    # firewall rules) governs its requests - an admin decision, like the
+    # policy itself.
+    current_user: User = Depends(require_role(UserRole.admin))
 ):
     service = UseCaseService(db)
     use_case = await service.create_use_case(current_user.org_id, data)
@@ -52,7 +55,7 @@ async def update_use_case(
     use_case_id: int,
     data: UseCaseUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_role(UserRole.admin))
 ):
     service = UseCaseService(db)
     use_case = await service.update_use_case(use_case_id, current_user.org_id, data)
