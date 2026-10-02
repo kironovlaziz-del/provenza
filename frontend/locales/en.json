@@ -2185,7 +2185,12 @@
     "keep_forever": "Keep indefinitely",
     "retention_hint": "Only the encrypted original is wiped; the masked text stays for the audit trail (1–3650)",
     "confirm_retention": "Turn on retention? Encrypted raw prompts older than this will be wiped permanently at the next sweep; the masked text and the audit trail stay.",
-    "save": "Save"
+    "save": "Save",
+    "col_telemetry": "agent telemetry (checks / content)",
+    "check_retention": "Agent policy checks, days",
+    "content_retention": "Agent & LLM content, days",
+    "check_retention_hint": "Verdicts of /actions/check older than this are deleted, except those an action or approval refers to (1–3650)",
+    "content_retention_hint": "Arguments, outputs, prompts and answers are erased; who did what, when and the verdict stay for the audit trail and the charts (1–3650)"
   },
   "byok": {
     "title": "Encryption Keys",
@@ -2401,6 +2406,10 @@
       "a2a_message": "A2A messages",
       "delegation_hop": "Delegations",
       "incident_created": "Incidents"
-    }
+    },
+    "load_older": "load older events",
+    "loading_older": "loading…",
+    "start_of_window": "start of the selected window",
+    "no_events_window": "no agent activity in the selected window"
   }
 }

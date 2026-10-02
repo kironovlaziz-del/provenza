@@ -2185,7 +2185,12 @@
     "keep_forever": "Muddatsiz saqlash",
     "retention_hint": "Faqat shifrlangan asl nusxa o'chiriladi; yashirilgan matn audit uchun qoladi (1–3650)",
     "confirm_retention": "Saqlash muddati yoqilsinmi? Bundan eski shifrlangan asl promptlar keyingi tekshiruvda butunlay o'chiriladi; yashirilgan matn va audit izi qoladi.",
-    "save": "Saqlash"
+    "save": "Saqlash",
+    "col_telemetry": "agent telemetriyasi (tekshiruvlar / mazmun)",
+    "check_retention": "Agent siyosat tekshiruvlari, kun",
+    "content_retention": "Agent va LLM mazmuni, kun",
+    "check_retention_hint": "Bundan eski /actions/check qarorlari o'chiriladi, amal yoki tasdiq bog'langanlaridan tashqari (1–3650)",
+    "content_retention_hint": "Argumentlar, natijalar, promptlar va javoblar o'chiriladi; kim, nima, qachon va qaror audit hamda grafiklar uchun qoladi (1–3650)"
   },
   "byok": {
     "title": "Shifrlash kalitlari",
@@ -2401,6 +2406,10 @@
       "a2a_message": "A2A xabarlari",
       "delegation_hop": "Delegatsiyalar",
       "incident_created": "Insidentlar"
-    }
+    },
+    "load_older": "eskiroq hodisalarni yuklash",
+    "loading_older": "yuklanmoqda…",
+    "start_of_window": "tanlangan davr boshi",
+    "no_events_window": "tanlangan davrda agent faolligi yo'q"
   }
 }

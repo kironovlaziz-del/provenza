@@ -198,7 +198,7 @@ async def _attach(db: AsyncSession, org_id: int, batch: list) -> None:
 async def events_history(
     agent_id: Optional[str] = Query(None),
     event_types: Optional[str] = Query(None),
-    minutes: int = Query(15, ge=1, le=10080),
+    minutes: int = Query(15, ge=1, le=43200),
     limit: int = Query(500, ge=1, le=2000),
     before: Optional[datetime] = Query(None, description="older than this time (paging)"),
     detail: bool = Query(False, description="attach content, PII masked"),

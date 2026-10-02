@@ -156,9 +156,10 @@ export async function getObsSummary(minutes: number, agentIds: number[]): Promis
   return data;
 }
 
-export async function getObsEvents(f: ObsFilters, minutes = 15, limit = 300, detail = false): Promise<ObsEvent[]> {
+export async function getObsEvents(f: ObsFilters, minutes = 15, limit = 300, detail = false, before?: string): Promise<ObsEvent[]> {
   const params: Record<string, string | number> = { ...filterParams(f), minutes, limit };
   if (detail) params.detail = "true";
+  if (before) params.before = before;
   const { data } = await api.get<ObsEvent[]>("/observability/events", { params });
   return data;
 }

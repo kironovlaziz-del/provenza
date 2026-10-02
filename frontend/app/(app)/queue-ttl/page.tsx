@@ -160,6 +160,7 @@ export default function QueueTtlPage() {
                     <th>{t("queue.col_expired_approvals", "expired approvals")}</th>
                     <th>{t("queue.col_failed_stuck", "worker lost")}</th>
                     <th>{t("queue.col_purged", "prompts wiped")}</th>
+                    <th>{t("queue.col_telemetry", "agent telemetry")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -172,6 +173,7 @@ export default function QueueTtlPage() {
                       <td>{s.expired_approvals}</td>
                       <td>{s.failed_stuck}</td>
                       <td>{s.purged_prompts}</td>
+                      <td style={{ fontSize: 12 }}>{(s.purged_checks ?? 0) + (s.scrubbed_content ?? 0) ? `${s.purged_checks ?? 0} / ${s.scrubbed_content ?? 0}` : "0"}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -207,10 +209,32 @@ export default function QueueTtlPage() {
                   onChange={(e) => setForm({ ...form, raw_prompt_retention_days: Number(e.target.value) })} />
                 <div className="hint-text" style={{ fontSize: 12 }}>{t("queue.retention_hint", "Only the encrypted original is wiped; the masked text stays for the audit trail (1–3650)")}</div>
               </div>
+              {(["agent_check_retention_days", "agent_content_retention_days"] as const).map((k) => (
+                <div key={k} className="field" style={{ margin: 0 }}>
+                  <label htmlFor={`q-${k}`}>
+                    {k === "agent_check_retention_days"
+                      ? t("queue.check_retention", "Agent policy checks, days")
+                      : t("queue.content_retention", "Agent & LLM content, days")}
+                  </label>
+                  <label style={{ display: "flex", gap: 8, alignItems: "center", fontWeight: "normal", marginBottom: 6 }}>
+                    <input type="checkbox" checked={form[k] == null} disabled={!isAdmin} style={{ width: "auto" }}
+                      onChange={(e) => setForm({ ...form, [k]: e.target.checked ? null : 90 })} />
+                    {t("queue.keep_forever", "Keep indefinitely")}
+                  </label>
+                  <input id={`q-${k}`} type="number" min={1} max={3650} disabled={!isAdmin || form[k] == null}
+                    value={form[k] ?? ""} onChange={(e) => setForm({ ...form, [k]: Number(e.target.value) })} />
+                  <div className="hint-text" style={{ fontSize: 12 }}>
+                    {k === "agent_check_retention_days"
+                      ? t("queue.check_retention_hint", "Verdicts of /actions/check older than this are deleted, except those an action or approval refers to (1–3650)")
+                      : t("queue.content_retention_hint", "Arguments, outputs, prompts and answers are erased; who did what, when and the verdict stay for the audit trail and the charts (1–3650)")}
+                  </div>
+                </div>
+              ))}
             </div>
             {isAdmin && (
               <button className="btn btn-primary btn-sm" style={{ marginTop: 12 }}
-                disabled={busy || badRetention || form.queue_ttl_seconds < 60 || form.queue_ttl_seconds > 86400 || form.approval_ttl_hours < 1 || form.approval_ttl_hours > 720}
+                disabled={busy || badRetention ||
+                  (["agent_check_retention_days", "agent_content_retention_days"] as const).some((k) => form[k] != null && ((form[k] as number) < 1 || (form[k] as number) > 3650)) || form.queue_ttl_seconds < 60 || form.queue_ttl_seconds > 86400 || form.approval_ttl_hours < 1 || form.approval_ttl_hours > 720}
                 onClick={save}>
                 {t("queue.save", "Save")}
               </button>

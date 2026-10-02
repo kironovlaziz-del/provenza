@@ -33,7 +33,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.ai_request import AIRequest
 from app.models.queue_ttl import QueueSettings, QueueSweep
 
-DEFAULTS = {"queue_ttl_seconds": 900, "approval_ttl_hours": 72, "raw_prompt_retention_days": None}
+DEFAULTS = {"queue_ttl_seconds": 900, "approval_ttl_hours": 72, "raw_prompt_retention_days": None,
+            "agent_check_retention_days": 90, "agent_content_retention_days": 90}
 QUEUED = ("pending", "approved")
 # Celery hard time limit (celery_app.task_time_limit) + margin: past this a
 # "processing" request has no live worker any more
@@ -60,10 +61,14 @@ async def save_settings(db: AsyncSession, org_id: int, values: dict, user_id: in
         row = QueueSettings(org_id=org_id)
         db.add(row)
     for k in DEFAULTS:
-        setattr(row, k, values[k])
+        if k in values:
+            setattr(row, k, values[k])
+        elif before is None:  # a new row: keys not sent take their defaults
+            setattr(row, k, DEFAULTS[k])
     row.updated_by = user_id
+    after = {k: getattr(row, k) for k in DEFAULTS}
     await db.commit()
-    return before, {k: values[k] for k in DEFAULTS}
+    return before, after
 
 
 # ---------------------------------------------------------------------- enqueue / claim
@@ -138,6 +143,8 @@ async def sweep_org(db: AsyncSession, org_id: int, trigger: str = "beat") -> Dic
     )
     counts = {"expired_queued": r1.rowcount or 0, "expired_approvals": r2.rowcount or 0,
               "failed_stuck": r3.rowcount or 0, "purged_prompts": r4.rowcount or 0}
+    from app.services.telemetry_retention import purge
+    counts.update(await purge(db, org_id, now, cfg["agent_check_retention_days"], cfg["agent_content_retention_days"]))
     if trigger == "manual" or any(counts.values()):
         db.add(QueueSweep(org_id=org_id, trigger=trigger, **counts))
     await db.commit()
@@ -146,6 +153,8 @@ async def sweep_org(db: AsyncSession, org_id: int, trigger: str = "beat") -> Dic
 
 async def sweep_all(db: AsyncSession) -> Dict[int, Dict[str, int]]:
     """Organizations that have anything a sweep could touch."""
+    from app.models.agent import Agent
+    agent_orgs = set((await db.execute(select(Agent.org_id).distinct())).scalars().all())
     org_ids = (await db.execute(
         select(AIRequest.org_id).where(or_(
             AIRequest.status.in_(QUEUED + ("pending_approval", "processing")),
@@ -155,7 +164,7 @@ async def sweep_all(db: AsyncSession) -> Dict[int, Dict[str, int]]:
                                           .where(QueueSettings.raw_prompt_retention_days.is_not(None))))),
         )).distinct()
     )).scalars().all()
-    return {oid: await sweep_org(db, oid) for oid in org_ids}
+    return {oid: await sweep_org(db, oid) for oid in sorted(set(org_ids) | agent_orgs)}
 
 
 # ---------------------------------------------------------------------- overview
@@ -179,7 +188,7 @@ async def overview(db: AsyncSession, org_id: int) -> dict:
         .where(AIRequest.org_id == org_id, AIRequest.input_text_encrypted.is_not(None))
     )).scalar_one()
     sweeps = (await db.execute(
-        select(QueueSweep).where(QueueSweep.org_id == org_id).order_by(QueueSweep.ran_at.desc()).limit(50)
+        select(QueueSweep).where(QueueSweep.org_id == org_id).order_by(QueueSweep.ran_at.desc(), QueueSweep.id.desc()).limit(50)
     )).scalars().all()
     return {
         "settings": await org_settings(db, org_id),
@@ -188,5 +197,6 @@ async def overview(db: AsyncSession, org_id: int) -> dict:
         "raw_prompts_kept": raw_kept,
         "sweeps": [{"id": s.id, "ran_at": s.ran_at, "trigger": s.trigger, "expired_queued": s.expired_queued,
                     "expired_approvals": s.expired_approvals, "failed_stuck": s.failed_stuck,
-                    "purged_prompts": s.purged_prompts} for s in sweeps],
+                    "purged_prompts": s.purged_prompts, "purged_checks": s.purged_checks,
+                    "scrubbed_content": s.scrubbed_content} for s in sweeps],
     }

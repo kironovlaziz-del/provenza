@@ -33,6 +33,9 @@ from app.models.gateway import GatewayCall
 MASK_LIMIT = 4000     # characters masked and shown per section in the terminal
 RAW_LIMIT = 20000     # characters returned by reveal()
 WITHHELD = "[content withheld: masking failed]"
+# text Provenza writes itself from labels (verdict reasons, flag and
+# capability names) - never user input, so it is shown as is
+SYSTEM_LABELS = {"reason", "reasons", "flags", "capabilities", "findings"}
 
 
 def _dump(value) -> Optional[str]:
@@ -81,7 +84,8 @@ async def _sections(db: AsyncSession, org_id: int, kind: str, ids: List[int], ra
     def add(i, label, value, pre_masked=False):
         text = _dump(value)
         if text:
-            out[i].append({"label": label, "text": text, "pre_masked": pre_masked})
+            out[i].append({"label": label, "text": text,
+                           "pre_masked": pre_masked or label in SYSTEM_LABELS})
 
     if kind == "action.recorded":
         rows = (await db.execute(select(AgentAction.id, AgentAction.input_data, AgentAction.output_data,

@@ -217,3 +217,23 @@ class TestStream:
         assert [n for n, _ in _sse(r.text)] == ["hello", "error"]
         assert (await client.get(O + "/stream", params={"event_types": "nope"},
                                  headers=auth_headers(admin_token))).status_code == 422
+
+
+class TestWindowAndPaging:
+    @pytest.mark.asyncio
+    async def test_thirty_day_window_and_before(self, client, admin_token):
+        agent = await _agent(client, admin_token)
+        for tool in ("db.read", "stripe.charge", "db.read"):
+            await _check(client, admin_token, agent, tool)
+        assert (await client.get(O + "/summary", params={"minutes": 43200},
+                                 headers=auth_headers(admin_token))).status_code == 200
+        ts = (await client.get(O + "/timeseries", params={"minutes": 43200},
+                               headers=auth_headers(admin_token))).json()
+        assert ts["bucket_seconds"] == 28800 and 89 <= len(ts["buckets"]) <= 91
+
+        params = {"agent_id": str(agent["id"]), "minutes": 43200, "limit": 2}
+        first = (await client.get(O + "/events", params=params, headers=auth_headers(admin_token))).json()
+        assert len(first) == 2
+        older = (await client.get(O + "/events", params={**params, "before": first[-1]["ts"]},
+                                  headers=auth_headers(admin_token))).json()
+        assert all(e["ts"] < first[-1]["ts"] for e in older)

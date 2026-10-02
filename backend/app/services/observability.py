@@ -31,7 +31,7 @@ from app.models.delegation import DelegationHop
 from app.models.gateway import GatewayCall
 
 VIEW = "agent_events_v"
-WINDOWS = {15: 15, 60: 60, 360: 300, 1440: 900, 10080: 7200}  # minutes -> bucket seconds
+WINDOWS = {15: 15, 60: 60, 360: 300, 1440: 900, 10080: 7200, 43200: 28800}  # minutes -> bucket seconds
 DECISION = "(event_type = 'action.checked' OR (event_type = 'action.recorded' AND NOT has_check))"
 LLM_ERRORS = "('failed', 'blocked', 'denied', 'rate_limited', 'filtered')"
 

@@ -17,6 +17,8 @@ class QueueSettings(Base):
     queue_ttl_seconds = Column(Integer, nullable=False, default=900)       # queued -> must start within
     approval_ttl_hours = Column(Integer, nullable=False, default=72)       # pending_approval -> expires after
     raw_prompt_retention_days = Column(Integer)                            # NULL = keep encrypted raw prompts
+    agent_check_retention_days = Column(Integer, default=90)               # NULL = keep policy checks
+    agent_content_retention_days = Column(Integer, default=90)             # NULL = keep agent/LLM content
     updated_by = Column(Integer, ForeignKey("users.id"))
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
@@ -34,3 +36,5 @@ class QueueSweep(Base):
     expired_approvals = Column(Integer, nullable=False, default=0)
     failed_stuck = Column(Integer, nullable=False, default=0)
     purged_prompts = Column(Integer, nullable=False, default=0)
+    purged_checks = Column(Integer, nullable=False, default=0)
+    scrubbed_content = Column(Integer, nullable=False, default=0)
