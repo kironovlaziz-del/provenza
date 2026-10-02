@@ -23,7 +23,7 @@ WORKDIR /app
 
 # Install CPU torch first (swap to the CUDA wheel index on a GPU host).
 RUN pip install --no-cache-dir \
-    torch==2.5.1 --index-url https://download.pytorch.org/whl/cpu
+    torch==2.14.0 --index-url https://download.pytorch.org/whl/cpu
 
 COPY requirements.txt /app/training_runner/requirements.txt
 RUN pip install --no-cache-dir -r /app/training_runner/requirements.txt
