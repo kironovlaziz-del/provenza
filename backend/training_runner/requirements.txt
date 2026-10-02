@@ -1,10 +1,9 @@
 # Runtime deps for the isolated training container. Kept separate from the
 # backend's requirements.txt so the backend image stays small and this
 # image can be updated independently.
-transformers==4.47.1
+transformers==5.16.1
 peft==0.14.0
-datasets==3.2.0
-accelerate==1.2.1
+accelerate==1.15.0
 scikit-learn==1.9.1
 pandas==2.2.3
 joblib==1.4.2
