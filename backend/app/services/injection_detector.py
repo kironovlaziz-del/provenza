@@ -17,7 +17,7 @@ The score (capped at 100) gives the verdict:
     otherwise                        -> "clean"
 
 Before matching, text is NFKC-normalised and invisible characters are
-removed, so "ign​ore previous instructions" is still caught; the
+removed, so "ign<U+200B>ore previous instructions" (with a zero-width space) is still caught; the
 invisible characters themselves are separate signals. Hidden text encoded
 with Unicode tag characters and base64 blobs is decoded and scanned too.
 
@@ -85,9 +85,9 @@ PATTERNS = [
 ]
 
 # invisible / smuggling characters
-_ZERO_WIDTH = dict.fromkeys(map(ord, "​‌‍⁠﻿᠎"))
-_ZW_RE = re.compile("[​‌‍⁠﻿᠎]")
-_BIDI_RE = re.compile("[‪-‮⁦-⁩]")
+_ZERO_WIDTH = dict.fromkeys(map(ord, "\u200b\u200c\u200d\u2060\ufeff\u180e"))
+_ZW_RE = re.compile("[\u200b\u200c\u200d\u2060\ufeff\u180e]")
+_BIDI_RE = re.compile("[\u202a-\u202e\u2066-\u2069]")
 _TAG_RE = re.compile("[\U000e0000-\U000e007f]+")
 _B64_RE = re.compile(r"[A-Za-z0-9+/]{200,}={0,2}")
 

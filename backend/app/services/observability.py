@@ -31,6 +31,9 @@ from app.models.delegation import DelegationHop
 from app.models.gateway import GatewayCall
 
 VIEW = "agent_events_v"
+# SQL in this module is assembled from module constants only (VIEW, _GUARDS,
+# the DIMS/METRICS whitelists, the fixed fragments in _filters); every user
+# value is a bound parameter. Hence `nosec B608` on the f-strings below.
 WINDOWS = {15: 15, 60: 60, 360: 300, 1440: 900, 10080: 7200, 43200: 28800}  # minutes -> bucket seconds
 DECISION = "(event_type = 'action.checked' OR (event_type = 'action.recorded' AND NOT has_check))"
 LLM_ERRORS = "('failed', 'blocked', 'denied', 'rate_limited', 'filtered')"
@@ -96,7 +99,7 @@ SELECT 'incident.created', i.id, i.org_id, i.agent_id, i.chain_id,
        i.incident_type, i.severity, NULL, NULL,
        NULL, i.resolved, NULL, NULL, NULL, NULL, NULL
   FROM {AgentIncident.__tablename__} i;
-"""
+"""  # nosec B608
 
 
 # Databases built with metadata.create_all (tests) get the view too; it is
@@ -149,7 +152,7 @@ async def history(db: AsyncSession, org_id: int, *, minutes: int, agent_ids=None
         params["before"] = before_ts
     params["limit"] = limit
     rows = (await db.execute(text(
-        f"SELECT * FROM {VIEW} WHERE {where} ORDER BY ts DESC, source_id DESC LIMIT :limit"
+        f"SELECT * FROM {VIEW} WHERE {where} ORDER BY ts DESC, source_id DESC LIMIT :limit"  # nosec B608
     ), params)).mappings().all()
     return [_row_event(r) for r in rows]
 
@@ -162,7 +165,7 @@ async def summary(db: AsyncSession, org_id: int, *, minutes: int, agent_ids=None
     now = datetime.now(timezone.utc)
     since = now - timedelta(minutes=minutes)
     where, params = _filters(org_id, since, agent_ids, None)
-    ev = f"WITH ev AS (SELECT * FROM {VIEW} WHERE {where})"
+    ev = f"WITH ev AS (SELECT * FROM {VIEW} WHERE {where})"  # nosec B608
 
     tot = (await db.execute(text(f"""{ev}
         SELECT
@@ -186,7 +189,7 @@ async def summary(db: AsyncSession, org_id: int, *, minutes: int, agent_ids=None
           count(*) FILTER (WHERE event_type = 'a2a.message') AS a2a_messages,
           count(*) FILTER (WHERE event_type = 'delegation.hop') AS delegations,
           count(DISTINCT agent_id) AS active_agents
-        FROM ev"""), params)).mappings().one()
+        FROM ev"""), params)).mappings().one()  # nosec B608
 
     per_agent = (await db.execute(text(f"""{ev}
         SELECT agent_id,
@@ -201,10 +204,10 @@ async def summary(db: AsyncSession, org_id: int, *, minutes: int, agent_ids=None
           max(ts) AS last_seen,
           percentile_cont(0.95) WITHIN GROUP (ORDER BY duration_ms)
             FILTER (WHERE event_type IN ('action.recorded', 'llm.call') AND duration_ms IS NOT NULL) AS p95_ms
-        FROM ev WHERE agent_id IS NOT NULL GROUP BY agent_id"""), params)).mappings().all()
+        FROM ev WHERE agent_id IS NOT NULL GROUP BY agent_id"""), params)).mappings().all()  # nosec B608
 
     open_incidents = (await db.execute(text(
-        f"SELECT count(*) FROM {VIEW} WHERE org_id = :org AND event_type = 'incident.created' AND resolved = false"
+        f"SELECT count(*) FROM {VIEW} WHERE org_id = :org AND event_type = 'incident.created' AND resolved = false"  # nosec B608
     ), {"org": org_id})).scalar_one()
 
     agents = (await db.execute(
@@ -277,7 +280,7 @@ async def timeseries(db: AsyncSession, org_id: int, *, minutes: int, dim: str, m
                {agg} AS v
           FROM {src}
          WHERE {cond} AND {key_expr} IS NOT NULL
-         GROUP BY 1, 2"""), params)).mappings().all()
+         GROUP BY 1, 2"""), params)).mappings().all()  # nosec B608
 
     first = int(since.timestamp() // bucket * bucket)
     last = int(now.timestamp() // bucket * bucket)
@@ -317,7 +320,7 @@ async def breakdown(db: AsyncSession, org_id: int, *, minutes: int, dim: str, by
         WITH ev AS (SELECT * FROM {VIEW} WHERE {where})
         SELECT {key_expr} AS key, {by_expr} AS by, count(*) AS v
           FROM ev WHERE {cond} AND {by_cond} AND {key_expr} IS NOT NULL AND {by_expr} IS NOT NULL
-         GROUP BY 1, 2"""), params)).mappings().all()
+         GROUP BY 1, 2"""), params)).mappings().all()  # nosec B608
     totals: Dict[str, Dict[str, int]] = {}
     for r in rows:
         totals.setdefault(str(r["key"]), {})[str(r["by"])] = int(r["v"])

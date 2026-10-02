@@ -10,6 +10,7 @@ from app.core.sync_database import SyncSessionLocal
 from app.models.training_job import TrainingJob
 from app.models.dataset import Dataset
 from app.services import notification_service
+from app.services import transformer_models
 
 logger = logging.getLogger("training_tasks")
 
@@ -482,7 +483,8 @@ def _run_transformer_training(job: "TrainingJob", dataset: "Dataset") -> None:
     # only vocab.txt without tokenizer.json/tokenizer_config.json, and
     # the fast-tokenizer auto-detection fails on them in recent
     # transformers versions.
-    tokenizer = AutoTokenizer.from_pretrained(job.base_model, use_fast=False)
+    revision = transformer_models.pinned_revision(job.base_model)
+    tokenizer = AutoTokenizer.from_pretrained(job.base_model, revision=revision, use_fast=False)
     max_length = int(hyperparameters.get("max_length", 256))
     train_encodings = tokenizer(
         train_texts, truncation=True, padding=True, max_length=max_length
@@ -510,8 +512,9 @@ def _run_transformer_training(job: "TrainingJob", dataset: "Dataset") -> None:
     _update_progress(job.id, 15.0, "Loading model")
 
     base_model = AutoModelForSequenceClassification.from_pretrained(
-        job.base_model, num_labels=num_labels
+        job.base_model, revision=revision, num_labels=num_labels
     ).to(device)
+    base_commit = getattr(base_model.config, "_commit_hash", None) or revision
 
     model, is_lora = _maybe_apply_lora(base_model, hyperparameters)
     if is_lora:
@@ -600,7 +603,8 @@ def _run_transformer_training(job: "TrainingJob", dataset: "Dataset") -> None:
 
     model.save_pretrained(models_dir)
     tokenizer.save_pretrained(models_dir)
-    meta = {"label_classes": label_classes, "mode": "transformer"}
+    meta = {"label_classes": label_classes, "mode": "transformer",
+            "base_model": job.base_model, "base_model_commit": base_commit}
     if is_lora:
         meta["lora"] = {
             "r": int(hyperparameters.get("lora_r", 8)),
@@ -682,7 +686,8 @@ def _run_generation_training(job: "TrainingJob", dataset: "Dataset") -> None:
     # only vocab.txt without tokenizer.json/tokenizer_config.json, and
     # the fast-tokenizer auto-detection fails on them in recent
     # transformers versions.
-    tokenizer = AutoTokenizer.from_pretrained(job.base_model, use_fast=False)
+    revision = transformer_models.pinned_revision(job.base_model)
+    tokenizer = AutoTokenizer.from_pretrained(job.base_model, revision=revision, use_fast=False)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
@@ -710,7 +715,8 @@ def _run_generation_training(job: "TrainingJob", dataset: "Dataset") -> None:
 
     _update_progress(job.id, 15.0, "Loading model")
 
-    base_model = AutoModelForCausalLM.from_pretrained(job.base_model)
+    base_model = AutoModelForCausalLM.from_pretrained(job.base_model, revision=revision)
+    base_commit = getattr(base_model.config, "_commit_hash", None) or revision
     base_model.resize_token_embeddings(len(tokenizer))
     base_model.to(device)
 
@@ -798,7 +804,8 @@ def _run_generation_training(job: "TrainingJob", dataset: "Dataset") -> None:
 
     model.save_pretrained(models_dir)
     tokenizer.save_pretrained(models_dir)
-    meta = {"mode": "transformer_generation"}
+    meta = {"mode": "transformer_generation",
+            "base_model": job.base_model, "base_model_commit": base_commit}
     if is_lora:
         meta["lora"] = {
             "r": int(hyperparameters.get("lora_r", 8)),

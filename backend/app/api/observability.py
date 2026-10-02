@@ -266,7 +266,7 @@ async def reveal(data: RevealIn, db: AsyncSession = Depends(get_db), current_use
     if data.type not in EVENT_TYPES:
         raise HTTPException(status_code=422, detail=f"type: one of {list(EVENT_TYPES)}")
     exists = (await db.execute(text(
-        f"SELECT 1 FROM {obs.VIEW} WHERE org_id = :org AND event_type = :t AND source_id = :id LIMIT 1"
+        f"SELECT 1 FROM {obs.VIEW} WHERE org_id = :org AND event_type = :t AND source_id = :id LIMIT 1"  # nosec B608
     ), {"org": current_user.org_id, "t": data.type, "id": data.id})).first()
     if not exists:
         raise HTTPException(status_code=404, detail="Event not found")

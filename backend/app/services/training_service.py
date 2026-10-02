@@ -47,8 +47,8 @@ def _load_transformer(model_dir: str):
     from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    tokenizer = AutoTokenizer.from_pretrained(model_dir, use_fast=False)
-    model = AutoModelForSequenceClassification.from_pretrained(model_dir).to(device)
+    tokenizer = AutoTokenizer.from_pretrained(model_dir, local_files_only=True, use_fast=False)  # nosec B615 - local model dir, no download
+    model = AutoModelForSequenceClassification.from_pretrained(model_dir, local_files_only=True).to(device)  # nosec B615 - local model dir, no download
     model.eval()
     return model, tokenizer, device
 
@@ -60,10 +60,10 @@ def _load_generator(model_dir: str):
     from transformers import AutoModelForCausalLM, AutoTokenizer
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    tokenizer = AutoTokenizer.from_pretrained(model_dir, use_fast=False)
+    tokenizer = AutoTokenizer.from_pretrained(model_dir, local_files_only=True, use_fast=False)  # nosec B615 - local model dir, no download
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
-    model = AutoModelForCausalLM.from_pretrained(model_dir).to(device)
+    model = AutoModelForCausalLM.from_pretrained(model_dir, local_files_only=True).to(device)  # nosec B615 - local model dir, no download
     model.eval()
     return model, tokenizer, device
 

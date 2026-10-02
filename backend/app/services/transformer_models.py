@@ -75,6 +75,28 @@ GENERATION_MODELS: List[Dict[str, Any]] = [
     },
 ]
 
+# Curated models are downloaded at a fixed commit, so a later push to the Hub
+# repo (by mistake or by whoever takes it over) cannot change what gets
+# trained here. Update a pin deliberately, after checking the new commit.
+PINNED_REVISIONS: Dict[str, str] = {
+    "google/bert_uncased_L-2_H-128_A-2": "30b0a37ccaaa32f332884b96992754e246e48c5f",
+    "microsoft/MiniLM-L12-H384-uncased": "44acabbec0ef496f6dbc93adadea57f376b7c0ec",
+    "distilbert-base-uncased": "12040accade4e8a0f71eabdb258fecc2e7e948be",
+    "bert-base-uncased": "86b5e0934494bd15c9632b12f734a8a67f723594",
+    "roberta-base": "e2da8e2f811d1448a5b465c236feacd80ffbac7b",
+    "sshleifer/tiny-gpt2": "5f91d94bd9cd7190a9f3216ff93cd1dd95f2c7be",
+    "distilgpt2": "2290a62682d06624634c1f46a6ad5be0f47f38aa",
+    "gpt2": "607a30d783dfa663caf39e06633721c8d4cfcd7e",
+}
+
+
+def pinned_revision(model_id: str) -> Optional[str]:
+    """The commit a curated model is pinned to; None for a free-form model id
+    (allowed on GPU hosts only), which resolves to the repo's default branch.
+    Either way the commit actually used is recorded in the model's meta.json."""
+    return PINNED_REVISIONS.get(model_id)
+
+
 # Safety margin: require this multiple of the estimate to be free, since the
 # estimate doesn't account for activation memory growing with batch size,
 # CUDA context overhead, or other processes sharing the GPU.
