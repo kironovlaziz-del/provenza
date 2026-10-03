@@ -50,6 +50,14 @@ this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Security
 
+- **Login throttling can no longer be walked around.** The per-account
+  counter is keyed by the organization slug as the lookup normalizes it, so
+  spellings like `"ACME "` and `" acme"` share one budget; a successful
+  login gives back only its own attempt and never resets the per-IP
+  counter, so a valid password for one account cannot be used to keep
+  guessing others. Each limit now counts only its own counter: the
+  per-account check used to bump the IP counter too and judge it against
+  the per-account limit, locking an IP out after its third failed attempt.
 - **Self-service sign-up is off by default.** `POST /users/register` (new
   organization + admin) answers 403 unless `ALLOW_PUBLIC_SIGNUP=true`, and
   is throttled per IP when enabled. `GET /auth/config` tells the UI.

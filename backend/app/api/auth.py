@@ -14,8 +14,10 @@ from app.models.organization import Organization
 router = APIRouter()
 
 # Login throttling: 10 attempts per 5 minutes from a single IP, and 5
-# attempts per 5 minutes against a single email. A successful login clears
-# both counters for that email/IP pair.
+# attempts per 5 minutes against a single account (organization + email).
+# A successful login gives back its own IP attempt and clears that
+# account's counter; it never clears the IP counter, so a valid password
+# for one account cannot be used to reset the budget for guessing others.
 LOGIN_IP_LIMIT = 10
 LOGIN_EMAIL_LIMIT = 5
 LOGIN_WINDOW_SECONDS = 300
@@ -27,6 +29,13 @@ async def auth_config():
     return {"signup_enabled": settings.ALLOW_PUBLIC_SIGNUP}
 
 
+def _account_key(org_slug: str, email: str) -> str:
+    """Rate-limit key for one account, normalized exactly like the lookup
+    below ("ACME ", " acme" and "acme" are the same organization, so they
+    must share one counter)."""
+    return f"{org_slug.strip().lower()}:{email.strip().lower()}"
+
+
 @router.post("/login", response_model=Token)
 async def login(
     user_data: UserLogin,
@@ -35,6 +44,7 @@ async def login(
 ):
     # Throttle before hitting the DB, so brute-force attempts cannot be
     # used to amplify load on Postgres.
+    account_key = _account_key(user_data.org_slug, user_data.email)
     rate_limit.enforce(
         request,
         scope="login",
@@ -46,7 +56,7 @@ async def login(
         scope="login",
         limit=LOGIN_EMAIL_LIMIT,
         window_seconds=LOGIN_WINDOW_SECONDS,
-        extra_key=f"{user_data.org_slug}:{user_data.email}",
+        extra_key=account_key,
     )
 
     # Resolve the organization first. A wrong slug and a wrong password
@@ -85,13 +95,11 @@ async def login(
             status=user.status,
         )
 
-    # Successful login: clear the email counter so a legitimate user who
-    # fat-fingered their password a few times is not locked out.
-    rate_limit.reset(
-        scope="login",
-        extra_key=f"{user_data.org_slug}:{user_data.email}",
-        ip=rate_limit._client_ip(request),
-    )
+    # Successful login: this account's counter is cleared (a user who
+    # mistyped a few times is not locked out), and this request's own IP
+    # attempt is given back - the IP counter itself is never reset.
+    rate_limit.reset_key(scope="login", extra_key=account_key)
+    rate_limit.refund(request, scope="login")
 
     access_token = create_access_token(
         data={"sub": str(user.id)},

@@ -278,6 +278,10 @@ class _FakeRedis:
         for k in keys:
             self._store.pop(k, None)
 
+    def decr(self, key):
+        self._store[key] = self._store.get(key, 0) - 1
+        return self._store[key]
+
     def close(self):
         pass
 
