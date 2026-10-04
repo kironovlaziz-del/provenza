@@ -25,7 +25,7 @@ celery[redis]==5.4.0
 redis==5.2.1
 
 # Database (sync, for Celery workers)
-psycopg2-binary==2.9.10
+psycopg2-binary==2.9.13
 
 # Crypto
 cryptography==50.0.1
