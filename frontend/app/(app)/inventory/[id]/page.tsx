@@ -166,7 +166,7 @@ export default function InventorySystemPage() {
     : s.kind === "agent"
       ? t("inventory.detail.retire_agent", "The agent is retired too: its key stops working and every action it attempts is refused.")
       : s.kind === "llm_provider"
-        ? t("inventory.detail.retire_provider", "The connection is disabled: requests, the gateway and Provider Chat stop using it.")
+        ? t("inventory.detail.retire_provider", "The connection is disabled: requests, the gateway and the Playground stop using it.")
         : null;
 
   function moveTo(stage: LifecycleStage) {

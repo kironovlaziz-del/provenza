@@ -51,14 +51,12 @@
   "sidebar": {
     "sections": {
       "overview": "Overview",
-      "connections": "Connections",
-      "management": "Management",
-      "operations": "Operations",
-      "monitoring": "Monitoring",
       "settings": "Settings",
-      "agent_governance": "Agent Governance",
-      "agent_security": "Agent security",
-      "data_compliance": "Data & compliance"
+      "discovery": "Discovery",
+      "registry": "Registry",
+      "policies": "Policies",
+      "enforcement": "Enforcement",
+      "audit": "Audit"
     },
     "nav": {
       "dashboard": "Dashboard",
@@ -69,11 +67,11 @@
       "requests": "Usage Registry",
       "approvals": "Approval Workflow",
       "incidents": "Incident Tracker",
-      "shadow_ai": "Shadow AI Monitor",
+      "shadow_ai": "Shadow AI Sightings",
       "domain_catalog": "AI Domain Catalog",
       "ingestion_sources": "Ingestion Sources",
-      "audit": "Audit & Reporting",
-      "notifications": "Notification Service",
+      "audit": "Audit Log",
+      "notifications": "Notifications",
       "users": "Users",
       "discovery": "Network Discovery",
       "agents": "Agents",
@@ -81,7 +79,7 @@
       "agent_approvals": "Pending Approvals",
       "agent_map": "Live Map",
       "agent_policies": "Agent Policies",
-      "provider_chat": "Provider Chat",
+      "provider_chat": "Playground",
       "agent_incidents": "Rejected Escalations",
       "inventory": "AI Inventory",
       "agent_breaker": "Circuit Breaker",
@@ -406,7 +404,7 @@
     "no_results": "No incidents match your filters."
   },
   "shadow_ai": {
-    "title": "Shadow AI Monitor",
+    "title": "Shadow AI Sightings",
     "report": "Report a sighting",
     "cancel": "Cancel",
     "hint": "Registry of unsanctioned AI tool usage: manual reports, expense reports, network proxy data, or browser extension signals. Each sighting must be confirmed, registered as a legitimate provider, or dismissed.",
@@ -535,7 +533,7 @@
     "download_extension": "Download extension"
   },
   "audit": {
-    "title": "Audit & Reporting",
+    "title": "Audit Log",
     "table_title": "Activity log",
     "filter_all": "All entity types",
     "col_time": "Time",
@@ -594,7 +592,7 @@
     "loading_models": "Loading…"
   },
   "notifications": {
-    "title": "Notification Service",
+    "title": "Notifications",
     "new": "New channel",
     "cancel": "Cancel",
     "hint": "Email is only sent when SMTP is configured on the server (see `.env` — `SMTP_HOST` and related variables). Webhooks always work — a POST with JSON { subject, message, metadata } is sent to the specified URL.",
@@ -1038,7 +1036,7 @@
     "create_failed": "Could not create the policy."
   },
   "provider_chat": {
-    "title": "Provider Chat",
+    "title": "Playground",
     "hint": "Chat with a connected AI provider through the governance layer: your prompt is scanned and secrets are masked before it leaves, and every request is logged to the Usage Registry.",
     "providers": "Providers",
     "no_providers": "No active providers. Connect one in Connections.",
@@ -1242,7 +1240,7 @@
       "retire_no_restart": "Moving it back later does not restart the source; that is done on its own page.",
       "retired_note": "Moving the entry back does not restart the source; re-enable it on its own page.",
       "retire_agent": "The agent is retired too: its key stops working and every action it attempts is refused.",
-      "retire_provider": "The connection is disabled: requests, the gateway and Provider Chat stop using it.",
+      "retire_provider": "The connection is disabled: requests, the gateway and the Playground stop using it.",
       "external_placeholder": "e.g. CRM database, S3 bucket, HR file share"
     },
     "metrics": {
