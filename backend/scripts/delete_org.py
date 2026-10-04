@@ -21,8 +21,9 @@ How it finds the data - from the live database schema, not a hand-kept list:
      or if the organization is still active (use --allow-active to override);
   4. rows are deleted children first, in one transaction: all or nothing.
 
-Files on disk (uploaded datasets, models) and Redis keys are not touched;
-the dry run lists the data directories to check by hand.
+Files on disk (left by the removed dataset / model / RAG features) and
+Redis keys are not touched; the dry run lists the data directories to
+check by hand.
 """
 
 import argparse

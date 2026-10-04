@@ -62,7 +62,7 @@ be read.
 - Health checks on every service, memory limits, log rotation (5 × 20 MB).
 - Redis keeps queued tasks on disk (AOF) and never evicts them.
 - Caddy: automatic TLS, HTTP/2 and HTTP/3, HSTS and security headers,
-  unbuffered proxying for live streams (agent observability, training).
+  unbuffered proxying for live streams (agent observability).
 
 ## Operate
 
@@ -132,8 +132,5 @@ Every setting is described in [`.env.example`](.env.example). The most common:
 
 ## Notes
 
-- Model training (MLOps) runs inside the worker. Heavy training needs more
-  memory (`WORKER_MEMORY`); the optional ML extras in
-  `backend/requirements-ml.txt` are not part of the image.
 - `docker-compose.dev.yml` in the repository root is a development/demo stack
   that seeds a demo admin. Never use it in production.

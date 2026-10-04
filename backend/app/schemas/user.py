@@ -1,7 +1,6 @@
 import re
 from pydantic import BaseModel, EmailStr, Field, field_validator
 from datetime import datetime
-from typing import Optional
 from app.models.user import UserRole
 
 
@@ -61,15 +60,10 @@ class UserOut(UserBase):
     id: int
     org_id: int
     status: str
-    ui_mode: Optional[str] = None
     created_at: datetime
 
     class Config:
         from_attributes = True
-
-
-class UserUIModeUpdate(BaseModel):
-    ui_mode: str = Field(pattern="^(simple|advanced)$")
 
 
 class UserLogin(BaseModel):

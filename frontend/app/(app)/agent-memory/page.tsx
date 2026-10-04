@@ -7,9 +7,7 @@ import { useAuth } from "@/lib/auth";
 import {
   getMemoryOverview,
   memoryError,
-  rescanCollection,
   saveMemorySettings,
-  setDocumentTrust,
   setEntryTrust,
   type EntryStatus,
   type MemFinding,
@@ -37,7 +35,6 @@ export default function AgentMemoryPage() {
   const [form, setForm] = useState<MemorySettings | null>(null);
   const [nsText, setNsText] = useState("");
   const [statusFilter, setStatusFilter] = useState<EntryStatus | "">("");
-  const [rescanId, setRescanId] = useState<number | "">("");
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -79,23 +76,12 @@ export default function AgentMemoryPage() {
       const ok = window.confirm(
         t(
           "memory.confirm_enforce",
-          "Switch to enforce? Poisoned RAG chunks and memory entries will be quarantined and kept out of prompts, and writes into foreign namespaces will be rejected.",
+          "Switch to enforce? Poisoned memory entries will be quarantined and kept out of prompts, and writes into foreign namespaces will be rejected.",
         ),
       );
       if (!ok) return;
     }
     run(() => saveMemorySettings({ ...form, shared_namespaces: namespaces }), t("memory.saved", "Saved"));
-  }
-
-  async function rescan() {
-    if (rescanId === "") return;
-    const r = (await run(() => rescanCollection(Number(rescanId)))) as
-      | { scanned: number; skipped_decided: number; quarantined_documents: number }
-      | undefined;
-    if (r)
-      setNotice(
-        `${t("memory.rescanned", "Rescanned")}: ${r.scanned} · ${t("memory.quarantined_docs", "quarantined")}: ${r.quarantined_documents} · ${t("memory.skipped_decided", "kept admin decisions")}: ${r.skipped_decided}`,
-      );
   }
 
   const fmt = (iso: string | null) => (iso ? new Date(iso).toLocaleString() : "—");
@@ -111,7 +97,6 @@ export default function AgentMemoryPage() {
   }
 
   const c = data.entry_counts;
-  const quarantinedDocs = data.documents.filter((d) => d.trust_status === "quarantined").length;
 
   return (
     <>
@@ -120,112 +105,19 @@ export default function AgentMemoryPage() {
         <p className="hint-text" style={{ marginTop: 0 }}>
           {t(
             "memory.hint",
-            "Whatever lands in a knowledge base or in an agent's memory comes back into prompts later (OWASP ASI06). RAG documents are scanned chunk by chunk on upload; agents attest each memory write and verify retrieved memory before using it. Only trusted content reaches a prompt.",
+            "Whatever lands in an agent's memory comes back into prompts later (OWASP ASI06). Agents attest each memory write and verify retrieved memory before using it; content is scanned for injections and code. Only trusted memory reaches a prompt.",
           )}
         </p>
         {error && <div className="panel" style={{ marginBottom: 16, borderColor: "#ef4444" }}><div className="panel-body" style={{ color: "#ef4444" }}>{error}</div></div>}
         {notice && <div className="hint-text" style={{ marginBottom: 16 }}>{notice}</div>}
 
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 12, marginBottom: 20 }}>
-          <div className="panel"><div className="panel-body">
-            <div className="hint-text" style={{ fontSize: 12 }}>{t("memory.docs_quarantined", "Quarantined documents")}</div>
-            <div style={{ fontSize: 24, fontWeight: 600 }}>{quarantinedDocs}</div>
-          </div></div>
           {(["trusted", "quarantined", "revoked", "rejected"] as const).map((k) => (
             <div className="panel" key={k}><div className="panel-body">
               <div className="hint-text" style={{ fontSize: 12 }}>{t("memory.entries", "Memory entries")} · {t(`memory.status_${k}`, k)}</div>
               <div style={{ fontSize: 24, fontWeight: 600 }}>{c[k] ?? 0}</div>
             </div></div>
           ))}
-        </div>
-
-        {/* ---- RAG documents ---- */}
-        <div className="panel" style={{ marginBottom: 20 }}>
-          <div className="panel-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-            <h2>{t("memory.docs_title", "Knowledge-base documents needing attention")}</h2>
-            {isAdmin && (
-              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                <select value={rescanId} onChange={(e) => setRescanId(e.target.value ? Number(e.target.value) : "")} style={{ width: "auto" }}>
-                  <option value="">{t("memory.pick_collection", "Collection…")}</option>
-                  {data.collections.map((col) => <option key={col.id} value={col.id}>{col.name}</option>)}
-                </select>
-                <button className="btn btn-sm" disabled={busy || rescanId === ""} onClick={rescan}>
-                  {t("memory.rescan", "Rescan")}
-                </button>
-              </div>
-            )}
-          </div>
-          <div className="panel-body" style={LIST}>
-            {data.documents.length === 0 ? (
-              <p className="hint-text" style={{ margin: 0 }}>{t("memory.docs_empty", "No document needs attention.")}</p>
-            ) : (
-              <table>
-                <thead>
-                  <tr>
-                    <th>{t("memory.col_document", "Document")}</th>
-                    <th>{t("memory.col_findings", "Findings")}</th>
-                    <th>{t("memory.col_status", "Status")}</th>
-                    {isAdmin && <th />}
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.documents.map((d) => (
-                    <tr key={d.document_id}>
-                      <td>
-                        <strong>{d.filename}</strong>
-                        <div className="hint-text" style={{ fontSize: 11 }}>{d.collection} · {fmt(d.created_at)}</div>
-                        <div className="hint-text" style={{ fontSize: 11 }}>
-                          {t("memory.chunks", "chunks")}: {d.details.chunks_scanned ?? "—"}
-                          {d.details.quarantined_chunks?.length ? ` · ${t("memory.status_quarantined", "quarantined")}: ${d.details.quarantined_chunks.length}` : ""}
-                          {d.details.flagged_chunks?.length ? ` · ${t("memory.flagged", "flagged")}: ${d.details.flagged_chunks.length}` : ""}
-                        </div>
-                      </td>
-                      <td style={{ fontSize: 12, maxWidth: 380 }}>
-                        {(d.details.findings ?? []).slice(0, 4).map((f, i) => (
-                          <div key={i}>
-                            <strong>{lab(f)}</strong> <span className="hint-text">#{f.chunk_index}</span>{" "}
-                            <span className="mono" style={{ fontSize: 11, wordBreak: "break-word" }}>{f.snippet}</span>
-                          </div>
-                        ))}
-                      </td>
-                      <td>
-                        <span className={`pill ${STATUS_PILL[d.trust_status]}`}>{t(`memory.status_${d.trust_status}`, d.trust_status)}</span>
-                        {d.decided && <div className="hint-text" style={{ fontSize: 11 }}>{t("memory.decided", "admin decision")}</div>}
-                      </td>
-                      {isAdmin && (
-                        <td style={{ whiteSpace: "nowrap" }}>
-                          {d.trust_status !== "trusted" && (
-                            <button
-                              className="btn btn-sm btn-primary"
-                              disabled={busy}
-                              onClick={() => {
-                                if (window.confirm(t("memory.confirm_trust_doc", "Trust this document? All its chunks, including the flagged ones, will be returned by search again.")))
-                                  run(() => setDocumentTrust(d.document_id, true), t("memory.saved", "Saved"));
-                              }}
-                            >
-                              {t("memory.trust", "Trust")}
-                            </button>
-                          )}{" "}
-                          {d.trust_status !== "revoked" && (
-                            <button
-                              className="btn btn-sm"
-                              disabled={busy}
-                              onClick={() => {
-                                if (window.confirm(t("memory.confirm_revoke_doc", "Revoke this document? Its chunks stop being returned by search; nothing is deleted.")))
-                                  run(() => setDocumentTrust(d.document_id, false), t("memory.saved", "Saved"));
-                              }}
-                            >
-                              {t("memory.revoke", "Revoke")}
-                            </button>
-                          )}
-                        </td>
-                      )}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </div>
         </div>
 
         {/* ---- agent memory ---- */}

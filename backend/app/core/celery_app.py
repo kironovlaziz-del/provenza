@@ -17,7 +17,7 @@ celery_app.conf.update(
     enable_utc=True,
     task_track_started=True,
 
-    # Task time limits protect against a runaway training job that would
+    # Task time limits protect against a runaway task that would
     # otherwise pin the worker indefinitely. soft_limit raises a Python
     # exception the task can catch; the hard limit sends SIGKILL.
     task_soft_time_limit=3600,     # 1 hour
@@ -63,7 +63,6 @@ celery_app.conf.beat_schedule = {
 
 from app.workers import (  # noqa: E402,F401
     request_tasks,
-    training_tasks,
     telemetry_tasks,
     discovery_tasks,
     queue_tasks,

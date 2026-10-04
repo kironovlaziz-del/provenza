@@ -14,13 +14,10 @@ import {
   getInventoryMeta,
   getSystem,
   getSystemMetrics,
-  listDatasetOptions,
   removeDataLink,
   updateSystem,
 } from "@/lib/inventory_api";
 import {
-  addCollectionLink,
-  listCollectionOptions,
   listUseCaseOptions,
   listUserOptions,
   updateSystemRefs,
@@ -42,13 +39,10 @@ import { AttentionList, StagePill, TierPill } from "../InventoryBadges";
 const SOURCE_PAGE: Record<string, string> = {
   agent: "/agents",
   llm_provider: "/providers",
-  model: "/deployments",
   shadow: "/shadow-ai",
 };
 
 const FLAG_GROUPS = ["prohibited", "safety", "transparency", "modifiers"] as const;
-
-type LinkTarget = "external" | "dataset" | "collection";
 
 function sameSet(a: string[], b: string[]) {
   return a.length === b.length && [...a].sort().join("|") === [...b].sort().join("|");
@@ -64,8 +58,6 @@ export default function InventorySystemPage() {
 
   const [system, setSystem] = useState<AISystemT | null>(null);
   const [meta, setMeta] = useState<InventoryMeta | null>(null);
-  const [datasets, setDatasets] = useState<Option[]>([]);
-  const [collections, setCollections] = useState<Option[]>([]);
   const [users, setUsers] = useState<Option[]>([]);
   const [useCases, setUseCases] = useState<Option[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -82,10 +74,7 @@ export default function InventorySystemPage() {
   const [justification, setJustification] = useState("");
   const [link, setLink] = useState({
     relation: "accesses" as DataRelation,
-    target: "external" as LinkTarget,
     external_name: "",
-    dataset_id: "",
-    collection_id: "",
     contains_pii: false,
   });
 
@@ -108,8 +97,6 @@ export default function InventorySystemPage() {
       .then(apply)
       .catch((e) => setError(apiErrorMessage(e, t("inventory.load_failed", "Could not load the inventory."))));
     getInventoryMeta().then(setMeta).catch(() => undefined);
-    listDatasetOptions().then(setDatasets).catch(() => undefined);
-    listCollectionOptions().then(setCollections).catch(() => undefined);
     listUseCaseOptions().then(setUseCases).catch(() => undefined);
   }, [id, apply, t]);
 
@@ -165,13 +152,13 @@ export default function InventorySystemPage() {
       : null;
   const domainLabel = (d: string) => t(`inventory.domains.${d}`, meta?.domains.find((x) => x.id === d)?.label ?? d);
   const sourcePage = SOURCE_PAGE[s.kind];
+  // Links to Provenza's own datasets / knowledge bases date from features that
+  // were removed; they are still shown, by id.
   const linkTarget = (l: DataLinkT) =>
     l.external_name ??
     (l.dataset_id != null
-      ? datasets.find((d) => d.id === l.dataset_id)?.name ??
-        t("inventory.detail.dataset_label", { id: l.dataset_id, defaultValue: `Dataset #${l.dataset_id}` })
-      : collections.find((c) => c.id === l.collection_id)?.name ??
-        t("inventory.detail.collection_label", { id: l.collection_id, defaultValue: `Knowledge base #${l.collection_id}` }));
+      ? t("inventory.detail.dataset_label", { id: l.dataset_id, defaultValue: `Dataset #${l.dataset_id}` })
+      : t("inventory.detail.collection_label", { id: l.collection_id, defaultValue: `Knowledge base #${l.collection_id}` }));
 
   // what retiring this entry will stop (mirrors InventoryService._stop_source)
   const retireEffect: string | null = !s.source_key
@@ -179,12 +166,8 @@ export default function InventorySystemPage() {
     : s.kind === "agent"
       ? t("inventory.detail.retire_agent", "The agent is retired too: its key stops working and every action it attempts is refused.")
       : s.kind === "llm_provider"
-        ? t("inventory.detail.retire_provider", "The connection is disabled: requests, the gateway and the playground stop using it.")
-        : s.kind === "model"
-          ? t("inventory.detail.retire_model", "The deployment is archived: it stops serving predictions.")
-          : s.kind === "rag_app"
-            ? t("inventory.detail.retire_rag", "The knowledge base stops answering questions until the entry is moved back to an active stage.")
-            : null;
+        ? t("inventory.detail.retire_provider", "The connection is disabled: requests, the gateway and Provider Chat stop using it.")
+        : null;
 
   function moveTo(stage: LifecycleStage) {
     if (stage === "retired" && retireEffect) {
@@ -283,7 +266,7 @@ export default function InventorySystemPage() {
                 <p className="hint-text" style={{ margin: 0 }}>
                   {t(
                     "inventory.metrics.no_source_v2",
-                    "No activity source is linked to this system. Activity is tracked for agents, LLM providers, deployed models, knowledge bases and shadow-AI tools.",
+                    "No activity source is linked to this system. Activity is tracked for agents, LLM providers and shadow-AI tools.",
                   )}
                 </p>
               ) : (
@@ -747,51 +730,14 @@ export default function InventorySystemPage() {
                     </select>
                   </div>
                   <div className="field">
-                    <label htmlFor="l-type">{t("inventory.detail.target_type", "Data source")}</label>
-                    <select id="l-type" value={link.target} onChange={(e) => setLink({ ...link, target: e.target.value as LinkTarget })}>
-                      <option value="external">{t("inventory.detail.target_external", "External source")}</option>
-                      <option value="dataset" disabled={datasets.length === 0}>
-                        {t("inventory.detail.target_dataset", "Dataset")}
-                      </option>
-                      <option value="collection" disabled={collections.length === 0}>
-                        {t("inventory.detail.target_collection", "Knowledge base")}
-                      </option>
-                    </select>
-                  </div>
-                  <div className="field">
-                    {link.target === "external" && (
-                      <>
-                        <label htmlFor="l-ext">{t("inventory.detail.external_name", "Name of the source")}</label>
-                        <input
-                          id="l-ext"
-                          maxLength={255}
-                          value={link.external_name}
-                          onChange={(e) => setLink({ ...link, external_name: e.target.value })}
-                        />
-                      </>
-                    )}
-                    {link.target === "dataset" && (
-                      <>
-                        <label htmlFor="l-ds">{t("inventory.detail.dataset", "Dataset")}</label>
-                        <select id="l-ds" value={link.dataset_id} onChange={(e) => setLink({ ...link, dataset_id: e.target.value })}>
-                          <option value="">—</option>
-                          {datasets.map((d) => (
-                            <option key={d.id} value={d.id}>{d.name}</option>
-                          ))}
-                        </select>
-                      </>
-                    )}
-                    {link.target === "collection" && (
-                      <>
-                        <label htmlFor="l-col">{t("inventory.detail.collection", "Knowledge base")}</label>
-                        <select id="l-col" value={link.collection_id} onChange={(e) => setLink({ ...link, collection_id: e.target.value })}>
-                          <option value="">—</option>
-                          {collections.map((c) => (
-                            <option key={c.id} value={c.id}>{c.name}</option>
-                          ))}
-                        </select>
-                      </>
-                    )}
+                    <label htmlFor="l-ext">{t("inventory.detail.external_name", "Name of the source")}</label>
+                    <input
+                      id="l-ext"
+                      maxLength={255}
+                      value={link.external_name}
+                      placeholder={t("inventory.detail.external_placeholder", "e.g. CRM database, S3 bucket, HR file share")}
+                      onChange={(e) => setLink({ ...link, external_name: e.target.value })}
+                    />
                   </div>
                 </div>
                 <label style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 10 }}>
@@ -805,27 +751,15 @@ export default function InventorySystemPage() {
                 </label>
                 <button
                   className="btn btn-primary btn-sm"
-                  disabled={
-                    busy ||
-                    (link.target === "external"
-                      ? !link.external_name.trim()
-                      : link.target === "dataset"
-                        ? !link.dataset_id
-                        : !link.collection_id)
-                  }
+                  disabled={busy || !link.external_name.trim()}
                   onClick={() =>
                     run(async () => {
-                      const updated =
-                        link.target === "collection"
-                          ? await addCollectionLink(s.id, Number(link.collection_id), link.relation, link.contains_pii)
-                          : await addDataLink(s.id, {
-                              relation: link.relation,
-                              contains_pii: link.contains_pii,
-                              ...(link.target === "external"
-                                ? { external_name: link.external_name.trim() }
-                                : { dataset_id: Number(link.dataset_id) }),
-                            });
-                      setLink({ ...link, external_name: "", dataset_id: "", collection_id: "", contains_pii: false });
+                      const updated = await addDataLink(s.id, {
+                        relation: link.relation,
+                        contains_pii: link.contains_pii,
+                        external_name: link.external_name.trim(),
+                      });
+                      setLink({ ...link, external_name: "", contains_pii: false });
                       return updated;
                     })
                   }

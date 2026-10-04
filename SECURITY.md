@@ -33,7 +33,7 @@ In scope:
 - Authentication and authorization bypasses.
 - SQL injection, XSS, CSRF, SSRF.
 - Credential leakage (API keys, tokens, passwords).
-- Container escape or training-job isolation bypass.
+- Container escape.
 - Prompt Firewall evasion that leaks raw PII to a provider.
 
 Out of scope:

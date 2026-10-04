@@ -21,7 +21,6 @@ const ICONS: Record<string, string> = {
   agents: "M7 7h10v10H7zM9 2v3M15 2v3M9 19v3M15 19v3M2 9h3M2 15h3M19 9h3M19 15h3",
   security: "M12 2l8 4v6c0 5-3.5 9-8 10-4.5-1-8-5-8-10V6z",
   data: "M5 11h14v10H5zM8 11V7a4 4 0 0 1 8 0v4",
-  mlops: "M12 2l10 5-10 5L2 7zM2 12l10 5 10-5M2 17l10 5 10-5",
   settings: "M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z",
   search: "M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM21 21l-4.3-4.3",
   chevron: "M9 6l6 6-6 6",
@@ -60,6 +59,7 @@ const NAV: Group[] = [
     items: [
       { href: "/requests", labelKey: "sidebar.nav.requests" },
       { href: "/approvals", labelKey: "sidebar.nav.approvals" },
+      { href: "/provider-chat", labelKey: "sidebar.nav.provider_chat" },
     ],
   },
   {
@@ -109,19 +109,6 @@ const NAV: Group[] = [
       { href: "/compliance", labelKey: "sidebar.nav.compliance" },
       { href: "/encryption-keys", labelKey: "sidebar.nav.encryption_keys", adminOnly: true },
       { href: "/queue-ttl", labelKey: "sidebar.nav.queue_ttl", adminOnly: true },
-    ],
-  },
-  {
-    sectionKey: "sidebar.sections.mlops",
-    icon: "mlops",
-    items: [
-      { href: "/simple", labelKey: "sidebar.nav.simple_mode" },
-      { href: "/compute", labelKey: "sidebar.nav.compute" },
-      { href: "/datasets", labelKey: "sidebar.nav.datasets" },
-      { href: "/training", labelKey: "sidebar.nav.training" },
-      { href: "/deployments", labelKey: "sidebar.nav.deployments" },
-      { href: "/playground", labelKey: "sidebar.nav.playground" },
-      { href: "/provider-chat", labelKey: "sidebar.nav.provider_chat" },
     ],
   },
   { sectionKey: "sidebar.sections.settings", icon: "settings", items: [

@@ -13,13 +13,6 @@ import type {
   Override,
   OverrideType,
   ShadowSighting,
-  Dataset,
-  ComputeStatus,
-  TrainingJob,
-  TrainingTaskType,
-  TrainingAlgorithm,
-  AllowedModelsResponse,
-  ModelDeployment,
   NotificationChannel,
   NotificationChannelType,
   RiskLevel,
@@ -476,131 +469,6 @@ export async function registerShadowSighting(
   return data;
 }
 
-// ---- MLOps: Compute Detector ----
-export async function getComputeStatus() {
-  const { data } = await api.get<ComputeStatus>("/compute/status");
-  return data;
-}
-
-// ---- MLOps: Dataset Manager ----
-export async function listDatasets() {
-  const { data } = await api.get<Page<Dataset>>("/datasets/");
-  return unwrap(data);
-}
-
-export async function listDatasetsPage(skip = 0, limit = 50) {
-  const { data } = await api.get<Page<Dataset>>("/datasets/", { params: { skip, limit } });
-  return data;
-}
-
-export async function uploadDataset(payload: {
-  name: string;
-  description?: string;
-  task_type: string;
-  file: File;
-}) {
-  const form = new FormData();
-  form.append("name", payload.name);
-  if (payload.description) form.append("description", payload.description);
-  form.append("task_type", payload.task_type);
-  form.append("file", payload.file);
-  const { data } = await api.post<Dataset>("/datasets/", form, {
-    headers: { "Content-Type": "multipart/form-data" },
-  });
-  return data;
-}
-
-export async function deleteDataset(id: number) {
-  await api.delete(`/datasets/${id}`);
-}
-
-// ---- MLOps: Training Service ----
-export async function listTrainingJobs() {
-  const { data } = await api.get<Page<TrainingJob>>("/training-jobs/");
-  return unwrap(data);
-}
-
-export async function listTrainingJobsPage(skip = 0, limit = 50) {
-  const { data } = await api.get<Page<TrainingJob>>("/training-jobs/", { params: { skip, limit } });
-  return data;
-}
-
-export async function getTrainingJob(id: number) {
-  const { data } = await api.get<TrainingJob>(`/training-jobs/${id}`);
-  return data;
-}
-
-export async function createTrainingJob(payload: {
-  dataset_id: number;
-  name: string;
-  task_type: TrainingTaskType;
-  target_column?: string;
-  // Algorithm ids now come from the backend registry (fetchAlgorithms),
-  // so this is a plain string rather than a hardcoded union type.
-  algorithm?: string;
-  base_model?: string;
-  hyperparameters?: Record<string, unknown>;
-  // Optuna auto-tune - runs a hyperparameter search before
-  // training the final model.
-  auto_tune?: boolean;
-  auto_tune_trials?: number;
-}) {
-  const { data } = await api.post<TrainingJob>("/training-jobs/", payload);
-  return data;
-}
-
-export async function getAllowedModels(taskType: string = "transformer_text_classification") {
-  const { data } = await api.get<AllowedModelsResponse>("/compute/allowed-models", {
-    params: { task_type: taskType },
-  });
-  return data;
-}
-
-export async function cancelTrainingJob(id: number) {
-  const { data } = await api.post<TrainingJob>(`/training-jobs/${id}/cancel`);
-  return data;
-}
-
-export async function retryTrainingJob(id: number) {
-  const { data } = await api.post<TrainingJob>(`/training-jobs/${id}/retry`);
-  return data;
-}
-
-/**
- * Trigger a streaming download of a training job's model artifact.
- *
- * The backend issues a short-lived, single-purpose token via POST
- * /training-jobs/{id}/download-token, then the browser navigates directly
- * to the streaming download URL. This keeps large model files out of
- * JavaScript memory - a 1 GB model would otherwise be buffered twice
- * (once in axios, once in the resulting Blob).
- */
-export async function downloadTrainingJobModel(id: number, filenameHint: string) {
-  const { data } = await api.post<{ token: string; expires_in: number }>(
-    `/training-jobs/${id}/download-token`
-  );
-  const url = `${API_BASE_URL}/training-jobs/${id}/download?token=${encodeURIComponent(data.token)}`;
-
-  // Native navigation so the browser streams the response to disk.
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = filenameHint;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-}
-
-export async function predictWithTrainingJob(
-  id: number,
-  features: Record<string, unknown>
-) {
-  const { data } = await api.post<{ prediction: unknown }>(
-    `/training-jobs/${id}/predict`,
-    { features }
-  );
-  return data;
-}
-
 // ---- Notification Service ----
 export async function listNotificationChannels() {
   const { data } = await api.get<Page<NotificationChannel>>("/notification-channels/");
@@ -645,103 +513,6 @@ export async function testNotificationChannel(id: number) {
   await api.post(`/notification-channels/${id}/test`);
 }
 
-// ---- Training algorithms registry ----
-export interface AlgorithmHyperparam {
-  name: string;
-  label_key: string;
-  type: "int" | "float" | "select";
-  default: number | string | null;
-  min?: number;
-  max?: number;
-  options?: { value: string; label_key: string }[];
-}
-
-export interface AlgorithmInfo {
-  id: string;
-  label_key: string;
-  task_types: string[];
-  hyperparameters: AlgorithmHyperparam[];
-}
-
-export async function fetchAlgorithms(taskType?: string) {
-  const { data } = await api.get<{ algorithms: AlgorithmInfo[] }>(
-    "/training-jobs/algorithms",
-    { params: taskType ? { task_type: taskType } : undefined },
-  );
-  return data.algorithms;
-}
-
-// ---- Deployment Manager ----
-export async function listDeployments() {
-  const { data } = await api.get<Page<ModelDeployment>>("/deployments/");
-  return unwrap(data);
-}
-
-export async function createDeployment(payload: {
-  training_job_id: number;
-  name: string;
-  description?: string;
-  version?: number;
-  traffic_weight?: number;
-}) {
-  const { data } = await api.post<ModelDeployment>("/deployments/", payload);
-  return data;
-}
-
-export async function getDeployment(id: number) {
-  const { data } = await api.get<ModelDeployment>(`/deployments/${id}`);
-  return data;
-}
-
-export async function updateDeployment(
-  id: number,
-  payload: Partial<{
-    description: string;
-    status: "active" | "inactive" | "archived";
-    traffic_weight: number;
-  }>,
-) {
-  const { data } = await api.put<ModelDeployment>(`/deployments/${id}`, payload);
-  return data;
-}
-
-export async function deleteDeployment(id: number) {
-  await api.delete(`/deployments/${id}`);
-}
-
-export async function predictViaDeployment(
-  id: number,
-  features: Record<string, unknown>,
-) {
-  const { data } = await api.post<{
-    deployment_id: number;
-    version: number;
-    prediction: unknown;
-  }>(`/deployments/${id}/predict`, { features });
-  return data;
-}
-
-// ---- Playground chat ----
-export interface DeploymentChatResponse {
-  deployment_id: number;
-  version: number;
-  model_type: string;
-  response: string;
-  latency_ms: number;
-  raw: unknown;
-}
-
-export async function chatWithDeployment(
-  id: number,
-  message: string,
-): Promise<DeploymentChatResponse> {
-  const { data } = await api.post<DeploymentChatResponse>(
-    `/deployments/${id}/chat`,
-    { message },
-  );
-  return data;
-}
-
 // ---- Dashboard stats ----
 export interface DayBucket {
   date: string;
@@ -756,15 +527,9 @@ export interface DashboardStats {
   requests_by_day: DayBucket[];
   requests_by_status: Record<string, number>;
   incidents_by_severity: Record<string, number>;
-  training_by_status: Record<string, number>;
-  deployments_by_status: Record<string, number>;
   total_requests: number;
   total_incidents: number;
-  total_training_jobs: number;
-  total_deployments: number;
-  active_deployments: number;
   pending_approvals: number;
-  total_datasets: number;
   total_policies: number;
 }
 
@@ -772,42 +537,6 @@ export async function fetchDashboardStats(days = 7): Promise<DashboardStats> {
   const { data } = await api.get<DashboardStats>("/dashboard/stats", {
     params: { days },
   });
-  return data;
-}
-
-// ---- Deployment Monitoring ----
-export interface MonitoringDay {
-  date: string;
-  count: number;
-}
-
-export interface DeploymentMonitoring {
-  deployment_id: number;
-  deployment_name: string;
-  deployment_version: number;
-  window_days: number;
-  total_predictions: number;
-  predictions_by_day: MonitoringDay[];
-  predictions_by_class: Record<string, number>;
-  latency_ms: { min: number | null; avg: number | null; max: number | null };
-  feedback: Record<string, number>;
-  recent_predictions: Array<{
-    id: number;
-    prediction: string | null;
-    latency_ms: number | null;
-    features: Record<string, unknown> | null;
-    created_at: string;
-  }>;
-}
-
-export async function fetchDeploymentMonitoring(
-  id: number,
-  days = 7,
-): Promise<DeploymentMonitoring> {
-  const { data } = await api.get<DeploymentMonitoring>(
-    `/deployments/${id}/monitoring`,
-    { params: { days } },
-  );
   return data;
 }
 
@@ -882,12 +611,6 @@ export async function deleteDomainCatalogEntry(id: number) {
   await api.delete(`/domain-catalog/${id}`);
 }
 
-// ---- Personal UI mode preference (Simple Mode wizard entry point) ----
-export async function updateMyUIMode(uiMode: "simple" | "advanced") {
-  const { data } = await api.put<User>("/users/me/ui-mode", { ui_mode: uiMode });
-  return data;
-}
-
 // ---- Shadow AI Monitor: summary counts ----
 export async function getShadowAISummary() {
   const { data } = await api.get<Record<string, number>>("/shadow-ai/summary");
@@ -899,99 +622,6 @@ export async function updateIncidentStatus(id: number, status: string) {
   const { data } = await api.put<Incident>(`/incidents/${id}`, { status });
   return data;
 }
-
-// ---- Simple Mode wizard ----
-export interface ParsedQAPair {
-  question: string;
-  answer: string;
-}
-
-export interface ParseUploadResponse {
-  qa_pairs: ParsedQAPair[];
-  error_row_count: number;
-  has_unstructured_text: boolean;
-  detected_columns: string[] | null;
-  preview_text: string | null;
-  recommended_approach: string;
-  recommended_reason: string;
-}
-
-export async function parseWizardUpload(file: File, taskType: string) {
-  const form = new FormData();
-  form.append("file", file);
-  form.append("task_type", taskType);
-  const { data } = await api.post<ParseUploadResponse>("/simple-mode/parse-upload", form, {
-    headers: { "Content-Type": "multipart/form-data" },
-  });
-  return data;
-}
-
-export async function previewWizardChat(payload: {
-  message: string;
-  system_prompt?: string;
-  provider_id: number;
-}) {
-  const { data } = await api.post<{ answer: string }>("/simple-mode/preview-chat", payload);
-  return data;
-}
-
-export async function recommendApproach(payload: {
-  task_type: string;
-  has_documents: boolean;
-  qa_pair_count: number;
-}) {
-  const { data } = await api.post<{ approach: string; reason: string }>(
-    "/rag/recommend-approach",
-    payload
-  );
-  return data;
-}
-
-export async function finalizeWizardRAG(payload: {
-  name: string;
-  systemPrompt: string;
-  qaPairs: { question: string; answer: string }[];
-  files: File[];
-}) {
-  const form = new FormData();
-  form.append("name", payload.name);
-  form.append("system_prompt", payload.systemPrompt);
-  form.append("qa_pairs_json", JSON.stringify(payload.qaPairs));
-  for (const f of payload.files) form.append("files", f);
-  const { data } = await api.post<{ collection_id: number; document_statuses: string[] }>(
-    "/simple-mode/finalize-rag",
-    form,
-    { headers: { "Content-Type": "multipart/form-data" } }
-  );
-  return data;
-}
-
-export interface RagCollectionInfo {
-  id: number;
-  name: string;
-  document_count: number;
-  chunk_count: number;
-}
-
-export async function getRagCollection(id: number) {
-  const { data } = await api.get<RagCollectionInfo>(`/rag/collections/${id}`);
-  return data;
-}
-
-export async function chatWithRagCollection(
-  collectionId: number,
-  message: string,
-  providerId: number
-) {
-  const { data } = await api.post<{
-    answer: string;
-    sources: { chunk_id: number; document_id: number; text: string; score: number }[];
-  }>(`/rag/collections/${collectionId}/chat`, { message, provider_id: providerId });
-  return data;
-}
-
-
-
 
 // ---- Network discovery (explicit-connect wizard) ----
 export async function listDiscoveredServices() {

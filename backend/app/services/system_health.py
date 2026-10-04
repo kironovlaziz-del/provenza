@@ -114,8 +114,8 @@ async def check(db: AsyncSession) -> dict:
     else:
         if not workers["ok"]:
             problems.append({"code": "no_workers", "severity": "critical",
-                             "message": "No Celery worker answers. Queued requests, sweeps and training jobs "
-                                        "are not processed."})
+                             "message": "No Celery worker answers. Queued requests, discovery and "
+                                        "retention sweeps are not processed."})
         if not beat["ok"]:
             problems.append({"code": "beat_stale", "severity": "warning",
                              "message": "Scheduled jobs are not running: no heartbeat from Celery beat "

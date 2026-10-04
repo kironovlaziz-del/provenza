@@ -9,11 +9,6 @@ EVENT_TYPES = [
     "shadow_ai_reported",
     "shadow_ai_blocked_domain",
     "request_blocked",
-    "training_completed",
-    "training_failed",
-    "deployment_created",
-    "deployment_updated",
-    "deployment_archived",
 ]
 
 

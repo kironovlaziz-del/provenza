@@ -90,20 +90,6 @@ class Settings(BaseSettings):
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
 
-    # Training isolation: when true, each training job runs in its own
-    # Docker container built from backend/training_runner/. When false,
-    # training runs in-process inside the Celery worker (the legacy
-    # behaviour, useful for local development without Docker).
-    TRAINING_USE_DOCKER: bool = False
-
-    # Image used for isolated training jobs. Build it once with:
-    #   docker build -t ai-control-tower/training-runner:latest backend/training_runner
-    TRAINING_RUNNER_IMAGE: str = "ai-control-tower/training-runner:latest"
-
-    # Container resource limits. Match these to the host's capacity.
-    TRAINING_CONTAINER_CPUS: float = 2.0
-    TRAINING_CONTAINER_MEMORY: str = "2g"
-
     # Prompt Firewall: enable NER-based PII detection (person names,
     # organizations, locations) on top of the built-in regex detectors.
     # Requires spaCy plus a language model; when the model is not
@@ -115,13 +101,20 @@ class Settings(BaseSettings):
     }
     PROMPT_FIREWALL_NER_DEFAULT_LANG: str = "en"
 
-    # MLOps - relative paths are resolved against the project root
-    # (backend/) so they work regardless of the current working directory.
-    # Absolute paths from .env are used as-is.
+    # Removed features (MLOps training/deployments and RAG). Nothing in the
+    # application reads these any more. They stay so that an existing .env
+    # that still sets them keeps loading (extra="forbid"), and so that
+    # scripts/delete_org.py can name the directories where those features
+    # left files on disk. Relative paths resolve against backend/.
     DATASETS_DIR: str = "data/datasets"
     MODELS_DIR: str = "data/models"
     RAG_DOCUMENTS_DIR: str = "data/rag_documents"
     RAG_VECTORIZERS_DIR: str = "data/rag_vectorizers"
+    TRAINING_USE_DOCKER: bool = False
+    TRAINING_RUNNER_IMAGE: str = ""
+    TRAINING_CONTAINER_CPUS: float = 2.0
+    TRAINING_CONTAINER_MEMORY: str = ""
+
     # Source tree for the browser extension template that
     # GET /shadow-ai/extension/download packages on demand - configurable
     # since the deploy layout (monorepo checkout path) isn't guaranteed
@@ -156,9 +149,9 @@ class Settings(BaseSettings):
     @model_validator(mode="after")
     def _resolve_relative_paths(self):
         """
-        Anchor MODELS_DIR and DATASETS_DIR to the backend package directory
-        so that starting uvicorn from a different working directory does
-        not silently create a second data/ tree somewhere else on disk.
+        Anchor the data directories to the backend package directory so
+        that starting uvicorn from a different working directory does not
+        silently point at a second data/ tree somewhere else on disk.
         """
         backend_root = Path(__file__).resolve().parents[2]
         for field in ("DATASETS_DIR", "MODELS_DIR", "RAG_DOCUMENTS_DIR", "RAG_VECTORIZERS_DIR", "EXTENSION_TEMPLATE_DIR"):

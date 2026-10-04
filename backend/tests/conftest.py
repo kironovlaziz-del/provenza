@@ -137,8 +137,8 @@ def mock_celery_send_task(monkeypatch):
     """
     Prevent any test from actually dispatching work to Redis.
 
-    Several API endpoints (request creation, approval decisions, training
-    jobs) call `celery_app.send_task(...)`. Without a running worker and a
+    Several API endpoints (request creation, approval decisions) call
+    `celery_app.send_task(...)`. Without a running worker and a
     reachable Redis, that raises during the request and masks the behaviour
     under test.
     """

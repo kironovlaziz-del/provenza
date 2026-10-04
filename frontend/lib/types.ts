@@ -9,7 +9,6 @@ export interface User {
   name: string;
   role: "admin" | "approver" | "user";
   status: string;
-  ui_mode?: "simple" | "advanced" | null;
   created_at: string;
 }
 
@@ -189,93 +188,6 @@ export interface ShadowSighting {
   resolved_at?: string | null;
 }
 
-export interface Dataset {
-  id: number;
-  org_id: number;
-  name: string;
-  description?: string | null;
-  task_type: string;
-  file_format?: string | null;
-  size_bytes: number;
-  uploaded_by?: number | null;
-  created_at: string;
-}
-
-export interface ComputeWarning {
-  code: string;
-  disk_free_gb?: number | null;
-  vram_free_gb?: number | null;
-}
-
-export interface ComputeStatus {
-  cpu_logical_cores: number;
-  cpu_physical_cores?: number | null;
-  ram_total_gb: number;
-  ram_available_gb: number;
-  disk_total_gb: number;
-  disk_free_gb: number;
-  gpu_available: boolean;
-  gpu_names: string[];
-  gpu_detection_method: string;
-  gpu_vram_total_gb?: number | null;
-  gpu_vram_free_gb?: number | null;
-  recommendation_tier: string;
-  recommendation_detail: string;
-  warnings: ComputeWarning[];
-}
-
-export type TrainingTaskType =
-  | "tabular_classification"
-  | "tabular_regression"
-  | "transformer_text_classification"
-  | "transformer_text_generation";
-export type TrainingAlgorithm =
-  | "logistic_regression"
-  | "random_forest_classifier"
-  | "linear_regression"
-  | "random_forest_regressor";
-export type TrainingJobStatus = "queued" | "running" | "completed" | "failed" | "cancelled";
-
-export interface TrainingJob {
-  id: number;
-  org_id: number;
-  dataset_id: number;
-  name: string;
-  task_type: TrainingTaskType;
-  target_column: string | null;
-  algorithm?: TrainingAlgorithm | null;
-  base_model?: string | null;
-  hyperparameters_json?: Record<string, unknown> | null;
-  feature_columns_json?: string[] | null;
-  status: TrainingJobStatus;
-  celery_task_id?: string | null;
-  progress_pct?: number | null;
-  progress_stage?: string | null;
-  has_model_artifact?: boolean;
-  metrics_json?: Record<string, number> | null;
-  error_message?: string | null;
-  created_by?: number | null;
-  created_at: string;
-  started_at?: string | null;
-  finished_at?: string | null;
-}
-
-export interface AllowedTransformerModel {
-  id: string;
-  label: string;
-  note: string;
-  estimated_vram_gb: number;
-  fits_vram: boolean | null;
-}
-
-export interface AllowedModelsResponse {
-  gpu_available: boolean;
-  gpu_vram_total_gb?: number | null;
-  gpu_vram_free_gb?: number | null;
-  models: AllowedTransformerModel[];
-  custom_model_allowed: boolean;
-}
-
 export type NotificationChannelType = "email" | "webhook";
 
 export interface NotificationChannel {
@@ -287,22 +199,6 @@ export interface NotificationChannel {
   enabled: boolean;
   created_by?: number | null;
   created_at: string;
-}
-
-export type DeploymentStatus = "active" | "inactive" | "archived";
-
-export interface ModelDeployment {
-  id: number;
-  org_id: number;
-  training_job_id: number;
-  name: string;
-  version: number;
-  description?: string | null;
-  status: DeploymentStatus;
-  traffic_weight: number;
-  created_by?: number | null;
-  created_at: string;
-  updated_at?: string | null;
 }
 
 // ---- Shadow AI Monitor: telemetry ingestion (stage 1) ----

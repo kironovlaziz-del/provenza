@@ -76,7 +76,7 @@ Commits
 
 Write clear, focused commit messages. Prefer the imperative mood:
 
-    ✅ Add retry logic to training worker
+    ✅ Add retry logic to discovery worker
 
     ❌ added retry logic
 

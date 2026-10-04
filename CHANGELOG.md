@@ -39,6 +39,24 @@ this project adheres to [Semantic Versioning](https://semver.org/).
   and stops agents without a hybrid key from delegating, recording actions
   and sending messages until they get one.
 
+### Removed
+
+- **MLOps, RAG and Simple Mode.** Provenza is a discovery and control plane
+  for AI in the organization; building and hosting models is not its job.
+  Removed: dataset upload, compute detection, training jobs (scikit-learn,
+  Transformers, hyperparameter search, the Docker training runner), model
+  deployments with their monitoring and playground, RAG knowledge bases
+  (collections, documents, chat), the Simple Mode wizard and its
+  `/users/me/ui-mode` preference. API prefixes `/datasets`, `/compute`,
+  `/training-jobs`, `/deployments`, `/rag` and `/simple-mode` are gone.
+  Dependencies dropped: pandas, scikit-learn, joblib, numpy (direct),
+  psutil, pypdf, python-docx, openpyxl, python-multipart, optuna, docker,
+  and `requirements-ml.txt`.
+- **Memory integrity** now covers agent memory only (the RAG-document
+  scanning, trust and rescan went with RAG).
+- **AI Inventory** no longer syncs deployments or knowledge bases; new data
+  links name an external source. Existing entries and links stay readable.
+
 ### Fixed
 
 - **Browser verification of non-ASCII payloads.** The browser now checks the
@@ -100,6 +118,17 @@ this project adheres to [Semantic Versioning](https://semver.org/).
   re-link the use case.
 - **Production `SECRET_KEY`** must not look like a placeholder - generate one
   with `python3 -c "import secrets; print(secrets.token_urlsafe(48))"`.
+- **Removed features keep their data.** The tables of the removed MLOps and
+  RAG features (`datasets`, `training_jobs`, `model_deployments`,
+  `prediction_logs`, `document_collections`, `rag_documents`,
+  `document_chunks`, `rag_query_logs`) and the files under `data/` are left
+  untouched; no migration drops anything. The old `DATASETS_DIR`,
+  `MODELS_DIR`, `RAG_*_DIR` and `TRAINING_*` settings are still accepted in
+  `.env` and ignored. Notification channels subscribed to `training_*` /
+  `deployment_*` events simply never receive them. Training jobs that were
+  still queued or running keep that status in the kept table, and training
+  tasks still waiting in Redis are rejected by the new worker as unknown -
+  let the queue drain (or accept the loss) before upgrading.
 
 ## [0.2.1] - 2026-09-19
 

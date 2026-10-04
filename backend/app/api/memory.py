@@ -2,7 +2,7 @@
 # Licensed under the Apache License, Version 2.0.
 # Part of Provenza — https://github.com/kironovlaziz-del/provenza
 
-"""Memory integrity (ASI06): agent-memory attestation, RAG document trust, settings."""
+"""Memory integrity (ASI06): agent-memory attestation and settings."""
 
 from typing import Literal, Optional
 
@@ -74,30 +74,4 @@ async def revoke_entry(entry_id: int, db: AsyncSession = Depends(get_db),
                        current_user: User = Depends(require_role(UserRole.admin))):
     r = await MemoryGuard(db).set_entry_status(current_user.org_id, entry_id, False, current_user.id)
     await AuditService(db).log(current_user.org_id, current_user.id, "memory_entry", entry_id, "memory_revoked", r)
-    return r
-
-
-# ---------------------------------------------------------------- RAG documents
-@router.post("/documents/{document_id}/trust")
-async def trust_document(document_id: int, db: AsyncSession = Depends(get_db),
-                         current_user: User = Depends(require_role(UserRole.admin))):
-    r = await MemoryGuard(db).set_document_trust(current_user.org_id, document_id, True, current_user.id)
-    await AuditService(db).log(current_user.org_id, current_user.id, "rag_document", document_id, "document_trusted", r)
-    return r
-
-
-@router.post("/documents/{document_id}/revoke")
-async def revoke_document(document_id: int, db: AsyncSession = Depends(get_db),
-                          current_user: User = Depends(require_role(UserRole.admin))):
-    r = await MemoryGuard(db).set_document_trust(current_user.org_id, document_id, False, current_user.id)
-    await AuditService(db).log(current_user.org_id, current_user.id, "rag_document", document_id, "document_revoked", r)
-    return r
-
-
-@router.post("/collections/{collection_id}/rescan")
-async def rescan_collection(collection_id: int, db: AsyncSession = Depends(get_db),
-                            current_user: User = Depends(require_role(UserRole.admin))):
-    r = await MemoryGuard(db).rescan_collection(current_user.org_id, collection_id)
-    await AuditService(db).log(current_user.org_id, current_user.id, "document_collection", collection_id,
-                               "collection_rescanned", r)
     return r

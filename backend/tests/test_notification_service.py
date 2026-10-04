@@ -316,16 +316,16 @@ def test_notify_sync_dedupes_and_filters_like_the_async_version(monkeypatch):
         channel_type="email",
         target="ops@x.com",
         enabled=True,
-        events_json=["training_completed"],
+        events_json=["incident_created"],
     )
     unsubscribed = SimpleNamespace(
         channel_type="email",
         target="other@x.com",
         enabled=True,
-        events_json=["training_failed"],
+        events_json=["request_blocked"],
     )
     fake_db = _FakeSyncDB([duplicate, duplicate, unsubscribed])
 
-    notification_service.notify_sync(fake_db, 1, "training_completed", "s", "m")
+    notification_service.notify_sync(fake_db, 1, "incident_created", "s", "m")
 
     assert dispatched == ["ops@x.com"]

@@ -186,22 +186,14 @@ class TestDataLinks:
         assert d.status_code == 200 and d.json()["data_links"] == [] and d.json()["data_protection_notes"] == []
 
     @pytest.mark.asyncio
-    async def test_link_needs_exactly_one_target(self, client, admin_token):
+    async def test_link_names_its_data_source(self, client, admin_token):
         s = await _create(client, admin_token)
-        both = await client.post(f"{BASE}/{s['id']}/data-links",
-                                 json={"relation": "accesses", "external_name": "x", "dataset_id": 1},
-                                 headers=auth_headers(admin_token))
-        none = await client.post(f"{BASE}/{s['id']}/data-links", json={"relation": "accesses"},
-                                 headers=auth_headers(admin_token))
-        assert both.status_code == 422 and none.status_code == 422
-
-    @pytest.mark.asyncio
-    async def test_dataset_of_unknown_id_is_rejected(self, client, admin_token):
-        s = await _create(client, admin_token)
-        r = await client.post(f"{BASE}/{s['id']}/data-links",
-                              json={"relation": "trained_on", "dataset_id": 999999},
-                              headers=auth_headers(admin_token))
-        assert r.status_code == 404
+        for body in ({"relation": "accesses"}, {"relation": "accesses", "external_name": ""},
+                     {"relation": "accesses", "external_name": "   "},
+                     {"relation": "trained_on", "dataset_id": 1},
+                     {"relation": "trained_on", "external_name": "crm", "dataset_id": 1}):
+            r = await client.post(f"{BASE}/{s['id']}/data-links", json=body, headers=auth_headers(admin_token))
+            assert r.status_code == 422, body
 
 
 class TestIsolationAndSummary:
