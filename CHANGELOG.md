@@ -8,6 +8,19 @@ this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **Agents Found and Devices (Discovery).** The endpoint agent (v1.2.0)
+  recognizes AI agents running on a machine - coding agents (Claude Code,
+  Cursor, GitHub Copilot, Codex CLI, Gemini CLI, Aider, Goose, OpenCode,
+  Amazon Q, OpenHands, Open Interpreter), agent frameworks (CrewAI,
+  LangGraph, AutoGen Studio, Letta) and agent platforms (n8n, Flowise,
+  Langflow) - and reports them as `agent_detected` events. Each finding is
+  kept per device for review: register it as a governed agent (the
+  registration form opens pre-filled and links the finding) or ignore it.
+  Every telemetry batch also refreshes its device, so Discovery -> Devices
+  lists each reporting machine and browser with user, OS, collector
+  version and last activity. New notification event `agent_discovered`.
+  API: `/devices`, `/agents-found`.
+
 - **Agent-held signing keys.** An agent can register its own Ed25519 public
   key (at registration or later via `POST /agents/{id}/signing-key`); the
   server never holds the private key. Server-generated keys remain as a
@@ -76,6 +89,14 @@ this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Security
 
+- **Process command lines no longer leave the endpoint.** The endpoint
+  agent sent the full command line of matched processes, which can carry
+  API keys and tokens. It now sends only the product it recognized and
+  how (executable, package, module); the backend also drops any
+  `cmdline` field an older agent still sends before storing the event.
+  Matching is by whole tokens, so unrelated text ("january", a log file
+  named after a tool) no longer counts as a detection.
+
 - **Login throttling can no longer be walked around.** The per-account
   counter is keyed by the organization slug as the lookup normalizes it, so
   spellings like `"ACME "` and `" acme"` share one budget; a successful
@@ -126,6 +147,10 @@ this project adheres to [Semantic Versioning](https://semver.org/).
   re-link the use case.
 - **Production `SECRET_KEY`** must not look like a placeholder - generate one
   with `python3 -c "import secrets; print(secrets.token_urlsafe(48))"`.
+- **Endpoint agent 1.2.0.** Rebuild and redeploy the agent to get agent
+  detection; older agents keep working (their process command lines are
+  now dropped on arrival). Run `alembic upgrade head` (new tables
+  `endpoint_devices`, `discovered_agents`).
 - **Removed features keep their data.** The tables of the removed MLOps and
   RAG features (`datasets`, `training_jobs`, `model_deployments`,
   `prediction_logs`, `document_collections`, `rag_documents`,

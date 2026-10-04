@@ -12,6 +12,7 @@ from app.api import shadow_ai
 from app.api import ingestion_sources
 from app.api import domain_catalog
 from app.api import discovery
+from app.api import devices
 from app.api import agents
 from app.api import notification_channels
 from app.api import dashboard
@@ -72,6 +73,8 @@ app.include_router(shadow_ai.router, prefix=f"{settings.API_V1_STR}/shadow-ai", 
 app.include_router(ingestion_sources.router, prefix=f"{settings.API_V1_STR}/ingestion-sources", tags=["shadow-ai"])
 app.include_router(domain_catalog.router, prefix=f"{settings.API_V1_STR}/domain-catalog", tags=["shadow-ai"])
 app.include_router(discovery.router, prefix=f"{settings.API_V1_STR}/discovery", tags=["discovery"])
+app.include_router(devices.devices_router, prefix=f"{settings.API_V1_STR}/devices", tags=["discovery"])
+app.include_router(devices.found_router, prefix=f"{settings.API_V1_STR}/agents-found", tags=["discovery"])
 app.include_router(agents.router, prefix=f"{settings.API_V1_STR}/agents", tags=["agent-governance"])
 app.include_router(notification_channels.router, prefix=f"{settings.API_V1_STR}/notification-channels", tags=["notifications"])
 app.include_router(dashboard.router, prefix=f"{settings.API_V1_STR}/dashboard", tags=["dashboard"])

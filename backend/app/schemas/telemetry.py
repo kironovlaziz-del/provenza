@@ -10,7 +10,10 @@ from typing import Optional, Dict, Any, List
 # around.
 DOMAIN_EVENT_TYPE = "domain_visit"
 LOCAL_SIGNAL_EVENT_TYPES = {"process_detected", "network_conn", "local_model_found"}
-KNOWN_EVENT_TYPES = {DOMAIN_EVENT_TYPE} | LOCAL_SIGNAL_EVENT_TYPES
+# An AI agent product found running (endpoint agent >= 1.2.0); payload
+# {"product": "<catalog id>", "process_name", "matched_by"}.
+AGENT_EVENT_TYPE = "agent_detected"
+KNOWN_EVENT_TYPES = {DOMAIN_EVENT_TYPE, AGENT_EVENT_TYPE} | LOCAL_SIGNAL_EVENT_TYPES
 
 
 class TelemetryEventIn(BaseModel):
@@ -61,6 +64,8 @@ class TelemetryIngestResponse(BaseModel):
     local_signals: int
     sightings_created: int
     incidents_created: int
+    agents_found: int = 0
+    devices_seen: int = 0
 
 
 class TelemetryIngestAcceptedResponse(BaseModel):

@@ -9,6 +9,7 @@ EVENT_TYPES = [
     "shadow_ai_reported",
     "shadow_ai_blocked_domain",
     "request_blocked",
+    "agent_discovered",
 ]
 
 

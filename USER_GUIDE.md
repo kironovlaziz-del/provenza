@@ -170,7 +170,30 @@ enabled, discovers network services.
 2. Put the key and your server URL into the agent's `config.json`
    (see `agent/config.example.json`), then build and run it — full steps
    are in the [README](README.md#7-endpoint-agent-optional).
-3. New findings appear under **Shadow AI Monitor** within a minute.
+3. New findings appear within a minute: local AI tools under
+   **Discovery → Shadow AI Sightings**, AI agents under **Discovery →
+   Agents Found**, and the machine itself under **Discovery → Devices**.
+
+### 8.4.1 Agents Found and Devices
+
+The endpoint agent (v1.2.0 or later) recognizes AI agents running on the
+machine — coding agents (Claude Code, Cursor, GitHub Copilot, Codex CLI,
+Gemini CLI, Aider, …), agent frameworks (CrewAI, LangGraph, AutoGen
+Studio, Letta) and agent platforms (n8n, Flowise, Langflow). It sends
+only which product it found and how it recognized it; the process
+command line, which can contain API keys, never leaves the machine.
+
+- **Discovery → Agents Found** lists each agent per device, newest to
+  review first. **Register** opens agent registration with the name and
+  type filled in; once registered, the finding is linked to the governed
+  agent and comes under its policies. **Ignore** hides a finding (it can
+  be restored).
+- **Discovery → Devices** lists every machine and browser that reports,
+  with its user, OS, collector version, last activity and the agents
+  found on it. A device that has been silent for a day is marked *quiet*.
+
+Both pages are visible to admins and approvers; only admins register or
+ignore findings.
 
 ### 8.5 Deploying the browser extension
 

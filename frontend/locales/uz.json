@@ -95,7 +95,9 @@
       "encryption_keys": "Shifrlash kalitlari",
       "compliance": "Muvofiqlik",
       "agent_observability": "Agentlar monitoringi",
-      "system_status": "Tizim holati"
+      "system_status": "Tizim holati",
+      "agents_found": "Topilgan agentlar",
+      "devices": "Qurilmalar"
     },
     "logout": "Chiqish",
     "role_admin": "administrator",
@@ -625,7 +627,8 @@
       "approval_pending": "Tasdiqlash talab qilinadi",
       "shadow_ai_reported": "Shadow AI aniqlandi",
       "shadow_ai_blocked_domain": "Bloklangan AI domeni aniqlandi",
-      "request_blocked": "So'rov Prompt Firewall tomonidan bloklandi"
+      "request_blocked": "So'rov Prompt Firewall tomonidan bloklandi",
+      "agent_discovered": "Qurilmada AI agent topildi"
     }
   },
   "users": {
@@ -701,7 +704,10 @@
     "ingestion.scope_denied": "Ushbu kollektor kaliti tarmoq xizmatlari haqida xabar berishga ruxsatga ega emas.",
     "agent.key_server_generated": "Bu kalit server tomonidan yaratilgan, shuning uchun uni agentning o'z kaliti sifatida ro'yxatdan o'tkazib bo'lmaydi. Agent ishlaydigan joyda yangi kalit juftligini yarating.",
     "agent.key_in_use": "Bu ochiq kalit boshqa agent uchun allaqachon ro'yxatdan o'tgan. Har bir agentga alohida kalit juftligi kerak.",
-    "agent.pq_required": "Bu tashkilot post-kvant imzolarni talab qiladi: gibrid kalitni (Ed25519 + ML-DSA-65) ro'yxatdan o'tkazing."
+    "agent.pq_required": "Bu tashkilot post-kvant imzolarni talab qiladi: gibrid kalitni (Ed25519 + ML-DSA-65) ro'yxatdan o'tkazing.",
+    "device.not_found": "Qurilma topilmadi.",
+    "found_agent.not_found": "Topilma topilmadi.",
+    "agent.not_found": "Agent topilmadi."
   },
   "discovery": {
     "title": "Tarmoq kashfiyoti",
@@ -2056,5 +2062,67 @@
     "banner_degraded": "Fon ishlarida muammo bor",
     "details": "Batafsil",
     "dismiss": "Yopish"
+  },
+  "found": {
+    "title": "Topilgan agentlar",
+    "hint": "Endpoint agent qurilmalaringizda ishlayotganini aniqlagan AI agentlar — kod yozuvchi agentlar, agent freymvorklari va agent platformalari. Ularni hech kim qo'lda ro'yxatdan o'tkazmagan: har birini ko'rib chiqing, so'ng siyosatlar ostiga olish uchun ro'yxatdan o'tkazing yoki e'tiborsiz qoldiring.",
+    "stat_new": "Ko'rib chiqish kerak",
+    "stat_registered": "Ro'yxatdan o'tgan",
+    "stat_ignored": "E'tiborsiz",
+    "stat_devices": "Hisobot beruvchi qurilmalar",
+    "table_title": "Topilmalar",
+    "filter": "Holat",
+    "filter_all": "Hammasi",
+    "status_new": "Yangi",
+    "status_registered": "Ro'yxatdan o'tgan",
+    "status_ignored": "E'tiborsiz",
+    "col_agent": "Agent",
+    "col_device": "Qurilma",
+    "col_risk": "Xavf",
+    "col_seen": "Oxirgi marta",
+    "col_status": "Holat",
+    "first_seen": "birinchi marta {{when}}",
+    "register": "Ro'yxatdan o'tkazish",
+    "ignore": "E'tiborsiz qoldirish",
+    "restore": "Qaytarish",
+    "empty_new": "Ko'rib chiqish uchun yangi narsa yo'q. Endpoint agent (v1.2.0 yoki yangiroq) qurilmada ishga tushgach, agentlar bu yerda o'zi paydo bo'ladi.",
+    "empty": "Bu holatda topilma yo'q.",
+    "load_failed": "Topilmalarni yuklab bo'lmadi.",
+    "action_failed": "Amal bajarilmadi.",
+    "category_coding_agent": "Kod agenti",
+    "category_agent_framework": "Agent freymvorki",
+    "category_agent_platform": "Agent platformasi",
+    "category_unknown": "Aniqlanmagan",
+    "register_description": "{{host}} qurilmasida topilgan {{product}}",
+    "registering_note": "Aniqlash topgan agent ro'yxatdan o'tkazilmoqda:",
+    "linked_note": "Topilma ro'yxatdan o'tgan deb belgilandi va shu agentga bog'landi.",
+    "link_failed_note": "Agent yaratildi, lekin topilmani unga bog'lab bo'lmadi — Topilgan agentlar sahifasida qayta bog'lang."
+  },
+  "devices": {
+    "title": "Qurilmalar",
+    "hint": "Provenzaga hisobot beradigan kompyuterlar va brauzerlar — endpoint agent va brauzer kengaytmasidan avtomatik yaratiladi. Qurilma o'z kollektori orqali aniqlanadi: ingestion kaliti ostida yuborilgan xost nomi.",
+    "table_title_one": "{{count}} ta qurilma",
+    "table_title_other": "{{count}} ta qurilma",
+    "search": "Xost yoki foydalanuvchini qidirish…",
+    "col_device": "Qurilma",
+    "col_source": "Ingestion manbasi",
+    "col_agents": "AI agentlar",
+    "col_last_seen": "Oxirgi marta",
+    "col_collector": "OT · kollektor",
+    "new_agents_one": "{{count}} ta yangi",
+    "new_agents_other": "{{count}} ta yangi",
+    "quiet": "jim",
+    "first_seen": "Birinchi marta {{when}}",
+    "events_one": "{{count}} ta hodisa",
+    "events_other": "{{count}} ta hodisa",
+    "no_agents": "Bu qurilmada AI agent topilmadi.",
+    "review_found": "Topilgan agentlarda ko'rib chiqish",
+    "empty": "Hali hech qaysi qurilma hisobot bermagan.",
+    "empty_link": "Ingestion kalitini yarating va endpoint agentni o'rnating.",
+    "no_match": "Mos qurilma yo'q.",
+    "load_failed": "Qurilmalarni yuklab bo'lmadi.",
+    "source_endpoint": "Endpoint agent",
+    "source_browser_extension": "Brauzer kengaytmasi",
+    "source_gateway": "Shlyuz"
   }
 }

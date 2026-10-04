@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"runtime"
 	"sync"
 	"time"
 
@@ -64,8 +65,18 @@ func NewReporter(cfg *config.AgentConfig) *Reporter {
 	}
 }
 
-// Submit puts an event into the delivery channel.
-func (r *Reporter) Submit(event TelemetryEvent) {
+// AgentVersion identifies this build to the backend (shown on Devices).
+const AgentVersion = "1.2.0"
+
+// Submit puts an event into the delivery channel. It returns false when the
+// buffer is full and the event was dropped.
+func (r *Reporter) Submit(event TelemetryEvent) bool {
+	if event.Payload == nil {
+		event.Payload = map[string]interface{}{}
+	}
+	// Device facts for the backend's device registry.
+	event.Payload["os"] = runtime.GOOS
+	event.Payload["agent_version"] = AgentVersion
 	if event.EventID == "" {
 		event.EventID = GenerateUUID()
 	}
@@ -78,8 +89,10 @@ func (r *Reporter) Submit(event TelemetryEvent) {
 
 	select {
 	case r.eventChan <- event:
+		return true
 	default:
 		log.Printf("[Reporter] Event buffer full, dropping event: %s", event.EventType)
+		return false
 	}
 }
 
