@@ -69,18 +69,20 @@ def enforce(
     extra_key: str | None = None,
 ) -> None:
     """
-    Increment the counter for the given scope (per-IP, optionally also per
-    extra_key, e.g. an email) and raise 429 if the limit is exceeded.
+    Increment ONE counter for the given scope and raise 429 if it exceeds
+    `limit`: the client IP's counter, or - when extra_key is given (e.g. one
+    account) - that key's counter instead. Each limit applies only to its
+    own counter: a per-account check must not also bump and judge the IP
+    counter against the (smaller) per-account limit.
 
     Fail-open on Redis errors: if Redis is down, requests still go through
     (an attacker who can DoS Redis has bigger problems), but a warning
     would normally be logged here.
     """
-    keys: list[str] = []
-    ip = _client_ip(request)
-    keys.append(f"rl:{scope}:ip:{ip}")
     if extra_key:
-        keys.append(f"rl:{scope}:key:{extra_key.lower()}")
+        keys = [f"rl:{scope}:key:{extra_key.lower()}"]
+    else:
+        keys = [f"rl:{scope}:ip:{_client_ip(request)}"]
 
     try:
         client = _get_redis()
@@ -114,18 +116,40 @@ def enforce(
             pass
 
 
-def reset(*, scope: str, extra_key: str, ip: str | None = None) -> None:
+def refund(request: Request, *, scope: str) -> None:
     """
-    Clear counters after a successful login. We drop both the per-IP and
-    per-email counters for this scope, so a legitimate user who mistyped
-    their password a few times is not penalised after a success.
+    Give back the one attempt THIS request spent on the per-IP counter.
+
+    Used after a successful login, so legitimate sign-ins never use up an
+    IP's budget. It undoes only its own increment - never clears the
+    counter - so knowing one valid password does not reset the limit for
+    guesses against other accounts. A counter that already expired is
+    not recreated (DECR on a missing key would leave a negative value with
+    no TTL, i.e. permanent extra budget).
     """
-    keys = [f"rl:{scope}:key:{extra_key.lower()}"]
-    if ip:
-        keys.append(f"rl:{scope}:ip:{ip}")
+    key = f"rl:{scope}:ip:{_client_ip(request)}"
     try:
         client = _get_redis()
-        client.delete(*keys)
+    except RedisError:
+        return
+    try:
+        if int(client.decr(key)) <= 0:
+            client.delete(key)
+    except RedisError:
+        pass
+    finally:
+        try:
+            client.close()
+        except Exception:  # noqa: BLE001
+            pass
+
+
+def reset_key(*, scope: str, extra_key: str) -> None:
+    """Clear the per-key counter (e.g. one account) after that account
+    signed in successfully. The per-IP counter is never cleared."""
+    try:
+        client = _get_redis()
+        client.delete(f"rl:{scope}:key:{extra_key.lower()}")
         client.close()
     except RedisError:
         pass
