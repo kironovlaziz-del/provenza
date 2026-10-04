@@ -32,8 +32,24 @@ joylashtirish va dasturlash uchun [README.md](README.md) ga qarang.
 ## 2. Boshqaruv paneli (Dashboard)
 
 Kirgandan so‘ng siz **Dashboard**ga tushasiz — bu so‘rovlar, hodisalar
-va kutilayotgan tasdiqlarning qisqacha ko‘rinishi. Bo‘limlar o‘rtasida chapdagi yon
-menyu orqali harakatlaning.
+va kutilayotgan tasdiqlarning qisqacha ko‘rinishi.
+
+Chapdagi yon menyu tashkilotingizdagi AI tizimining hayot yo‘liga mos
+tuzilgan:
+
+- **Aniqlash (Discovery)** — Provenza o‘zi topgan narsalar: agentlarning
+  jonli xaritasi, shadow AI topilmalari, tarmoq kashfiyoti va ularni
+  yig‘uvchi kollektorlar.
+- **Reyestr (Registry)** — ishlatilayotgan AI ning yagona ro‘yxati:
+  inventar, agentlar, provayder ulanishlari, agent identifikatorlari va
+  vositalar reyestri.
+- **Siyosatlar (Policies)** — qoidalar: siyosat versiyalari, agent
+  siyosatlari, foydalanish holatlari va muvofiqlik.
+- **Nazorat (Enforcement)** — ish vaqtidagi nazorat: AI shlyuzi,
+  tasdiqlar, circuit breaker, agent himoyalari va boshqariladigan sinov
+  maydoni.
+- **Audit** — dalillar: foydalanish reyestri, audit jurnali, hodisalar va
+  imzolangan vakolat zanjirlari.
 
 ---
 
@@ -41,7 +57,7 @@ menyu orqali harakatlaning.
 
 Platforma promptlarni AI provayderga yuborishidan oldin ulanish qo‘shing.
 
-1. Yon menyu → **Connections**.
+1. Yon menyu → **Registry → Connections**.
 2. **New provider** → turini tanlang (OpenAI, Anthropic, Azure OpenAI
    yoki Shaxsiy), nom bering va API kalitni joylashtiring.
 3. Kalit **shifrlangan holda saqlanadi** va boshqa hech qachon
@@ -58,7 +74,7 @@ mumkin.
 Siyosatlar nimaga ruxsat berilishini va promptlar qanday
 filtrlanishini belgilaydi.
 
-1. Yon menyu → **Policy Center** → **New policy**.
+1. Yon menyu → **Policies → Policy Center** → **New policy**.
 2. Siyosatni oching va **versiya yarating**. Versiya JSON qoidalarini
    saqlaydi: maskalash sozlamalari va **bloklangan atamalar** ro‘yxati.
 3. Versiyani **tasdiqlang** (Approve) — shunda u faollashadi. Versiyalar
@@ -79,7 +95,7 @@ yuborilmaydi.
 Foydalanish holati maqsad, xavf darajasi va tasdiqlangan siyosat
 versiyasini birlashtiradi.
 
-1. Yon menyu → **Use Cases** → **New use case**.
+1. Yon menyu → **Policies → Use Cases** → **New use case**.
 2. Nom, xavf darajasi va (ixtiyoriy) tasdiqlangan siyosat versiyasi hamda
    egasini belgilang.
 
@@ -99,7 +115,7 @@ versiyasini birlashtiradi.
 
 ## 7. Hodisalar kuzatuvchisi (Incident Tracker)
 
-1. Yon menyu → **Incident Tracker**.
+1. Yon menyu → **Audit → Incident Tracker**.
 2. Hodisalar qo‘lda yoki avtomatik yaratilishi mumkin (masalan,
    bloklangan AI domeni aniqlanganda — Shadow AI Monitorga qarang).
 3. Hodisani **Open → Investigating → Resolved** bosqichlaridan o‘tkazing
@@ -119,7 +135,7 @@ yagona **Sightings** ro‘yxatini to‘ldiradi.
 Kollektorlar foydalanuvchi hisobi bilan emas, mashina kaliti bilan
 autentifikatsiya qiladi.
 
-1. Yon menyu → **Ingestion Sources** (faqat admin).
+1. Yon menyu → **Discovery → Ingestion Sources** (faqat admin).
 2. **New source** → turini tanlang (Gateway, Endpoint agent, Browser
    extension) va nom bering.
 3. **Telemetriya kaliti faqat bir marta ko‘rsatiladi** — uni hozir
@@ -130,7 +146,7 @@ autentifikatsiya qiladi.
 
 Katalog aniqlangan domen qanday qayta ishlanishini belgilaydi.
 
-1. Yon menyu → **AI Domain Catalog** (faqat admin).
+1. Yon menyu → **Discovery → AI Domain Catalog** (faqat admin).
 2. Domen qo‘shing va siyosatini belgilang: **Allowed** (faqat qayd
    etiladi), **Blocked** (avtomatik hodisa yaratadi) yoki **Unknown**
    (ko‘rib chiqish uchun signal yaratadi). Katalogda yo‘q har qanday
@@ -140,7 +156,7 @@ Katalog aniqlangan domen qanday qayta ishlanishini belgilaydi.
 
 ### 8.3 Sightings (aniqlangan holatlar)
 
-Yon menyu → **Shadow AI Monitor**. Har bir yozuv vositani, manbani
+Yon menyu → **Discovery → Shadow AI Sightings**. Har bir yozuv vositani, manbani
 (brauzer kengaytmasi, endpoint agenti, lokal jarayon/tarmoq/model fayli
 yoki qo‘lda), ma’lum bo‘lsa xodim haqidagi malumotni, holatni va
 takroriy aniqlashlar uchun "seen N times" hisoblagichini ko‘rsatadi. Har
@@ -190,7 +206,7 @@ yubormaydi.
 
 ## 9. Tarmoq kashfiyoti (aniq ulanish)
 
-Yon menyu → **Network Discovery** (faqat admin).
+Yon menyu → **Discovery → Network Discovery** (faqat admin).
 
 Endpoint agenti kashfiyot yoqilgan holda ishlaganda, u tarmoq
 xizmatlarini **passiv** ravishda topadi (DNS, shlyuz, Active Directory
@@ -209,7 +225,7 @@ xizmatlarni **Ignore** qilishingiz ham mumkin.
 
 ## 10. Bildirishnomalar
 
-Yon menyu → **Notification Service**. **Email** yoki **webhook**
+Yon menyu → **Settings → Notifications**. **Email** yoki **webhook**
 kanallarini qo‘shing va har birini o‘zingizga kerakli hodisalarga obuna
 qiling (`incident_created`, `approval_pending`, `request_blocked`,
 `shadow_ai_reported`, `shadow_ai_blocked_domain` va boshqalar). Agar
@@ -220,7 +236,7 @@ o‘tkazib yuboriladi; webhooklar doim ishlaydi.
 
 ## 11. Audit va hisobot
 
-Yon menyu → **Audit & Reporting**. Platforma orqali qilingan har bir
+Yon menyu → **Audit → Audit Log**. Platforma orqali qilingan har bir
 o‘zgarish — kim, nimani, qaysi obyektga, qachon qilgani — filtrlash va
 ko‘rib chiqish mumkin bo‘lgan faqat qo‘shiladigan jurnalga yoziladi.
 

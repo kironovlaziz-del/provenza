@@ -31,7 +31,20 @@ development, see [README.md](README.md).
 ## 2. The dashboard
 
 After sign-in you land on the **Dashboard** — a summary of requests,
-incidents and pending approvals over a recent window. Use the left sidebar to navigate between sections.
+incidents and pending approvals over a recent window.
+
+The left sidebar follows the life of an AI system in your organization:
+
+- **Discovery** — what Provenza found on its own: the live agent map,
+  shadow-AI sightings, network discovery and the collectors that feed it.
+- **Registry** — the single list of AI in use: inventory, agents,
+  provider connections, agent identities and the tool registry.
+- **Policies** — the rules: policy versions, agent policies, use cases
+  and compliance mapping.
+- **Enforcement** — control at runtime: the AI gateway, approvals,
+  circuit breaker, the agent guards and the governed playground.
+- **Audit** — the evidence: usage registry, audit log, incidents and
+  signed delegation chains.
 
 ---
 
@@ -40,7 +53,7 @@ incidents and pending approvals over a recent window. Use the left sidebar to na
 Before the platform can send prompts to an AI provider, add a
 connection.
 
-1. Sidebar → **Connections**.
+1. Sidebar → **Registry → Connections**.
 2. **New provider** → choose type (OpenAI, Anthropic, Azure OpenAI, or
    Custom), give it a name, and paste the API key.
 3. The key is **encrypted at rest** and never shown again — the UI only
@@ -54,7 +67,7 @@ You can also set an SLA and a risk score for vendor-risk tracking.
 
 Policies define what is allowed and how prompts are filtered.
 
-1. Sidebar → **Policy Center** → **New policy**.
+1. Sidebar → **Policies → Policy Center** → **New policy**.
 2. Open the policy and **create a version**. A version holds the JSON
    rules: masking settings and a list of **blocked terms**.
 3. **Approve** the version to make it active. Versions are immutable —
@@ -73,7 +86,7 @@ containing a blocked term is rejected and never sent.
 A use case ties together a purpose, a risk level, and an approved policy
 version.
 
-1. Sidebar → **Use Cases** → **New use case**.
+1. Sidebar → **Policies → Use Cases** → **New use case**.
 2. Set the name, risk level, and (optionally) the approved policy
    version and owner.
 
@@ -93,7 +106,7 @@ version.
 
 ## 7. Incident Tracker
 
-1. Sidebar → **Incident Tracker**.
+1. Sidebar → **Audit → Incident Tracker**.
 2. Incidents can be created manually or automatically (e.g. when a
    blocked AI domain is detected — see Shadow AI Monitor).
 3. Move an incident through **Open → Investigating → Resolved**, and
@@ -112,7 +125,7 @@ of them feed one **Sightings** list.
 
 Collectors authenticate with a machine key, not a user login.
 
-1. Sidebar → **Ingestion Sources** (admin only).
+1. Sidebar → **Discovery → Ingestion Sources** (admin only).
 2. **New source** → choose type (Gateway, Endpoint agent, Browser
    extension) and name it.
 3. The **ingestion key is shown once** — copy it now. It is stored
@@ -123,7 +136,7 @@ Collectors authenticate with a machine key, not a user login.
 
 The catalog decides how a detected domain is treated.
 
-1. Sidebar → **AI Domain Catalog** (admin only).
+1. Sidebar → **Discovery → AI Domain Catalog** (admin only).
 2. Add a domain and set its policy: **Allowed** (only logged),
    **Blocked** (raises an automatic incident), or **Unknown** (raises a
    sighting for review). Anything not in the catalog is treated as
@@ -133,7 +146,7 @@ The catalog decides how a detected domain is treated.
 
 ### 8.3 Sightings
 
-Sidebar → **Shadow AI Monitor**. Each sighting shows the tool, the
+Sidebar → **Discovery → Shadow AI Sightings**. Each sighting shows the tool, the
 source (browser extension, endpoint agent, local process/network/model
 file, or manual), the employee hint if known, the status, and a
 "seen N times" counter for repeat detections. For each one you can:
@@ -178,7 +191,7 @@ that an attempt happened — **without** ever sending the secret itself.
 
 ## 9. Network Discovery (explicit-connect)
 
-Sidebar → **Network Discovery** (admin only).
+Sidebar → **Discovery → Network Discovery** (admin only).
 
 When the endpoint agent runs with discovery enabled, it **passively**
 finds network services (DNS, gateway, Active Directory, and — with the
@@ -196,7 +209,7 @@ about.
 
 ## 10. Notifications
 
-Sidebar → **Notification Service**. Add **email** or **webhook**
+Sidebar → **Settings → Notifications**. Add **email** or **webhook**
 channels and subscribe each to the events you care about
 (`incident_created`, `approval_pending`, `request_blocked`,
 `shadow_ai_reported`, `shadow_ai_blocked_domain`, and more). If email
@@ -207,7 +220,7 @@ silently; webhooks always work.
 
 ## 11. Audit & Reporting
 
-Sidebar → **Audit & Reporting**. Every change made through the platform
+Sidebar → **Audit → Audit Log**. Every change made through the platform
 — who did what, to which entity, when — is recorded in an append-only
 log you can filter and review.
 

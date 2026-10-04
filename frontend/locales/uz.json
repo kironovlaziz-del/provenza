@@ -51,14 +51,12 @@
   "sidebar": {
     "sections": {
       "overview": "Umumiy ko'rinish",
-      "connections": "Ulanishlar",
-      "management": "Boshqaruv",
-      "operations": "Amallar",
-      "monitoring": "Kuzatuv",
       "settings": "Sozlamalar",
-      "agent_governance": "Agent boshqaruvi",
-      "agent_security": "Agentlar xavfsizligi",
-      "data_compliance": "Ma'lumotlar va muvofiqlik"
+      "discovery": "Aniqlash",
+      "registry": "Reyestr",
+      "policies": "Siyosatlar",
+      "enforcement": "Nazorat",
+      "audit": "Audit"
     },
     "nav": {
       "dashboard": "Boshqaruv paneli",
@@ -69,11 +67,11 @@
       "requests": "So'rovlar reyestri",
       "approvals": "Tasdiqlash jarayoni",
       "incidents": "Hodisalar kuzatuvi",
-      "shadow_ai": "Shadow AI kuzatuvi",
+      "shadow_ai": "Shadow AI topilmalari",
       "domain_catalog": "AI domenlar katalogi",
       "ingestion_sources": "Telemetriya manbalari",
-      "audit": "Audit va hisobot",
-      "notifications": "Bildirishnoma xizmati",
+      "audit": "Audit jurnali",
+      "notifications": "Bildirishnomalar",
       "users": "Foydalanuvchilar",
       "discovery": "Tarmoq kashfiyoti",
       "agents": "Agentlar",
@@ -81,7 +79,7 @@
       "agent_approvals": "Tasdiqlash kutilmoqda",
       "agent_map": "Jonli xarita",
       "agent_policies": "Agent siyosatlari",
-      "provider_chat": "Provayder chati",
+      "provider_chat": "Sinov maydoni",
       "agent_incidents": "Rad etilgan eskalatsiyalar",
       "inventory": "AI reyestri",
       "agent_breaker": "Avtomatik to'xtatgich",
@@ -406,7 +404,7 @@
     "no_results": "Filtrlarga mos hodisalar yo'q."
   },
   "shadow_ai": {
-    "title": "Shadow AI kuzatuvi",
+    "title": "Shadow AI topilmalari",
     "report": "Topilma haqida xabar berish",
     "cancel": "Bekor qilish",
     "hint": "Ruxsatsiz AI vositalaridan foydalanish reyestri: qo'lda xabarlar, xarajat hisobotlari, tarmoq proksisi ma'lumotlari yoki brauzer kengaytmasi signallari. Har bir topilma tasdiqlanishi, qonuniy provayder sifatida ro'yxatga olinishi yoki rad etilishi kerak.",
@@ -535,7 +533,7 @@
     "download_extension": "Kengaytmani yuklab olish"
   },
   "audit": {
-    "title": "Audit va hisobot",
+    "title": "Audit jurnali",
     "table_title": "Faoliyat jurnali",
     "filter_all": "Barcha ob'ekt turlari",
     "col_time": "Vaqt",
@@ -594,7 +592,7 @@
     "loading_models": "Yuklanmoqda…"
   },
   "notifications": {
-    "title": "Bildirishnoma xizmati",
+    "title": "Bildirishnomalar",
     "new": "Yangi kanal",
     "cancel": "Bekor qilish",
     "hint": "Email faqat serverda SMTP sozlangan bo'lsa yuboriladi (`.env` faylida `SMTP_HOST` va tegishli o'zgaruvchilarga qarang). Webhooklar har doim ishlaydi — belgilangan URLga JSON { subject, message, metadata } bilan POST yuboriladi.",
@@ -1038,7 +1036,7 @@
     "create_failed": "Siyosatni yaratib bo'lmadi."
   },
   "provider_chat": {
-    "title": "Provayder chati",
+    "title": "Sinov maydoni",
     "hint": "Ulangan AI provayderi bilan boshqaruv qatlami orqali suhbatlashing: so'rovingiz tekshiriladi va maxfiy ma'lumotlar jo'natilishdan oldin niqoblanadi, har bir so'rov Foydalanish reyestriga yoziladi.",
     "providers": "Provayderlar",
     "no_providers": "Faol provayderlar yo'q. Connections'da ulang.",
@@ -1242,7 +1240,7 @@
       "retire_no_restart": "Keyinroq qaytarish manbani qayta ishga tushirmaydi; bu uning o'z sahifasida qilinadi.",
       "retired_note": "Yozuvni qaytarish manbani qayta ishga tushirmaydi; uni o'z sahifasida yoqing.",
       "retire_agent": "Agent ham foydalanishdan chiqariladi: uning kaliti ishlamay qoladi va har bir harakati rad etiladi.",
-      "retire_provider": "Ulanish o'chiriladi: so'rovlar, shlyuz va provayder chati undan foydalanmaydi.",
+      "retire_provider": "Ulanish o'chiriladi: so'rovlar, shlyuz va sinov maydoni undan foydalanmaydi.",
       "external_placeholder": "masalan, CRM ma'lumotlar bazasi, S3 bucket, HR fayl ombori"
     },
     "metrics": {

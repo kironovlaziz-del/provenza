@@ -39,6 +39,14 @@ this project adheres to [Semantic Versioning](https://semver.org/).
   and stops agents without a hybrid key from delegating, recording actions
   and sending messages until they get one.
 
+### Changed
+
+- **Navigation follows the lifecycle of an AI system:** Discovery →
+  Registry → Policies → Enforcement → Audit (plus Settings), instead of
+  grouping by feature type. Pages and URLs are unchanged. A few labels
+  changed with it: Shadow AI Sightings, Audit Log, Notifications, and
+  Playground (the governed chat with a connected provider).
+
 ### Removed
 
 - **MLOps, RAG and Simple Mode.** Provenza is a discovery and control plane
