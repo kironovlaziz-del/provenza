@@ -3,7 +3,7 @@
  *
  * The backend returns `detail` as either a plain string code
  * ("auth.invalid_credentials") or an object with an interpolation context:
- *   {"code": "training.lora_r_range", "context": {"min": 1, "max": 256}}
+ *   {"code": "auth.rate_limited", "context": {"retry_after": 300}}
  *
  * Anything unrecognised (including legacy plain-text messages) is returned
  * as-is so nothing breaks during the migration.

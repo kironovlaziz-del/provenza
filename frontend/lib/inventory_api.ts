@@ -77,9 +77,7 @@ export async function addDataLink(
   id: number,
   payload: {
     relation: DataRelation;
-    dataset_id?: number;
-    collection_id?: number;
-    external_name?: string;
+    external_name: string;
     contains_pii: boolean;
   },
 ) {
@@ -110,12 +108,6 @@ export async function getInventoryMeta() {
 export async function syncInventory() {
   const { data } = await api.post<{ created: number }>("/inventory/sync");
   return data;
-}
-
-export async function listDatasetOptions(): Promise<{ id: number; name: string }[]> {
-  const { data } = await api.get("/datasets/");
-  const rows: any[] = Array.isArray(data) ? data : data?.items ?? [];
-  return rows.map((d) => ({ id: d.id, name: d.name }));
 }
 
 export function apiErrorMessage(err: unknown, fallback: string): string {

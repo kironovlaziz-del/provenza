@@ -43,7 +43,7 @@ COPY extension/ /opt/provenza/extension/
 COPY deploy/backend-entrypoint.sh /usr/local/bin/provenza-entrypoint
 RUN chmod 0755 /usr/local/bin/provenza-entrypoint \
  && rm -f /app/apply_*.py /app/celerybeat-schedule \
- && mkdir -p /app/data/datasets /app/data/models /app/data/rag_documents /app/data/rag_vectorizers /app/run \
+ && mkdir -p /app/data /app/run \
  && chown -R provenza:provenza /app/data /app/run
 USER provenza
 EXPOSE 8000

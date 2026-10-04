@@ -7,8 +7,7 @@ AIDomainCatalog). It's used to pre-fill tool_name/category when an org
 hasn't classified a domain yet, so a first-time "unknown" match still
 shows something more useful than the bare domain string.
 
-Same pattern as app/services/ml_algorithms.py - a plain in-code registry,
-not a DB table, because it changes with code releases, not per-org
+A plain in-code registry, not a DB table, because it changes with code releases, not per-org
 configuration.
 """
 from typing import Optional, TypedDict

@@ -77,9 +77,6 @@ export default function DashboardPage() {
   const incidentsBySeverityData = Object.entries(
     stats.incidents_by_severity,
   ).map(([name, value]) => ({ name, value }));
-  const trainingByStatusData = Object.entries(stats.training_by_status).map(
-    ([name, value]) => ({ name, value }),
-  );
 
   return (
     <>
@@ -117,18 +114,6 @@ export default function DashboardPage() {
           <div className="stat">
             <div className="stat-label">{t("dashboard.stat_incidents")}</div>
             <div className="stat-value">{stats.total_incidents}</div>
-          </div>
-          <div className="stat">
-            <div className="stat-label">{t("dashboard.stat_training")}</div>
-            <div className="stat-value">{stats.total_training_jobs}</div>
-          </div>
-          <div className="stat">
-            <div className="stat-label">{t("dashboard.stat_deployments")}</div>
-            <div className="stat-value">{stats.active_deployments}</div>
-          </div>
-          <div className="stat">
-            <div className="stat-label">{t("dashboard.stat_datasets")}</div>
-            <div className="stat-value">{stats.total_datasets}</div>
           </div>
           <div className="stat">
             <div className="stat-label">{t("dashboard.stat_policies")}</div>
@@ -229,31 +214,6 @@ export default function DashboardPage() {
                     <Tooltip />
                     <Bar dataKey="value" radius={[4, 4, 0, 0]}>
                       {incidentsBySeverityData.map((_, i) => (
-                        <Cell key={i} fill={PALETTE[i % PALETTE.length]} />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              )}
-            </div>
-          </div>
-
-          <div className="panel">
-            <div className="panel-header">
-              <h2>{t("dashboard.training_by_status")}</h2>
-            </div>
-            <div className="panel-body">
-              {trainingByStatusData.length === 0 ? (
-                <p className="hint-text">{t("dashboard.no_data")}</p>
-              ) : (
-                <ResponsiveContainer width="100%" height={220}>
-                  <BarChart data={trainingByStatusData}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e4e9" />
-                    <XAxis dataKey="name" fontSize={11} />
-                    <YAxis fontSize={11} allowDecimals={false} />
-                    <Tooltip />
-                    <Bar dataKey="value" radius={[4, 4, 0, 0]}>
-                      {trainingByStatusData.map((_, i) => (
                         <Cell key={i} fill={PALETTE[i % PALETTE.length]} />
                       ))}
                     </Bar>

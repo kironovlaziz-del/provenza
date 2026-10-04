@@ -1,3 +1,9 @@
+# Tables of removed features stay mapped: datasets, training_jobs,
+# model_deployments, prediction_logs (MLOps) and document_collections,
+# rag_documents, document_chunks, rag_query_logs (RAG). Their rows are kept,
+# ai_systems / ai_system_data_links still reference them by foreign key, and
+# leaving them out would make Alembic autogenerate propose dropping them.
+# No application code reads or writes them any more.
 from app.models.organization import Organization
 from app.models.user import User, UserRole
 from app.models.ai_provider import AIProvider

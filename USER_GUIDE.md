@@ -31,8 +31,7 @@ development, see [README.md](README.md).
 ## 2. The dashboard
 
 After sign-in you land on the **Dashboard** — a summary of requests,
-incidents, training jobs, deployments, and pending approvals over a
-recent window. Use the left sidebar to navigate between sections.
+incidents and pending approvals over a recent window. Use the left sidebar to navigate between sections.
 
 ---
 
@@ -195,43 +194,18 @@ about.
 
 ---
 
-## 10. MLOps: training and running models
-
-### 10.1 Simple Mode (guided)
-
-For non-technical users. After login, if you choose **Simple Mode**, a
-wizard walks you through: pick what the model should do → provide data
-(upload a file, enter Q&A manually, or start from documents) → the
-system automatically chooses **RAG** (answer from documents) or
-**fine-tuning** (learn a style) → set the model's tone → test it → build
-it. You can switch to Advanced Mode any time from the settings icon.
-
-### 10.2 Advanced MLOps
-
-- **Dataset Manager** — upload CSV/TSV/JSON datasets.
-- **Compute Detector** — see CPU/RAM/disk/GPU/VRAM and which models fit.
-- **Training Service** — queue a training job (tabular via scikit-learn,
-  or text via Hugging Face Transformers). Download the artifact or use
-  the per-job prediction API when done.
-- **Deployments & Playground** — serve a trained model and chat with it.
-
-> Transformer fine-tuning requires the optional PyTorch/Transformers
-> install on the server — see the [README](README.md#training-service).
-
----
-
-## 11. Notifications
+## 10. Notifications
 
 Sidebar → **Notification Service**. Add **email** or **webhook**
 channels and subscribe each to the events you care about
-(`incident_created`, `approval_pending`, `training_completed`,
+(`incident_created`, `approval_pending`, `request_blocked`,
 `shadow_ai_reported`, `shadow_ai_blocked_domain`, and more). If email
 (SMTP) is not configured on the server, email channels are skipped
 silently; webhooks always work.
 
 ---
 
-## 12. Audit & Reporting
+## 11. Audit & Reporting
 
 Sidebar → **Audit & Reporting**. Every change made through the platform
 — who did what, to which entity, when — is recorded in an append-only
@@ -239,7 +213,7 @@ log you can filter and review.
 
 ---
 
-## 13. Tips
+## 12. Tips
 
 - **Keep the domain catalog current** — it is what turns raw telemetry
   into meaningful "allowed / blocked / unknown" signals.

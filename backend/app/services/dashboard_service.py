@@ -16,10 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.ai_request import AIRequest
 from app.models.ai_incident import AIIncident
 from app.models.ai_approval import AIApproval
-from app.models.dataset import Dataset
 from app.models.ai_policy import AIPolicy
-from app.models.model_deployment import ModelDeployment
-from app.models.training_job import TrainingJob
 
 
 async def _grouped_counts(
@@ -86,21 +83,12 @@ async def build_stats(
     incidents_by_severity = await _grouped_counts(
         db, AIIncident.severity, AIIncident.org_id == org_id
     )
-    training_by_status = await _grouped_counts(
-        db, TrainingJob.status, TrainingJob.org_id == org_id
-    )
-    deployments_by_status = await _grouped_counts(
-        db, ModelDeployment.status, ModelDeployment.org_id == org_id
-    )
 
     # --- scalar counters ---
     total_requests = sum(requests_by_status.values())
     total_incidents = await db.scalar(
         select(func.count()).select_from(AIIncident).where(AIIncident.org_id == org_id)
     )
-    total_training_jobs = sum(training_by_status.values())
-    total_deployments = sum(deployments_by_status.values())
-    active_deployments = deployments_by_status.get("active", 0)
 
     pending_approvals = await db.scalar(
         select(func.count())
@@ -111,9 +99,6 @@ async def build_stats(
             AIApproval.decision.is_(None),
         )
     )
-    total_datasets = await db.scalar(
-        select(func.count()).select_from(Dataset).where(Dataset.org_id == org_id)
-    )
     total_policies = await db.scalar(
         select(func.count()).select_from(AIPolicy).where(AIPolicy.org_id == org_id)
     )
@@ -123,14 +108,8 @@ async def build_stats(
         "requests_by_day": requests_by_day,
         "requests_by_status": requests_by_status,
         "incidents_by_severity": incidents_by_severity,
-        "training_by_status": training_by_status,
-        "deployments_by_status": deployments_by_status,
         "total_requests": total_requests,
         "total_incidents": int(total_incidents or 0),
-        "total_training_jobs": total_training_jobs,
-        "total_deployments": total_deployments,
-        "active_deployments": active_deployments,
         "pending_approvals": int(pending_approvals or 0),
-        "total_datasets": int(total_datasets or 0),
         "total_policies": int(total_policies or 0),
     }

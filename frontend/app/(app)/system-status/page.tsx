@@ -49,7 +49,7 @@ export default function SystemStatusPage() {
       <PageHeader title={t("health.title", "System status")} />
       <div className="content">
         <p className="hint-text" style={{ marginTop: 0 }}>
-          {t("health.hint", "The web app can look fine while background work has stopped. This page checks each part behind it: database, Redis, the Celery workers that process requests, sweeps and training, and Celery beat that schedules them.")}
+          {t("health.hint", "The web app can look fine while background work has stopped. This page checks each part behind it: database, Redis, the Celery workers that process requests and sweeps, and Celery beat that schedules them.")}
         </p>
         {error && <div className="panel" style={{ marginBottom: 16, borderColor: "var(--risk-critical)" }}><div className="panel-body" style={{ color: "var(--risk-critical)" }}>{error}</div></div>}
         {h && c && (

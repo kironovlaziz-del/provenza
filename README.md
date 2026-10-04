@@ -77,7 +77,7 @@ What this does and does not guarantee is spelled out in the [Security Model](#se
     </td>
     <td width="50%">
       <b>Dashboard</b><br>
-      <sub>Requests, incidents, training jobs, action trace at a glance</sub><br>
+      <sub>Requests, incidents, approvals, action trace at a glance</sub><br>
       <img src="docs/screenshots/dashboard.png" alt="Dashboard">
     </td>
   </tr>
@@ -95,14 +95,13 @@ What this does and does not guarantee is spelled out in the [Security Model](#se
   </tr>
 </table>
 
-## 🧩 Four layers of control, one tower
+## 🧩 Three layers of control, one tower
 
 |  | Layer | For | What it does |
 |--|-------|-----|--------------|
 | 🛡️ | **Policy & Prompt Firewall** | everyone | Secrets (cards, keys, IDs) masked before any prompt leaves. Every call logged. Rules built visually — no JSON required. |
 | 👁️ | **Shadow AI Monitor** | unsanctioned AI | Endpoint agent finds local models; browser extension warns before a secret is pasted; passive network discovery — nothing auto-connects. |
 | 🤖 | **Agent Governance** | autonomous agents | Registry with scoped tools & delegation limits; delegating more than an agent holds is rejected and raised as an incident; kill-switch; the live verifiable graph above. |
-| 🧠 | **Build your own AI** | MLOps, simplified | Guided wizard, knowledge bases (RAG), train & deploy — for non-technical users. |
 
 ## 🖥️ Governed access to any LLM
 
@@ -131,7 +130,7 @@ real policy applied to live traffic.
 - **Audit & Reporting** — every mutation in the platform is written
   to `ai_audit_logs` and queryable.
 - **Notification Service** — route events (`incident_created`,
-  `approval_pending`, `training_completed`, `shadow_ai_reported`,
+  `approval_pending`, `request_blocked`, `shadow_ai_reported`,
   `shadow_ai_blocked_domain`, etc.) to email or webhook channels.
 
 ### Shadow AI Monitor
@@ -158,23 +157,6 @@ real policy applied to live traffic.
   (port, file, device), a "seen N times" repeat counter, and one-click
   conversion into a sanctioned provider or dismissal.
 
-### MLOps layer
-- **Dataset Manager** — upload and manage CSV/TSV/JSON datasets.
-- **Compute Detector** — CPU/RAM/disk/GPU/VRAM snapshot; gates which
-  models may be trained on the current hardware.
-- **Training Service** — scikit-learn (tabular) and Hugging Face
-  Transformers (text) fine-tuning on Celery, with a per-job prediction
-  API and downloadable artifacts.
-- **Deployments & Playground** — serve trained models and chat with
-  them.
-- **RAG service** — build knowledge bases from documents (PDF/DOCX/TXT),
-  retrieve and answer over them without fine-tuning. Uses TF-IDF by
-  default (works with no heavy ML deps) and upgrades to neural
-  embeddings automatically if the optional ML stack is installed.
-- **Simple Mode** — a guided, jargon-free wizard that walks a
-  non-technical user from "what should the model do?" to a working
-  model, automatically choosing RAG vs fine-tuning based on the data.
-
 ## Repository Layout
 
 ```
@@ -191,10 +173,10 @@ Inside `backend/app/`:
 ```
 api/          FastAPI routers (one per feature area)
 services/     business logic (policy engine, prompt firewall, telemetry,
-              rag, discovery, approach recommender, …)
+              discovery, agent governance, …)
 models/       SQLAlchemy models
 schemas/      Pydantic v2 schemas
-workers/      Celery tasks (request, training, telemetry)
+workers/      Celery tasks (request, discovery, telemetry)
 core/         config, database, celery, security, crypto
 alembic/      database migrations
 ```
@@ -220,8 +202,7 @@ collectors/discovery/      network discovery (DNS SRV, mDNS, LLMNR,
 | Database | PostgreSQL 16 |
 | Auth | JWT (python-jose), bcrypt |
 | Encryption | Fernet (cryptography) for provider keys |
-| ML | scikit-learn, pandas, joblib, PyTorch + Transformers (optional) |
-| RAG | scikit-learn TF-IDF (default), sentence-transformers (optional) |
+| PII detection | regex detectors + spaCy NER (optional models) |
 | Frontend | Next.js 16, React 19, TypeScript, axios, i18next (en/uz) |
 | Agent | Go 1.21+ (stdlib only, plus golang.org/x/net for DNS parsing) |
 | Extension | Chrome Manifest V3 (vanilla JS) |
@@ -234,8 +215,7 @@ collectors/discovery/      network discovery (DNS SRV, mDNS, LLMNR,
 - Python 3.12
 - Node.js 20.9+ (for frontend)
 - Go 1.21+ (only if building the endpoint agent)
-- ~4 GB RAM minimum for CPU-only training; 16+ GB and a GPU for
-  transformer fine-tuning
+- ~4 GB RAM (all services on one host)
 
 ## 🏭 Production self-hosting (Docker)
 
@@ -460,11 +440,8 @@ unprivileged methods only.
 | `OUTBOUND_PRIVATE_ALLOWLIST` | Internal hosts that AI-provider, Vault and webhook calls may reach (hostnames, IPs, CIDRs). Private and loopback targets are refused otherwise; cloud metadata (link-local) always is. Server-wide. |
 | `OUTBOUND_PROXY` | Egress proxy for those calls when the network requires one (`HTTP(S)_PROXY` is ignored for them) |
 | `SMTP_*` | Optional email notifications. If `SMTP_HOST` is empty, email is skipped — webhooks still work. |
-| `DATASETS_DIR` / `MODELS_DIR` | Where uploads and trained artifacts are stored |
-| `RAG_DOCUMENTS_DIR` / `RAG_VECTORIZERS_DIR` | RAG document and vectorizer storage |
 | `EXTENSION_TEMPLATE_DIR` | Path to the `extension/` template packaged by the download endpoint |
 | `PROMPT_FIREWALL_NER_*` | Optional NER-based PII detection settings |
-| `TRAINING_USE_DOCKER` / `TRAINING_RUNNER_IMAGE` / `TRAINING_CONTAINER_CPUS` / `TRAINING_CONTAINER_MEMORY` | Sandboxed training runner settings |
 
 ### `frontend/.env.local`
 
@@ -498,9 +475,6 @@ All endpoints are under `/api/v1`. Router groups:
 | `/ingestion-sources` | Machine keys for agents/collectors |
 | `/domain-catalog` | AI domain allow/block/unknown catalog |
 | `/discovery` | Discovered network services + explicit-connect wizard |
-| `/rag` | RAG collections, documents, chat, approach recommendation |
-| `/simple-mode` | Simple Mode wizard (parse upload, preview chat, finalize) |
-| `/datasets`, `/compute`, `/training-jobs`, `/deployments` | MLOps |
 | `/notification-channels` | Email / webhook targets |
 | `/dashboard` | Aggregate stats |
 
@@ -603,30 +577,6 @@ What this does **not** do, stated plainly:
   the agent's signature are enforced when the action is recorded.
 - **Keyless agents** (created without a key) stay on the unsigned,
   cooperative path.
-
-## Training Service
-
-| Task type | Engine | Use case |
-|-----------|--------|----------|
-| `tabular_classification` | scikit-learn | Structured data, logistic regression or random forest |
-| `tabular_regression` | scikit-learn | Linear or random forest regression |
-| `transformer_text_classification` | Hugging Face | Fine-tune BERT / DistilBERT / MiniLM on text |
-| `transformer_text_generation` | Hugging Face | Fine-tune GPT-2 family for text continuation |
-
-Before a job is queued the backend calls the Compute Detector to verify
-the chosen base model fits detected VRAM (1.3× safety margin). On
-CPU-only servers only small models are allowed.
-
-**PyTorch and `transformers` are optional** — install them into the
-backend virtualenv to enable transformer fine-tuning and neural RAG
-embeddings:
-
-```bash
-cd backend && source .venv/bin/activate
-pip install torch --index-url https://download.pytorch.org/whl/cpu   # CPU-only
-pip install transformers
-sudo systemctl restart ai-ct-celery
-```
 
 ## Common Operations
 

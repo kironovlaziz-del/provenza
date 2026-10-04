@@ -3,7 +3,7 @@ Notification Service.
 
 Two entry points into the same send logic:
   - notify()      - async, for use from FastAPI request handlers/services.
-  - notify_sync() - sync, for use from the Celery worker (training_tasks.py),
+  - notify_sync() - sync, for use from Celery workers,
                     which has no event loop to await into.
 
 Email is optional: if settings.SMTP_HOST is empty, email channels are

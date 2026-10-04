@@ -52,9 +52,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setToken(access_token);
       const me = await getMe();
       setUser(me);
-      // Login always lands in the main app. Simple Mode is a guided
-      // wizard reachable from the sidebar ("learning mode"), not a
-      // separate login path.
+      // Login always lands in the main app.
       router.push("/dashboard");
     },
     [router]

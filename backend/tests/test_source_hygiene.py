@@ -2,23 +2,10 @@
 # Licensed under the Apache License, Version 2.0.
 # Part of Provenza — https://github.com/kironovlaziz-del/provenza
 
-"""Curated base models are pinned to a commit; source files carry no invisible characters."""
+"""Source files carry no invisible or bidi characters (Trojan Source)."""
 
 import re
 from pathlib import Path
-
-from app.services import transformer_models as tm
-
-
-def test_every_curated_model_is_pinned_to_a_full_commit():
-    curated = {m["id"] for m in tm.CPU_SAFE_MODELS + tm.GPU_ADDITIONAL_MODELS + tm.GENERATION_MODELS}
-    assert curated == set(tm.PINNED_REVISIONS)
-    for model_id in curated:
-        assert re.fullmatch(r"[0-9a-f]{40}", tm.pinned_revision(model_id)), model_id
-
-
-def test_free_form_model_is_not_pinned():
-    assert tm.pinned_revision("someone/some-model") is None
 
 
 def test_no_invisible_or_bidi_characters_in_backend_source():

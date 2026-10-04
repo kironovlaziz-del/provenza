@@ -16,7 +16,6 @@ from app.schemas.user import (
     UserRoleUpdate,
     UserStatusUpdate,
     PasswordChange,
-    UserUIModeUpdate,
 )
 from app.models.user import User, UserRole
 from app.models.organization import Organization
@@ -112,25 +111,6 @@ async def change_my_password(
         "password_changed", None,
     )
     return {"status": "ok"}
-
-
-@router.put("/me/ui-mode", response_model=UserOut)
-async def update_my_ui_mode(
-    data: UserUIModeUpdate,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    """
-    Self-service: switches between Simple Mode (guided wizard) and the
-    full advanced console. This is a personal display preference, not a
-    permission, so any authenticated user can set their own - no role
-    check, and no audit log entry (matches the treatment of other purely
-    cosmetic/UI preferences elsewhere in the app).
-    """
-    current_user.ui_mode = data.ui_mode
-    await db.commit()
-    await db.refresh(current_user)
-    return current_user
 
 
 @router.get("/", response_model=Page[UserOut])

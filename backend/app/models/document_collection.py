@@ -10,7 +10,7 @@ class DocumentCollection(Base):
 
     embedding_provider records which embedder produced every chunk vector
     currently stored for this collection ("tfidf" or "sentence_transformer")
-    - see app/services/rag_service.py. Chunks from different providers are
+    (RAG was removed; the table is kept). Chunks from different providers are
     not comparable, so if the provider available on this box changes
     later, existing collections keep using what they were built with
     until explicitly rebuilt, rather than silently returning garbage

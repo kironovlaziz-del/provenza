@@ -6,10 +6,10 @@
 AI Inventory: one registry of every AI system in the organization.
 
 The registry stays current without manual data entry: sync() discovers
-agents, LLM providers, model deployments, RAG collections and active
-shadow-AI sightings that have no inventory entry yet and creates one
-(review_status="unreviewed"). It is idempotent (unique source_key per org)
-and cheap enough to run whenever the inventory is listed.
+agents, LLM providers and active shadow-AI sightings that have no
+inventory entry yet and creates one (review_status="unreviewed"). It is
+idempotent (unique source_key per org) and cheap enough to run whenever
+the inventory is listed.
 
 Two governance rules are enforced here, not in the UI:
   - a system can move to production only after a human confirmed its risk tier
@@ -31,13 +31,7 @@ from app.models.ai_provider import AIProvider
 from app.models.ai_request import AIRequest
 from app.models.ai_system import AISystem, AISystemDataLink
 from app.models.ai_use_case import AIUseCase
-from app.models.dataset import Dataset
-from app.models.document_collection import DocumentCollection
-from app.models.model_deployment import ModelDeployment
-from app.models.prediction_log import PredictionLog
-from app.models.rag_query_log import RagQueryLog
 from app.models.shadow_ai_sighting import ShadowAISighting
-from app.models.training_job import TrainingJob
 from app.models.user import User
 from app.services.risk_classifier import classify
 
@@ -58,21 +52,6 @@ def _stage_for(source_status: Optional[str]) -> str:
     # That gap is exactly what the "attention" flags surface.
     return "retired" if (source_status or "").lower() in INACTIVE_SOURCE_STATUSES else "production"
 
-
-
-async def ensure_collection_not_retired(db: AsyncSession, org_id: int, collection_id: int) -> None:
-    """A knowledge base whose inventory entry is retired no longer answers questions."""
-    retired = (await db.execute(
-        select(AISystem.id).where(
-            AISystem.org_id == org_id, AISystem.kind == "rag_app",
-            AISystem.source_key == f"rag:{collection_id}", AISystem.lifecycle_stage == "retired",
-        ).limit(1)
-    )).scalar_one_or_none()
-    if retired:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="This knowledge base is retired in the AI Inventory; move it back to an active stage to use it",
-        )
 
 
 class InventoryService:
@@ -128,26 +107,6 @@ class InventoryService:
                 lifecycle_stage=_stage_for(p.status),
             ))
 
-        rows = await self.db.execute(
-            select(ModelDeployment, TrainingJob.dataset_id)
-            .outerjoin(TrainingJob, TrainingJob.id == ModelDeployment.training_job_id)
-            .where(ModelDeployment.org_id == org_id)
-        )
-        for d, dataset_id in rows.all():
-            out.append(dict(
-                source_key=f"deployment:{d.id}", kind="model", name=f"{d.name} v{d.version}",
-                description=d.description, deployment_id=d.id, owner_user_id=d.created_by,
-                lifecycle_stage=_stage_for(d.status), _dataset_id=dataset_id,
-            ))
-
-        for c in (await self.db.execute(
-            select(DocumentCollection).where(DocumentCollection.org_id == org_id)
-        )).scalars():
-            out.append(dict(
-                source_key=f"rag:{c.id}", kind="rag_app", name=c.name, description=c.description,
-                owner_user_id=c.created_by, lifecycle_stage="production", _collection_id=c.id,
-            ))
-
         seen = set()
         for s in (await self.db.execute(
             select(ShadowAISighting)
@@ -178,8 +137,6 @@ class InventoryService:
         created: List[dict] = []
         try:
             for cand in await self._candidates(org_id):
-                dataset_id = cand.pop("_dataset_id", None)
-                collection_id = cand.pop("_collection_id", None)
                 if cand["source_key"] in existing:
                     continue
                 system = AISystem(org_id=org_id, domain="general", risk_flags=[],
@@ -187,12 +144,6 @@ class InventoryService:
                 self._classify(system)
                 self.db.add(system)
                 await self.db.flush()
-                if dataset_id:
-                    self.db.add(AISystemDataLink(org_id=org_id, system_id=system.id,
-                                                 relation="trained_on", dataset_id=dataset_id))
-                if collection_id:
-                    self.db.add(AISystemDataLink(org_id=org_id, system_id=system.id,
-                                                 relation="accesses", collection_id=collection_id))
                 created.append({"id": system.id, "source_key": system.source_key, "name": system.name})
                 existing.add(cand["source_key"])
             if created:
@@ -303,19 +254,6 @@ class InventoryService:
         await self.db.commit()
         return previous
 
-    @staticmethod
-    def _collection_ids(system: AISystem, with_links: bool = True) -> List[int]:
-        ids = []
-        if (system.source_key or "").startswith("rag:"):
-            try:
-                ids.append(int(system.source_key.split(":", 1)[1]))
-            except ValueError:
-                pass
-        if with_links:
-            ids += [l.collection_id for l in (system.data_links or [])
-                    if l.relation == "accesses" and l.collection_id is not None]
-        return sorted(set(ids))
-
     async def _stop_source(self, system: AISystem) -> Optional[dict]:
         """Stop what a retired entry describes. Never restarts anything: going
         back from "retired" is a separate, deliberate action on the source."""
@@ -333,18 +271,6 @@ class InventoryService:
             if provider is not None and provider.status == "active":
                 before, provider.status = provider.status, "inactive"
                 return {"provider_id": provider.id, "from": before, "to": "inactive"}
-        elif system.kind == "model" and system.deployment_id:
-            dep = (await self.db.execute(
-                select(ModelDeployment).where(ModelDeployment.id == system.deployment_id,
-                                              ModelDeployment.org_id == system.org_id)
-            )).scalar_one_or_none()
-            if dep is not None and dep.status == "active":
-                before, dep.status = dep.status, "archived"
-                return {"deployment_id": dep.id, "from": before, "to": "archived"}
-        elif system.kind == "rag_app":
-            ids = self._collection_ids(system, with_links=False)
-            if ids:
-                return {"collection_ids": ids, "effect": "questions refused while retired"}
         return None
 
     async def confirm_risk(self, system_id: int, org_id: int, user_id: int,
@@ -365,19 +291,6 @@ class InventoryService:
 
     async def add_data_link(self, system_id: int, org_id: int, data) -> int:
         system = await self.get(system_id, org_id)
-        if data.dataset_id is not None:
-            ok = (await self.db.execute(
-                select(Dataset.id).where(Dataset.id == data.dataset_id, Dataset.org_id == org_id)
-            )).scalar_one_or_none()
-            if not ok:
-                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Dataset not found")
-        if data.collection_id is not None:
-            ok = (await self.db.execute(
-                select(DocumentCollection.id).where(
-                    DocumentCollection.id == data.collection_id, DocumentCollection.org_id == org_id)
-            )).scalar_one_or_none()
-            if not ok:
-                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document collection not found")
         link = AISystemDataLink(org_id=org_id, system_id=system.id, **data.model_dump())
         self.db.add(link)
         await self.db.flush()
@@ -405,7 +318,6 @@ class InventoryService:
         the events other modules already record (nothing is stored here):
           agent        -> agent_actions / agent_incidents
           llm_provider -> ai_requests
-          model        -> prediction_logs
           shadow       -> shadow_ai_sightings
         Signals are prompts for a reviewer, not verdicts."""
         system = await self.get(system_id, org_id)
@@ -482,41 +394,6 @@ class InventoryService:
                     signals.append("high_block_rate")
             if counts["pending_approval"]:
                 signals.append("requests_awaiting_approval")
-
-        elif system.kind == "model" and system.deployment_id:
-            source = "prediction_logs"
-            row = (await self.db.execute(
-                select(func.count(), func.avg(PredictionLog.latency_ms))
-                .where(PredictionLog.org_id == org_id, PredictionLog.deployment_id == system.deployment_id,
-                       PredictionLog.created_at >= since)
-            )).one()
-            counts = {"predictions": row[0]}
-            if row[1] is not None:
-                rates["avg_latency_ms"] = round(float(row[1]), 1)
-            last = (await self.db.execute(
-                select(func.max(PredictionLog.created_at)).where(
-                    PredictionLog.org_id == org_id, PredictionLog.deployment_id == system.deployment_id)
-            )).scalar_one()
-
-        elif system.kind == "rag_app" and self._collection_ids(system):
-            source = "rag_query_logs"
-            ids = self._collection_ids(system)
-            base = (RagQueryLog.org_id == org_id, RagQueryLog.collection_id.in_(ids))
-            row = (await self.db.execute(
-                select(func.count(), func.count().filter(RagQueryLog.kind == "chat"),
-                       func.count().filter(RagQueryLog.matches == 0), func.avg(RagQueryLog.latency_ms),
-                       func.count(func.distinct(RagQueryLog.user_id)))
-                .where(*base, RagQueryLog.created_at >= since)
-            )).one()
-            total = row[0]
-            counts = {"questions": total, "chats": row[1], "no_context": row[2], "distinct_users": row[4]}
-            if row[3] is not None:
-                rates["avg_latency_ms"] = round(float(row[3]), 1)
-            last = (await self.db.execute(select(func.max(RagQueryLog.created_at)).where(*base))).scalar_one()
-            if total:
-                rates["no_context_rate"] = round(row[2] / total, 3)
-                if total >= MIN_EVENTS_FOR_RATE and rates["no_context_rate"] > HIGH_RATE_THRESHOLD:
-                    signals.append("often_no_context")
 
         elif system.kind == "shadow" and system.shadow_tool:
             source = "shadow_ai_sightings"

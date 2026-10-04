@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Any, Dict, List, Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.services.risk_classifier import DOMAINS, FLAGS
 
@@ -78,19 +78,24 @@ class RiskConfirm(BaseModel):
 
 
 class DataLinkCreate(BaseModel):
+    """A data source the system was trained on or accesses, named by the
+    reviewer (a database, a bucket, a document store). Links to Provenza's
+    own datasets / RAG collections existed while those features did; such
+    rows are still listed (DataLinkOut), but new links are external."""
+    model_config = ConfigDict(extra="forbid")  # an old client's dataset_id fails loudly
+
     relation: Literal["trained_on", "accesses"]
-    dataset_id: Optional[int] = None
-    collection_id: Optional[int] = None
-    external_name: Optional[str] = Field(default=None, min_length=1, max_length=255)
+    external_name: str = Field(min_length=1, max_length=255)
+
+    @field_validator("external_name")
+    @classmethod
+    def _strip(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("external_name must not be blank")
+        return v
     contains_pii: bool = False
     notes: Optional[str] = None
-
-    @model_validator(mode="after")
-    def _exactly_one_target(self):
-        targets = [self.dataset_id, self.collection_id, self.external_name]
-        if sum(t is not None for t in targets) != 1:
-            raise ValueError("specify exactly one of dataset_id, collection_id, external_name")
-        return self
 
 
 class DataLinkOut(BaseModel):

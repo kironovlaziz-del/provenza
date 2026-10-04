@@ -8,7 +8,7 @@
     "start": "next start"
   },
   "dependencies": {
-    "@noble/post-quantum": "^0.7.1",
+    "@noble/post-quantum": "0.7.1",
     "axios": "^1.20.0",
     "d3": "^7.9.0",
     "i18next": "^26.4.2",

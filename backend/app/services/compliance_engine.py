@@ -34,7 +34,8 @@ from app.models.compliance import ComplianceAttestation
 from app.services.compliance_catalog import CATALOG_VERSION, FRAMEWORKS, REQUIREMENTS
 
 RANK = {"fail": 0, "manual": 1, "partial": 2, "pass": 3}
-SOURCE_KINDS = ("agent", "llm_provider", "model", "rag_app")
+# Kinds whose events Provenza itself records (agent actions, gateway calls).
+SOURCE_KINDS = ("agent", "llm_provider")
 
 Result = Tuple[str, str, List[dict]]  # status, detail, evidence [{label, value, link?}]
 

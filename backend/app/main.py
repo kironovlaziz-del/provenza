@@ -11,17 +11,10 @@ from app.api import overrides
 from app.api import shadow_ai
 from app.api import ingestion_sources
 from app.api import domain_catalog
-from app.api import rag
-from app.api import simple_mode
 from app.api import discovery
 from app.api import agents
-from app.api import datasets
-from app.api import compute
-from app.api import training_jobs
 from app.api import notification_channels
-from app.api import deployments
 from app.api import dashboard
-from app.api import monitoring
 from app.api import inventory
 from app.api import breaker
 from app.api import tool_registry
@@ -78,17 +71,10 @@ app.include_router(overrides.router, prefix=f"{settings.API_V1_STR}/overrides", 
 app.include_router(shadow_ai.router, prefix=f"{settings.API_V1_STR}/shadow-ai", tags=["shadow-ai"])
 app.include_router(ingestion_sources.router, prefix=f"{settings.API_V1_STR}/ingestion-sources", tags=["shadow-ai"])
 app.include_router(domain_catalog.router, prefix=f"{settings.API_V1_STR}/domain-catalog", tags=["shadow-ai"])
-app.include_router(rag.router, prefix=f"{settings.API_V1_STR}/rag", tags=["rag"])
-app.include_router(simple_mode.router, prefix=f"{settings.API_V1_STR}/simple-mode", tags=["simple-mode"])
 app.include_router(discovery.router, prefix=f"{settings.API_V1_STR}/discovery", tags=["discovery"])
 app.include_router(agents.router, prefix=f"{settings.API_V1_STR}/agents", tags=["agent-governance"])
-app.include_router(datasets.router, prefix=f"{settings.API_V1_STR}/datasets", tags=["datasets"])
-app.include_router(compute.router, prefix=f"{settings.API_V1_STR}/compute", tags=["compute"])
-app.include_router(training_jobs.router, prefix=f"{settings.API_V1_STR}/training-jobs", tags=["training-jobs"])
 app.include_router(notification_channels.router, prefix=f"{settings.API_V1_STR}/notification-channels", tags=["notifications"])
-app.include_router(deployments.router, prefix=f"{settings.API_V1_STR}/deployments", tags=["deployments"])
 app.include_router(dashboard.router, prefix=f"{settings.API_V1_STR}/dashboard", tags=["dashboard"])
-app.include_router(monitoring.router, prefix=f"{settings.API_V1_STR}/deployments", tags=["monitoring"])
 app.include_router(inventory.router, prefix=f"{settings.API_V1_STR}/inventory", tags=["inventory"])
 app.include_router(breaker.router, prefix=f"{settings.API_V1_STR}/agent-breaker", tags=["agent-governance"])
 app.include_router(tool_registry.router, prefix=f"{settings.API_V1_STR}/tool-registry", tags=["agent-governance"])

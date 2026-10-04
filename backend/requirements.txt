@@ -17,12 +17,8 @@ PyJWT==2.15.1
 passlib[bcrypt]==1.7.4
 bcrypt==4.0.1
 
-# File uploads
-python-multipart==0.0.32
+# Validation
 email-validator==2.2.0
-
-# System info
-psutil==6.1.1
 
 # Task queue
 celery[redis]==5.4.0
@@ -31,37 +27,11 @@ redis==5.2.1
 # Database (sync, for Celery workers)
 psycopg2-binary==2.9.10
 
-# Classic ML
-pandas==2.2.3
-scikit-learn==1.9.1
-joblib==1.4.2
-numpy==2.2.1
-
 # Crypto
 cryptography==50.0.1
 
 # HTTP client
 httpx==0.28.1
-
-# RAG: document text extraction (lightweight, pure-Python - no heavy ML
-# deps required for RAG to work out of the box)
-pypdf==6.19.0
-python-docx==1.1.2
-
-# Simple Mode: Excel support for the auto-parse ("magic") data import step
-openpyxl==3.1.5
-
-# ---------------------------------------------------------------------------
-# Optional: transformer fine-tuning (heavy, ~2 GB of wheels).
-# Not installed by default — the UI shows the transformer task types and the
-# compute detector reports GPU/VRAM, but training_tasks.py imports these
-# lazily. Install on a GPU box (or a large CPU box for tiny models) with:
-#
-#   pip install torch --index-url https://download.pytorch.org/whl/cpu
-#   pip install -r requirements-ml.txt
-#
-# See requirements-ml.txt for the pinned transformer stack.
-# ---------------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------
 # Development / testing
@@ -70,9 +40,7 @@ pytest==9.0.3
 pytest-asyncio==1.4.0
 pytest-cov==6.0.0
 httpx==0.28.1
-docker==7.2.0
 spacy==3.8.2
-optuna==4.1.0
 
 
 

@@ -7,7 +7,7 @@ localised string. The frontend translates the code via i18n using
 
 Codes follow the shape "<domain>.<snake_case_short_name>", for example:
     auth.invalid_credentials
-    training.model_not_allowed_no_gpu
+    agent.key_in_use
     validation.email_invalid
 """
 

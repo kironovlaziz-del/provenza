@@ -20,23 +20,6 @@ export interface MemFinding {
   poisoned?: boolean;
 }
 
-export interface RagDocTrust {
-  document_id: number;
-  collection_id: number;
-  collection: string;
-  filename: string;
-  created_at: string;
-  trust_status: "trusted" | "quarantined" | "revoked";
-  decided: boolean;
-  details: {
-    mode?: string;
-    chunks_scanned?: number;
-    quarantined_chunks?: number[];
-    flagged_chunks?: number[];
-    findings?: MemFinding[];
-  };
-}
-
 export interface MemoryEntryT {
   id: number;
   agent_id: number;
@@ -59,9 +42,7 @@ export interface MemoryEntryT {
 export interface MemoryOverview {
   settings: MemorySettings;
   entry_counts: Record<string, number>;
-  documents: RagDocTrust[];
   entries: MemoryEntryT[];
-  collections: { id: number; name: string }[];
 }
 
 export async function getMemoryOverview(status?: EntryStatus | "") {
@@ -78,20 +59,8 @@ export async function saveMemorySettings(s: MemorySettings) {
   return data;
 }
 
-export async function setDocumentTrust(id: number, trusted: boolean) {
-  const { data } = await api.post(`/memory/documents/${id}/${trusted ? "trust" : "revoke"}`);
-  return data;
-}
-
 export async function setEntryTrust(id: number, trusted: boolean) {
   const { data } = await api.post(`/memory/entries/${id}/${trusted ? "trust" : "revoke"}`);
-  return data;
-}
-
-export async function rescanCollection(id: number) {
-  const { data } = await api.post<{ scanned: number; skipped_decided: number; quarantined_documents: number }>(
-    `/memory/collections/${id}/rescan`,
-  );
   return data;
 }
 

@@ -31,9 +31,8 @@ joylashtirish va dasturlash uchun [README.md](README.md) ga qarang.
 
 ## 2. Boshqaruv paneli (Dashboard)
 
-Kirgandan so‘ng siz **Dashboard**ga tushasiz — bu so‘rovlar, hodisalar,
-o‘qitish vazifalari, joylashtirilgan modellar va kutilayotgan
-tasdiqlarning qisqacha ko‘rinishi. Bo‘limlar o‘rtasida chapdagi yon
+Kirgandan so‘ng siz **Dashboard**ga tushasiz — bu so‘rovlar, hodisalar
+va kutilayotgan tasdiqlarning qisqacha ko‘rinishi. Bo‘limlar o‘rtasida chapdagi yon
 menyu orqali harakatlaning.
 
 ---
@@ -208,49 +207,18 @@ xizmatlarni **Ignore** qilishingiz ham mumkin.
 
 ---
 
-## 10. MLOps: modellarni o‘qitish va ishga tushirish
-
-### 10.1 Oddiy rejim (yordamchi bilan)
-
-Texnik bo‘lmagan foydalanuvchilar uchun. Kirgandan so‘ng **Simple
-Mode**ni tanlasangiz, yordamchi sizni bosqichma-bosqich olib o‘tadi:
-model nima qilishi kerakligini tanlash → ma’lumot berish (fayl yuklash,
-savol-javobni qo‘lda kiritish yoki hujjatlardan boshlash) → tizim
-avtomatik ravishda **RAG** (hujjatlardan javob berish) yoki
-**fine-tuning** (uslubni o‘rganish)ni tanlaydi → model ohangini belgilash
-→ sinash → yaratish. Sozlamalar belgisidan istalgan vaqtda Kengaytirilgan
-rejimga o‘tishingiz mumkin.
-
-### 10.2 Kengaytirilgan MLOps
-
-- **Dataset Manager** — CSV/TSV/JSON datasetlarini yuklash.
-- **Compute Detector** — CPU/RAM/disk/GPU/VRAM va qaysi modellar mos
-  kelishini ko‘rish.
-- **Training Service** — o‘qitish vazifasini navbatga qo‘yish (jadval
-  uchun scikit-learn yoki matn uchun Hugging Face Transformers). Tugagach
-  artefaktni yuklab oling yoki har bir vazifa uchun bashorat API’dan
-  foydalaning.
-- **Deployments & Playground** — o‘qitilgan modelni ishga tushiring va u
-  bilan suhbatlashing.
-
-> Transformer fine-tuning serverda ixtiyoriy PyTorch/Transformers
-> o‘rnatilishini talab qiladi — [README](README.md#training-service) ga
-> qarang.
-
----
-
-## 11. Bildirishnomalar
+## 10. Bildirishnomalar
 
 Yon menyu → **Notification Service**. **Email** yoki **webhook**
 kanallarini qo‘shing va har birini o‘zingizga kerakli hodisalarga obuna
-qiling (`incident_created`, `approval_pending`, `training_completed`,
+qiling (`incident_created`, `approval_pending`, `request_blocked`,
 `shadow_ai_reported`, `shadow_ai_blocked_domain` va boshqalar). Agar
 serverda email (SMTP) sozlanmagan bo‘lsa, email kanallari jimgina
 o‘tkazib yuboriladi; webhooklar doim ishlaydi.
 
 ---
 
-## 12. Audit va hisobot
+## 11. Audit va hisobot
 
 Yon menyu → **Audit & Reporting**. Platforma orqali qilingan har bir
 o‘zgarish — kim, nimani, qaysi obyektga, qachon qilgani — filtrlash va
@@ -258,7 +226,7 @@ ko‘rib chiqish mumkin bo‘lgan faqat qo‘shiladigan jurnalga yoziladi.
 
 ---
 
-## 13. Maslahatlar
+## 12. Maslahatlar
 
 - **Domenlar katalogini dolzarb saqlang** — aynan u xom telemetriyani
   mazmunli "allowed / blocked / unknown" signallariga aylantiradi.
