@@ -182,8 +182,33 @@ fayllari) aniqlaydi va yoqilgan bo‘lsa, tarmoq xizmatlarini kashf qiladi.
    (`agent/config.example.json` ga qarang), so‘ng uni yig‘ing va ishga
    tushiring — to‘liq bosqichlar [README](README.md#7-endpoint-agent-optional)
    da.
-3. Yangi topilmalar bir daqiqa ichida **Shadow AI Monitor**da paydo
-   bo‘ladi.
+3. Yangi topilmalar bir daqiqa ichida paydo bo‘ladi: lokal AI vositalari
+   **Discovery → Shadow AI Sightings**da, AI agentlar **Discovery →
+   Agents Found**da, mashinaning o‘zi esa **Discovery → Devices**da.
+
+### 8.4.1 Topilgan agentlar va qurilmalar
+
+Endpoint agent (v1.2.0 yoki yangiroq) mashinada ishlayotgan AI
+agentlarni taniydi — kod agentlari (Claude Code, Cursor, GitHub Copilot,
+Codex CLI, Gemini CLI, Aider, …), agent freymvorklari (CrewAI,
+LangGraph, AutoGen Studio, Letta) va agent platformalari (n8n, Flowise,
+Langflow). U faqat qaysi mahsulot topilganini va qanday tanilganini
+yuboradi; API kalitlari bo‘lishi mumkin bo‘lgan jarayon buyruq qatori
+mashinadan hech qachon chiqmaydi.
+
+- **Discovery → Agents Found** har bir agentni qurilma bo‘yicha
+  ko‘rsatadi, ko‘rib chiqilishi kerak bo‘lganlar birinchi. **Register**
+  agentni ro‘yxatdan o‘tkazish formasini nom va tur bilan to‘ldirib
+  ochadi; ro‘yxatdan o‘tgach topilma boshqariladigan agentga bog‘lanadi
+  va uning siyosatlari ostiga o‘tadi. **Ignore** topilmani yashiradi
+  (keyin qaytarish mumkin).
+- **Discovery → Devices** hisobot beradigan barcha kompyuter va
+  brauzerlarni ko‘rsatadi: foydalanuvchi, OT, kollektor versiyasi,
+  oxirgi faollik va unda topilgan agentlar. Bir kun jim bo‘lgan qurilma
+  *quiet* deb belgilanadi.
+
+Ikkala sahifa adminlar va tasdiqlovchilarga ko‘rinadi; topilmalarni
+faqat adminlar ro‘yxatdan o‘tkazadi yoki e’tiborsiz qoldiradi.
 
 ### 8.5 Brauzer kengaytmasini joylashtirish
 

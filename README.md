@@ -141,7 +141,13 @@ real policy applied to live traffic.
   analysis; domain visits are classified against the org's catalog.
 - **Endpoint Agent** — a native Go binary that detects locally-running
   AI tools (processes like `ollama`/`vllm`, listening ports, and model
-  weight files on disk) and reports them.
+  weight files on disk) and AI agents (Claude Code, Cursor, Copilot,
+  Codex CLI, Aider, CrewAI, LangGraph, n8n, …) and reports them. It
+  sends only what it recognized — never a process command line.
+- **Agents Found & Devices** — agents found on endpoints appear by
+  themselves for review (register as a governed agent, or ignore), and
+  every reporting machine or browser is listed with its user, OS and
+  last activity. No manual inventory.
 - **Network Discovery** — the same agent passively discovers network
   services (DNS, gateway, Active Directory via DNS SRV, plus mDNS/LLMNR;
   and ARP scan / passive DHCP when granted `CAP_NET_RAW`). Discovery is

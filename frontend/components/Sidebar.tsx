@@ -8,7 +8,8 @@ import { useAuth } from "@/lib/auth";
 import { LanguageSwitcher } from "./LanguageSwitcher";
 import { Logo } from "@/components/Logo";
 
-type Item = { href: string; labelKey: string; adminOnly?: boolean };
+// adminOnly: admins; reviewOnly: admins and approvers.
+type Item = { href: string; labelKey: string; adminOnly?: boolean; reviewOnly?: boolean };
 type Group = { sectionKey: string; icon: string; items: Item[] };
 
 // Stroke icons (24x24, feather-style paths), one per section.
@@ -46,6 +47,8 @@ const NAV: Group[] = [
     icon: "discovery",
     items: [
       { href: "/agent-map", labelKey: "sidebar.nav.agent_map" },
+      { href: "/agents-found", labelKey: "sidebar.nav.agents_found", reviewOnly: true },
+      { href: "/devices", labelKey: "sidebar.nav.devices", reviewOnly: true },
       { href: "/agent-observability", labelKey: "sidebar.nav.agent_observability" },
       { href: "/shadow-ai", labelKey: "sidebar.nav.shadow_ai" },
       { href: "/discovery", labelKey: "sidebar.nav.discovery", adminOnly: true },
@@ -152,7 +155,9 @@ export function Sidebar() {
   const isActive = (href: string) => pathname === href || !!pathname?.startsWith(href + "/");
   const groups = useMemo(
     () =>
-      NAV.map((g) => ({ ...g, items: g.items.filter((i) => !i.adminOnly || user?.role === "admin") })).filter((g) => g.items.length),
+      NAV.map((g) => ({ ...g, items: g.items.filter((i) =>
+        i.adminOnly ? user?.role === "admin" : i.reviewOnly ? user?.role === "admin" || user?.role === "approver" : true,
+      ) })).filter((g) => g.items.length),
     [user?.role],
   );
   const activeGroup = groups.find((g) => g.items.some((i) => isActive(i.href)))?.sectionKey;

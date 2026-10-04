@@ -1,21 +1,58 @@
+import re
 from datetime import datetime, timezone
-from typing import List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
+from sqlalchemy import func, literal_column
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.ai_telemetry_event import AITelemetryEvent
+from app.models.endpoint_device import DiscoveredAgent, EndpointDevice
 from app.schemas.incident import IncidentCreate
 from app.schemas.shadow_ai import ShadowSightingCreate
 from app.schemas.telemetry import (
+    AGENT_EVENT_TYPE,
     DOMAIN_EVENT_TYPE,
     LOCAL_SIGNAL_EVENT_TYPES,
     TelemetryEventIn,
     TelemetryIngestResponse,
 )
 from app.services import notification_service
+from app.services.agent_catalog import AGENT_PRODUCTS, describe as describe_agent
 from app.services.domain_catalog_service import DomainCatalogService
 from app.services.incident_service import IncidentService
 from app.services.shadow_ai_service import ShadowAIService
+
+
+_PRODUCT_ID = re.compile(r"[a-z0-9][a-z0-9_.-]{0,59}")
+_MAX_AGENT_NOTIFICATIONS = 5
+# Never stored, whatever an (older) collector sends: a process command line
+# can carry API keys and tokens.
+_DROPPED_PAYLOAD_KEYS = ("cmdline", "command_line", "argv", "env")
+
+
+def _host_id(event: TelemetryEventIn) -> str:
+    """The reporting device as it names itself, without control characters."""
+    raw = re.sub(r"[\x00-\x1f\x7f]+", " ", event.agent_id or "")
+    return _clip(raw, 255) or "unknown"
+
+
+def _clip(value, limit: int) -> Optional[str]:
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text[:limit] or None
+
+
+def _one_line(text: str) -> str:
+    """No line breaks in a value that goes into a mail subject."""
+    return re.sub(r"[\r\n\t]+", " ", text)[:120]
+
+
+def _safe_payload(payload: Optional[dict]) -> Optional[dict]:
+    if not payload:
+        return payload
+    return {k: v for k, v in payload.items() if k not in _DROPPED_PAYLOAD_KEYS}
 
 
 class TelemetryService:
@@ -40,6 +77,13 @@ class TelemetryService:
        different people's machines the way domain dedup works would
        hide exactly the fact that matters (how many people are running
        this, not just whether anyone is).
+
+    3. "agent_detected" (endpoint agent >= 1.2.0) - an AI agent product
+       (Claude Code, Cursor, CrewAI, ...) found running; recorded per
+       device in discovered_agents for review in Discovery -> Agents Found.
+
+    Every event also refreshes its device (endpoint_devices), so the list
+    of reporting machines keeps itself current.
     """
 
     def __init__(self, db: AsyncSession):
@@ -55,9 +99,19 @@ class TelemetryService:
         local_signals = 0
         sightings_created = 0
         incidents_created = 0
+        agents_found = 0
+        new_agents: List[dict] = []
+
+        devices = await self._upsert_devices(org_id, ingestion_source_id, events)
 
         for event in events:
-            if event.event_type == DOMAIN_EVENT_TYPE:
+            if event.event_type == AGENT_EVENT_TYPE:
+                self._log_raw_event(org_id, ingestion_source_id, event, matched_policy_status=None)
+                found = await self._handle_agent_detected(org_id, devices[_host_id(event)], event)
+                if found:
+                    agents_found += 1
+                    new_agents.append(found)
+            elif event.event_type == DOMAIN_EVENT_TYPE:
                 policy_status, sighting_delta, incident_delta = await self._handle_domain_visit(
                     org_id, ingestion_source_id, event
                 )
@@ -77,6 +131,7 @@ class TelemetryService:
                 self._log_raw_event(org_id, ingestion_source_id, event, matched_policy_status=None)
 
         await self.db.commit()
+        await self._notify_new_agents(org_id, new_agents)
 
         return TelemetryIngestResponse(
             received=len(events),
@@ -86,6 +141,8 @@ class TelemetryService:
             local_signals=local_signals,
             sightings_created=sightings_created,
             incidents_created=incidents_created,
+            agents_found=agents_found,
+            devices_seen=len(devices),
         )
 
     def _log_raw_event(
@@ -107,9 +164,103 @@ class TelemetryService:
                 action_taken=event.action_taken,
                 occurred_at=event.timestamp or datetime.now(timezone.utc),
                 matched_policy_status=matched_policy_status,
-                metadata_json=event.payload,
+                metadata_json=_safe_payload(event.payload),
             )
         )
+
+    # ------------------------------------------------------------ devices / agents
+    async def _upsert_devices(
+        self, org_id: int, ingestion_source_id: int, events: List[TelemetryEventIn]
+    ) -> Dict[str, int]:
+        """One row per reporting device (host_id), refreshed on every batch.
+        INSERT ... ON CONFLICT, so concurrent workers never race into a
+        duplicate. Returns {host_id: device_id}."""
+        per_host: Dict[str, dict] = {}
+        for e in events:
+            payload = e.payload or {}
+            row = per_host.setdefault(_host_id(e), {"events": 0, "user": None, "os": None, "version": None})
+            row["events"] += 1
+            row["user"] = _clip(e.user_id, 255) or row["user"]
+            row["os"] = _clip(payload.get("os"), 30) or row["os"]
+            row["version"] = _clip(payload.get("agent_version"), 30) or row["version"]
+
+        ids: Dict[str, int] = {}
+        # sorted: concurrent batches lock device rows in the same order (no deadlock)
+        for host in sorted(per_host):
+            row = per_host[host]
+            stmt = pg_insert(EndpointDevice).values(
+                org_id=org_id, ingestion_source_id=ingestion_source_id, host_id=host,
+                last_user=row["user"], os=row["os"], agent_version=row["version"], event_count=row["events"],
+            )
+            ex = stmt.excluded
+            stmt = stmt.on_conflict_do_update(
+                constraint="uq_endpoint_devices_host",
+                set_={
+                    "last_seen_at": func.now(),
+                    "event_count": EndpointDevice.event_count + ex.event_count,
+                    "last_user": func.coalesce(ex.last_user, EndpointDevice.last_user),
+                    "os": func.coalesce(ex.os, EndpointDevice.os),
+                    "agent_version": func.coalesce(ex.agent_version, EndpointDevice.agent_version),
+                },
+            ).returning(EndpointDevice.id)
+            ids[host] = (await self.db.execute(stmt)).scalar_one()
+        return ids
+
+    async def _handle_agent_detected(self, org_id: int, device_id: int, event: TelemetryEventIn) -> Optional[dict]:
+        """Record an AI agent found on a device. Returns it when it is new."""
+        payload = event.payload or {}
+        product = str(payload.get("product") or "").strip().lower()
+        if not _PRODUCT_ID.fullmatch(product):
+            return None  # malformed or missing id: the raw event is logged, nothing else
+        evidence = {
+            "process_name": _clip(payload.get("process_name"), 255),
+            "matched_by": _clip(payload.get("matched_by"), 20),
+        }
+        stmt = pg_insert(DiscoveredAgent).values(
+            org_id=org_id, device_id=device_id, product=product, risk_score=event.risk_score, evidence=evidence,
+        )
+        stmt = stmt.on_conflict_do_update(
+            constraint="uq_discovered_agents_device_product",
+            set_={
+                "last_seen_at": func.now(),
+                "seen_count": DiscoveredAgent.seen_count + 1,
+                "evidence": stmt.excluded.evidence,
+                "risk_score": func.coalesce(stmt.excluded.risk_score, DiscoveredAgent.risk_score),
+            },
+        ).returning(DiscoveredAgent.id, literal_column("(xmax = 0)").label("inserted"))
+        found_id, inserted = (await self.db.execute(stmt)).one()
+        if not inserted:
+            return None
+        return {"id": found_id, "product": product, "host": _host_id(event)}
+
+    async def _notify_new_agents(self, org_id: int, new_agents: List[dict]) -> None:
+        """After the batch is committed: one message per new finding of a
+        known product, or a single summary when a batch brings many (a
+        rollout to a fleet must not flood the channels). Unknown product ids
+        are recorded but do not notify - an ingestion key alone should not
+        be able to send arbitrary text to every channel."""
+        known = [a for a in new_agents if a["product"] in AGENT_PRODUCTS]
+        if not known:
+            return
+        if len(known) > _MAX_AGENT_NOTIFICATIONS:
+            hosts = sorted({a["host"] for a in known})
+            await notification_service.notify(
+                self.db, org_id, "agent_discovered",
+                f"{len(known)} AI agents found on {len(hosts)} devices",
+                "Found automatically by the endpoint agent. Review them in Discovery -> Agents Found.",
+                {"count": len(known), "devices": len(hosts)},
+            )
+            return
+        for a in known:
+            name = describe_agent(a["product"])["name"]
+            host = _one_line(a["host"])
+            await notification_service.notify(
+                self.db, org_id, "agent_discovered",
+                f"AI agent found: {name} on {host}",
+                "Found automatically by the endpoint agent. Register it to put it under "
+                "policies, or ignore it, in Discovery -> Agents Found.",
+                {"discovered_agent_id": a["id"], "product": a["product"], "device": host},
+            )
 
     async def _handle_domain_visit(
         self, org_id: int, ingestion_source_id: int, event: TelemetryEventIn

@@ -48,6 +48,7 @@ from app.models.queue_ttl import QueueSettings, QueueSweep
 from app.models.org_key import ByokJob, OrgKey
 from app.models.rag_query_log import RagQueryLog
 from app.models.compliance import ComplianceAttestation, ComplianceReport
+from app.models.endpoint_device import DiscoveredAgent, EndpointDevice
 
 __all__ = [
     "Organization",
@@ -85,6 +86,8 @@ __all__ = [
     "DelegationHop",
     "AgentAction",
     "AgentIncident",
+    "EndpointDevice",
+    "DiscoveredAgent",
 ]
 
 # live agent events (after-commit session hook)

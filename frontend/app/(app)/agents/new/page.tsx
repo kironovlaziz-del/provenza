@@ -1,11 +1,12 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslation } from "react-i18next";
 import { PageHeader } from "@/components/PageHeader";
 import { Form } from "@/components/Form";
 import { registerAgent } from "@/lib/agent_api";
+import { linkFoundAgent } from "@/lib/endpoints_api";
 import type { AgentCreated } from "@/lib/agent_types";
 import { translateApiError } from "@/lib/errors";
 
@@ -18,6 +19,22 @@ export default function NewAgentPage() {
   const router = useRouter();
   const { t } = useTranslation();
   const [name, setName] = useState("");
+  // Opened from Discovery -> Agents Found: register that finding.
+  const [foundId, setFoundId] = useState<number | null>(null);
+  const [description, setDescription] = useState("");
+  const [linkResult, setLinkResult] = useState<"linked" | "failed" | null>(null);
+
+  useEffect(() => {
+    const p = new URLSearchParams(window.location.search);
+    const found = Number(p.get("found"));
+    if (found > 0) {
+      setFoundId(found);
+      setName((p.get("name") || "").slice(0, 100));
+      setDescription((p.get("description") || "").slice(0, 500));
+      const type = p.get("type");
+      if (type && ["crewai", "langgraph", "autogen", "custom"].includes(type)) setAgentType(type);
+    }
+  }, []);
   const [agentType, setAgentType] = useState("custom");
   const [ownerTeam, setOwnerTeam] = useState("");
   const [capabilities, setCapabilities] = useState("");
@@ -46,6 +63,7 @@ export default function NewAgentPage() {
     try {
       const agent = await registerAgent({
         name,
+        description: description || undefined,
         agent_type: agentType,
         owner_team: ownerTeam || undefined,
         capabilities: toList(capabilities),
@@ -56,6 +74,10 @@ export default function NewAgentPage() {
         pq_public_key: keyMode === "agent" && hybrid ? pqPublicKey.replace(/\s+/g, "") : undefined,
         key_scheme: keyMode === "server" ? (hybrid ? "hybrid" : "ed25519") : undefined,
       });
+      if (foundId) {
+        // the agent exists either way; a failed link is shown, not fatal
+        setLinkResult(await linkFoundAgent(foundId, agent.id).then(() => "linked" as const, () => "failed" as const));
+      }
       setCreated(agent);
     } catch (err) {
       const detail = (err as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail;
@@ -82,6 +104,8 @@ export default function NewAgentPage() {
       <>
         <PageHeader title={t("agents.registered_title")} />
         <div className="content">
+          {linkResult === "linked" && <p className="hint-text u-mb-16">{t("found.linked_note")}</p>}
+          {linkResult === "failed" && <p className="error-text u-mb-16">{t("found.link_failed_note")}</p>}
           <div className="panel" style={{ borderColor: "var(--danger, #c0392b)" }}>
             <div className="panel-header"><h2>{t("agents.secrets_title")}</h2></div>
             <div className="panel-body">
@@ -151,6 +175,11 @@ export default function NewAgentPage() {
     <>
       <PageHeader title={t("agents.register")} />
       <div className="content">
+        {foundId && (
+          <p className="hint-text u-mb-16">
+            {t("found.registering_note")} {description && <strong>{description}</strong>}
+          </p>
+        )}
         <div className="panel">
           <div className="panel-body">
             <Form onSubmit={handleSubmit}>
