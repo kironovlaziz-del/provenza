@@ -2,7 +2,7 @@
 import { api, type Page } from "./api";
 
 export type FoundStatus = "new" | "registered" | "ignored";
-export type AgentCategory = "coding_agent" | "agent_framework" | "agent_platform" | "unknown";
+export type AgentCategory = "coding_agent" | "agent_framework" | "agent_platform" | "custom_agent" | "unknown";
 
 export interface DeviceT {
   id: number;
@@ -28,7 +28,15 @@ export interface FoundAgentT {
   device_host: string;
   device_user: string | null;
   risk_score: number | null;
-  evidence: { process_name?: string | null; matched_by?: string | null } | null;
+  evidence: {
+    process_name?: string | null;
+    matched_by?: string | null; // executable | package | module | path | behavior
+    // matched_by "behavior" (an agent no catalog knows):
+    confidence?: "high" | "medium" | null;
+    api_hosts?: string[];
+    env_keys?: string[]; // variable names only
+    sdks?: string[];
+  } | null;
   status: FoundStatus;
   registered_agent: { id: number; name: string } | null;
   decided_at: string | null;

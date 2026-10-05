@@ -2065,7 +2065,7 @@
   },
   "found": {
     "title": "Topilgan agentlar",
-    "hint": "Endpoint agent qurilmalaringizda ishlayotganini aniqlagan AI agentlar — kod yozuvchi agentlar, agent freymvorklari va agent platformalari. Ularni hech kim qo'lda ro'yxatdan o'tkazmagan: har birini ko'rib chiqing, so'ng siyosatlar ostiga olish uchun ro'yxatdan o'tkazing yoki e'tiborsiz qoldiring.",
+    "hint": "Qurilmalaringizda ishlayotgan AI agentlar: tanilgan mahsulotlar (kod agentlari, agent freymvorklari, agent platformalari) va LLM API bilan aloqa qiladigan yoki LLM SDK yuklagan tanilmagan dasturlar. Ularni hech kim qo'lda ro'yxatdan o'tkazmagan: har birini ko'rib chiqing, so'ng siyosatlar ostiga olish uchun ro'yxatdan o'tkazing yoki e'tiborsiz qoldiring.",
     "stat_new": "Ko'rib chiqish kerak",
     "stat_registered": "Ro'yxatdan o'tgan",
     "stat_ignored": "E'tiborsiz",
@@ -2096,7 +2096,13 @@
     "register_description": "{{host}} qurilmasida topilgan {{product}}",
     "registering_note": "Aniqlash topgan agent ro'yxatdan o'tkazilmoqda:",
     "linked_note": "Topilma ro'yxatdan o'tgan deb belgilandi va shu agentga bog'landi.",
-    "link_failed_note": "Agent yaratildi, lekin topilmani unga bog'lab bo'lmadi — Topilgan agentlar sahifasida qayta bog'lang."
+    "link_failed_note": "Agent yaratildi, lekin topilmani unga bog'lab bo'lmadi — Topilgan agentlar sahifasida qayta bog'lang.",
+    "category_custom_agent": "Tanilmagan agent",
+    "sig_api": "{{hosts}} bilan aloqada",
+    "sig_sdk": "yuklangan SDK: {{sdks}}",
+    "sig_env": "kalit o'zgaruvchilari: {{keys}}",
+    "confidence_high": "yuqori ishonch",
+    "confidence_medium": "o'rtacha ishonch"
   },
   "devices": {
     "title": "Qurilmalar",

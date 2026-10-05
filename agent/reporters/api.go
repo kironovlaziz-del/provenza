@@ -66,7 +66,7 @@ func NewReporter(cfg *config.AgentConfig) *Reporter {
 }
 
 // AgentVersion identifies this build to the backend (shown on Devices).
-const AgentVersion = "1.2.0"
+const AgentVersion = "1.3.0"
 
 // Submit puts an event into the delivery channel. It returns false when the
 // buffer is full and the event was dropped.

@@ -18,7 +18,7 @@ from app.schemas.telemetry import (
     TelemetryIngestResponse,
 )
 from app.services import notification_service
-from app.services.agent_catalog import AGENT_PRODUCTS, describe as describe_agent
+from app.services.agent_catalog import AGENT_PRODUCTS, describe as describe_agent, is_custom
 from app.services.domain_catalog_service import DomainCatalogService
 from app.services.incident_service import IncidentService
 from app.services.shadow_ai_service import ShadowAIService
@@ -47,6 +47,33 @@ def _clip(value, limit: int) -> Optional[str]:
 def _one_line(text: str) -> str:
     """No line breaks in a value that goes into a mail subject."""
     return re.sub(r"[\r\n\t]+", " ", text)[:120]
+
+
+_HOST = re.compile(r"[a-z0-9][a-z0-9.-]{0,99}")
+_ENV_NAME = re.compile(r"[A-Z][A-Z0-9_]{0,63}")
+_SDK = re.compile(r"[a-z0-9][a-z0-9-]{0,39}")
+
+
+def _str_list(value, pattern: re.Pattern, limit: int) -> List[str]:
+    if not isinstance(value, list):
+        return []
+    out = [v for v in value if isinstance(v, str) and pattern.fullmatch(v)]
+    return sorted(set(out))[:limit]
+
+
+def _behavior_evidence(payload: dict) -> dict:
+    """Signals of an agent found by behavior (endpoint agent >= 1.3.0):
+    which LLM APIs it talks to, which key variable NAMES it has, which SDKs
+    are loaded, and how sure the collector is. Anything else is dropped."""
+    if payload.get("matched_by") != "behavior":
+        return {}
+    conf = payload.get("confidence")
+    return {
+        "confidence": conf if conf in ("high", "medium") else None,
+        "api_hosts": _str_list(payload.get("api_hosts"), _HOST, 10),
+        "env_keys": _str_list(payload.get("env_keys"), _ENV_NAME, 10),
+        "sdks": _str_list(payload.get("sdks"), _SDK, 5),
+    }
 
 
 def _safe_payload(payload: Optional[dict]) -> Optional[dict]:
@@ -215,6 +242,7 @@ class TelemetryService:
         evidence = {
             "process_name": _clip(payload.get("process_name"), 255),
             "matched_by": _clip(payload.get("matched_by"), 20),
+            **_behavior_evidence(payload),
         }
         stmt = pg_insert(DiscoveredAgent).values(
             org_id=org_id, device_id=device_id, product=product, risk_score=event.risk_score, evidence=evidence,
@@ -239,7 +267,7 @@ class TelemetryService:
         rollout to a fleet must not flood the channels). Unknown product ids
         are recorded but do not notify - an ingestion key alone should not
         be able to send arbitrary text to every channel."""
-        known = [a for a in new_agents if a["product"] in AGENT_PRODUCTS]
+        known = [a for a in new_agents if a["product"] in AGENT_PRODUCTS or is_custom(a["product"])]
         if not known:
             return
         if len(known) > _MAX_AGENT_NOTIFICATIONS:
@@ -254,9 +282,10 @@ class TelemetryService:
         for a in known:
             name = describe_agent(a["product"])["name"]
             host = _one_line(a["host"])
+            kind = "Unrecognized AI agent" if is_custom(a["product"]) else "AI agent"
             await notification_service.notify(
                 self.db, org_id, "agent_discovered",
-                f"AI agent found: {name} on {host}",
+                f"{kind} found: {name} on {host}",
                 "Found automatically by the endpoint agent. Register it to put it under "
                 "policies, or ignore it, in Discovery -> Agents Found.",
                 {"discovered_agent_id": a["id"], "product": a["product"], "device": host},
