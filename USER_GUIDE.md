@@ -265,6 +265,26 @@ Sidebar → **Audit → Audit Log**. Every change made through the platform
 — who did what, to which entity, when — is recorded in an append-only
 log you can filter and review.
 
+The log is tamper-evident (details in `docs/audit-proofs.md`):
+
+- **Integrity** panel: how many records the chain holds, the last signed
+  checkpoint and whether its signature verifies in your browser.
+  **Download checkpoint** and keep the file outside Provenza (with the
+  auditor, in a repository) — later logs can then be proven to extend it.
+- **Check** on a row verifies that record in your browser: its hash, its
+  place in the signed log and the signature. **Download proof** gives a
+  file anyone can verify offline:
+  `python tools/provenza_audit.py verify proof.json --fingerprint <audit key>`.
+- Admins: **Sign now** signs a checkpoint immediately (otherwise every
+  5 minutes); **Verify whole log** recomputes the entire chain and lists
+  any record that was changed or removed.
+- **Audit key**: pin it in your browser once; after a key change the page
+  tells you whether the old key handed over to the new one. To change the
+  key, an admin proposes it, the new fingerprint is published outside
+  Provenza, enough admins approve by typing that published fingerprint, and
+  after the announcement period (24 h by default) the old key hands over.
+  Any admin can cancel before that.
+
 ---
 
 ## 12. Tips

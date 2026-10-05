@@ -2,6 +2,7 @@
 backend/.venv/
 backend/__pycache__/
 backend/**/__pycache__/
+__pycache__/
 backend/.env
 
 # frontend
@@ -15,6 +16,7 @@ ai-control-tower.zip
 all_code.txt
 *.zip
 *.log
+*.log.*
 backend.log
 frontend.log
 celery.log

@@ -127,8 +127,12 @@ real policy applied to live traffic.
   SLA and risk scoring. Keys are encrypted at rest with Fernet.
 - **Incident Tracker** — register incidents, track root cause,
   resolve with audit trail.
-- **Audit & Reporting** — every mutation in the platform is written
-  to `ai_audit_logs` and queryable.
+- **Tamper-evident audit log** — every mutation in the platform is written
+  to `ai_audit_logs`, which the database keeps append-only. Records are
+  hash-chained per organization and the chain's Merkle root is signed every
+  few minutes (Ed25519 + ML-DSA-65); any record can be proven to be in the
+  signed log, offline, with `tools/provenza_audit.py`
+  ([docs/audit-proofs.md](docs/audit-proofs.md)).
 - **Notification Service** — route events (`incident_created`,
   `approval_pending`, `request_blocked`, `shadow_ai_reported`,
   `shadow_ai_blocked_domain`, etc.) to email or webhook channels.
@@ -521,7 +525,10 @@ when `ENVIRONMENT=production`).
 - **Outbound calls** — URLs that admins configure (AI providers, Vault,
   webhooks) cannot reach private or internal addresses unless listed in
   `OUTBOUND_PRIVATE_ALLOWLIST`.
-- **Audit trail** — every mutation writes a row to `ai_audit_logs`.
+- **Audit trail** — every mutation writes a row to `ai_audit_logs`. A
+  trigger refuses `UPDATE` and `DELETE`; records are hash-chained and
+  covered by signed Merkle checkpoints, so a change is detectable by anyone
+  who kept an earlier checkpoint ([docs/audit-proofs.md](docs/audit-proofs.md)).
 
 ### Agent governance — guarantees
 
