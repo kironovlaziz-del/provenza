@@ -142,8 +142,10 @@ real policy applied to live traffic.
 - **Endpoint Agent** — a native Go binary that detects locally-running
   AI tools (processes like `ollama`/`vllm`, listening ports, and model
   weight files on disk) and AI agents (Claude Code, Cursor, Copilot,
-  Codex CLI, Aider, CrewAI, LangGraph, n8n, …) and reports them. It
-  sends only what it recognized — never a process command line.
+  Codex CLI, Aider, CrewAI, LangGraph, n8n, …) and reports them. Agents
+  no catalog knows are found by behavior: a process that talks to an LLM
+  API or has an LLM SDK loaded. It sends only what it recognized — never
+  a process command line or a key value.
 - **Agents Found & Devices** — agents found on endpoints appear by
   themselves for review (register as a governed agent, or ignore), and
   every reporting machine or browser is listed with its user, OS and

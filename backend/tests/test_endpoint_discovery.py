@@ -111,6 +111,22 @@ class TestIngestion:
         await _ingest(db_session, src, [_agent_event(host="pc\r\nBcc: x@evil.example")])
         assert "\n" not in notes[0][1] and "\r" not in notes[0][1]
 
+    async def test_unrecognized_agent_found_by_behavior(self, db_session, org_and_users, notes):
+        src = await _source(db_session, org_and_users["org"].id)
+        ev = _agent_event(product="custom.sales_bot", matched_by="behavior", confidence="high",
+                          api_hosts=["api.openai.com", "<script>"], env_keys=["OPENAI_API_KEY", "sk-live-123"],
+                          sdks=["openai-or-anthropic-python"], process_name="python3")
+        r = await _ingest(db_session, src, [ev])
+        assert r.agents_found == 1
+        found = (await db_session.execute(select(DiscoveredAgent).where(DiscoveredAgent.org_id == src.org_id))).scalar_one()
+        assert found.evidence == {
+            "process_name": "python3", "matched_by": "behavior", "confidence": "high",
+            "api_hosts": ["api.openai.com"],          # junk dropped
+            "env_keys": ["OPENAI_API_KEY"],           # a value-looking entry dropped
+            "sdks": ["openai-or-anthropic-python"],
+        }
+        assert notes == [("agent_discovered", "Unrecognized AI agent found: sales_bot on dev-1")]
+
     @pytest.mark.parametrize("product", ["", "../etc", "A" * 80, "rm -rf"])
     async def test_malformed_product_is_not_recorded(self, db_session, org_and_users, notes, product):
         src = await _source(db_session, org_and_users["org"].id)
@@ -154,6 +170,11 @@ class TestApi:
             ("Claude Code", "Anthropic", "coding_agent", "dev-1")
         crew = next(f for f in found if f["product"] == "crewai")
         assert crew["category"] == "agent_framework"
+
+    async def test_custom_agent_is_described_by_its_name(self, client, db_session, org_and_users, admin_token, notes):
+        await _seed(db_session, org_and_users["org"].id, products=("custom.ticket-triage",))
+        f = (await client.get(F + "/", headers=auth_headers(admin_token))).json()["items"][0]
+        assert (f["name"], f["category"], f["vendor"]) == ("ticket-triage", "custom_agent", "")
 
     async def test_plain_users_cannot_see_devices(self, client, db_session, org_and_users, notes):
         from tests.conftest import _login

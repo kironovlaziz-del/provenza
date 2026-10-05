@@ -10,6 +10,8 @@ category:
   coding_agent    edits code and runs commands in a developer's workspace
   agent_framework a framework / runtime that executes agents someone wrote
   agent_platform  a workflow tool that runs agents built in its UI
+  custom_agent    not a known product: found by behavior (talks to an LLM
+                  API, has an LLM SDK loaded); id "custom.<script or binary>"
 An unknown id (a newer agent version) is kept as-is and shown by its id.
 """
 
@@ -44,9 +46,18 @@ AGENT_PRODUCTS: Dict[str, AgentProduct] = {
     "langflow": {"name": "Langflow", "vendor": "DataStax", "category": "agent_platform"},
 }
 
-CATEGORIES = ("coding_agent", "agent_framework", "agent_platform")
+CATEGORIES = ("coding_agent", "agent_framework", "agent_platform", "custom_agent")
+CUSTOM_PREFIX = "custom."
+
+
+def is_custom(product: str) -> bool:
+    return product.startswith(CUSTOM_PREFIX) and len(product) > len(CUSTOM_PREFIX)
 
 
 def describe(product: str) -> AgentProduct:
     """Catalog entry for a product id; unknown ids describe themselves."""
-    return AGENT_PRODUCTS.get(product) or {"name": product, "vendor": "", "category": "unknown"}
+    if product in AGENT_PRODUCTS:
+        return AGENT_PRODUCTS[product]
+    if is_custom(product):
+        return {"name": product[len(CUSTOM_PREFIX):], "vendor": "", "category": "custom_agent"}
+    return {"name": product, "vendor": "", "category": "unknown"}

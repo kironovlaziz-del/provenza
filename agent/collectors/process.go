@@ -25,6 +25,7 @@ type ProcessCollector struct {
 	seenPIDs   map[int]string
 	agentsSent map[string]time.Time // product -> last report
 	userNames  map[string]string    // uid -> user name
+	resolver   *apiResolver
 	mu         sync.Mutex
 }
 
@@ -36,6 +37,7 @@ func NewProcessCollector(cfg *config.AgentConfig, rep *reporters.Reporter) *Proc
 		seenPIDs:   make(map[int]string),
 		agentsSent: make(map[string]time.Time),
 		userNames:  make(map[string]string),
+		resolver:   newAPIResolver(),
 	}
 }
 
@@ -54,6 +56,9 @@ func (c *ProcessCollector) ScanOnce() {
 
 	activePIDs := make(map[int]bool)
 	agentsNow := make(map[string]agentHit)
+	apiIPs := c.resolver.addresses()
+	sockets := llmSockets(httpsSockets(), apiIPs)
+	self := os.Getpid()
 
 	for _, entry := range entries {
 		pid, err := strconv.Atoi(entry)
@@ -71,7 +76,11 @@ func (c *ProcessCollector) ScanOnce() {
 		cmdlineBytes, _ := os.ReadFile(fmt.Sprintf("/proc/%d/cmdline", pid))
 		argv := strings.Split(strings.TrimRight(string(cmdlineBytes), "\x00"), "\x00")
 
-		for _, m := range MatchProcess(commName, argv) {
+		matches := MatchProcess(commName, argv)
+		if len(matches) == 0 && pid != self && len(cmdlineBytes) > 0 && !behaviorIgnore[normalizeName(commName)] {
+			c.inspectUnknown(pid, commName, argv, sockets, apiIPs, agentsNow)
+		}
+		for _, m := range matches {
 			if m.Signature.Kind == "agent" {
 				if _, seen := agentsNow[m.Signature.Product]; !seen {
 					agentsNow[m.Signature.Product] = agentHit{comm: commName, pid: pid, by: m.By, risk: m.Signature.Risk,
@@ -120,11 +129,12 @@ func (c *ProcessCollector) ScanOnce() {
 }
 
 type agentHit struct {
-	comm string
-	pid  int
-	by   string
-	risk float64
-	user string
+	comm  string
+	pid   int
+	by    string
+	risk  float64
+	user  string
+	extra map[string]interface{} // behavioral signals, for unrecognized agents
 }
 
 // processUser is the account that owns the process (the person running the
@@ -160,6 +170,46 @@ func (c *ProcessCollector) processUser(pid int) string {
 	return ""
 }
 
+func (h agentHit) payload(product string) map[string]interface{} {
+	p := map[string]interface{}{
+		"product":      product,
+		"process_name": h.comm,
+		"pid":          h.pid,
+		"matched_by":   h.by,
+	}
+	for k, v := range h.extra {
+		p[k] = v
+	}
+	return p
+}
+
+// inspectUnknown looks for behavioral signals in a process no signature
+// matched (see behavior.go) and records it as an unrecognized agent.
+func (c *ProcessCollector) inspectUnknown(pid int, comm string, argv []string,
+	sockets, apiIPs map[string]string, agentsNow map[string]agentHit) {
+	interpreted := len(argv) > 0 && interpreters[interpreterName(argv[0])]
+	sig := inspectProcess(pid, interpreted, sockets, apiIPs, os.ReadFile, os.Readlink, listDir)
+	if !sig.found() {
+		return
+	}
+	product := customProductID(comm, argv)
+	if _, seen := agentsNow[product]; seen {
+		return
+	}
+	conf := sig.confidence()
+	risk := 0.5
+	if conf == "high" {
+		risk = 0.6
+	}
+	agentsNow[product] = agentHit{comm: comm, pid: pid, by: "behavior", risk: risk, user: c.processUser(pid),
+		extra: map[string]interface{}{
+			"confidence": conf,
+			"api_hosts":  sig.APIHosts,
+			"env_keys":   sig.EnvKeys, // names only, never values
+			"sdks":       sig.SDKs,
+		}}
+}
+
 // reportAgents sends one agent_detected event per AI agent product running
 // now: when it first appears, then once per agentHeartbeat while it keeps
 // running. Products that stopped are forgotten, so a restart is reported.
@@ -179,12 +229,7 @@ func (c *ProcessCollector) reportAgents(now map[string]agentHit) {
 			UserID:      hit.user,
 			RiskScore:   hit.risk,
 			ActionTaken: "monitored",
-			Payload: map[string]interface{}{
-				"product":      product,
-				"process_name": hit.comm,
-				"pid":          hit.pid,
-				"matched_by":   hit.by,
-			},
+			Payload:     hit.payload(product),
 		})
 		if sent { // a dropped event is retried on the next scan
 			c.agentsSent[product] = t

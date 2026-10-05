@@ -192,6 +192,24 @@ command line, which can contain API keys, never leaves the machine.
   with its user, OS, collector version, last activity and the agents
   found on it. A device that has been silent for a day is marked *quiet*.
 
+Agents that are not known products — a company's own bots and scripts —
+are found by behavior (endpoint agent v1.3.0 or later) and listed as
+**Unrecognized agent**, named after the script or program that runs:
+
+- the process has a connection to an LLM API (OpenAI, Anthropic, Google
+  Gemini, Mistral, Groq, DeepSeek, OpenRouter, AWS Bedrock, …);
+- or it has an LLM SDK loaded (the OpenAI / Anthropic Python SDKs,
+  tiktoken, Hugging Face tokenizers).
+
+LLM API key variables in its environment (`OPENAI_API_KEY`, …) raise the
+confidence; only their names are reported, never the values. A finding
+from an API connection alone is *medium confidence*: some providers share
+CDN addresses with other sites. To see the processes of every user on a
+machine, run the endpoint agent as root; as a regular user it sees only
+that user's processes. Services on the same machine that call LLMs on
+purpose (for example Provenza's own backend) appear here too — ignore
+them once.
+
 Both pages are visible to admins and approvers; only admins register or
 ignore findings.
 

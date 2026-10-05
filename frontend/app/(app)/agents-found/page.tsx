@@ -31,6 +31,27 @@ function riskPill(score: number | null): string {
   return "pill-low";
 }
 
+// Why an unrecognized agent was flagged: the LLM APIs it talks to, the key
+// variable names it carries, the SDKs it loaded.
+function Signals({ ev }: { ev: NonNullable<FoundAgentT["evidence"]> }) {
+  const { t } = useTranslation();
+  const parts = [
+    ev.api_hosts?.length ? t("found.sig_api", { hosts: ev.api_hosts.join(", ") }) : null,
+    ev.sdks?.length ? t("found.sig_sdk", { sdks: ev.sdks.join(", ") }) : null,
+    ev.env_keys?.length ? t("found.sig_env", { keys: ev.env_keys.join(", ") }) : null,
+  ].filter(Boolean);
+  return (
+    <div style={{ fontSize: 11, marginTop: 4 }}>
+      {ev.confidence && (
+        <span className={`pill ${ev.confidence === "high" ? "pill-medium" : "pill-neutral"}`} style={{ marginRight: 6 }}>
+          {t(`found.confidence_${ev.confidence}`)}
+        </span>
+      )}
+      <span className="hint-text">{parts.join(" · ")}</span>
+    </div>
+  );
+}
+
 export default function AgentsFoundPage() {
   const { t, i18n } = useTranslation();
   const router = useRouter();
@@ -139,7 +160,9 @@ export default function AgentsFoundPage() {
                       <div style={{ fontWeight: 600 }}>{f.name}</div>
                       <div className="hint-text" style={{ fontSize: 11 }}>
                         {[f.vendor, t(`found.category_${f.category}`, f.category)].filter(Boolean).join(" · ")}
+                        {f.evidence?.process_name ? ` · ${f.evidence.process_name}` : ""}
                       </div>
+                      {f.evidence?.matched_by === "behavior" && <Signals ev={f.evidence} />}
                     </td>
                     <td>
                       <Link href={`/devices?focus=${f.device_id}`} className="mono" style={{ fontSize: 12 }}>{f.device_host}</Link>

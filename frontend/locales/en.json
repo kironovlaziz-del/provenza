@@ -2065,7 +2065,7 @@
   },
   "found": {
     "title": "Agents Found",
-    "hint": "AI agents the endpoint agent found running on your devices — coding agents, agent frameworks and agent platforms. Nobody had to register them: review each one, then register it to put it under policies, or ignore it.",
+    "hint": "AI agents found running on your devices: known products (coding agents, agent frameworks, agent platforms) and unrecognized programs that talk to an LLM API or load an LLM SDK. Nobody had to register them: review each one, then register it to put it under policies, or ignore it.",
     "stat_new": "To review",
     "stat_registered": "Registered",
     "stat_ignored": "Ignored",
@@ -2096,7 +2096,13 @@
     "register_description": "{{product}} found on {{host}}",
     "registering_note": "Registering an agent found by Discovery:",
     "linked_note": "The finding is marked as registered and linked to this agent.",
-    "link_failed_note": "The agent was created, but the finding could not be linked to it - link it again from Agents Found."
+    "link_failed_note": "The agent was created, but the finding could not be linked to it - link it again from Agents Found.",
+    "category_custom_agent": "Unrecognized agent",
+    "sig_api": "talks to {{hosts}}",
+    "sig_sdk": "SDK loaded: {{sdks}}",
+    "sig_env": "key variables: {{keys}}",
+    "confidence_high": "high confidence",
+    "confidence_medium": "medium confidence"
   },
   "devices": {
     "title": "Devices",

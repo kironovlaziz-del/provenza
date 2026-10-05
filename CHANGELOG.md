@@ -20,6 +20,13 @@ this project adheres to [Semantic Versioning](https://semver.org/).
   lists each reporting machine and browser with user, OS, collector
   version and last activity. New notification event `agent_discovered`.
   API: `/devices`, `/agents-found`.
+- **Unrecognized agents found by behavior** (endpoint agent 1.3.0). A
+  process no catalog knows is reported as `custom.<script or program>`
+  when it has a connection to an LLM API (addresses of the major providers
+  are resolved periodically) or an LLM SDK loaded (`/proc/<pid>/maps`:
+  jiter, tiktoken, tokenizers); LLM API key variable names in its
+  environment raise the confidence - names only, never values. Agents
+  Found shows the signals and a high / medium confidence.
 
 - **Agent-held signing keys.** An agent can register its own Ed25519 public
   key (at registration or later via `POST /agents/{id}/signing-key`); the
@@ -147,10 +154,13 @@ this project adheres to [Semantic Versioning](https://semver.org/).
   re-link the use case.
 - **Production `SECRET_KEY`** must not look like a placeholder - generate one
   with `python3 -c "import secrets; print(secrets.token_urlsafe(48))"`.
-- **Endpoint agent 1.2.0.** Rebuild and redeploy the agent to get agent
-  detection; older agents keep working (their process command lines are
-  now dropped on arrival). Run `alembic upgrade head` (new tables
-  `endpoint_devices`, `discovered_agents`).
+- **Endpoint agent 1.3.0.** Rebuild and redeploy the agent to get agent
+  detection. To see other users' processes (behavioral detection reads
+  `/proc/<pid>/fd`, `environ`, `maps`) it must run as root or with
+  `CAP_SYS_PTRACE` and `CAP_DAC_READ_SEARCH`. Older agents keep working
+  (their process command lines are now dropped on arrival). Run
+  `alembic upgrade head` (new tables `endpoint_devices`,
+  `discovered_agents`).
 - **Removed features keep their data.** The tables of the removed MLOps and
   RAG features (`datasets`, `training_jobs`, `model_deployments`,
   `prediction_logs`, `document_collections`, `rag_documents`,

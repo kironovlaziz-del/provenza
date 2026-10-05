@@ -207,6 +207,26 @@ mashinadan hech qachon chiqmaydi.
   oxirgi faollik va unda topilgan agentlar. Bir kun jim bo‘lgan qurilma
   *quiet* deb belgilanadi.
 
+Tanilgan mahsulot bo‘lmagan agentlar — kompaniyaning o‘z botlari va
+skriptlari — xatti-harakati bo‘yicha topiladi (endpoint agent v1.3.0 yoki
+yangiroq) va ishlayotgan skript yoki dastur nomi bilan **Tanilmagan
+agent** sifatida ko‘rsatiladi:
+
+- jarayon LLM API bilan ulangan (OpenAI, Anthropic, Google Gemini,
+  Mistral, Groq, DeepSeek, OpenRouter, AWS Bedrock, …);
+- yoki unda LLM SDK yuklangan (OpenAI / Anthropic Python SDK, tiktoken,
+  Hugging Face tokenizers).
+
+Muhitdagi LLM API kalit o‘zgaruvchilari (`OPENAI_API_KEY`, …) ishonchni
+oshiradi; faqat ularning nomlari yuboriladi, qiymatlari hech qachon.
+Faqat API ulanishi asosidagi topilma *o‘rtacha ishonchli*: ba’zi
+provayderlar CDN manzillarini boshqa saytlar bilan bo‘lishadi. Mashinadagi
+barcha foydalanuvchilar jarayonlarini ko‘rish uchun endpoint agentni root
+sifatida ishga tushiring; oddiy foydalanuvchi sifatida u faqat o‘sha
+foydalanuvchi jarayonlarini ko‘radi. Xuddi shu mashinadagi LLMga ataylab
+murojaat qiladigan xizmatlar (masalan, Provenzaning o‘z backendi) ham bu
+yerda paydo bo‘ladi — ularni bir marta e’tiborsiz qoldiring.
+
 Ikkala sahifa adminlar va tasdiqlovchilarga ko‘rinadi; topilmalarni
 faqat adminlar ro‘yxatdan o‘tkazadi yoki e’tiborsiz qoldiradi.
 
