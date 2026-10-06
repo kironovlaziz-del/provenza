@@ -11,6 +11,7 @@ EVENT_TYPES = [
     "request_blocked",
     "agent_discovered",
     "audit_key_rotation",
+    "kill_switch",
 ]
 
 

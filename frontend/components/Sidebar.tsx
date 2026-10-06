@@ -62,9 +62,11 @@ const NAV: Group[] = [
     items: [
       { href: "/inventory", labelKey: "sidebar.nav.inventory" },
       { href: "/agents", labelKey: "sidebar.nav.agents" },
+      { href: "/teams", labelKey: "sidebar.nav.teams" },
       { href: "/connections", labelKey: "sidebar.nav.connections" },
       { href: "/providers", labelKey: "sidebar.nav.providers" },
       { href: "/agent-identity", labelKey: "sidebar.nav.agent_identity", adminOnly: true },
+      { href: "/attestation", labelKey: "sidebar.nav.attestation", adminOnly: true },
       { href: "/tool-registry", labelKey: "sidebar.nav.tool_registry", adminOnly: true },
     ],
   },
@@ -73,6 +75,7 @@ const NAV: Group[] = [
     icon: "policies",
     items: [
       { href: "/policies", labelKey: "sidebar.nav.policies" },
+      { href: "/policy-hierarchy", labelKey: "sidebar.nav.policy_hierarchy", reviewOnly: true },
       { href: "/agent-policies", labelKey: "sidebar.nav.agent_policies", adminOnly: true },
       { href: "/use-cases", labelKey: "sidebar.nav.use_cases" },
       { href: "/compliance", labelKey: "sidebar.nav.compliance" },
@@ -82,6 +85,7 @@ const NAV: Group[] = [
     sectionKey: "sidebar.sections.enforcement",
     icon: "security",
     items: [
+      { href: "/kill-switch", labelKey: "sidebar.nav.kill_switch", reviewOnly: true },
       { href: "/gateway", labelKey: "sidebar.nav.gateway", adminOnly: true },
       { href: "/approvals", labelKey: "sidebar.nav.approvals" },
       { href: "/agent-approvals", labelKey: "sidebar.nav.agent_approvals", adminOnly: true },

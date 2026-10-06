@@ -37,7 +37,8 @@ async def gateway_agent(
         key = authorization[7:].strip()
     if not key:
         raise HTTPException(status_code=401, detail="The gateway needs an agent key (X-Agent-Key or Bearer).")
-    return await authenticate_agent_request(request, db, key)
+    # a suspended agent is refused by GatewayService itself, logged and in the gateway's error format
+    return await authenticate_agent_request(request, db, key, allow_inactive=True)
 
 
 @router.post("/v1/chat/completions")

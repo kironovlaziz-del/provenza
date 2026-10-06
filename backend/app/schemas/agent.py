@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.core.agent_signing import (
     SCHEME_CLASSIC, SCHEME_HYBRID, key_fingerprint, normalize_pq_public_key, normalize_public_key,
@@ -94,7 +94,7 @@ class AgentUpdate(BaseModel):
     allowed_tools: Optional[List[str]] = None
     allowed_models: Optional[List[str]] = None
     max_delegation_depth: Optional[int] = None
-    status: Optional[str] = None  # active, suspended, retired
+    status: Optional[Literal["active", "suspended", "retired"]] = None
 
 
 class AgentOut(BaseModel):
@@ -106,6 +106,8 @@ class AgentOut(BaseModel):
     version: Optional[str]
     owner_user_id: Optional[int]
     owner_team: Optional[str]
+    team_id: Optional[int] = None
+    role_id: Optional[int] = None
     capabilities: Optional[List[str]]
     allowed_tools: Optional[List[str]]
     allowed_models: Optional[List[str]]
@@ -149,6 +151,7 @@ class AgentKillRequest(BaseModel):
 class AgentKillResponse(BaseModel):
     agents_stopped: List[int]
     chains_terminated: int
+    event_id: Optional[int] = None
 
 
 # ---- Delegation ----
@@ -157,6 +160,9 @@ class DelegateRequest(BaseModel):
     to_agent_id: int
     task: str
     delegated_capabilities: List[str] = Field(default_factory=list)
+    # tools handed over; omitted = the delegating agent's tools in the chain
+    # (never more). Part of the signed payload only when present.
+    delegated_tools: Optional[List[str]] = Field(default=None, max_length=200)
     chain_id: Optional[int] = None      # None = start a new chain (root delegation)
     signature: Optional[str] = None     # Ed25519 signature by the delegating agent
     # ML-DSA-65 signature over the same bytes - required for hybrid agents
@@ -173,6 +179,9 @@ class DelegateResponse(BaseModel):
     depth: int
     max_depth_remaining: int
     verified: bool
+    # what the receiving agent may actually use: the grant narrowed to its registration
+    effective_capabilities: List[str] = Field(default_factory=list)
+    effective_tools: List[str] = Field(default_factory=list)
 
 
 class HopOut(BaseModel):
@@ -181,6 +190,7 @@ class HopOut(BaseModel):
     to_agent_id: int
     depth: int
     delegated_capabilities: Optional[List[str]]
+    delegated_tools: Optional[List[str]] = None
     expires_at: Optional[datetime] = None
     task_description: Optional[str]
     verified: bool
@@ -216,16 +226,31 @@ class ChainDetail(ChainOut):
 
 # ---- Actions ----
 
+def _no_declared_capabilities(v):
+    if v:
+        raise ValueError("action_capabilities is no longer accepted: the capabilities an action needs are "
+                         "derived from the Tool Registry (required_capabilities of the matching tool)")
+    return v
+
+
 class ActionCheckRequest(BaseModel):
     agent_id: int
     chain_id: Optional[int] = None
     action_type: str = "tool_call"
     tool_name: str
     input: Dict[str, Any] = Field(default_factory=dict)
+    # No longer accepted: what an action needs comes from the Tool Registry
+    # (required_capabilities), never from the caller. Kept only to explain
+    # the refusal instead of silently ignoring it.
     action_capabilities: List[str] = Field(default_factory=list)
     # ASI04: reported by the agent's runtime, compared with the Tool Registry pins
     tool_version: Optional[str] = Field(default=None, max_length=100)
     tool_digest: Optional[str] = Field(default=None, max_length=100)
+
+    @field_validator("action_capabilities")
+    @classmethod
+    def _refuse_declared(cls, v):
+        return _no_declared_capabilities(v)
 
 
 class ActionCheckResponse(BaseModel):
@@ -248,7 +273,12 @@ class ActionRecordRequest(BaseModel):
     pq_signature: Optional[str] = Field(default=None, max_length=6000)  # hybrid agents
     duration_ms: Optional[int] = None
     check_id: Optional[str] = None        # from /actions/check (required for keyed agents)
-    action_capabilities: List[str] = Field(default_factory=list)  # keyless path only
+    action_capabilities: List[str] = Field(default_factory=list)  # refused when non-empty, see ActionCheckRequest
+
+    @field_validator("action_capabilities")
+    @classmethod
+    def _refuse_declared(cls, v):
+        return _no_declared_capabilities(v)
 
 
 class ActionDenyRequest(BaseModel):
@@ -356,3 +386,18 @@ class ApprovalDecision(BaseModel):
     """ASI09: the reviewer approves the exact arguments they saw."""
     input_sha256: str = Field(min_length=64, max_length=64)
     confirmation: Optional[str] = Field(default=None, max_length=255)
+
+
+class KeyRevokeIn(BaseModel):
+    reason: str = Field(min_length=3, max_length=500)
+    # when the key is known to have been compromised before now: signatures
+    # received from this moment on are not trusted (default: from now)
+    compromised_since: Optional[datetime] = None
+
+
+class AgentAssignment(BaseModel):
+    """Both are required (null clears): leaving one out must not silently
+    take the agent off its role or team."""
+    model_config = ConfigDict(extra="forbid")
+    team_id: Optional[int]
+    role_id: Optional[int]

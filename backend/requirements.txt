@@ -33,6 +33,9 @@ cryptography==50.0.1
 # HTTP client
 httpx==0.28.1
 
+# Policy documents (hierarchical policies, YAML tab)
+PyYAML==6.0.3
+
 # ---------------------------------------------------------------------------
 # Development / testing
 # ---------------------------------------------------------------------------

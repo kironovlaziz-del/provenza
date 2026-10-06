@@ -11,9 +11,10 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.agent import Agent, AgentPolicy
-from app.models.delegation import DelegationChain, DelegationHop
+from app.models.delegation import DelegationChain
 from app.models.agent_action import AgentAction, AgentIncident, ActionCheck
 from app.core.agent_signing import content_hash
+from app.services.agent_rights import Rights
 from app.services.agent_policy_engine import (
     check_action,
     AgentView,
@@ -41,9 +42,14 @@ class AgentAudit:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found")
         return agent
 
-    async def _chain_view(self, chain_id: Optional[int], agent_id: int, agent: Agent) -> ChainView:
+    async def _chain_view(self, chain_id: Optional[int], agent_id: int, agent: Agent) -> Tuple[ChainView, Rights]:
+        """The chain as the engine sees it, and the agent's rights in it -
+        computed by the server (services/agent_rights.py)."""
+        from app.services.agent_rights import own_rights, rights_in_chain
+
         if chain_id is None:
-            return ChainView(max_depth_reached=0, granted_capabilities=list(agent.capabilities or []))
+            rights = own_rights(agent)
+            return ChainView(max_depth_reached=0, granted_capabilities=rights.capabilities), rights
         result = await self.db.execute(
             select(DelegationChain).where(
                 DelegationChain.id == chain_id, DelegationChain.org_id == agent.org_id
@@ -53,25 +59,15 @@ class AgentAudit:
         if not chain:
             # an unknown chain, or one belonging to another organization
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Delegation chain not found")
-        # capabilities granted to this agent within the chain
-        hop_result = await self.db.execute(
-            select(DelegationHop)
-            .where(DelegationHop.chain_id == chain_id, DelegationHop.to_agent_id == agent_id)
-            .order_by(DelegationHop.depth.desc())
-        )
-        hop = hop_result.scalars().first()
-        granted = (
-            list(hop.delegated_capabilities)
-            if hop and hop.delegated_capabilities is not None
-            else list(agent.capabilities or [])
-        )
-        expiry = hop.expires_at if hop else None
+        rights = await rights_in_chain(self.db, agent, chain)
         return ChainView(
-            max_depth_reached=chain.max_depth_reached or 0,
+            max_depth_reached=rights.depth,  # the agent's own depth, not the deepest branch
+            root_agent_id=chain.root_agent_id,
             status=chain.status,
-            granted_capabilities=granted,
-            delegation_expires_at=expiry,
-        )
+            granted_capabilities=rights.capabilities,
+            delegation_expires_at=rights.expires_at,
+            member=rights.member,
+        ), rights
 
     async def _custom_policies(self, org_id: int, agent_id: int) -> List[dict]:
         """Enabled agent policies that apply: those scoped to this agent
@@ -83,10 +79,25 @@ class AgentAudit:
                 ((AgentPolicy.agent_id == agent_id) | (AgentPolicy.agent_id.is_(None))),
             ).order_by(AgentPolicy.priority.desc())
         )
-        return [
+        own = [
             {"id": p.id, "name": p.name, "rules": p.rules or {}}
             for p in result.scalars().all()
         ]
+        # the policy hierarchy (organization -> team -> agent) first: its
+        # refusals name the level that refused
+        levels, _ = await self._hierarchy(org_id, agent_id)
+        return levels + own
+
+    async def _hierarchy(self, org_id: int, agent_id: int):
+        """The policy hierarchy as engine policies + its depth limit, once per
+        agent per service instance (a check reads it twice)."""
+        cache = self.__dict__.setdefault("_hier_cache", {})
+        if agent_id not in cache:
+            from app.services import hier_policy
+
+            agent = await self._get_agent(agent_id, org_id)
+            cache[agent_id] = await hier_policy.engine_policies(self.db, agent)
+        return cache[agent_id]
 
     async def check(
         self,
@@ -96,26 +107,48 @@ class AgentAudit:
         action_type: Optional[str],
         tool_name: Optional[str],
         input_data: dict,
-        action_capabilities: List[str],
         tool_version: Optional[str] = None,
         tool_digest: Optional[str] = None,
     ):
         """Run the policy engine for a proposed action. Returns the
-        Decision (does not persist - use record() for that)."""
+        Decision (does not persist - use record() for that).
+
+        The tools and capabilities the agent holds are its rights in the
+        chain, and what the action needs comes from the Tool Registry -
+        nothing the caller declares is trusted."""
+        from app.services.agent_rights import required_capabilities
+
         agent = await self._get_agent(agent_id, org_id)
+        chain_view, rights = await self._chain_view(chain_id, agent_id, agent)
+        # depth: the agent's own place in the chain, within the chain root's limit
+        # (delegation already enforces each delegating agent's limit)
+        depth_limit = agent.max_delegation_depth
+        if chain_id is not None and rights.member and rights.depth > 0:
+            root = await self._get_agent(chain_view.root_agent_id, org_id)
+            depth_limit = root.max_delegation_depth
+        _, policy_depth = await self._hierarchy(org_id, agent_id)
+        if policy_depth is not None:
+            depth_limit = min(depth_limit, policy_depth)
         agent_view = AgentView(
-            allowed_tools=list(agent.allowed_tools or []),
+            allowed_tools=list(rights.tools),
             allowed_models=list(agent.allowed_models or []),
-            max_delegation_depth=agent.max_delegation_depth,
+            max_delegation_depth=depth_limit,
             status=agent.status,
         )
-        chain_view = await self._chain_view(chain_id, agent_id, agent)
+        required = await required_capabilities(self.db, org_id, tool_name)
         ctx = ActionContext(
             tool_name=tool_name,
             action_type=action_type,
             input_data=input_data or {},
-            action_capabilities=action_capabilities or [],
+            action_capabilities=required,
         )
+        decision = await self._decide(org_id, agent_id, chain_id, tool_name, input_data, tool_version, tool_digest,
+                                      agent_view, chain_view, ctx)
+        decision.required_capabilities = list(required)  # one derivation, used for the verdict and stored
+        return decision
+
+    async def _decide(self, org_id, agent_id, chain_id, tool_name, input_data, tool_version, tool_digest,
+                      agent_view, chain_view, ctx):
         policies = await self._custom_policies(org_id, agent_id)
         decision = check_action(agent_view, chain_view, ctx, policies)
         # ASI04: Tool Registry (also records usage when the policy already denied)

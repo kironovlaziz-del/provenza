@@ -9,6 +9,8 @@ export interface Agent {
   version?: string | null;
   owner_user_id?: number | null;
   owner_team?: string | null;
+  team_id?: number | null;
+  role_id?: number | null;
   capabilities?: string[] | null;
   allowed_tools?: string[] | null;
   allowed_models?: string[] | null;
@@ -41,12 +43,27 @@ export interface SigningKeyT {
   retired_at?: string | null;
 }
 
+/** An entry of the organization's signing-key revocation list. */
+export interface KeyRevocationT {
+  id: number;
+  agent_id: number;
+  signing_key_id: number | null;
+  fingerprint: string;
+  revoked_at: string;
+  /** signatures received from this moment on are not trusted */
+  untrusted_from: string;
+  reason: string;
+  revoked_by: number | null;
+}
+
 export interface DelegationHopT {
   id: number;
   from_agent_id: number;
   to_agent_id: number;
   depth: number;
   delegated_capabilities?: string[] | null;
+  /** Tools handed over on this hop; null on hops recorded before tools were delegated. */
+  delegated_tools?: string[] | null;
   task_description?: string | null;
   expires_at?: string | null;
   verified: boolean;

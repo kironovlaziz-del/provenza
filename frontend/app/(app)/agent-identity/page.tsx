@@ -14,8 +14,61 @@ import {
   type IdentityOverview,
   type IdentitySettings,
 } from "@/lib/agent_identity_api";
+import Link from "next/link";
+import { listEnrollments, revokeEnrollment, type EnrollmentT } from "@/lib/enrollment_api";
 
 const LIST: React.CSSProperties = { maxHeight: 520, overflowY: "auto", overflowX: "auto" };
+
+function EnrollmentTokens({ isAdmin }: { isAdmin: boolean }) {
+  const { t, i18n } = useTranslation();
+  const [rows, setRows] = useState<EnrollmentT[] | null>(null);
+  const load = () => listEnrollments().then(setRows).catch(() => setRows([]));
+  useEffect(() => { load(); }, []);
+  const STATE: Record<string, string> = { open: "pill-accent", used: "pill-low", revoked: "pill-critical", expired: "pill-neutral" };
+  return (
+    <div className="panel" style={{ marginBottom: 20 }}>
+      <div className="panel-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+        <h2>{t("enroll.tokens_title")}</h2>
+        {isAdmin && <Link href="/agents/new" className="btn btn-sm btn-primary">{t("enroll.issue")}</Link>}
+      </div>
+      <div style={{ overflowX: "auto" }}>
+        <table className="table-cards">
+          <thead>
+            <tr>
+              <th>{t("enroll.col_token")}</th>
+              <th>{t("enroll.col_for")}</th>
+              <th>{t("enroll.col_state")}</th>
+              <th>{t("enroll.col_expires")}</th>
+              {isAdmin && <th />}
+            </tr>
+          </thead>
+          <tbody>
+            {rows === null && <tr className="empty-row"><td colSpan={5}>{t("common.loading")}</td></tr>}
+            {rows?.length === 0 && <tr className="empty-row"><td colSpan={5}>{t("enroll.none")}</td></tr>}
+            {rows?.map((r) => (
+              <tr key={r.id}>
+                <td data-label={t("enroll.col_token")} className="mono">{r.token_prefix}…</td>
+                <td data-label={t("enroll.col_for")}>
+                  {r.purpose === "rekey" ? t("enroll.for_rekey", { id: r.agent_id }) : (r.name || t("enroll.for_new"))}
+                  {r.purpose === "new" && r.agent_id && <div className="hint-text"><Link href={`/agents/${r.agent_id}`}>#{r.agent_id}</Link></div>}
+                </td>
+                <td data-label={t("enroll.col_state")}><span className={`pill ${STATE[r.state] ?? "pill-neutral"}`}>{t(`enroll.state_${r.state}`)}</span></td>
+                <td data-label={t("enroll.col_expires")} className="mono" style={{ fontSize: 12 }}>{new Date(r.expires_at).toLocaleString(i18n.language)}</td>
+                {isAdmin && (
+                  <td>
+                    {r.state === "open" && (
+                      <button type="button" className="btn btn-sm" onClick={() => revokeEnrollment(r.id).then(load)}>{t("enroll.revoke")}</button>
+                    )}
+                  </td>
+                )}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
 
 export default function AgentIdentityPage() {
   const { t } = useTranslation();
@@ -67,6 +120,13 @@ export default function AgentIdentityPage() {
       );
       if (!ok) return;
     }
+    const relaxing = (!form.require_agent_key && data.settings.require_agent_key)
+      || (form.allow_keyless_agents && !data.settings.allow_keyless_agents)
+      || (form.allow_direct_registration && !data.settings.allow_direct_registration);
+    if (relaxing && !window.confirm(t(
+      "identity.confirm_relax",
+      "Relax agent identity? A user session will be able to act in an agent's name, or agents without a signing key will be able to act unsigned - neither can be verified later. Every change is in the audit log.",
+    ))) return;
     if (form.require_pq_signatures && !data.settings.require_pq_signatures) {
       const ok = window.confirm(
         t(
@@ -139,6 +199,20 @@ export default function AgentIdentityPage() {
                 </button>
                 <button className="btn btn-sm" onClick={() => setIssued(null)}>{t("identity.done", "Done")}</button>
               </div>
+            </div>
+          </div>
+        )}
+
+        {(!data.settings.require_agent_key || data.settings.allow_keyless_agents || data.settings.allow_direct_registration) && (
+          <div className="panel" style={{ marginBottom: 16, borderColor: "#ef4444" }}>
+            <div className="panel-body" style={{ color: "#ef4444", fontSize: 13 }}>
+              ⚠ {t("identity.relaxed_warning", "Agent identity is relaxed in this organization:")}{" "}
+              {[
+                !data.settings.require_agent_key ? t("identity.relaxed_session", "user sessions can act in an agent's name") : null,
+                data.settings.allow_keyless_agents ? t("identity.relaxed_keyless", "agents without a signing key can act unsigned") : null,
+                data.settings.allow_direct_registration ? t("identity.relaxed_direct", "agents and keys can be registered without proof of possession") : null,
+              ].filter(Boolean).join("; ")}.{" "}
+              {t("identity.relaxed_hint", "What they do cannot be verified later. Turn it back on in Settings below once your agents use their own keys.")}
             </div>
           </div>
         )}
@@ -218,6 +292,8 @@ export default function AgentIdentityPage() {
           </div>
         </div>
 
+        <EnrollmentTokens isAdmin={isAdmin} />
+
         <div className="panel">
           <div className="panel-header"><h2>{t("identity.settings_title", "Settings")}</h2></div>
           <div className="panel-body">
@@ -238,6 +314,26 @@ export default function AgentIdentityPage() {
                 <strong>{t("identity.require_pq", "Require post-quantum signatures")}</strong>
                 <span className="hint-text" style={{ display: "block", fontSize: 12 }}>
                   {t("identity.require_pq_hint", "New agents and key changes must use the hybrid Ed25519 + ML-DSA-65 scheme; agents without a hybrid key (Ed25519-only or no signing key) cannot delegate, record actions or send messages until they get one.")}
+                </span>
+              </span>
+            </label>
+            <label style={{ display: "flex", gap: 10, alignItems: "flex-start", marginBottom: 14 }}>
+              <input type="checkbox" checked={!!form.allow_keyless_agents} disabled={!isAdmin}
+                onChange={(e) => setForm({ ...form, allow_keyless_agents: e.target.checked })} style={{ width: "auto", marginTop: 3 }} />
+              <span>
+                <strong>{t("identity.allow_keyless", "Allow agents without a signing key (not recommended)")}</strong>
+                <span className="hint-text" style={{ display: "block", fontSize: 12 }}>
+                  {t("identity.allow_keyless_hint", "Off by default: an agent without a signing key cannot delegate or record actions, because nothing it does could be verified later. Turn on only temporarily, while agents get their keys.")}
+                </span>
+              </span>
+            </label>
+            <label style={{ display: "flex", gap: 10, alignItems: "flex-start", marginBottom: 14 }}>
+              <input type="checkbox" checked={!!form.allow_direct_registration} disabled={!isAdmin}
+                onChange={(e) => setForm({ ...form, allow_direct_registration: e.target.checked })} style={{ width: "auto", marginTop: 3 }} />
+              <span>
+                <strong>{t("identity.allow_direct", "Allow registration without proof of possession (not recommended)")}</strong>
+                <span className="hint-text" style={{ display: "block", fontSize: 12 }}>
+                  {t("identity.allow_direct_hint", "Off by default: agents join with a one-time enrollment token and prove they hold their key; keys change only with proof. On: admins can register agents and replace keys directly, as before.")}
                 </span>
               </span>
             </label>

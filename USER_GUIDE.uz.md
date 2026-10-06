@@ -88,6 +88,21 @@ kalitlar) saqlashdan va provayderga yuborishdan oldin maskalanadi.
 Bloklangan atamani o‘z ichiga olgan har qanday prompt rad etiladi va
 yuborilmaydi.
 
+### 4.1 Siyosatlar ierarxiyasi
+
+Policies → **Policy hierarchy**: bitta siyosat uch darajada - tashkilot,
+jamoa (va uning kichik jamoalari), agent - forma yoki YAML sifatida
+tahrirlanadi. Pastki daraja faqat qattiqlashtira oladi: eng kichik limit
+g'olib, har bir darajaning ruxsat ro'yxati ruxsat berishi kerak, barcha
+taqiq / tasdiq ro'yxatlari va bloklangan atamalar amal qiladi, biror joyda
+yoqilgan kalit yoqiq qoladi. Shlyuzga (limitlar, modellar, provayderlar,
+bloklangan atamalar), agent amallariga (vositalar, delegatsiya chuqurligi)
+va - tashkilot darajasi - foydalanuvchi so'rovlariga (provayderlar,
+bloklangan atamalar, tasdiq) qo'llaniladi. Tahrirlash paytida *Effective
+policy* har bir qiymatni u kelgan daraja bilan ko'rsatadi va yuqoridagi
+daraja qattiqroq bo'lgani uchun ta'siri yo'q narsalarni sanab beradi. Har
+bir saqlash audit jurnalida. Batafsil: docs/policies.md.
+
 ---
 
 ## 5. Foydalanish holatlari (Use Cases)
@@ -229,6 +244,95 @@ yerda paydo bo‘ladi — ularni bir marta e’tiborsiz qoldiring.
 
 Ikkala sahifa adminlar va tasdiqlovchilarga ko‘rinadi; topilmalarni
 faqat adminlar ro‘yxatdan o‘tkazadi yoki e’tiborsiz qoldiradi.
+
+### 8.4.2 Agentni ro'yxatga olish
+
+Registry → Agents → **New agent**: agent nima qila olishini kiriting
+(imkoniyatlar, vositalar, modellar, delegatsiya chuqurligi, jamoa) va
+**Issue enrollment token** tugmasini bosing. Tokenni agentni ishga
+tushiradigan odamga bering; u o'sha kompyuterda ko'rsatilgan buyruqni
+ishga tushiradi, masalan
+
+    python tools/provenza_sign.py enroll --server https://provenza.example.com --token pvz_enr_...
+
+Yoki **Enroll in this browser** tugmasini bosing: kalitlar sahifada
+yaratiladi va `provenza-agent.json` sifatida yuklab olinadi (serverga
+yuborilmaydi); faylni agent kompyuteriga ko'chiring. Buyruq uchun Python va
+`pip install cryptography` kerak; sahifa bu haqda ogohlantiradi.
+
+Agent kalitlari o'sha yerda yaratiladi va u yerdan chiqmaydi; agent
+chaqiruvni imzolab ularga egaligini isbotlaydi va shundan keyingina
+reyestrda paydo bo'ladi - aynan siz belgilagan huquqlar bilan. Token bir
+marta ishlaydi va muddati tugaydi (1 soatdan 7 kungacha). Ochiq va
+ishlatilgan tokenlar Agent Identity sahifasida.
+
+Kalitlar `python tools/provenza_sign.py rotate` bilan almashtiriladi (eski
+kalit rozilik beradi, yangisi o'zini isbotlaydi). Kalit yo'qolsa, uni agent
+sahifasida bekor qiling va **Issue re-key token** tugmasini bosing.
+
+### 8.4.3 Jamoalar va rol shablonlari
+
+Registry → **Teams & Roles**. Jamoalar daraxt hosil qiladi (tashkilot →
+jamoa → kichik jamoa → agent); agent jamoaga uning id si orqali tegishli,
+shuning uchun jamoa nomini o'zgartirsangiz, u hamma joyda o'zgaradi.
+
+**Rol shabloni** - huquqlarning nomlangan to'plami: imkoniyatlar,
+vositalar, modellar, delegatsiya chuqurligi hamda gibrid kalit (keyinroq
+attestatsiya ham) talab qilinadimi. Rolga ega agent aynan rol huquqlariga
+ega - ularni agentda tahrirlab bo'lmaydi - rolni tahrirlash esa unga ega
+barcha agentlarni yangilaydi (sahifa nechtaligini ko'rsatadi). Butun
+tashkilot roli har qanday agentga, jamoa roli faqat o'sha jamoa agentlariga
+beriladi.
+
+Jamoa va rolni **New agent** sahifasida tanlang (huquq maydonlari rol
+huquqlari bilan almashtiriladi) yoki agent sahifasida o'zgartiring
+(**Jamoa va rol → O'zgartirish**). Agent roldan chiqarilsa, joriy
+huquqlari saqlanadi va endi agent bo'yicha tahrirlanadi. Hali
+ishlatilayotgan jamoa yoki rol (agentlar, kichik jamoalar, ochiq tokenlar)
+o'chirilmaydi. Yangilashda mavjud `owner_team` nomlari jamoalarga
+aylanadi.
+
+### 8.4.4 Ish yuklamasi attestatsiyasi
+
+Registry → **Attestation**. Siyosat agentlar qayerda ishlayotganini
+isbotlashi kerakligini belgilaydi: Kubernetes klasteringiz (emitenti va imzo
+kalitlari - `kubectl get --raw /openid/v1/jwks`), token audience'i (xuddi
+shu qiymat pod spetsifikatsiyasiga yoziladi), ruxsat etilgan namespace /
+service account'lar va isbot qancha amal qilishi. Teams & Roles'da rolda
+**Require attestation**ni belgilang va siyosatni tanlang: uning agentlari
+attestatsiyadan o'tmaguncha harakat qila olmaydi. Siyosatdagi **Setup** pod
+spetsifikatsiyasi qismini va agent ishga tushiradigan buyruqni ko'rsatadi
+(`provenza_sign.py attest --every 10`); **Test a token** tokenni hech narsa
+yozmasdan tekshiradi. Har bir urinish sahifada ko'rsatiladi va audit
+jurnaliga yoziladi; agent sahifasi u attestatsiyadan o'tganmi va nega
+o'tmaganini ko'rsatadi. Batafsil: docs/attestation.md.
+
+**Iste'foga chiqarilgan** agent (agent sahifasi → Retire) yakuniy: u harakat
+qila olmaydi, jamoa yoki rolda hisoblanmaydi va qayta yoqilmaydi.
+To'xtatilgan (kill) agentni qayta yoqish mumkin - agar uni favqulodda
+to'xtatish hali ushlab turmasa: unda o'sha to'xtatishni bekor qiling (8.4.5).
+
+### 8.4.5 Favqulodda to'xtatish (Kill switch)
+
+Enforcement → **Kill switch** AI'ni to'rt bosqichda to'xtatadi: bitta
+**agent**, **jamoa** (quyi jamoalari bilan), **barcha agentlar** yoki **butun
+AI trafigi** (barcha agentlar, shuningdek gateway, AI so'rovlari va
+playground). Har bir to'xtatish sababni talab qiladi; tashkilot
+miqyosidagi ikki daraja uchun `STOP` deb yozish ham kerak. To'xtatilgan
+agentlar suspended holatiga o'tadi va (belgini olib tashlamasangiz) ularning
+delegatsiya zanjirlari tugaydi. To'xtatish amalda ekan, u qamragan narsa
+to'xtatilganicha qoladi: uning doirasida yaratilgan yoki unga o'tkazilgan
+agentlar to'xtatilgan holda boshlanadi, u ushlab turgan agentni qo'lda qayta
+yoqib bo'lmaydi.
+
+**Lift** bitta to'xtatishni bekor qiladi va aynan u to'xtatgan narsani
+qaytaradi: oldinroq boshqa sabab bilan to'xtatilgan agentlar to'xtatilganicha
+qoladi, shu orada o'zgargan agentlarga (masalan, retired) tegilmaydi, boshqa
+to'xtatish hali ushlab turgan agent o'shanga o'tadi. Tugatilgan delegatsiya
+zanjirlari tiklanmaydi. Har bir to'xtatish va bekor qilish sahifadagi
+tarixda, audit jurnalida va - kanalni `kill_switch` hodisasiga obuna
+qilsangiz - bildirishnomalarda. Agent sahifasidagi **Kill** agent
+darajasidagi to'xtatish bilan bir xil. Batafsil: docs/kill-switch.md.
 
 ### 8.5 Brauzer kengaytmasini joylashtirish
 

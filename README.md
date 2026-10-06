@@ -101,7 +101,7 @@ What this does and does not guarantee is spelled out in the [Security Model](#se
 |--|-------|-----|--------------|
 | 🛡️ | **Policy & Prompt Firewall** | everyone | Secrets (cards, keys, IDs) masked before any prompt leaves. Every call logged. Rules built visually — no JSON required. |
 | 👁️ | **Shadow AI Monitor** | unsanctioned AI | Endpoint agent finds local models; browser extension warns before a secret is pasted; passive network discovery — nothing auto-connects. |
-| 🤖 | **Agent Governance** | autonomous agents | Registry with scoped tools & delegation limits; delegating more than an agent holds is rejected and raised as an incident; kill-switch; the live verifiable graph above. |
+| 🤖 | **Agent Governance** | autonomous agents | Registry with scoped tools & delegation limits, teams and role templates (an agent's rights follow its role); workload attestation (Kubernetes ServiceAccount tokens); a policy hierarchy (organization → team → agent, YAML or forms, lower levels only tighten); delegating more than an agent holds is rejected and raised as an incident; a kill switch in levels (agent → team → all agents → all AI traffic) with exact undo; the live verifiable graph above. |
 
 ## 🖥️ Governed access to any LLM
 

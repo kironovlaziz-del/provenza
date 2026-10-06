@@ -14,6 +14,15 @@ from app.models.agent_action import AgentIncident
 from app.services.capability_validator import validate_delegation
 
 
+def _aware(dt):
+    """Datetimes compared here are UTC; tolerate a naive one."""
+    from datetime import timezone
+
+    if dt is None or dt.tzinfo is not None:
+        return dt
+    return dt.replace(tzinfo=timezone.utc)
+
+
 class DelegationService:
     def __init__(self, db: AsyncSession):
         self.db = db
@@ -51,27 +60,41 @@ class DelegationService:
         signer_public_key: Optional[str] = None,
         pq_signature: Optional[str] = None,
         signer_pq_public_key: Optional[str] = None,
+        delegated_tools: Optional[List[str]] = None,
+        verified: bool = False,
     ) -> Tuple[DelegationChain, DelegationHop]:
         """
         Record one delegation hop, creating the chain if this is the root
-        delegation (chain_id is None).
+        delegation (chain_id is None). All checks are made here, on the
+        server, against rights the server computes (services/agent_rights.py):
 
-        Enforces the two governance invariants before accepting the hop:
-          - capability subset: what's delegated must be within what the
-            delegating agent legitimately holds in this chain (its own
-            capabilities at the root, or what it was granted at deeper
-            hops). A superset -> capability_escalation incident + 403.
-          - depth: the new hop's depth must not exceed the delegating
-            agent's max_delegation_depth -> depth_exceeded incident + 403.
+          - both agents are active members of the organization; an agent
+            cannot delegate to itself;
+          - in an existing chain the delegating agent must be a member (the
+            root, or reached by a hop) and its own grant must not have expired;
+          - capabilities and tools: a subset of the delegating agent's rights
+            in this chain -> otherwise capability_escalation incident + 403;
+            tools not named are inherited from the parent, never widened;
+          - depth: the parent's depth + 1, within both the delegating agent's
+            and the chain root's max_delegation_depth -> depth_exceeded + 403;
+          - TTL: never beyond the parent's own expiry -> ttl_escalation + 403.
 
-        The parent's Ed25519 signature (verified at the API layer against
-        the from_agent's public key) is stored on the hop for offline
-        auditability.
+        `verified` is the API layer's signature verdict, stored as is.
         """
-        from_agent = await self._get_agent(from_agent_id, org_id)
-        await self._get_agent(to_agent_id, org_id)  # ensure target exists in org
+        from datetime import datetime, timezone
 
-        # Determine the chain and the parent's capability set within it.
+        from app.services.agent_rights import own_rights, rights_in_chain
+
+        from_agent = await self._get_agent(from_agent_id, org_id)
+        to_agent = await self._get_agent(to_agent_id, org_id)
+        if from_agent.id == to_agent.id:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="delegation.self")
+        for agent in (from_agent, to_agent):
+            if agent.status != "active":
+                raise HTTPException(status_code=status.HTTP_409_CONFLICT,
+                                    detail=f"delegation.agent_not_active: agent {agent.id} is {agent.status}")
+        now = datetime.now(timezone.utc)
+
         if chain_id is None:
             chain = DelegationChain(
                 org_id=org_id,
@@ -83,8 +106,8 @@ class DelegationService:
             )
             self.db.add(chain)
             await self.db.flush()
-            parent_capabilities = list(from_agent.capabilities or [])
-            new_depth = 1
+            parent = own_rights(from_agent)
+            root = from_agent
         else:
             chain = await self._get_chain(chain_id, org_id)
             if chain.status != "active":
@@ -92,48 +115,74 @@ class DelegationService:
                     status_code=status.HTTP_409_CONFLICT,
                     detail=f"Chain is {chain.status}, cannot delegate further",
                 )
-            # The parent's rights within THIS chain are whatever it was
-            # granted on the hop that brought it in (or its own caps if it
-            # is the root acting again).
-            parent_capabilities = await self._capabilities_of_agent_in_chain(
-                chain_id, from_agent_id, from_agent
-            )
-            new_depth = chain.max_depth_reached + 1
+            parent = await rights_in_chain(self.db, from_agent, chain)
+            if not parent.member:
+                # an outsider writing itself into someone else's chain
+                await self._raise_incident(org_id, chain.id, from_agent_id, "not_in_chain", "high",
+                                           {"to_agent_id": to_agent_id})
+                await self.db.commit()
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
+                                    detail="delegation.not_in_chain: the delegating agent is not part of this chain")
+            exp = _aware(parent.expires_at)
+            if exp is not None and exp <= now:
+                await self._raise_incident(org_id, chain.id, from_agent_id, "delegation_expired", "medium",
+                                           {"to_agent_id": to_agent_id, "expired_at": exp.isoformat()})
+                await self.db.commit()
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
+                                    detail="delegation.expired: the delegating agent's own grant has expired")
+            root = await self._get_agent(chain.root_agent_id, org_id)
 
-        # Depth check against the delegating agent's own limit.
-        if new_depth > from_agent.max_delegation_depth:
+        new_depth = parent.depth + 1
+        limit = min(from_agent.max_delegation_depth, root.max_delegation_depth)
+        # and within the policy hierarchy's limit for the delegating agent
+        from app.services import hier_policy
+
+        # ... for the delegating agent and for the one receiving the work (its
+        # actions are checked against its own limit - accepting a delegation
+        # it could never act under would only fail later, on every action)
+        for party in (from_agent, to_agent):
+            _, policy_depth = await hier_policy.engine_policies(self.db, party)
+            if policy_depth is not None:
+                limit = min(limit, policy_depth)
+        if new_depth > limit:
             await self._raise_incident(
                 org_id, chain.id, from_agent_id, "depth_exceeded", "high",
-                {"attempted_depth": new_depth, "max": from_agent.max_delegation_depth},
+                {"attempted_depth": new_depth, "max": limit},
             )
             chain.status = "violated"
             await self.db.commit()
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Delegation depth {new_depth} exceeds agent limit {from_agent.max_delegation_depth}",
+                detail=f"Delegation depth {new_depth} exceeds the limit {limit}",
             )
 
-        # Escalation check: delegated must be subset of parent's rights.
-        ok, escalated = validate_delegation(delegated_capabilities, parent_capabilities)
-        if not ok:
+        ok, escalated = validate_delegation(delegated_capabilities, parent.capabilities)
+        if delegated_tools is not None:
+            tools = sorted({str(t) for t in delegated_tools})
+        elif parent.tools_narrowed:
+            tools = list(parent.tools)       # a narrowed list is inherited, never widened
+        else:
+            tools = None                     # nobody named tools yet: each agent keeps its own
+        ok_tools, escalated_tools = (True, []) if tools is None else validate_delegation(tools, parent.tools)
+        if not ok or not ok_tools:
             await self._raise_incident(
                 org_id, chain.id, from_agent_id, "capability_escalation", "critical",
-                {"escalated": escalated, "parent_had": parent_capabilities},
+                {"escalated": escalated, "parent_had": parent.capabilities,
+                 "escalated_tools": escalated_tools, "parent_tools": parent.tools},
             )
             chain.status = "violated"
             await self.db.commit()
+            what = ", ".join(escalated + [f"tool {t}" for t in escalated_tools])
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Capability escalation: {', '.join(escalated)} not held by delegating agent",
+                detail=f"Capability escalation: {what} not held by delegating agent",
             )
 
-        # TTL monotonic check: a delegation can never outlive the one that
-        # authorized it. If the delegating agent's own grant expires at T,
-        # anything it delegates must expire at or before T.
-        parent_expiry = await self._expiry_of_agent_in_chain(chain.id, from_agent_id)
+        # TTL monotonic: a delegation can never outlive the one that authorized it
+        parent_expiry = _aware(parent.expires_at)
+        expires_at = _aware(expires_at)
         if parent_expiry is not None:
             if expires_at is None:
-                # child left it open, but parent is time-bounded -> inherit
                 expires_at = parent_expiry
             elif expires_at > parent_expiry:
                 await self._raise_incident(
@@ -155,7 +204,8 @@ class DelegationService:
             from_agent_id=from_agent_id,
             to_agent_id=to_agent_id,
             depth=new_depth,
-            delegated_capabilities=list(delegated_capabilities or []),
+            delegated_capabilities=sorted({str(c) for c in delegated_capabilities or []}),
+            delegated_tools=tools,
             task_description=task,
             expires_at=expires_at,
             signature=signature,
@@ -163,7 +213,7 @@ class DelegationService:
             signer_public_key=signer_public_key if signature else None,
             pq_signature=pq_signature if signature else None,
             signer_pq_public_key=signer_pq_public_key if signature else None,
-            verified=bool(signature),  # API layer verifies before calling; stored result
+            verified=bool(verified and signature),
         )
         self.db.add(hop)
         chain.total_hops = (chain.total_hops or 0) + 1
@@ -172,35 +222,6 @@ class DelegationService:
         await self.db.refresh(hop)
         await self.db.refresh(chain)
         return chain, hop
-
-    async def _capabilities_of_agent_in_chain(
-        self, chain_id: int, agent_id: int, agent: Agent
-    ) -> List[str]:
-        """The capability set an agent holds within a chain: the caps it
-        was granted on the most recent hop TO it, or - if it's the root
-        and has no incoming hop - its own registered capabilities."""
-        result = await self.db.execute(
-            select(DelegationHop)
-            .where(DelegationHop.chain_id == chain_id, DelegationHop.to_agent_id == agent_id)
-            .order_by(DelegationHop.depth.desc())
-        )
-        hop = result.scalars().first()
-        if hop and hop.delegated_capabilities is not None:
-            return list(hop.delegated_capabilities)
-        return list(agent.capabilities or [])
-
-    async def _expiry_of_agent_in_chain(self, chain_id: int, agent_id: int):
-        """The expiry the agent holds within a chain: the expires_at of the
-        most recent hop TO it, or None if it's the root / has no time bound.
-        Used to enforce monotonic TTL shrinkage: a delegation can never
-        outlive the delegation that authorized it."""
-        result = await self.db.execute(
-            select(DelegationHop)
-            .where(DelegationHop.chain_id == chain_id, DelegationHop.to_agent_id == agent_id)
-            .order_by(DelegationHop.depth.desc())
-        )
-        hop = result.scalars().first()
-        return hop.expires_at if hop else None
 
     async def _get_chain(self, chain_id: int, org_id: int) -> DelegationChain:
         result = await self.db.execute(

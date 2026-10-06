@@ -38,7 +38,7 @@ function writePin(fp: string) {
   }
 }
 
-export function KeyPanel({ isAdmin, onChange }: { isAdmin: boolean; onChange?: () => void }) {
+export function KeyPanel({ isAdmin, onChange, rev = 0 }: { isAdmin: boolean; onChange?: () => void; rev?: number }) {
   const { t, i18n } = useTranslation();
   const [data, setData] = useState<KeyStatusT | null>(null);
   const [verified, setVerified] = useState<Record<number, boolean>>({});
@@ -62,10 +62,9 @@ export function KeyPanel({ isAdmin, onChange }: { isAdmin: boolean; onChange?: (
       .catch((e) => setError(translateApiError(e?.response?.data?.detail, t, t("audit.load_failed"))));
   }
 
-  useEffect(() => {
-    setPin(readPin());
-    load();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => setPin(readPin()), []);
+  // reload whenever the integrity panel reloads (a checkpoint signed now creates the first key)
+  useEffect(load, [rev]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!pin || !data?.current) {
@@ -84,8 +83,8 @@ export function KeyPanel({ isAdmin, onChange }: { isAdmin: boolean; onChange?: (
       await fn();
       setTyped("");
       setReason("");
-      load();
-      onChange?.();
+      if (onChange) onChange();
+      else load();
     } catch (e: unknown) {
       const err = e as { response?: { data?: { detail?: unknown } } };
       setError(translateApiError(err?.response?.data?.detail, t, t("audit.action_failed")));

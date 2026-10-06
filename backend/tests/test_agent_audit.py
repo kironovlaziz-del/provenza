@@ -33,14 +33,14 @@ class TestCheck:
     async def test_allowed_action(self, db_session, agent):
         audit = AgentAudit(db_session)
         d = await audit.check(agent["org"].id, agent["agent"].id, None, "tool_call",
-                              "openai.chat", {"model": "gpt-4o-mini"}, ["read"])
+                              "openai.chat", {"model": "gpt-4o-mini"})
         assert d.result == "allowed"
 
     @pytest.mark.asyncio
     async def test_denied_tool(self, db_session, agent):
         audit = AgentAudit(db_session)
         d = await audit.check(agent["org"].id, agent["agent"].id, None, "tool_call",
-                              "stripe.charge", {}, [])
+                              "stripe.charge", {})
         assert d.result == "denied"
 
     @pytest.mark.asyncio
@@ -52,7 +52,7 @@ class TestCheck:
         await db_session.flush()
         audit = AgentAudit(db_session)
         d = await audit.check(agent["org"].id, agent["agent"].id, None, "tool_call",
-                              "openai.chat", {"model": "gpt-4o-mini"}, ["read"])
+                              "openai.chat", {"model": "gpt-4o-mini"})
         assert d.result == "pending_approval"
 
 
@@ -60,7 +60,7 @@ class TestRecord:
     @pytest.mark.asyncio
     async def test_denied_action_recorded_with_incident(self, db_session, agent):
         audit = AgentAudit(db_session)
-        d = await audit.check(agent["org"].id, agent["agent"].id, None, "tool_call", "stripe.charge", {}, [])
+        d = await audit.check(agent["org"].id, agent["agent"].id, None, "tool_call", "stripe.charge", {})
         action = await audit.record(agent["org"].id, agent["agent"].id, None, "tool_call",
                                     "stripe.charge", {}, None, None, None, decision=d)
         assert action.policy_check_result == "denied"
@@ -74,7 +74,7 @@ class TestRecord:
     async def test_allowed_action_recorded_no_incident(self, db_session, agent):
         audit = AgentAudit(db_session)
         d = await audit.check(agent["org"].id, agent["agent"].id, None, "tool_call",
-                              "openai.chat", {"model": "gpt-4o-mini"}, ["read"])
+                              "openai.chat", {"model": "gpt-4o-mini"})
         action = await audit.record(agent["org"].id, agent["agent"].id, None, "tool_call",
                                     "openai.chat", {"model": "gpt-4o-mini"}, {"ok": True}, None, 120, decision=d)
         assert action.policy_check_result == "allowed"
@@ -92,7 +92,7 @@ class TestApproveDeny:
         await db_session.flush()
         audit = AgentAudit(db_session)
         d = await audit.check(agent["org"].id, agent["agent"].id, None, "tool_call",
-                              "openai.chat", {"model": "gpt-4o-mini"}, ["read"])
+                              "openai.chat", {"model": "gpt-4o-mini"})
         action = await audit.record(agent["org"].id, agent["agent"].id, None, "tool_call",
                                     "openai.chat", {"model": "gpt-4o-mini"}, None, None, None, decision=d)
         return audit, action
@@ -119,7 +119,7 @@ class TestApproveDeny:
     async def test_cannot_approve_non_pending(self, db_session, agent):
         audit = AgentAudit(db_session)
         d = await audit.check(agent["org"].id, agent["agent"].id, None, "tool_call",
-                              "openai.chat", {"model": "gpt-4o-mini"}, ["read"])
+                              "openai.chat", {"model": "gpt-4o-mini"})
         action = await audit.record(agent["org"].id, agent["agent"].id, None, "tool_call",
                                     "openai.chat", {"model": "gpt-4o-mini"}, None, None, None, decision=d)
         # this action is 'allowed', not pending -> approving is a 409

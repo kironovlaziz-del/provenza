@@ -165,6 +165,7 @@ async def _create_org_with_admin_and_approver(
     admin_email: str = "admin@test.example.com",
     approver_email: str = "approver@test.example.com",
     password: str = "TestPass123!",
+    relaxed_identity: bool = True,
 ) -> dict:
     from app.core.security import get_password_hash
 
@@ -189,6 +190,19 @@ async def _create_org_with_admin_and_approver(
         status="active",
     )
     db.add_all([admin, approver])
+    if relaxed_identity:
+        # Production defaults are strict (agents act only with their own key,
+        # keyless agents cannot act, A2A enforced). Most tests predate that and
+        # drive agents through a user session, so this fixture organization
+        # keeps the old relaxed settings explicitly; tests/test_strict_identity.py
+        # covers the strict defaults with relaxed_identity=False.
+        from app.models.a2a import A2ASettings
+        from app.models.agent_identity import AgentIdentitySettings
+
+        db.add(AgentIdentitySettings(org_id=org.id, require_agent_key=False, allow_keyless_agents=True,
+                                     allow_direct_registration=True, rotation_grace_minutes=60,
+                                     require_pq_signatures=False))
+        db.add(A2ASettings(org_id=org.id, mode="monitor"))
     await db.flush()
     return {
         "org": org,

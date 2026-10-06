@@ -40,7 +40,10 @@ from app.models.agent_action import AgentIncident
 from app.models.agent_identity import AgentIdentitySettings
 from app.models.user import User
 
-DEFAULTS = {"require_agent_key": False, "rotation_grace_minutes": 60, "require_pq_signatures": False}
+# Strict by default: agents act only with their own key, and only agents that
+# can sign may act. An admin can relax either per organization (the UI warns).
+DEFAULTS = {"require_agent_key": True, "rotation_grace_minutes": 60, "require_pq_signatures": False,
+            "allow_keyless_agents": False, "allow_direct_registration": False}
 LAST_USED_RESOLUTION = timedelta(minutes=1)
 IMPERSONATION_INCIDENT = "agent_impersonation_attempt"
 
@@ -57,7 +60,8 @@ def _envelope_from(req: Request, body: Any) -> Any:
 
 
 def _path_id(req: Request, body: Any) -> Any:
-    m = re.match(_P + r"/agents/(\d+)/delegate/?$", req.url.path)
+    m = re.match(_P + r"/agents/(\d+)/(?:delegate|signing-key/challenge|signing-key/rotate"
+                      r"|attestation/challenge|attestation)/?$", req.url.path)
     return m.group(1) if m else None
 
 
@@ -68,6 +72,10 @@ AGENT_ROUTES = [
     ("POST", _P + r"/agents/actions/check/?$", _body("agent_id"), True),
     ("POST", _P + r"/agents/actions/record/?$", _body("agent_id"), True),
     ("POST", _P + r"/agents/\d+/delegate/?$", _path_id, True),
+    # an agent rotating its own signing key (proof with the old and the new key)
+    ("POST", _P + r"/agents/\d+/signing-key/(?:challenge|rotate)/?$", _path_id, True),
+    # an agent proving where it runs (services/attestation.py)
+    ("POST", _P + r"/agents/\d+/attestation(?:/challenge)?/?$", _path_id, True),
     ("POST", _P + r"/a2a/send/?$", _envelope_from, True),
     ("POST", _P + r"/a2a/receive/?$", _body("agent_id"), True),
     ("POST", _P + r"/memory/write/?$", _body("agent_id"), True),
@@ -78,6 +86,32 @@ AGENT_ROUTES = [
     ("POST", _P + r"/gateway/v1/.*$", None, True),
     ("GET", _P + r"/gateway/v1/.*$", None, True),
 ]
+
+
+def claimed_id(value: Any) -> Optional[int]:
+    """The agent id a request names, read the way the endpoint's int field
+    will read it (pydantic's lax mode takes 5, 5.0, "5", true): checks made
+    here on the raw body must not be dodged by another spelling of the id."""
+    if isinstance(value, bool):
+        return int(value)
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return int(value) if value.is_integer() else None
+    if isinstance(value, str):
+        try:
+            f = float(value.strip())
+        except ValueError:
+            return None
+        return int(f) if f.is_integer() else None
+    return None
+
+
+# routes an agent can use before it has attested: attesting itself, keeping
+# its key, and asking who it is - everything else waits for the attestation
+_ATTESTATION_EXEMPT = re.compile(
+    _P + r"/(?:agents/\d+/attestation(?:/challenge)?|agents/\d+/signing-key/(?:challenge|rotate)"
+    r"|agent-identity/me)/?$")
 
 
 def match_route(request: Request):
@@ -111,15 +145,34 @@ async def org_settings(db: AsyncSession, org_id: int) -> dict:
     if not row:
         return {**DEFAULTS, "source": "default"}
     return {"require_agent_key": row.require_agent_key, "rotation_grace_minutes": row.rotation_grace_minutes,
-            "require_pq_signatures": bool(row.require_pq_signatures), "source": "org"}
+            "require_pq_signatures": bool(row.require_pq_signatures),
+            "allow_keyless_agents": bool(row.allow_keyless_agents),
+            "allow_direct_registration": bool(row.allow_direct_registration), "source": "org"}
+
+
+async def keyless_refused(db: AsyncSession, agent: Agent) -> bool:
+    """True when the agent has no signing key and the organization does not
+    allow keyless agents: whatever it did could never be verified."""
+    from app.services.teams import role_requires_hybrid
+
+    if agent.public_key:
+        return False
+    if await role_requires_hybrid(db, agent):  # the role's key requirement beats the org's leniency
+        return True
+    return not (await org_settings(db, agent.org_id)).get("allow_keyless_agents")
 
 
 async def pq_signature_required(db: AsyncSession, agent: Agent) -> bool:
-    """True when the organization requires hybrid (Ed25519 + ML-DSA-65)
-    signatures and this agent has no hybrid key - an Ed25519-only key, or no
-    signing key at all (whose records would be unsigned)."""
+    """True when the organization - or the agent's role template - requires
+    hybrid (Ed25519 + ML-DSA-65) signatures and this agent has no hybrid key:
+    an Ed25519-only key, or no signing key at all (whose records would be
+    unsigned)."""
+    from app.services.teams import role_requires_hybrid
+
     if agent.public_key and agent.pq_public_key:
         return False
+    if await role_requires_hybrid(db, agent):
+        return True
     return bool((await org_settings(db, agent.org_id)).get("require_pq_signatures"))
 
 
@@ -138,8 +191,11 @@ def _unauthorized(detail: str = "agent_identity.invalid_key") -> HTTPException:
     return HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=detail)
 
 
-async def authenticate_agent_request(request: Request, db: AsyncSession, raw_key: str) -> User:
-    """X-Agent-Key path of get_current_user."""
+async def authenticate_agent_request(request: Request, db: AsyncSession, raw_key: str,
+                                     allow_inactive: bool = False) -> User:
+    """X-Agent-Key path of get_current_user. `allow_inactive`: the caller
+    refuses non-active agents itself (the gateway, which answers in the
+    OpenAI error format and logs the refused call)."""
     route = match_route(request)
     if route is None:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
@@ -154,11 +210,15 @@ async def authenticate_agent_request(request: Request, db: AsyncSession, raw_key
     )).scalars().first()
     if agent is None or agent.api_key_revoked_at is not None or agent.status == "retired":
         raise _unauthorized()
+    if agent.status != "active" and not allow_inactive:
+        # suspended (kill switch) or any other non-active state: the key is valid, the agent may not act
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
+                            detail=f"agent_identity.agent_inactive: the agent is {agent.status}")
 
     getter, _bound = route
     if getter is not None:
         claimed = getter(request, await _json(request))
-        if claimed is not None and str(claimed) != str(agent.id):
+        if claimed is not None and claimed_id(claimed) != agent.id:
             db.add(AgentIncident(
                 org_id=agent.org_id, agent_id=agent.id, incident_type=IMPERSONATION_INCIDENT, severity="critical",
                 details={"claimed_agent_id": str(claimed)[:20], "path": request.url.path},
@@ -166,6 +226,14 @@ async def authenticate_agent_request(request: Request, db: AsyncSession, raw_key
             await db.commit()
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
                                 detail="agent_identity.agent_mismatch: an agent key can only act as its own agent")
+
+    # after the impersonation check, so a borrowed key still leaves its incident
+    if not _ATTESTATION_EXEMPT.match(request.url.path):
+        from app.services.attestation import refusal
+
+        code = await refusal(db, agent)
+        if code:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=code)
 
     user = await _accountable_user(db, agent)
     if user is None:
@@ -191,6 +259,24 @@ async def enforce_user_session_policy(request: Request, db: AsyncSession, user: 
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
                             detail="agent_identity.agent_key_required: this organization requires agents to "
                                    "authenticate with their own key (X-Agent-Key)")
+    # relaxed organization: a user session may act in an agent's name - but
+    # not in the name of one whose role requires attestation it does not have
+    getter = route[0]
+    claimed = getter(request, await _json(request)) if getter is not None else None
+    if claimed is not None and not _ATTESTATION_EXEMPT.match(request.url.path):
+        agent_id = claimed_id(claimed)
+        if agent_id is None:
+            # an id we cannot read is not one the endpoint should act on either
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                                detail="agent_identity.bad_agent_id")
+        agent = (await db.execute(select(Agent).where(
+            Agent.id == agent_id, Agent.org_id == user.org_id))).scalar_one_or_none()
+        if agent is not None:
+            from app.services.attestation import refusal
+
+            code = await refusal(db, agent)
+            if code:
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=code)
 
 
 # ---------------------------------------------------------------------- management

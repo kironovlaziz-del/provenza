@@ -24,6 +24,11 @@ from app.api import injection
 from app.api import code_exec
 from app.api import memory
 from app.api import a2a
+from app.api import enrollment as enrollment_api
+from app.api import teams as teams_api
+from app.api import attestation as attestation_api
+from app.api import policy_layers as policy_layers_api
+from app.api import kill_switch as kill_switch_api
 from app.api import agent_identity
 from app.api import gateway
 from app.api import queue_ttl
@@ -87,6 +92,11 @@ app.include_router(code_exec.router, prefix=f"{settings.API_V1_STR}/code-exec", 
 app.include_router(memory.router, prefix=f"{settings.API_V1_STR}/memory", tags=["agent-governance"])
 app.include_router(a2a.router, prefix=f"{settings.API_V1_STR}/a2a", tags=["agent-governance"])
 app.include_router(agent_identity.router, prefix=f"{settings.API_V1_STR}/agent-identity", tags=["agent-governance"])
+app.include_router(enrollment_api.router, prefix=f"{settings.API_V1_STR}/agent-enrollment", tags=["agent-governance"])
+app.include_router(teams_api.router, prefix=f"{settings.API_V1_STR}/teams", tags=["agent-governance"])
+app.include_router(attestation_api.router, prefix=f"{settings.API_V1_STR}/attestation", tags=["agent-governance"])
+app.include_router(policy_layers_api.router, prefix=f"{settings.API_V1_STR}/policy-layers", tags=["policies"])
+app.include_router(kill_switch_api.router, prefix=f"{settings.API_V1_STR}/kill-switch", tags=["agent-governance"])
 app.include_router(gateway.router, prefix=f"{settings.API_V1_STR}/gateway", tags=["gateway"])
 app.include_router(queue_ttl.router, prefix=f"{settings.API_V1_STR}/queue", tags=["requests"])
 app.include_router(byok.router, prefix=f"{settings.API_V1_STR}/byok", tags=["security"])

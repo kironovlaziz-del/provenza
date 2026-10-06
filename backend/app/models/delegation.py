@@ -58,6 +58,9 @@ class DelegationHop(Base):
     to_agent_id = Column(Integer, ForeignKey("agents.id"), nullable=False)
     depth = Column(Integer, nullable=False, default=1)  # hop's depth in the chain (root delegation = 1)
     delegated_capabilities = Column(JSONB)  # subset of the parent's capabilities
+    # tools the hop hands over (subset of the parent's tools in the chain);
+    # NULL on hops recorded before tools were delegated - the agent's own tools apply
+    delegated_tools = Column(JSONB(none_as_null=True))
     task_description = Column(Text)
     expires_at = Column(DateTime(timezone=True))
     signature = Column(Text)  # Ed25519 signature by from_agent

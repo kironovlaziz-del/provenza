@@ -22,6 +22,10 @@ class RequestService:
     async def create_request(
         self, org_id: int, user_id: int, data: RequestCreate
     ) -> AIRequest:
+        from app.services.kill_switch import traffic_stop
+
+        if await traffic_stop(self.db, org_id) is not None:
+            raise api_error(status.HTTP_503_SERVICE_UNAVAILABLE, "kill_switch.traffic_stopped")
         result = await self.db.execute(
             select(AIUseCase).where(
                 AIUseCase.id == data.use_case_id,
@@ -79,11 +83,23 @@ class RequestService:
 
         rules = (policy_version.rules_json if policy_version else {}) or {}
 
+        # the organization's policy level (services/hier_policy.py) on top of
+        # the use case's: it can only add restrictions
+        from app.services import hier_policy
+
+        org_policy = await hier_policy.for_requests(self.db, org_id)
+        refused_by = org_policy.refusing_any("providers.allow", [provider.name, provider.type])
+        if refused_by:
+            raise api_error(status.HTTP_403_FORBIDDEN, "policy.provider_not_allowed", provider=provider.name,
+                            level=refused_by)
+        blocked_terms = list(rules.get("blocked_terms") or [])
+        blocked_terms += [t for t in org_policy.items("content.blocked_terms") if t not in blocked_terms]
+
         # Prompt Firewall runs before anything is persisted: a blocked
         # prompt never reaches the policy engine or a provider.
         firewall_result = prompt_firewall.scan(
             data.input_text,
-            blocked_terms=rules.get("blocked_terms"),
+            blocked_terms=blocked_terms,
             language=getattr(data, "language", None) or "en",
         )
 
@@ -110,7 +126,8 @@ class RequestService:
             await self.db.refresh(request)
             return request
 
-        requires_approval = rules.get("effect") == "require_approval"
+        requires_approval = (rules.get("effect") == "require_approval"
+                             or org_policy.switch("requests.require_approval"))
 
         request = AIRequest(
             org_id=org_id,
@@ -139,7 +156,7 @@ class RequestService:
 
         return request
 
-    async def process_request(self, request_id: int, org_id: int) -> AIResponse:
+    async def process_request(self, request_id: int, org_id: int) -> Optional[AIResponse]:
         result = await self.db.execute(
             select(AIRequest).where(
                 AIRequest.id == request_id,
@@ -152,6 +169,15 @@ class RequestService:
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Request not found",
             )
+        from app.services.kill_switch import traffic_stop
+
+        stop = await traffic_stop(self.db, org_id)
+        if stop is not None:
+            # queued before the stop: it does not reach the provider
+            request.status = "failed"
+            request.error_message = f"Stopped by the kill switch (#{stop.id}): the organization's AI traffic is stopped."
+            await self.db.commit()
+            return None
 
         provider = None
         if request.provider_id:

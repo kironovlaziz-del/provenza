@@ -31,10 +31,10 @@ delegations and actions:
            was accepted and is not expired, and it is consumed only once.
 
 mode "off"      nothing is checked;
-mode "monitor"  (default) problems are recorded, messages still pass -
+mode "monitor"  problems are recorded, messages still pass -
                 except a replayed nonce and a tampered payload, which are
                 never usable;
-mode "enforce"  any failed check rejects the message (an incident is raised);
+mode "enforce"  (default) any failed check rejects the message (an incident is raised);
                 a poisoned payload is quarantined until an admin releases it.
 """
 
@@ -54,7 +54,7 @@ from app.models.delegation import DelegationChain, DelegationHop
 from app.services.agent_identity import pq_signature_required
 
 MODES = ("off", "monitor", "enforce")
-DEFAULTS = {"mode": "monitor", "allow_same_chain": True, "max_age_seconds": 300, "message_ttl_seconds": 3600}
+DEFAULTS = {"mode": "enforce", "allow_same_chain": True, "max_age_seconds": 300, "message_ttl_seconds": 3600}
 FUTURE_SKEW = timedelta(seconds=60)
 INCIDENT = "agent_communication_violation"
 
@@ -241,6 +241,9 @@ class A2AGuard:
         # An organization policy, not a guard setting: it holds in every mode.
         if await pq_signature_required(self.db, src):
             hard.append("this organization requires post-quantum (hybrid) signatures; the sender has no hybrid key")
+        from app.services.attestation import refusal as attestation_refusal
+        if await attestation_refusal(self.db, src):
+            hard.append("the sender's role requires attestation and it has no current one")
 
         poisoned = False
         if mode != "off" and not hard:

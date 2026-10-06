@@ -1,10 +1,20 @@
 from datetime import datetime
-from typing import Any, Dict, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 PATTERN_RE = r"^[A-Za-z0-9._:/*?\[\]-]+$"
 DIGEST_RE = r"^(sha256:)?[A-Fa-f0-9]{64}$"
+
+
+def _capabilities(v):
+    """Capabilities a tool requires: trimmed, de-duplicated, sorted; empty = none."""
+    if v is None:
+        return None
+    out = sorted({str(c).strip() for c in v if str(c).strip()})
+    if len(out) > 50 or any(len(c) > 100 for c in out):
+        raise ValueError("at most 50 capabilities of up to 100 characters")
+    return out
 
 
 class SupplyChainMode(BaseModel):
@@ -21,6 +31,13 @@ class ToolEntryCreate(BaseModel):
     pinned_digest: Optional[str] = Field(default=None, pattern=DIGEST_RE)
     status: Literal["approved", "pending", "blocked"] = "approved"
     notes: Optional[str] = None
+    # what an agent must hold (in its chain) to call a matching tool
+    required_capabilities: Optional[List[str]] = None
+
+    @field_validator("required_capabilities")
+    @classmethod
+    def _caps(cls, v):
+        return _capabilities(v)
 
 
 class ToolEntryUpdate(BaseModel):
@@ -31,6 +48,12 @@ class ToolEntryUpdate(BaseModel):
     pinned_version: Optional[str] = Field(default=None, max_length=100)
     pinned_digest: Optional[str] = Field(default=None, pattern=DIGEST_RE)
     notes: Optional[str] = None
+    required_capabilities: Optional[List[str]] = None
+
+    @field_validator("required_capabilities")
+    @classmethod
+    def _caps(cls, v):
+        return _capabilities(v)
 
 
 class ToolEntryOut(BaseModel):
@@ -53,6 +76,7 @@ class ToolEntryOut(BaseModel):
     approved_at: Optional[datetime] = None
     drift_details: Optional[Dict[str, Any]] = None
     notes: Optional[str] = None
+    required_capabilities: Optional[List[str]] = None
     created_at: Optional[datetime] = None
 
 

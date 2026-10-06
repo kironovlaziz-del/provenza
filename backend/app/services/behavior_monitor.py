@@ -260,6 +260,9 @@ class BehaviorMonitor:
         if agent.status != "quarantined":
             raise HTTPException(status_code=status.HTTP_409_CONFLICT,
                                 detail=f"Agent is {agent.status}, not quarantined")
+        from app.services import kill_switch
+
+        await kill_switch.check_reactivation(self.db, agent)
         agent.status = "active"
         bl = await self.baseline(org_id, agent_id)
         bl.quarantine_released_at = datetime.now(timezone.utc)

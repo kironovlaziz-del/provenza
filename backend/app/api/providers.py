@@ -142,6 +142,12 @@ async def governed_chat(
     the Usage Registry. This is the governance-layer difference from
     hitting the provider directly.
     """
+    from app.services.kill_switch import traffic_stop
+
+    if await traffic_stop(db, current_user.org_id) is not None:
+        from app.core.errors import api_error
+
+        raise api_error(503, "kill_switch.traffic_stopped")
     result = await db.execute(
         select(AIProvider).where(
             AIProvider.id == provider_id, AIProvider.org_id == current_user.org_id

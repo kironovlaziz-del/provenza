@@ -149,8 +149,12 @@ class GatewayService:
         rows = (await self.db.execute(
             select(GatewayRoute.model).where(GatewayRoute.org_id == org_id, GatewayRoute.enabled.is_(True))
         )).scalars().all()
+        from app.services import hier_policy
+
+        eff = await hier_policy.for_agent(self.db, agent)
         allowed = list(agent.allowed_models or [])
-        data = [m for m in allowed if any(m == r or fnmatch.fnmatchcase(m, r) for r in rows)]
+        data = [m for m in allowed if any(m == r or fnmatch.fnmatchcase(m, r) for r in rows)
+                and eff.refusing("models.allow", m) is None]
         return {"object": "list", "data": [{"id": m, "object": "model", "owned_by": "provenza"} for m in data]}
 
     # ------------------------------------------------------------------ chat
@@ -174,6 +178,22 @@ class GatewayService:
         user_id = user.id
         model = body["model"]
         cfg = await self.settings(org_id)
+        # the policy hierarchy (gateway settings -> organization -> team -> agent):
+        # limits, models, providers, blocked terms, output scanning
+        from app.services import hier_policy
+
+        eff = await hier_policy.for_agent(self.db, agent)
+        rpm = eff.limit("limits.requests_per_minute") or cfg["rpm_per_agent"]
+        max_tokens_cap = eff.limit("limits.max_tokens") or cfg["max_tokens_cap"]
+        blocked_terms = eff.items("content.blocked_terms")
+        scan_output = eff.switch("content.scan_output")
+        from app.services.kill_switch import traffic_stop
+
+        stop = await traffic_stop(self.db, org_id)
+        if stop is not None:
+            await self._record(org_id, agent_id, model, "denied", f"kill switch #{stop.id}: AI traffic stopped", [])
+            raise GatewayError(503, "kill_switch", "The organization's AI traffic is stopped by the kill switch.",
+                               "service_unavailable")
         if not cfg["enabled"]:
             raise GatewayError(403, "gateway_disabled", "The gateway is disabled for this organization.")
         if body.get("stream"):
@@ -185,6 +205,11 @@ class GatewayService:
         if model not in allowed_models:
             await self._record(org_id, agent_id, model, "denied", "model not in the agent's allowed models", [])
             raise GatewayError(403, "model_not_allowed", f"Model '{model}' is not in the agent's allowed models.",
+                               "permission_error")
+        by = eff.refusing("models.allow", model)
+        if by:
+            await self._record(org_id, agent_id, model, "denied", f"model not allowed by the {by} policy", [])
+            raise GatewayError(403, "model_not_allowed", f"Model '{model}' is not allowed by the {by} policy.",
                                "permission_error")
         found = await self._route(org_id, model)
         if found is None:
@@ -199,16 +224,23 @@ class GatewayService:
             await self._record(org_id, agent_id, model, "denied", "connection disabled", [], provider_id)
             raise GatewayError(503, "connection_disabled", f"The '{p_name}' connection is disabled.",
                                "api_error")
+        by = eff.refusing_any("providers.allow", [p_name, p_type])
+        if by:
+            await self._record(org_id, agent_id, model, "denied", f"provider not allowed by the {by} policy", [],
+                               provider_id)
+            raise GatewayError(403, "provider_not_allowed", f"The '{p_name}' connection is not allowed by the {by} "
+                                                            f"policy.", "permission_error")
 
         since = datetime.now(timezone.utc) - timedelta(minutes=1)
         recent = (await self.db.execute(
             select(func.count()).select_from(GatewayCall)
             .where(GatewayCall.agent_id == agent_id, GatewayCall.created_at >= since)
         )).scalar_one()
-        if recent >= cfg["rpm_per_agent"]:
-            await self._record(org_id, agent_id, model, "rate_limited", f"over {cfg['rpm_per_agent']} requests/min", [],
+        if recent >= rpm:
+            by = eff.source("limits.requests_per_minute") or hier_policy.GATEWAY_SOURCE
+            await self._record(org_id, agent_id, model, "rate_limited", f"over {rpm} requests/min ({by})", [],
                                provider_id)
-            raise GatewayError(429, "rate_limited", f"Rate limit of {cfg['rpm_per_agent']} requests per minute "
+            raise GatewayError(429, "rate_limited", f"Rate limit of {rpm} requests per minute "
                                                     f"for this agent reached.", "rate_limit_error")
 
         # ---- firewall + ASI01 on every message
@@ -220,7 +252,7 @@ class GatewayService:
         injection_hits: List[str] = []
         for i, m in enumerate(body["messages"]):
             text = _text(m.get("content"))
-            fw = prompt_firewall.scan(text, blocked_terms=cfg["blocked_terms"]) if text else None
+            fw = prompt_firewall.scan(text, blocked_terms=blocked_terms) if text else None
             if fw is not None and fw.blocked:
                 await self._record(org_id, agent_id, model, "blocked", fw.blocked_reason, list(fw.flags), provider_id)
                 raise GatewayError(403, "blocked_by_firewall", fw.blocked_reason or "Blocked by the Prompt Firewall.",
@@ -244,7 +276,7 @@ class GatewayService:
 
         params = {k: body.get(k) for k in ("temperature", "top_p", "stop")}
         requested = body.get("max_tokens") or body.get("max_completion_tokens")
-        params["max_tokens"] = min(requested or cfg["max_tokens_cap"], cfg["max_tokens_cap"])
+        params["max_tokens"] = min(requested or max_tokens_cap, max_tokens_cap)
 
         masked_transcript = "\n".join(f"[{m['role']}] {_text(m.get('content'))}" for m in outgoing)[:20000]
         ai_req = AIRequest(
@@ -272,7 +304,7 @@ class GatewayService:
 
         # ---- output: ASI01 / ASI05
         filtered_reason = None
-        if cfg["scan_output"] and text:
+        if scan_output and text:
             from app.services.code_exec_detector import scan_value
             from app.services.code_exec_guard import CodeExecGuard
             ce_cfg = await CodeExecGuard(self.db).settings(org_id)
