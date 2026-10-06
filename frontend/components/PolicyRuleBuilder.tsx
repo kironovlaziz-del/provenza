@@ -1,16 +1,13 @@
 "use client";
 
+import Link from "next/link";
 import React, { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 
 // A regular policy version's rules_json understands:
-//   blocked_terms: string[]   -> a prompt containing any is rejected
 //   effect: "require_approval" -> every request under this policy needs sign-off
-// PII masking is automatic in the Prompt Firewall and is not configured here.
-
-function toList(s: string): string[] {
-  return s.split(/[,\n]/).map((x) => x.trim()).filter(Boolean);
-}
+// Blocked terms of a policy are kept on the Blocked terms page (scope "policy"),
+// PII rules on the PII rules page.
 
 export function PolicyRuleBuilder({
   value,
@@ -21,34 +18,24 @@ export function PolicyRuleBuilder({
 }) {
   const { t } = useTranslation();
 
-  const [blockedTerms, setBlockedTerms] = useState<string>(() => {
-    const v = value?.blocked_terms;
-    return Array.isArray(v) ? v.join(", ") : "";
-  });
   const [requireApproval, setRequireApproval] = useState<boolean>(
     () => value?.effect === "require_approval"
   );
 
   useEffect(() => {
     const rules: Record<string, unknown> = {};
-    const terms = toList(blockedTerms);
-    if (terms.length) rules.blocked_terms = terms;
     if (requireApproval) rules.effect = "require_approval";
     onChange(rules);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [blockedTerms, requireApproval]);
+  }, [requireApproval]);
 
   return (
     <div>
       <div style={{ border: "1px solid var(--border,#e5e7eb)", borderRadius: 8, padding: 12, marginBottom: 12 }}>
         <strong style={{ fontSize: 14 }}>🚫 {t("rulebuilder.pol_blocked_title")}</strong>
-        <p className="hint-text" style={{ fontSize: 12, margin: "4px 0 8px" }}>{t("rulebuilder.pol_blocked_hint")}</p>
-        <input
-          value={blockedTerms}
-          onChange={(e) => setBlockedTerms(e.target.value)}
-          placeholder={t("rulebuilder.pol_blocked_ph")}
-          style={{ width: "100%" }}
-        />
+        <p className="hint-text" style={{ fontSize: 12, margin: "4px 0 0" }}>
+          {t("rulebuilder.pol_blocked_moved")} <Link href="/blocked-terms">{t("sidebar.nav.blocked_terms")}</Link>
+        </p>
       </div>
 
       <div style={{ border: "1px solid var(--border,#e5e7eb)", borderRadius: 8, padding: 12 }}>

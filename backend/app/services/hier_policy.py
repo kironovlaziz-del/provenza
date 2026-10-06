@@ -8,13 +8,13 @@ agent, each level a document of core/policy_doc.py, combined so that lower
 levels can only tighten.
 
 Where it applies:
-  * gateway (gateway_service): limits, models, providers, blocked terms,
-    output scanning - for the calling agent, on top of the gateway settings
+  * gateway (gateway_service): limits, models, providers, output scanning - for the calling agent, on top of the gateway settings
     (which take part as the topmost level, "gateway settings");
   * agent actions (agent_audit -> agent_policy_engine): tools allow / deny /
     require approval, models, delegation depth;
   * user requests (request_service): the organization level - providers,
-    blocked terms, approval required - on top of the use case's policy.
+    approval required - on top of the use case's policy.
+Blocked terms have their own page and scopes (services/blocked_terms.py).
 """
 
 from __future__ import annotations
@@ -151,9 +151,6 @@ def _gateway_level(cfg: Dict[str, Any]) -> Dict[str, Any]:
     doc: Dict[str, Any] = {"limits": {"requests_per_minute": int(cfg["rpm_per_agent"]),
                                       "max_tokens": int(cfg["max_tokens_cap"])},
                            "content": {"scan_output": bool(cfg["scan_output"])}}
-    terms = [str(t).strip() for t in (cfg.get("blocked_terms") or []) if str(t).strip()]
-    if terms:
-        doc["content"]["blocked_terms"] = terms
     return doc
 
 

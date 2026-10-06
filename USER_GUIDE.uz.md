@@ -76,7 +76,8 @@ filtrlanishini belgilaydi.
 
 1. Yon menyu → **Policies → Policy Center** → **New policy**.
 2. Siyosatni oching va **versiya yarating**. Versiya JSON qoidalarini
-   saqlaydi: maskalash sozlamalari va **bloklangan atamalar** ro‘yxati.
+   saqlaydi (tasdiq kerakmi yoki yo'q). Siyosatning **bloklangan
+   atamalari** Bloklangan atamalar sahifasida (4.3) saqlanadi, doira: Policy.
 3. Versiyani **tasdiqlang** (Approve) — shunda u faollashadi. Versiyalar
    o‘zgarmasdir — qoidalarni o‘zgartirish uchun yangi versiya yaratib,
    uni tasdiqlang.
@@ -85,8 +86,8 @@ filtrlanishini belgilaydi.
 **Prompt Firewall:** so‘rov siyosat asosida ishlaganda, PII (elektron
 pochta, karta raqamlari, SSN, telefon raqamlari, IP manzillar, API
 kalitlar) saqlashdan va provayderga yuborishdan oldin maskalanadi.
-Bloklangan atamani o‘z ichiga olgan har qanday prompt rad etiladi va
-yuborilmaydi.
+Bloklangan atamani o‘z ichiga olgan prompt rad etiladi va yuborilmaydi
+(4.3).
 
 ### 4.1 Siyosatlar ierarxiyasi
 
@@ -94,11 +95,10 @@ Policies → **Policy hierarchy**: bitta siyosat uch darajada - tashkilot,
 jamoa (va uning kichik jamoalari), agent - forma yoki YAML sifatida
 tahrirlanadi. Pastki daraja faqat qattiqlashtira oladi: eng kichik limit
 g'olib, har bir darajaning ruxsat ro'yxati ruxsat berishi kerak, barcha
-taqiq / tasdiq ro'yxatlari va bloklangan atamalar amal qiladi, biror joyda
-yoqilgan kalit yoqiq qoladi. Shlyuzga (limitlar, modellar, provayderlar,
-bloklangan atamalar), agent amallariga (vositalar, delegatsiya chuqurligi)
-va - tashkilot darajasi - foydalanuvchi so'rovlariga (provayderlar,
-bloklangan atamalar, tasdiq) qo'llaniladi. Tahrirlash paytida *Effective
+taqiq / tasdiq ro'yxatlari amal qiladi, biror joyda
+yoqilgan kalit yoqiq qoladi. Shlyuzga (limitlar, modellar, provayderlar),
+agent amallariga (vositalar, delegatsiya chuqurligi) va - tashkilot
+darajasi - foydalanuvchi so'rovlariga (provayderlar, tasdiq) qo'llaniladi. Tahrirlash paytida *Effective
 policy* har bir qiymatni u kelgan daraja bilan ko'rsatadi va yuqoridagi
 daraja qattiqroq bo'lgani uchun ta'siri yo'q narsalarni sanab beradi. Har
 bir saqlash audit jurnalida. Batafsil: docs/policies.md.
@@ -115,6 +115,23 @@ tekshiring: u qoida nimani topishini belgilaydi va provayder nima olishini
 ko'rsatadi. Juda uzoq ishlashi mumkin bo'lgan shablonlar sababi bilan rad
 etiladi; saqlangan qoida baribir vaqtdan oshsa, o'sha prompt rad etiladi va
 ogohlantirish chiqadi. Batafsil: docs/pii-rules.md.
+
+### 4.3 Bloklangan atamalar
+
+Policies → **Blocked terms** - promptda bo'lmasligi kerak bo'lgan so'zlar
+uchun yagona joy. Har bir atama uchun qayerda amal qilishini (butun
+tashkilot, barcha agentlar, quyi jamoalari bilan jamoa, bitta agent yoki
+siyosatning use case'lari), qanday topilishini (**butun so'z** - ajratib,
+qo'shib, harf o'rniga raqam yoki o'xshash harflar bilan yozilgan bo'lsa ham
+- yoki **istalgan joyda**) va nima bo'lishini (**Block** promptni rad
+etadi; **Monitor** o'tkazib yuboradi va sanaydi - yangi atamani avval
+Monitor'da sinang) tanlang. Atamalarni **toifalarga** guruhlang va toifani
+o'chirib, uning atamalarini to'xtatib turing. Ro'yxat har bir atama necha
+marta ko'rilganini ko'rsatadi; **Import CSV** qo'shishdan oldin ko'rsatadi,
+**Export CSV** ro'yxatni yuklab beradi; **Try it** namuna nimaga tushishini
+ko'rsatadi. Gateway sozlamalari, siyosat ierarxiyasi yoki siyosat
+versiyalaridagi atamalar yangilashda shu yerga ko'chirildi. Batafsil:
+docs/blocked-terms.md.
 
 ---
 

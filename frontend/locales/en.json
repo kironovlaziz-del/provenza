@@ -102,7 +102,8 @@
       "attestation": "Attestation",
       "policy_hierarchy": "Policy hierarchy",
       "kill_switch": "Kill switch",
-      "pii_rules": "PII rules"
+      "pii_rules": "PII rules",
+      "blocked_terms": "Blocked terms"
     },
     "logout": "Sign out",
     "role_admin": "admin",
@@ -917,7 +918,28 @@
     "pii.too_many_rules": "At most {{max}} rules.",
     "pii.braces": "A brace that is not a count ({{detail}}).",
     "pii.value_required": "{{field}} cannot be empty.",
-    "pii.broad_repeat": "The pattern has an open-ended repetition of characters that include spaces (like .*, \\D+ or [^@]+) - on a long prompt it can run very long. Give it a limit, like {0,50}."
+    "pii.broad_repeat": "The pattern has an open-ended repetition of characters that include spaces (like .*, \\D+ or [^@]+) - on a long prompt it can run very long. Give it a limit, like {0,50}.",
+    "terms.too_short": "A term needs at least two letters or digits.",
+    "terms.too_long": "A term is at most {{max}} characters.",
+    "terms.duplicate": "\"{{term}}\" is already there for this scope (spelling variants count as the same term).",
+    "terms.target_required": "Choose the team, agent or policy.",
+    "terms.target_not_found": "That team, agent or policy was not found.",
+    "terms.bad_scope": "Unknown scope.",
+    "terms.not_found": "Term not found.",
+    "terms.too_many": "At most {{max}} terms.",
+    "terms.category_not_found": "Category not found.",
+    "terms.category_name_required": "Enter a category name.",
+    "terms.category_taken": "A category \"{{name}}\" already exists.",
+    "terms.too_many_categories": "At most {{max}} categories.",
+    "terms.value_required": "{{field}} cannot be empty.",
+    "terms.import_too_large": "At most {{max}} rows per import.",
+    "terms.import_no_term_column": "The CSV needs a \"term\" column.",
+    "terms.import_bad_value": "match, action or scope has a value that is not allowed",
+    "policy.blocked_terms_moved": "Blocked terms are kept on the Blocked terms page now - remove content.blocked_terms here.",
+    "terms.bad_character": "The term contains a character that is not allowed.",
+    "terms.category_name_too_long": "A category name is at most 100 characters.",
+    "terms.import_bad_csv": "The file is not valid CSV: {{detail}}",
+    "terms.target_ambiguous": "Several teams, agents or policies have this name - add the term on the page instead"
   },
   "discovery": {
     "title": "Network Discovery",
@@ -1254,7 +1276,8 @@
     "preset_read_only_sql": "Read-only SQL",
     "preset_corp_email": "Email to own domain only",
     "preset_sandbox_files": "Files in sandbox only",
-    "preset_payment_limit": "Payment limit → approval"
+    "preset_payment_limit": "Payment limit → approval",
+    "pol_blocked_moved": "A policy's terms are kept on the Blocked terms page (applies to: Policy):"
   },
   "agent_policies": {
     "title": "Agent Policies",
@@ -2018,7 +2041,8 @@
     "rpm": "Requests per minute, per agent",
     "max_tokens": "Max tokens per answer",
     "blocked_terms": "Blocked terms (one per line)",
-    "save": "Save"
+    "save": "Save",
+    "blocked_terms_moved": "Kept on their own page now, with scopes (all agents, a team, an agent...):"
   },
   "queue": {
     "title": "Queue & Retention",
@@ -2484,7 +2508,8 @@
     "attestation_policy": "Attestation policy",
     "no_attestation_policies": "No attestation policies yet - create one under",
     "confirm_attestation_on": "{{count}} agent(s) have this role: they will be blocked until each attests. Continue?",
-    "part_policy": "a policy level (clear it under Policy hierarchy)"
+    "part_policy": "a policy level (clear it under Policy hierarchy)",
+    "part_blocked_terms": "blocked terms scoped to it"
   },
   "attest": {
     "title": "Workload attestation",
@@ -2636,7 +2661,8 @@
       }
     },
     "agent_effective_link": "Policy levels that apply to this agent",
-    "yaml_only": "This level has an empty allow list (allow nothing), which the form cannot show - edit it as YAML."
+    "yaml_only": "This level has an empty allow list (allow nothing), which the form cannot show - edit it as YAML.",
+    "terms_moved": "Blocked terms are kept on their own page, with the same levels (organization, team, agent):"
   },
   "ks": {
     "title": "Kill switch",
@@ -2777,5 +2803,88 @@
     "rule_finds": "The rule finds {{count}} ({{ms}} ms)",
     "firewall_result": "What the provider would get",
     "blocked": "Blocked"
+  },
+  "bt": {
+    "title": "Blocked terms",
+    "intro": "Words a prompt must not contain - project code names, client names, confidential markers - in one place. Each term says where it applies, how it is found and what happens: Block refuses the prompt, Monitor lets it through and records that the term was seen (try a new term in Monitor before blocking). Whole-word matching sees through the usual disguises: P r o j e c t, Project_Titan, Pr0ject, look-alike Cyrillic letters, invisible characters.",
+    "load_failed": "Could not load the blocked terms",
+    "failed": "The action failed",
+    "terms": "Terms",
+    "add": "Add term",
+    "import": "Import CSV",
+    "export": "Export CSV",
+    "term": "Term",
+    "match": "Matching",
+    "match_word": "Whole word",
+    "match_substring": "Anywhere",
+    "match_hint_word": "Finds the term as whole words, also written apart, joined, with _ or -, digits for letters (0 for o), look-alike letters of other scripts or accents. \"ass\" does not find \"class\".",
+    "match_hint_substring": "Finds the term's letters anywhere, also inside other words: \"titan\" finds \"titanium\".",
+    "action": "Action",
+    "block": "Block",
+    "monitor": "Monitor",
+    "where": "Applies to",
+    "choose": "Choose",
+    "scope": {
+      "org": "Whole organization",
+      "agents": "All agents",
+      "team": "Team",
+      "agent": "Agent",
+      "policy": "Policy"
+    },
+    "scope_hint": {
+      "org": "The gateway (every agent), user AI requests and the playground.",
+      "agents": "Every agent's calls through the gateway.",
+      "team": "Gateway calls of the team's agents and of its sub-teams' agents.",
+      "agent": "This agent's calls through the gateway.",
+      "policy": "User requests of use cases governed by this policy, and the playground while the policy is active."
+    },
+    "target": {
+      "team": "Team",
+      "agent": "Agent",
+      "policy": "Policy"
+    },
+    "category": "Category",
+    "no_category": "No category",
+    "note": "Note (optional)",
+    "enabled": "On",
+    "save": "Save",
+    "cancel": "Cancel",
+    "saved": "Saved.",
+    "deleted": "Removed (kept in the audit log).",
+    "search": "Search terms",
+    "all_scopes": "Everywhere",
+    "all_categories": "All categories",
+    "all_actions": "Block and monitor",
+    "hits": "Seen",
+    "none_match": "No term matches the filter.",
+    "no_terms": "No blocked terms yet.",
+    "off": "off",
+    "edit": "Edit",
+    "disable": "Turn off",
+    "enable": "Turn on",
+    "delete": "Remove",
+    "confirm_delete": "Remove the term \"{{term}}\"?",
+    "categories": "Categories",
+    "no_categories": "No categories yet. A category switches its terms on and off together.",
+    "category_terms": "{{count}} term(s)",
+    "category_off": "switched off - its terms do not apply",
+    "new_category": "New category, e.g. Clients",
+    "add_category": "Add category",
+    "confirm_delete_category": "Remove the category \"{{name}}\"? Its terms stay, without a category.",
+    "test": "Try it",
+    "test_with_draft": "Try it, with the term being edited",
+    "sample": "Sample text",
+    "sample_ph": "Paste a prompt to see which terms it would trip",
+    "sample_hint": "Checked against every switched-on term, whatever it applies to. Nothing is stored or counted.",
+    "nothing_found": "No term found",
+    "draft": "the term being edited",
+    "import_preview": "Import preview",
+    "import_counts": "{{added}} to add, {{skipped}} already there, {{errors}} with errors",
+    "import_errors": "Rows with errors",
+    "import_skipped": "Already there",
+    "line": "Line {{n}}:",
+    "import_confirm": "Add {{count}} term(s)",
+    "imported": "Imported.",
+    "import_too_big": "The file is too large (2 MB at most)."
   }
 }

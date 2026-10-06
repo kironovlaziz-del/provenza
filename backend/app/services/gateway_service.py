@@ -49,7 +49,7 @@ from app.models.user import User
 from app.services import gateway_adapters, prompt_firewall
 from app.services.provider_adapters import ProviderCallError
 
-DEFAULTS = {"enabled": True, "rpm_per_agent": 60, "max_tokens_cap": 4096, "blocked_terms": [], "scan_output": True}
+DEFAULTS = {"enabled": True, "rpm_per_agent": 60, "max_tokens_cap": 4096, "scan_output": True}
 SCANNED_ROLES = ("user", "tool", "function")
 
 
@@ -87,14 +87,14 @@ class GatewayService:
     async def settings(self, org_id: int) -> dict:
         row = await self._settings_row(org_id)
         if not row:
-            return {**DEFAULTS, "blocked_terms": [], "source": "default"}
+            return {**DEFAULTS, "source": "default"}
         return {k: getattr(row, k) for k in DEFAULTS} | {"source": "org"}
 
     async def save_settings(self, org_id: int, values: dict, user_id: int) -> tuple:
         row = await self._settings_row(org_id)
         before = None if row is None else {k: getattr(row, k) for k in DEFAULTS}
         if row is None:
-            row = GatewaySettings(org_id=org_id)
+            row = GatewaySettings(org_id=org_id, blocked_terms=[])  # terms: services/blocked_terms.py
             self.db.add(row)
         for k in DEFAULTS:
             setattr(row, k, values[k])
@@ -180,13 +180,15 @@ class GatewayService:
         model = body["model"]
         cfg = await self.settings(org_id)
         # the policy hierarchy (gateway settings -> organization -> team -> agent):
-        # limits, models, providers, blocked terms, output scanning
+        # limits, models, providers, output scanning (blocked terms: services/blocked_terms.py)
         from app.services import hier_policy
 
         eff = await hier_policy.for_agent(self.db, agent)
         rpm = eff.limit("limits.requests_per_minute") or cfg["rpm_per_agent"]
         max_tokens_cap = eff.limit("limits.max_tokens") or cfg["max_tokens_cap"]
-        blocked_terms = eff.items("content.blocked_terms")
+        from app.services import blocked_terms as bt
+
+        blocked_terms = await bt.for_agent(self.db, agent)
         scan_output = eff.switch("content.scan_output")
         from app.services.kill_switch import traffic_stop
 
@@ -254,13 +256,17 @@ class GatewayService:
         from app.services import pii_rules
 
         pii_cfg = await pii_rules.config(self.db, org_id, request_budget=1.0)  # all messages together
+        term_hits: List[Any] = []  # counted once per request, after every message is checked
         for i, m in enumerate(body["messages"]):
             text = _text(m.get("content"))
             # in a thread: custom PII rules may run up to their time limit
             fw = await asyncio.to_thread(prompt_firewall.scan, text, blocked_terms, "en", pii_cfg) if text else None
             if fw is not None and fw.timed_out:
                 await pii_rules.note_timeouts(self.db, org_id, fw.timed_out)
+            if fw is not None:
+                term_hits += fw.term_hits
             if fw is not None and fw.blocked:
+                await bt.record_hits(self.db, org_id, term_hits)
                 await self._record(org_id, agent_id, model, "blocked", fw.blocked_reason, list(fw.flags), provider_id)
                 raise GatewayError(403, "blocked_by_firewall", fw.blocked_reason or "Blocked by the Prompt Firewall.",
                                    "permission_error")
@@ -273,6 +279,7 @@ class GatewayService:
                                           + ", ".join(f["label"] for f in r["findings"][:3]))
             outgoing.append({**{k: v for k, v in m.items() if k != "content"},
                              "content": fw.masked_text if fw is not None else m.get("content")})
+        await bt.record_hits(self.db, org_id, term_hits)  # committed with the request just below
         if injection_hits:
             flags.append("asi01:injection")
             if inj_cfg["mode"] == "enforce":

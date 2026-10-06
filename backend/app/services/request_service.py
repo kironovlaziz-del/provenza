@@ -92,8 +92,10 @@ class RequestService:
         if refused_by:
             raise api_error(status.HTTP_403_FORBIDDEN, "policy.provider_not_allowed", provider=provider.name,
                             level=refused_by)
-        blocked_terms = list(rules.get("blocked_terms") or [])
-        blocked_terms += [t for t in org_policy.items("content.blocked_terms") if t not in blocked_terms]
+        # the organization's terms and those of the use case's policy (services/blocked_terms.py)
+        from app.services import blocked_terms as bt
+
+        blocked_terms = await bt.for_request(self.db, org_id, policy_version.policy_id if policy_version else None)
 
         # Prompt Firewall runs before anything is persisted: a blocked
         # prompt never reaches the policy engine or a provider.
@@ -106,6 +108,7 @@ class RequestService:
             prompt_firewall.scan, data.input_text, blocked_terms, getattr(data, "language", None) or "en", pii_cfg,
         )
         await pii_rules.note_timeouts(self.db, org_id, firewall_result.timed_out)
+        await bt.record_hits(self.db, org_id, firewall_result.term_hits)
 
         # The raw prompt is only ever stored Fernet-encrypted, and never
         # returned by the API. Anything downstream (UI, provider call,

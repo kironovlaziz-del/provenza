@@ -2,8 +2,8 @@
 Tests for governed chat (POST /providers/{id}/chat): the governance layer
 around a provider call. The real provider call is mocked so the test never
 touches the network — we assert the GOVERNANCE behavior: blocked prompts
-never reach the provider, clean prompts do and are logged, and a policy's
-blocked_terms are enforced.
+never reach the provider, clean prompts do and are logged, and an active
+policy's blocked terms (scope "policy" on the Blocked terms page) are enforced.
 """
 
 import pytest
@@ -26,13 +26,15 @@ async def _make_provider(client, token):
 
 
 async def _add_active_blocked_policy(db_session, org_id, term, approver_id):
+    """An active policy with a policy-scoped blocked term (Blocked terms page)."""
+    from app.core.term_match import term_key
+    from app.models.blocked_term import BlockedTerm
+
     policy = AIPolicy(org_id=org_id, name="blocklist", status="active")
     db_session.add(policy)
     await db_session.flush()
-    db_session.add(AIPolicyVersion(
-        policy_id=policy.id, version=1,
-        rules_json={"blocked_terms": [term]}, approved_by=approver_id,
-    ))
+    db_session.add(AIPolicyVersion(policy_id=policy.id, version=1, rules_json={}, approved_by=approver_id))
+    db_session.add(BlockedTerm(org_id=org_id, term=term, key=term_key(term), scope="policy", policy_id=policy.id))
     await db_session.flush()
 
 

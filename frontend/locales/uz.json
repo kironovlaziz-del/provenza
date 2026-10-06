@@ -102,7 +102,8 @@
       "attestation": "Attestatsiya",
       "policy_hierarchy": "Siyosatlar ierarxiyasi",
       "kill_switch": "Favqulodda to'xtatish",
-      "pii_rules": "Shaxsiy ma'lumot qoidalari"
+      "pii_rules": "Shaxsiy ma'lumot qoidalari",
+      "blocked_terms": "Bloklangan atamalar"
     },
     "logout": "Chiqish",
     "role_admin": "administrator",
@@ -917,7 +918,28 @@
     "pii.too_many_rules": "Ko'pi bilan {{max}} ta qoida.",
     "pii.braces": "Takrorlar soni bo'lmagan qavs ({{detail}}).",
     "pii.value_required": "{{field}} bo'sh bo'lishi mumkin emas.",
-    "pii.broad_repeat": "Shablonda bo'shliqni ham o'z ichiga olgan belgilarning cheksiz takrori bor (.*, \\D+ yoki [^@]+ kabi) - uzun promptda juda uzoq ishlashi mumkin. Unga chegara bering, masalan {0,50}."
+    "pii.broad_repeat": "Shablonda bo'shliqni ham o'z ichiga olgan belgilarning cheksiz takrori bor (.*, \\D+ yoki [^@]+ kabi) - uzun promptda juda uzoq ishlashi mumkin. Unga chegara bering, masalan {0,50}.",
+    "terms.too_short": "Atamada kamida ikkita harf yoki raqam bo'lishi kerak.",
+    "terms.too_long": "Atama ko'pi bilan {{max}} belgi.",
+    "terms.duplicate": "\"{{term}}\" bu doira uchun allaqachon bor (yozilish variantlari bir atama hisoblanadi).",
+    "terms.target_required": "Jamoa, agent yoki siyosatni tanlang.",
+    "terms.target_not_found": "Bu jamoa, agent yoki siyosat topilmadi.",
+    "terms.bad_scope": "Noma'lum doira.",
+    "terms.not_found": "Atama topilmadi.",
+    "terms.too_many": "Ko'pi bilan {{max}} ta atama.",
+    "terms.category_not_found": "Toifa topilmadi.",
+    "terms.category_name_required": "Toifa nomini kiriting.",
+    "terms.category_taken": "\"{{name}}\" toifasi allaqachon bor.",
+    "terms.too_many_categories": "Ko'pi bilan {{max}} ta toifa.",
+    "terms.value_required": "{{field}} bo'sh bo'lishi mumkin emas.",
+    "terms.import_too_large": "Bir importda ko'pi bilan {{max}} qator.",
+    "terms.import_no_term_column": "CSV'da \"term\" ustuni bo'lishi kerak.",
+    "terms.import_bad_value": "match, action yoki scope'da ruxsat etilmagan qiymat bor",
+    "policy.blocked_terms_moved": "Bloklangan atamalar endi Bloklangan atamalar sahifasida saqlanadi - bu yerdan content.blocked_terms ni olib tashlang.",
+    "terms.bad_character": "Atamada ruxsat etilmagan belgi bor.",
+    "terms.category_name_too_long": "Toifa nomi ko'pi bilan 100 belgi.",
+    "terms.import_bad_csv": "Fayl yaroqli CSV emas: {{detail}}",
+    "terms.target_ambiguous": "Bu nom bir nechta jamoa, agent yoki siyosatda bor - atamani sahifada qo'shing"
   },
   "discovery": {
     "title": "Tarmoq kashfiyoti",
@@ -1254,7 +1276,8 @@
     "preset_read_only_sql": "Faqat o'qish uchun SQL",
     "preset_corp_email": "Email faqat o'z domeniga",
     "preset_sandbox_files": "Fayllar faqat sandboxda",
-    "preset_payment_limit": "To'lov limiti → tasdiq"
+    "preset_payment_limit": "To'lov limiti → tasdiq",
+    "pol_blocked_moved": "Siyosat atamalari Bloklangan atamalar sahifasida saqlanadi (doira: Siyosat):"
   },
   "agent_policies": {
     "title": "Agent siyosatlari",
@@ -2018,7 +2041,8 @@
     "rpm": "Daqiqasiga so'rovlar, har bir agent uchun",
     "max_tokens": "Javobdagi maksimal tokenlar",
     "blocked_terms": "Taqiqlangan atamalar (har qatorda bittadan)",
-    "save": "Saqlash"
+    "save": "Saqlash",
+    "blocked_terms_moved": "Endi alohida sahifada, doiralari bilan saqlanadi (barcha agentlar, jamoa, agent...):"
   },
   "queue": {
     "title": "Navbat va saqlash",
@@ -2484,7 +2508,8 @@
     "attestation_policy": "Attestatsiya siyosati",
     "no_attestation_policies": "Hali attestatsiya siyosatlari yo'q - ularni bu yerda yarating:",
     "confirm_attestation_on": "Bu rol {{count}} ta agentda: ularning har biri attestatsiyadan o'tguncha bloklanadi. Davom etilsinmi?",
-    "part_policy": "siyosat darajasi (uni Policy hierarchy bo'limida tozalang)"
+    "part_policy": "siyosat darajasi (uni Policy hierarchy bo'limida tozalang)",
+    "part_blocked_terms": "unga tegishli bloklangan atamalar"
   },
   "attest": {
     "title": "Ish yuklamasi attestatsiyasi",
@@ -2636,7 +2661,8 @@
       }
     },
     "agent_effective_link": "Bu agentga qo'llaniladigan siyosat darajalari",
-    "yaml_only": "Bu darajada bo'sh ruxsat ro'yxati bor (hech narsaga ruxsat yo'q), forma uni ko'rsata olmaydi - YAML sifatida tahrirlang."
+    "yaml_only": "Bu darajada bo'sh ruxsat ro'yxati bor (hech narsaga ruxsat yo'q), forma uni ko'rsata olmaydi - YAML sifatida tahrirlang.",
+    "terms_moved": "Bloklangan atamalar alohida sahifada, xuddi shu darajalar bilan (tashkilot, jamoa, agent) saqlanadi:"
   },
   "ks": {
     "title": "Favqulodda to'xtatish",
@@ -2777,5 +2803,88 @@
     "rule_finds": "Qoida {{count}} ta topdi ({{ms}} ms)",
     "firewall_result": "Provayder nima oladi",
     "blocked": "Bloklandi"
+  },
+  "bt": {
+    "title": "Bloklangan atamalar",
+    "intro": "Promptda bo'lmasligi kerak bo'lgan so'zlar - loyiha kod nomlari, mijoz nomlari, maxfiylik belgilari - bir joyda. Har bir atama qayerda amal qilishi, qanday topilishi va nima bo'lishini aytadi: Block promptni rad etadi, Monitor uni o'tkazib yuboradi va atama ko'rilganini yozib qo'yadi (yangi atamani bloklashdan oldin Monitor'da sinab ko'ring). Butun so'z bo'yicha qidiruv odatiy niqoblarni ko'radi: P r o j e c t, Project_Titan, Pr0ject, boshqa yozuvdagi o'xshash harflar, ko'rinmas belgilar.",
+    "load_failed": "Bloklangan atamalarni yuklab bo'lmadi",
+    "failed": "Amal bajarilmadi",
+    "terms": "Atamalar",
+    "add": "Atama qo'shish",
+    "import": "CSV import",
+    "export": "CSV eksport",
+    "term": "Atama",
+    "match": "Moslik",
+    "match_word": "Butun so'z",
+    "match_substring": "Istalgan joyda",
+    "match_hint_word": "Atamani butun so'zlar sifatida topadi, ajratib, qo'shib, _ yoki - bilan, harf o'rniga raqam (o o'rniga 0), boshqa yozuvdagi o'xshash harflar yoki urg'ular bilan yozilgan bo'lsa ham. \"ass\" \"class\"ni topmaydi.",
+    "match_hint_substring": "Atama harflarini istalgan joyda, boshqa so'zlar ichida ham topadi: \"titan\" \"titanium\"ni topadi.",
+    "action": "Amal",
+    "block": "Bloklash",
+    "monitor": "Kuzatish",
+    "where": "Qayerda amal qiladi",
+    "choose": "Tanlang",
+    "scope": {
+      "org": "Butun tashkilot",
+      "agents": "Barcha agentlar",
+      "team": "Jamoa",
+      "agent": "Agent",
+      "policy": "Siyosat"
+    },
+    "scope_hint": {
+      "org": "Gateway (barcha agentlar), foydalanuvchilarning AI so'rovlari va playground.",
+      "agents": "Barcha agentlarning gateway orqali chaqiruvlari.",
+      "team": "Jamoa va uning quyi jamoalari agentlarining gateway chaqiruvlari.",
+      "agent": "Shu agentning gateway orqali chaqiruvlari.",
+      "policy": "Shu siyosat boshqaradigan use case'lardagi foydalanuvchi so'rovlari va siyosat faol ekan playground."
+    },
+    "target": {
+      "team": "Jamoa",
+      "agent": "Agent",
+      "policy": "Siyosat"
+    },
+    "category": "Toifa",
+    "no_category": "Toifasiz",
+    "note": "Izoh (ixtiyoriy)",
+    "enabled": "Yoqilgan",
+    "save": "Saqlash",
+    "cancel": "Bekor",
+    "saved": "Saqlandi.",
+    "deleted": "Olib tashlandi (audit jurnalida saqlanadi).",
+    "search": "Atamalarni qidirish",
+    "all_scopes": "Hamma joyda",
+    "all_categories": "Barcha toifalar",
+    "all_actions": "Bloklash va kuzatish",
+    "hits": "Ko'rilgan",
+    "none_match": "Filtrga mos atama yo'q.",
+    "no_terms": "Hali bloklangan atamalar yo'q.",
+    "off": "o'chiq",
+    "edit": "Tahrirlash",
+    "disable": "O'chirish",
+    "enable": "Yoqish",
+    "delete": "Olib tashlash",
+    "confirm_delete": "\"{{term}}\" atamasini olib tashlaysizmi?",
+    "categories": "Toifalar",
+    "no_categories": "Hali toifalar yo'q. Toifa o'z atamalarini birga yoqadi va o'chiradi.",
+    "category_terms": "{{count}} ta atama",
+    "category_off": "o'chirilgan - atamalari amal qilmaydi",
+    "new_category": "Yangi toifa, masalan Mijozlar",
+    "add_category": "Toifa qo'shish",
+    "confirm_delete_category": "\"{{name}}\" toifasini olib tashlaysizmi? Atamalari toifasiz qoladi.",
+    "test": "Sinab ko'rish",
+    "test_with_draft": "Tahrirlanayotgan atama bilan sinash",
+    "sample": "Namuna matn",
+    "sample_ph": "Qaysi atamalar ishlashini ko'rish uchun promptni joylang",
+    "sample_hint": "Qayerga tegishli bo'lishidan qat'i nazar, barcha yoqilgan atamalar bilan tekshiriladi. Hech narsa saqlanmaydi va sanalmaydi.",
+    "nothing_found": "Atama topilmadi",
+    "draft": "tahrirlanayotgan atama",
+    "import_preview": "Import oldindan ko'rish",
+    "import_counts": "{{added}} ta qo'shiladi, {{skipped}} tasi bor, {{errors}} tasida xato",
+    "import_errors": "Xatoli qatorlar",
+    "import_skipped": "Allaqachon bor",
+    "line": "{{n}}-qator:",
+    "import_confirm": "{{count}} ta atama qo'shish",
+    "imported": "Import qilindi.",
+    "import_too_big": "Fayl juda katta (ko'pi bilan 2 MB)."
   }
 }

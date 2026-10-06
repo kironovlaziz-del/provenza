@@ -65,10 +65,13 @@ def test_levels_only_tighten():
 
 
 async def test_write_read_and_concurrent_edits(client, admin_token, approver_token, db_session):
-    yaml_text = "# company-wide\nlimits:\n  max_tokens: 2000\ncontent:\n  blocked_terms: [Project Titan]\n"
+    # blocked terms have their own page now
+    r = await put(client, admin_token, "org", "content:\n  blocked_terms: [Project Titan]\n", revision=0)
+    assert r.status_code == 422 and _code(r) == "policy.blocked_terms_moved"
+    yaml_text = "# company-wide\nlimits:\n  max_tokens: 2000\ncontent:\n  scan_output: true\n"
     r = await put(client, admin_token, "org", yaml_text, revision=0)
     assert r.status_code == 200, r.text
-    assert r.json()["revision"] == 1 and r.json()["document"]["content"]["blocked_terms"] == ["project titan"]
+    assert r.json()["revision"] == 1 and r.json()["document"]["content"]["scan_output"] is True
     got = (await client.get(f"{L}?scope=org", headers=auth_headers(admin_token))).json()
     assert got["yaml"] == yaml_text  # what the admin wrote, comments included
 
@@ -132,9 +135,10 @@ async def test_gateway_follows_the_hierarchy(client, admin_token, db_session, fa
     assert r.status_code == 403 and "team gw-team" in r.json()["error"]["message"]
     await put(client, admin_token, "team", "", target_id=t["id"])  # cleared
 
-    # organization: a smaller token cap, a blocked term, the provider type allowed
-    await put(client, admin_token, "org", "limits: {max_tokens: 100}\ncontent: {blocked_terms: [titan]}\n"
-                                          "providers: {allow: [openai]}")
+    # organization: a smaller token cap, the provider type allowed; a blocked term (its own page)
+    await put(client, admin_token, "org", "limits: {max_tokens: 100}\nproviders: {allow: [openai]}")
+    r = await client.post("/api/v1/blocked-terms", json={"term": "titan"}, headers=auth_headers(admin_token))
+    assert r.status_code == 201, r.text
     r = await _chat(client, a, msgs(("user", "hello")), max_tokens=5000)
     assert r.status_code == 200, r.text
     assert fake.calls[-1]["params"]["max_tokens"] == 100
@@ -193,7 +197,9 @@ async def test_user_requests_follow_the_organization_level(client, admin_token):
         return await client.post("/api/v1/requests/", headers=auth_headers(admin_token), json={
             "use_case_id": uc, "provider_id": provider, "input_text": text, "purpose": "test"})
 
-    await put(client, admin_token, "org", "content: {blocked_terms: [titan]}\nrequests: {require_approval: true}")
+    await put(client, admin_token, "org", "requests: {require_approval: true}")
+    r = await client.post("/api/v1/blocked-terms", json={"term": "titan"}, headers=auth_headers(admin_token))
+    assert r.status_code == 201, r.text
     r = await ask("about Titan")
     assert r.status_code == 200 and r.json()["status"] == "blocked"
     r = await ask("about the weather")

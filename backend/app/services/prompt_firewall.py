@@ -56,6 +56,8 @@ class FirewallResult:
     blocked_reason: str | None = None
     # ids of custom rules that ran out of time on this text
     timed_out: List[int] = field(default_factory=list)
+    # blocked terms found (core/term_match.Hit), blocking and monitored ones
+    term_hits: List[Any] = field(default_factory=list)
 
 
 @dataclass
@@ -274,14 +276,22 @@ def _overlaps(a: Tuple[int, int], b: Tuple[int, int]) -> bool:
     return not (a_e <= b_s or a_s >= b_e)
 
 
-def _find_blocked_terms(text: str, blocked_terms: Iterable[str]) -> List[str]:
-    lowered = text.lower()
-    hits = []
-    for term in blocked_terms:
-        term = (term or "").strip()
-        if term and term.lower() in lowered:
-            hits.append(term)
-    return hits
+def _find_blocked_terms(text: str, blocked_terms: Iterable[Any]) -> Tuple[List[Any], bool]:
+    """Hits of blocked terms (core/term_match.py). A plain string is a
+    blocking term matched anywhere (the behaviour of callers that pass
+    strings); services/blocked_terms.py passes Term objects with their own
+    match mode and action."""
+    from app.core.term_match import Term, scan
+
+    terms = []
+    for t in blocked_terms:
+        if isinstance(t, Term):
+            terms.append(t)
+        elif (t or "").strip():
+            terms.append(Term(None, t.strip(), match="substring", action="block"))
+    if not terms:
+        return [], True
+    return scan(text, terms)
 
 
 def _apply_masks(text: str, matches: List[Tuple[int, int, str]]) -> str:
@@ -348,15 +358,21 @@ def scan(
 
     Priority order for overlapping spans: custom rules > regex > gazetteer > NER.
     """
-    blocked_terms = list(blocked_terms or [])
-
-    hits = _find_blocked_terms(text, blocked_terms)
-    if hits and not mask_only:
+    term_hits, complete = _find_blocked_terms(text, list(blocked_terms or [])) if not mask_only else ([], True)
+    if not complete:  # a crafted text that takes too long to check is not let through unchecked
+        return FirewallResult(masked_text="", flags=["blocked_terms_timeout"], blocked=True,
+                              blocked_reason="The blocked-terms check did not finish in time", term_hits=term_hits)
+    # monitored terms are counted (services/blocked_terms.record_hits), never shown in flags:
+    # the people being watched for them see the flags
+    term_flags = [f"blocked_term:{h.term.term}" for h in term_hits if h.term.action == "block"]
+    blocking_terms = [h for h in term_hits if h.term.action == "block"]
+    if blocking_terms:
         return FirewallResult(
             masked_text="",
-            flags=[f"blocked_term:{h}" for h in hits],
+            flags=term_flags,
             blocked=True,
-            blocked_reason=f"Prompt contains a blocked term: {hits[0]}",
+            blocked_reason=f"Prompt contains a blocked term: {blocking_terms[0].term.term}",
+            term_hits=term_hits,
         )
 
     cfg = pii or default_config()
@@ -373,10 +389,11 @@ def scan(
             return FirewallResult(masked_text=WITHHELD_TEXT, flags=flags, timed_out=timed_out)
         return FirewallResult(
             masked_text="",
-            flags=flags,
+            flags=term_flags + flags,
             blocked=True,
             blocked_reason=f"The PII rule {labels[0]} could not check the prompt in time",
             timed_out=timed_out,
+            term_hits=term_hits,
         )
 
     def enabled(matches: List[Tuple[int, int, str]]) -> List[Tuple[int, int, str]]:
@@ -409,9 +426,10 @@ def scan(
             blocked=True,
             blocked_reason=f"Prompt contains {', '.join(blocking)}, which this organization blocks",
             timed_out=timed_out,
+            term_hits=term_hits,
         )
 
-    flags: List[str] = []
+    flags: List[str] = list(term_flags)
     for _, _, label in accepted:
         f = f"masked:{label.lower()}"
         if f not in flags:
@@ -419,4 +437,5 @@ def scan(
 
     masked_text = _apply_masks(text, accepted)
 
-    return FirewallResult(masked_text=masked_text, flags=flags, blocked=False, timed_out=timed_out)
+    return FirewallResult(masked_text=masked_text, flags=flags, blocked=False, timed_out=timed_out,
+                          term_hits=term_hits)

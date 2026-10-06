@@ -16,8 +16,11 @@ sub-teams), agent - written as YAML or through the forms:
     models:     {allow: ["gpt-4o-mini", "claude-*"]}
     providers:  {allow: ["openai"]}
     tools:      {allow: ["kb.*"], deny: ["shell.*"], require_approval: ["email.send"]}
-    content:    {blocked_terms: ["project titan"], scan_output: true}
+    content:    {scan_output: true}
     requests:   {require_approval: true}
+
+Blocked terms are not part of a policy document: they are kept on the
+Blocked terms page (services/blocked_terms.py), with their own scopes.
 
 Levels combine so that a lower one can only TIGHTEN what is above it:
   * limits                 the smallest wins
@@ -60,7 +63,6 @@ FIELDS: Dict[Tuple[str, str], Tuple[str, str, Any]] = {
     ("tools", "allow"): ("allow", "patterns", None),
     ("tools", "deny"): ("union", "patterns", None),
     ("tools", "require_approval"): ("union", "patterns", None),
-    ("content", "blocked_terms"): ("union", "terms", None),
     ("content", "scan_output"): ("or", "bool", None),
     ("requests", "require_approval"): ("or", "bool", None),
 }
@@ -180,6 +182,9 @@ def validate(doc: Any) -> Dict[str, Any]:
             spec = FIELDS.get((key, sub))
             path = f"{key}.{sub}"
             if spec is None:
+                if path == "content.blocked_terms":
+                    raise PolicyDocError("policy.blocked_terms_moved", path,
+                                         "blocked terms are kept on the Blocked terms page")
                 raise PolicyDocError("policy.unknown_key", path)
             if v is None:
                 continue

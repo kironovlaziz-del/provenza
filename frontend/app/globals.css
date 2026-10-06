@@ -1338,6 +1338,13 @@ tbody tr.clickable:hover {
 .agent-page .ks-event-head { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .agent-page .ks-event-head .ag-row-actions { margin-left: auto; min-width: 0; }
 .agent-page .ks-names { font-size: 12px; overflow-wrap: anywhere; }
+/* blocked terms page */
+.agent-page .bt-filters { display: flex; flex-wrap: wrap; gap: 8px; padding-top: 0; }
+.agent-page .bt-filters input[type="search"] { flex: 1 1 200px; min-width: 0; }
+.agent-page .bt-filters select { width: auto; flex: 0 1 auto; max-width: 100%; }
+.agent-page .bt-cat { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.agent-page .bt-cat-add { display: flex; gap: 8px; flex-wrap: wrap; }
+.agent-page .bt-cat-add input { flex: 1 1 200px; min-width: 0; width: auto; }
 /* PII rules page */
 .agent-page .pii-sample { white-space: pre-wrap; }
 .agent-page mark.pii-hit { background: var(--risk-medium-bg); color: var(--text-primary); border-bottom: 2px solid var(--risk-medium); padding: 0 1px; border-radius: 2px; }

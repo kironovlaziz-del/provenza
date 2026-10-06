@@ -26,6 +26,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import api_error
 from app.models.agent import Agent
+from app.models.blocked_term import BlockedTerm
 from app.models.enrollment import AgentEnrollment
 from app.models.policy_layer import PolicyLayer
 from app.models.team import RoleTemplate, Team
@@ -184,6 +185,9 @@ async def delete_team(db: AsyncSession, org_id: int, team_id: int) -> Dict[str, 
             # a policy level with rules: clear it first (the change is audited)
             ("policy", select(func.count()).select_from(PolicyLayer).where(
                 PolicyLayer.org_id == org_id, PolicyLayer.team_id == t.id, PolicyLayer.document != text("'{}'::jsonb"))),
+            # blocked terms scoped to the team: move or remove them first
+            ("blocked_terms", select(func.count()).select_from(BlockedTerm).where(
+                BlockedTerm.org_id == org_id, BlockedTerm.team_id == t.id, BlockedTerm.deleted_at.is_(None))),
         ) if (await db.execute(q)).scalar_one()
     ]
     if used:

@@ -5,6 +5,7 @@
 // where every value comes from and what a lower level tried but could not
 // loosen.
 
+import Link from "next/link";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { PageHeader } from "@/components/PageHeader";
@@ -21,12 +22,12 @@ type Sel = { scope: Scope; id: number | null; label: string };
 type Tri = "" | "on" | "off";
 type FormState = {
   description: string; rpm: string; maxTokens: string; depth: string; models: string; providers: string;
-  toolsAllow: string; toolsDeny: string; toolsApproval: string; terms: string; scanOutput: Tri; reqApproval: Tri;
+  toolsAllow: string; toolsDeny: string; toolsApproval: string; scanOutput: Tri; reqApproval: Tri;
 };
 
 const EMPTY_FORM: FormState = {
   description: "", rpm: "", maxTokens: "", depth: "", models: "", providers: "", toolsAllow: "", toolsDeny: "",
-  toolsApproval: "", terms: "", scanOutput: "", reqApproval: "",
+  toolsApproval: "", scanOutput: "", reqApproval: "",
 };
 
 const split = (s: string) => Array.from(new Set(s.split(/[,\n]/).map((x) => x.trim()).filter(Boolean)));
@@ -52,7 +53,6 @@ function docFromForm(f: FormState): PolicyDocument {
   put("tools", "allow", split(f.toolsAllow));
   put("tools", "deny", split(f.toolsDeny));
   put("tools", "require_approval", split(f.toolsApproval));
-  put("content", "blocked_terms", split(f.terms));
   put("content", "scan_output", fromTri(f.scanOutput));
   put("requests", "require_approval", fromTri(f.reqApproval));
   return d;
@@ -64,7 +64,7 @@ function formFromDoc(d: PolicyDocument): FormState {
     rpm: d.limits?.requests_per_minute?.toString() ?? "", maxTokens: d.limits?.max_tokens?.toString() ?? "",
     depth: d.limits?.max_delegation_depth?.toString() ?? "", models: join(d.models?.allow),
     providers: join(d.providers?.allow), toolsAllow: join(d.tools?.allow), toolsDeny: join(d.tools?.deny),
-    toolsApproval: join(d.tools?.require_approval), terms: join(d.content?.blocked_terms),
+    toolsApproval: join(d.tools?.require_approval),
     scanOutput: tri(d.content?.scan_output), reqApproval: tri(d.requests?.require_approval),
   };
 }
@@ -335,7 +335,7 @@ export default function PolicyHierarchyPage() {
                       <div className="field"><label>{t("ph.f.tools_deny")}</label><input className="mono" placeholder="shell.*" {...f("toolsDeny")} /></div>
                       <div className="field"><label>{t("ph.f.tools_require_approval")}</label><input className="mono" placeholder="email.send" {...f("toolsApproval")} /></div>
                     </div>
-                    <div className="field"><label>{t("ph.f.blocked_terms")}</label><textarea rows={2} {...f("terms")} /></div>
+                    <p className="hint-text ag-small">{t("ph.terms_moved")} <Link href="/blocked-terms">{t("sidebar.nav.blocked_terms")}</Link></p>
                     <div className="ph-fields">
                       <div className="field"><label>{t("ph.f.scan_output")}</label><select {...f("scanOutput")}>{triOptions}</select></div>
                       {sel.scope === "org" && (

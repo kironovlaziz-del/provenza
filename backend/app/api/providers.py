@@ -95,15 +95,14 @@ class ProviderChatResponse(BaseModel):
 
 
 async def _active_policy_rules(db, org_id: int) -> dict:
-    """Merged rules from ALL active policies of the org: the latest APPROVED
-    version of each active policy contributes its blocked_terms, and if any
-    requires approval, the whole request does. This way every active rule
-    applies, not just one arbitrary policy."""
+    """Merged rules from ALL active policies of the org: if the latest
+    APPROVED version of any active policy requires approval, the whole
+    request does. Blocked terms are not here: policy-scoped terms are kept
+    on the Blocked terms page (services/blocked_terms.for_playground)."""
     pres = await db.execute(
         select(AIPolicy).where(AIPolicy.org_id == org_id, AIPolicy.status == "active")
     )
     policies = list(pres.scalars().all())
-    blocked_terms: list[str] = []
     require_approval = False
     for policy in policies:
         vres = await db.execute(
@@ -114,15 +113,9 @@ async def _active_policy_rules(db, org_id: int) -> dict:
         version = vres.scalar_one_or_none()
         if not version:
             continue
-        rules = version.rules_json or {}
-        for term in (rules.get("blocked_terms") or []):
-            if term not in blocked_terms:
-                blocked_terms.append(term)
-        if rules.get("effect") == "require_approval":
+        if (version.rules_json or {}).get("effect") == "require_approval":
             require_approval = True
     out: dict = {}
-    if blocked_terms:
-        out["blocked_terms"] = blocked_terms
     if require_approval:
         out["effect"] = "require_approval"
     return out
@@ -159,7 +152,9 @@ async def governed_chat(
 
     # 1. firewall the user's message, enforcing the org's active policy
     active_policy_rules = await _active_policy_rules(db, current_user.org_id)
-    blocked_terms = active_policy_rules.get("blocked_terms") or []
+    from app.services import blocked_terms as bt
+
+    blocked_terms = await bt.for_playground(db, current_user.org_id)
     import asyncio
 
     from app.services import pii_rules
@@ -167,6 +162,8 @@ async def governed_chat(
     pii_cfg = await pii_rules.config(db, current_user.org_id)
     fw = await asyncio.to_thread(prompt_firewall.scan, data.message, blocked_terms, "en", pii_cfg)
     await pii_rules.note_timeouts(db, current_user.org_id, fw.timed_out)
+    await bt.record_hits(db, current_user.org_id, fw.term_hits)
+    await db.commit()  # before the provider call: the counted rows are not held locked while it runs
 
     # policy may require human approval for every request under it
     if active_policy_rules.get("effect") == "require_approval" and not fw.blocked:

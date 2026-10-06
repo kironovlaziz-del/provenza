@@ -56,6 +56,7 @@ from app.models.attestation import AgentAttestation, AttestationPolicy
 from app.models.policy_layer import PolicyLayer
 from app.models.kill_switch import KillSwitchEvent
 from app.models.pii import PiiRule, PiiSettings
+from app.models.blocked_term import BlockedTerm, BlockedTermCategory
 
 __all__ = [
     "Organization",
