@@ -113,7 +113,7 @@ def parse_yaml(text: str) -> Dict[str, Any]:
     if deepest > MAX_NESTING:
         raise PolicyDocError("policy.too_deep", "", f"at most {MAX_NESTING} levels of brackets")
     try:
-        doc = yaml.load(text, Loader=_no_alias_loader())  # noqa: S506 - a SafeLoader subclass
+        doc = yaml.load(text, Loader=_no_alias_loader())  # noqa: S506  # nosec B506 - a SafeLoader subclass
     except PolicyDocError:
         raise
     except RecursionError:
