@@ -45,23 +45,74 @@ not depend on the server, use agent-held keys.
   registration and never treated as valid: with such a key a fixed
   signature verifies for every message.
 
-Generate a key pair where the agent runs (add `--hybrid` for the
-post-quantum scheme below):
+### Enrollment: the agent proves it holds its key
+
+By default an agent joins only with a **one-time enrollment token** an admin
+issues (Registry -> Agents -> New agent, or `POST /api/v1/agent-enrollment/tokens`).
+The token carries the agent's rights - capabilities, tools, models, depth,
+team - and an expiry; the agent cannot ask for anything else. Where the
+agent runs (add `--hybrid` for the post-quantum scheme below):
 
 ```bash
 pip install cryptography
-python tools/provenza_sign.py keygen
-# private_key  ...   <- stays with the agent
-# public_key   ...   <- register this in Provenza
-# fingerprint  SHA256:...   <- give this to the auditor
+python tools/provenza_sign.py enroll --server https://provenza.example.com --token pvz_enr_...
+# ENROLLED  agent 42 (billing-bot)
+#   key fingerprint  SHA256:...   <- give this to the auditor
+#   saved to         provenza-agent.json  (private keys + API key, mode 600)
 ```
 
-Register the public key when creating the agent (`public_key` in
-`POST /api/v1/agents/register`, or the "agent uses its own key" option in
-the UI), or later with `POST /api/v1/agents/{id}/signing-key`. Changing the
-key does not break old records: each signed record stores the public key
-that verified it (`signer_public_key`), and the agent's page lists every
-key with the period it was current.
+Or press **Enroll in this browser** on the token's page: the keys are
+generated in the browser (WebCrypto Ed25519, bundled ML-DSA-65), the
+challenge is signed there, and the private keys go only into the downloaded
+`provenza-agent.json` - the same file the tool writes, so `rotate` works
+with it later. Move it to the agent's machine (mode 600).
+
+The tool generates the keys on the agent's machine, asks for a challenge
+(`POST /agent-enrollment/challenge`), signs the enrollment statement with
+the new key - both halves for a hybrid key - and sends it
+(`POST /agent-enrollment/enroll`):
+
+```json
+{"challenge":"<from the server>","enrollment_id":<id>,"name":"<agent name>",
+ "org_id":<org>,"pq_public_key":<base64 or null>,"public_key":"<base64>",
+ "type":"provenza.agent.enroll","v":1}
+```
+
+A challenge is single-use and valid for 5 minutes; a wrong signature spends
+it, five failed proofs spend the token. The proof is stored with the key
+(`agent_signing_keys.proof`).
+
+### Rotation: old key consents, new key proves possession
+
+```bash
+python tools/provenza_sign.py rotate            # updates provenza-agent.json
+```
+
+With its own API key the agent asks for a challenge
+(`POST /agents/{id}/signing-key/challenge`) and sends the rotation statement
+signed by the **current** key and by the **new** one
+(`POST /agents/{id}/signing-key/rotate`):
+
+```json
+{"agent_id":<id>,"challenge":"...","new_key_fingerprint":"SHA256:...",
+ "new_pq_public_key":<base64 or null>,"new_public_key":"<base64>",
+ "old_key_fingerprint":"SHA256:...","type":"provenza.agent.key_rotation","v":1}
+```
+
+A lost or revoked key cannot consent; then an admin issues a **re-key**
+token (purpose `rekey`, the agent's page -> "Issue re-key token") and the
+agent enrolls a new key with it. A lost signing key usually means the
+machine holding the API key is gone too, so a re-key also issues a new API
+key and the old one stops at once. A hybrid agent can only be re-keyed or
+rotated to another hybrid key, and a key that was ever registered before
+cannot come back through enrollment or rotation.
+
+Direct registration (`POST /agents/register`) and key replacement by an
+admin (`POST /agents/{id}/signing-key`) prove nothing, so they work only
+where the organization turns on `allow_direct_registration` (Agent
+Identity settings). Changing the key never breaks old records: each signed
+record stores the public key that verified it (`signer_public_key`), and
+the agent's page lists every key with the period it was current.
 
 ## Hybrid post-quantum signatures (Ed25519 + ML-DSA-65)
 
@@ -136,7 +187,30 @@ Verifiers should not re-serialize: Provenza returns the exact signed text as
  "to_agent_id":<agent id>}
 ```
 
-`delegated_capabilities` is sorted before signing.
+`delegated_capabilities` is sorted before signing. A delegation that hands
+over only some tools adds `"delegated_tools":[<sorted, unique>]`; the key is
+present only when the request carries `delegated_tools`, so payloads of
+agents that do not delegate tools are unchanged.
+
+### What the server checks on every hop
+
+Rights are computed by the server, never taken from the request:
+
+- in an existing chain the delegating agent must be its root or have been
+  reached by a hop (`not_in_chain` incident otherwise), and its own grant
+  must not have expired;
+- delegated capabilities and tools must be within the delegating agent's
+  rights in the chain; once a hop names tools, later hops that name none
+  inherit that list - tools only narrow from there (until then each agent
+  uses its own registered tools);
+- what an agent can use is the grant narrowed to its own registration;
+- depth is the delegating agent's depth + 1, within its own and the chain
+  root's `max_delegation_depth`; the TTL never exceeds the parent's;
+- both agents must be active, and an agent cannot delegate to itself.
+
+What an action needs comes from the Tool Registry: each matching entry
+(exact name and globs) lists `required_capabilities`, and the action needs
+all of them. Requests that declare `action_capabilities` are refused (422).
 
 ### Recorded action payload
 
@@ -148,6 +222,31 @@ Verifiers should not re-serialize: Provenza returns the exact signed text as
 `check_id` is the string token returned by `/actions/check`.
 `input_sha256` / `output_sha256` are SHA-256 hex digests of the input and
 output in the same canonical form.
+
+## Revoking a key
+
+Registry -> Agents -> an agent -> Signing keys -> **Revoke**, or
+`POST /agents/{id}/signing-keys/{key_id}/revoke {"reason": ..., "compromised_since": ...}`.
+
+- The key enters the organization's revocation list (`GET /agents/key-revocations`).
+  The list is append-only (database trigger), and every entry is also an
+  audit record (entity `agent_key_revocation`) - so it is covered by the
+  signed audit checkpoints and can be proven offline (docs/audit-proofs.md).
+- `untrusted_from` is the revocation time, or `compromised_since` when the
+  key is known to have leaked earlier. A signature received at or after it
+  is **not trusted** even though it verifies; one received before still
+  stands - retiring a key does not void its past.
+- Revoking the agent's current key leaves it without one: with the default
+  setting (keyless agents not allowed) it cannot act until it gets a new key.
+- A revoked key can never be registered again, by any agent.
+
+Evidence files carry `signed_at` (when the server received the record),
+the key's `revocation` entry if any, and `trusted`. Offline, pass the list
+you exported - not the server's claim inside the evidence:
+
+```bash
+python tools/provenza_sign.py verify evidence.json --fingerprint SHA256:... --revocations revocations.json
+```
 
 ## Evidence files
 

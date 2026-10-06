@@ -57,11 +57,11 @@ export default function ChainDetailPage() {
   }
 
   // Build the ordered node list: root agent first, then each hop's target.
-  const nodes: { agentId: number; delegated?: string[] | null; task?: string | null; expires?: string | null }[] = [
+  const nodes: { agentId: number; delegated?: string[] | null; tools?: string[] | null; task?: string | null; expires?: string | null }[] = [
     { agentId: chain.root_agent_id, task: chain.root_task },
   ];
   for (const hop of chain.hops) {
-    nodes.push({ agentId: hop.to_agent_id, delegated: hop.delegated_capabilities, task: hop.task_description, expires: hop.expires_at });
+    nodes.push({ agentId: hop.to_agent_id, delegated: hop.delegated_capabilities, tools: hop.delegated_tools, task: hop.task_description, expires: hop.expires_at });
   }
 
   return (
@@ -116,6 +116,9 @@ export default function ChainDetailPage() {
                     {i > 0 && (
                       <div style={{ paddingLeft: 18, color: "var(--text-muted,#64748b)", fontSize: 12, margin: "4px 0" }}>
                         │ <span className="mono">delegate: {(node.delegated || []).join(", ") || "—"}</span>
+                        {node.tools && (
+                          <span className="mono"> · tools: {node.tools.join(", ") || "—"}</span>
+                        )}
                         <div style={{ paddingLeft: 8 }}>▼</div>
                       </div>
                     )}

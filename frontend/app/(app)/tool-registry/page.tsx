@@ -13,6 +13,7 @@ import {
   deleteToolEntry,
   getSupplyChainMode,
   listToolEntries,
+  parseCapabilities,
   registryError,
   setSupplyChainMode,
   updateToolEntry,
@@ -35,6 +36,7 @@ const EMPTY_FORM = {
   source: "",
   pinned_version: "",
   pinned_digest: "",
+  required_capabilities: "",
 };
 
 export default function ToolRegistryPage() {
@@ -50,7 +52,7 @@ export default function ToolRegistryPage() {
   const [busy, setBusy] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
-  const [editing, setEditing] = useState<{ id: number; pinned_version: string; pinned_digest: string } | null>(null);
+  const [editing, setEditing] = useState<{ id: number; pinned_version: string; pinned_digest: string; caps: string } | null>(null);
   const [manifestText, setManifestText] = useState("");
   const [digest, setDigest] = useState<string | null>(null);
 
@@ -104,6 +106,7 @@ export default function ToolRegistryPage() {
         source: form.source || undefined,
         pinned_version: form.pinned_version || undefined,
         pinned_digest: form.pinned_digest || undefined,
+        required_capabilities: parseCapabilities(form.required_capabilities),
         status: "approved",
       });
       setForm(EMPTY_FORM);
@@ -237,6 +240,12 @@ export default function ToolRegistryPage() {
                     <input id="tr-dig" className="mono" placeholder="sha256:…" value={form.pinned_digest} onChange={(e) => setForm({ ...form, pinned_digest: e.target.value })} />
                   </div>
                 </div>
+                <div className="field">
+                  <label htmlFor="tr-caps">{t("registry.required_capabilities", "Required capabilities")}</label>
+                  <input id="tr-caps" className="mono" placeholder="payments, email.send" value={form.required_capabilities}
+                    onChange={(e) => setForm({ ...form, required_capabilities: e.target.value })} />
+                  <div className="hint-text">{t("registry.required_capabilities_hint", "An agent may call this tool only if it holds these capabilities in its delegation chain. Agents can no longer declare them.")}</div>
+                </div>
                 <button className="btn btn-primary" type="submit" disabled={busy || !form.pattern.trim()}>
                   {t("registry.submit", "Approve tool")}
                 </button>
@@ -275,6 +284,11 @@ export default function ToolRegistryPage() {
                         {e.publisher ? ` · ${e.publisher}` : ""}
                         {e.discovered ? ` · ${t("registry.discovered", "discovered automatically")}` : ""}
                       </div>
+                      {e.required_capabilities && e.required_capabilities.length > 0 && (
+                        <div className="hint-text mono" style={{ fontSize: 11 }}>
+                          {t("registry.requires", "requires")}: {e.required_capabilities.join(", ")}
+                        </div>
+                      )}
                       {e.status === "drifted" && e.drift_details?.problems && (
                         <div style={{ color: "#ef4444", fontSize: 12, marginTop: 4 }}>
                           ⚠ {e.drift_details.problems.join("; ")}
@@ -298,6 +312,13 @@ export default function ToolRegistryPage() {
                             value={editing.pinned_digest}
                             onChange={(ev) => setEditing({ ...editing, pinned_digest: ev.target.value })}
                           />
+                          <input
+                            className="mono"
+                            placeholder={t("registry.required_capabilities", "Required capabilities")}
+                            aria-label={t("registry.required_capabilities", "Required capabilities")}
+                            value={editing.caps}
+                            onChange={(ev) => setEditing({ ...editing, caps: ev.target.value })}
+                          />
                           <div style={{ display: "flex", gap: 4 }}>
                             <button
                               className="btn btn-sm btn-primary"
@@ -307,6 +328,7 @@ export default function ToolRegistryPage() {
                                   await updateToolEntry(e.id, {
                                     pinned_version: editing.pinned_version.trim() || null,
                                     pinned_digest: editing.pinned_digest.trim() || null,
+                                    required_capabilities: parseCapabilities(editing.caps),
                                   });
                                   setEditing(null);
                                 }, t("registry.saved", "Saved"))
@@ -345,7 +367,7 @@ export default function ToolRegistryPage() {
                         <button
                           className="btn btn-sm"
                           disabled={busy}
-                          onClick={() => setEditing({ id: e.id, pinned_version: e.pinned_version ?? "", pinned_digest: e.pinned_digest ?? "" })}
+                          onClick={() => setEditing({ id: e.id, pinned_version: e.pinned_version ?? "", pinned_digest: e.pinned_digest ?? "", caps: (e.required_capabilities ?? []).join(", ") })}
                         >
                           {t("registry.pin", "Pin")}
                         </button>{" "}

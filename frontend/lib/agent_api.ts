@@ -10,6 +10,7 @@ import type {
   AgentPolicyT,
   AgentIncidentT,
   EscalationSummaryRow,
+  KeyRevocationT,
   SigningKeyT,
 } from "./agent_types";
 
@@ -18,8 +19,8 @@ function items<T>(p: Page<T>): T[] {
 }
 
 // ---- Agents ----
-export async function listAgents() {
-  const { data } = await api.get<Page<Agent>>("/agents/");
+export async function listAgents(limit?: number) {
+  const { data } = await api.get<Page<Agent>>("/agents/", limit ? { params: { limit } } : undefined);
   return items(data);
 }
 
@@ -164,6 +165,12 @@ export interface HopVerification {
   key_fingerprint: string | null;
   key_origin: "agent" | "server" | null;
   server_verified: boolean;
+  /** when the server received the record - what revocation is judged against */
+  signed_at?: string | null;
+  /** the signing key's entry in the revocation list, if any */
+  revocation?: KeyRevocationT | null;
+  /** verified AND received before the key stopped being trusted */
+  trusted?: boolean;
 }
 
 export async function getHopVerification(hopId: number) {
@@ -175,6 +182,21 @@ export async function setSigningKey(agentId: number, publicKey: string, pqPublic
   const { data } = await api.post<Agent>(`/agents/${agentId}/signing-key`, {
     public_key: publicKey,
     pq_public_key: pqPublicKey || null,
+  });
+  return data;
+}
+
+export async function listKeyRevocations(agentId?: number) {
+  const { data } = await api.get<KeyRevocationT[]>("/agents/key-revocations", {
+    params: agentId != null ? { agent_id: agentId } : undefined,
+  });
+  return data;
+}
+
+export async function revokeSigningKey(agentId: number, keyId: number, reason: string, compromisedSince?: string) {
+  const { data } = await api.post<KeyRevocationT>(`/agents/${agentId}/signing-keys/${keyId}/revoke`, {
+    reason,
+    compromised_since: compromisedSince || null,
   });
   return data;
 }

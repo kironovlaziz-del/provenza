@@ -4,7 +4,9 @@ import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { useTranslation } from "react-i18next";
 import { PageHeader } from "@/components/PageHeader";
-import { listAgents, killAgent } from "@/lib/agent_api";
+import { listAgents, killAgent, updateAgent } from "@/lib/agent_api";
+import { useAuth } from "@/lib/auth";
+import { translateApiError } from "@/lib/errors";
 import type { Agent } from "@/lib/agent_types";
 
 function statusClass(s: string): string {
@@ -25,6 +27,9 @@ export default function AgentsPage() {
   const [agents, setAgents] = useState<Agent[]>([]);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<number | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
 
   function refresh() {
     setLoading(true);
@@ -39,9 +44,28 @@ export default function AgentsPage() {
     const reason = window.prompt(t("agents.kill_prompt", { name: a.name }) as string);
     if (reason === null) return; // cancelled
     setBusyId(a.id);
+    setError(null);
     try {
       await killAgent(a.id, reason || "manual kill", true);
       refresh();
+    } catch (err) {
+      const detail = (err as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail;
+      setError(translateApiError(detail, t, t("agents.status_change_failed")));
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function handleReactivate(a: Agent) {
+    if (!window.confirm(t("agents.confirm_reactivate", { name: a.name }))) return;
+    setBusyId(a.id);
+    setError(null);
+    try {
+      await updateAgent(a.id, { status: "active" });
+      refresh();
+    } catch (err) {
+      const detail = (err as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail;
+      setError(translateApiError(detail, t, t("agents.status_change_failed")));
     } finally {
       setBusyId(null);
     }
@@ -64,6 +88,7 @@ export default function AgentsPage() {
           <Link href="/agent-chains" className="btn btn-sm">{t("agents.view_chains")}</Link>
         </div>
 
+        {error && <p className="error-text u-mb-16">{error}</p>}
         <div className="panel">
           <div className="panel-header"><h2>{t("agents.table_title")}</h2></div>
           <table>
@@ -100,14 +125,16 @@ export default function AgentsPage() {
                       {t(`agents.status_${a.status}`, a.status)}
                     </span>
                   </td>
-                  <td className="u-nowrap">
-                    {a.status !== "suspended" && (
-                      <button
-                        className="btn btn-sm btn-danger"
-                        disabled={busyId === a.id}
-                        onClick={() => handleKill(a)}
-                      >
+                  <td className="u-nowrap" style={{ textAlign: "right" }}>
+                    {/* active: stop it now; suspended: switch it back on; retired: final, nothing to do */}
+                    {isAdmin && a.status === "active" && (
+                      <button className="btn btn-sm btn-danger" disabled={busyId === a.id} onClick={() => handleKill(a)}>
                         {t("agents.kill")}
+                      </button>
+                    )}
+                    {isAdmin && a.status === "suspended" && (
+                      <button className="btn btn-sm" disabled={busyId === a.id} onClick={() => handleReactivate(a)}>
+                        {t("agents.reactivate")}
                       </button>
                     )}
                   </td>

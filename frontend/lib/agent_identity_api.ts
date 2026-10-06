@@ -6,6 +6,10 @@ export interface IdentitySettings {
   rotation_grace_minutes: number;
   /** Every agent must sign with Ed25519 + ML-DSA-65 (post-quantum hybrid). */
   require_pq_signatures: boolean;
+  /** Agents without a signing key may act (unsigned, unverifiable). Off by default. */
+  allow_keyless_agents: boolean;
+  /** Direct registration and admin key replacement without proof of possession. Off by default. */
+  allow_direct_registration?: boolean;
   source?: "default" | "org";
 }
 
@@ -37,6 +41,8 @@ export async function saveIdentitySettings(s: IdentitySettings) {
     require_agent_key: s.require_agent_key,
     rotation_grace_minutes: s.rotation_grace_minutes,
     require_pq_signatures: s.require_pq_signatures,
+    allow_keyless_agents: s.allow_keyless_agents,
+    allow_direct_registration: s.allow_direct_registration,
   });
   return data;
 }

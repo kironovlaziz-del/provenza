@@ -79,6 +79,64 @@ this project adheres to [Semantic Versioning](https://semver.org/).
   organization setting `require_pq_signatures` refuses Ed25519-only keys
   and stops agents without a hybrid key from delegating, recording actions
   and sending messages until they get one.
+- **Teams and role templates.** Registry → Teams & Roles: teams form a
+  tree (organization → team → sub-team → agent) and agents belong to one by
+  id (`agents.team_id`; `owner_team` stays as its display name). A role
+  template is a named set of rights - capabilities, tools, models,
+  delegation depth, `require_hybrid`, `require_attestation` (enforced once
+  attestation lands). An agent enrolled with or assigned a role has exactly
+  the role's rights, cannot have them edited individually, and follows
+  every change to the role; a team's role is only for that team's agents.
+  A role that requires a hybrid key cannot be given to an agent with a
+  classic key. Teams and roles still in use are not deleted; every change
+  is audited. API: `/teams`, `/teams/roles`, `PUT /agents/{id}/assignment`;
+  enrollment tokens take `team_id` / `role_id`.
+- **Workload attestation with Kubernetes ServiceAccount tokens**
+  ([docs/attestation.md](docs/attestation.md)). A role template can require
+  attestation under a policy (cluster issuer and keys, audience, allowed
+  namespaces / service accounts, pod-bound tokens only, validity). Its agents
+  cannot act until they send their pod's projected token, signed with their
+  own key over a server challenge (`provenza_sign.py attest --every N`); a
+  passing attestation lasts until the policy's validity or the token's
+  expiry, and stops counting when the policy changes. JWKS by paste, URL or
+  OIDC discovery (cached for an hour). Every attempt is audited
+  (`attested`, `attestation_failed`, `attestation_refused`) and rate
+  limited. Registry → Attestation: policies, a token tester, every attempt;
+  the agent page shows its status. API: `/attestation/*`,
+  `/agents/{id}/attestation[/challenge]`.
+- **Policy hierarchy** ([docs/policies.md](docs/policies.md)). One policy
+  document at three levels - organization, team (with its parent teams),
+  agent - edited as a form or as YAML (Policies → Policy hierarchy). Lower
+  levels can only tighten: smallest limit, every allow list must allow, all
+  deny / approval lists and blocked terms apply, switches stay on. Applied in
+  the gateway (rate limit, token cap, models, providers, blocked terms,
+  output scanning - the gateway settings take part as the topmost level),
+  to agent actions and delegation (tools allow / deny / approval, models,
+  depth) and, at the organization level, to user requests (providers,
+  blocked terms, approval). The editor previews the effective policy with
+  the source of every value and lists what a level tried to loosen.
+  Concurrent edits are refused rather than overwritten; every save is
+  audited with the document before and after. API: `/policy-layers/*`.
+- **Kill switch with levels and undo** ([docs/kill-switch.md](docs/kill-switch.md)).
+  Enforcement → Kill switch stops one agent, a team with its sub-teams, all
+  agents, or all AI traffic (every agent plus the gateway, AI requests and
+  the playground), with a required reason and, organization-wide, a typed
+  confirmation. Each stop records exactly which agents it suspended and
+  which delegation chains it ended; lifting it gives back only those -
+  agents stopped earlier stay stopped, agents changed since are left alone,
+  and agents still held by another stop are handed over to it. While a stop
+  is in force, agents created or moved into its scope (teams created or moved
+  under a stopped team included) start suspended, and
+  the agents it holds cannot be switched back on by hand
+  (`409 kill_switch.holds_agent`). History on the page, audit records
+  (`kill_switch` engaged / lifted) and a new notification event
+  `kill_switch`. `POST /agents/{id}/kill` is now an agent-level stop and
+  returns its `event_id`. API: `/kill-switch`, `/kill-switch/events`,
+  `/kill-switch/events/{id}/lift`.
+- **Retire an agent** from its page: final - its key stops working, it no
+  longer counts toward a team or role (they can then be deleted) and neither
+  a kill nor a status change brings it back (`409 agent.retired_final`).
+  Suspended (killed) agents can be reactivated.
 
 ### Changed
 
@@ -117,6 +175,45 @@ this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Security
 
+- **Agents join only with an enrollment token and proof of possession.** An
+  admin issues a one-time token bound to a rights template; the agent
+  generates its key and signs a fresh server challenge
+  (`tools/provenza_sign.py enroll`), and only then is it created - with the
+  template's rights, never its own. Key rotation needs the old key's
+  consent and the new key's proof (`provenza_sign.py rotate`); a lost or
+  revoked key is replaced through a re-key token (which also issues a new
+  API key; a hybrid agent stays hybrid). Direct registration and
+  admin key replacement without proof are off by default
+  (`allow_direct_registration`). API: `/agent-enrollment/*`,
+  `/agents/{id}/signing-key/challenge|rotate`. Tokens can also be used
+  right in the browser ("Enroll in this browser"): the keys are generated
+  on the page and downloaded, never sent to the server.
+- **Strict agent identity by default** - for new and existing
+  organizations: agents act only with their own key (`require_agent_key`),
+  agents without a signing key cannot delegate or record actions (new
+  `allow_keyless_agents`, off), and agent-to-agent messages are enforced
+  (A2A mode `enforce`). An admin can relax each per organization; the Agent
+  Identity page then shows a warning and asks for confirmation. A suspended
+  agent's key no longer authenticates.
+- **Signing keys can be revoked.** Append-only revocation list, every entry
+  also in the hash-chained audit log; signatures received from
+  `untrusted_from` (revocation time, or an earlier `compromised_since`) are
+  not trusted - in evidence (`trusted`), in the browser and offline
+  (`tools/provenza_sign.py verify --revocations`). Revoked keys can never be
+  registered again.
+- **Agent rights are computed by the server.** What an action needs comes
+  from the Tool Registry (new `required_capabilities` per entry; all
+  matching entries count), and requests that declare `action_capabilities`
+  are refused with 422. Inside a delegation chain an agent holds what its
+  incoming hop granted, capped by its own registration; a hop can also
+  hand over only some tools (`delegated_tools`, signed when present), and
+  from there tools only narrow. Fixed:
+  an agent outside a chain could append hops to it with its full rights
+  (now 403 + `not_in_chain` incident), and act in it; depth counted from
+  the chain instead of the delegating agent's own hop and ignored the
+  root's limit; suspended or retired agents could delegate and receive;
+  an expired grant could be passed on; a hop's `verified` flag only meant
+  "a signature was attached".
 - **Rotating `ENCRYPTION_KEY` re-encrypts the audit keys too**
   (`scripts/rotate_encryption_key.py`); before, checkpoints would have
   stopped after a master key rotation.
@@ -205,6 +302,38 @@ this project adheres to [Semantic Versioning](https://semver.org/).
   until they rotate. Organizations with a single admin cannot rotate until
   they add a second one - or the operator sets `AUDIT_KEY_ROTATION_QUORUM=1`
   (server-wide).
+- **Derived capabilities** (migration `f2a7c4e9d1b3`). Integrations that
+  send `action_capabilities` must stop sending it; set
+  `required_capabilities` on Tool Registry entries instead (Registry ->
+  Tool Registry). Tools without it are checked only against the agent's
+  allowed tools, as before.
+- **Strict identity defaults** (migration `a8c3e5f1b7d9`): existing
+  organizations are switched to `require_agent_key`, no keyless agents and
+  A2A `enforce`. Integrations that call Provenza with a user's token in an
+  agent's name, or run agents without a signing key, stop working until
+  they use the agent's own key (X-Agent-Key) and a signing key - or an admin
+  relaxes the setting temporarily (Agent Identity, A2A settings). Downgrading
+  this migration does not restore the earlier relaxed values.
+- **Enrollment** (migration `b4d6f8a0c2e5`): `POST /agents/register` and
+  `POST /agents/{id}/signing-key` answer 403 unless an admin turns on
+  `allow_direct_registration`. New agents: issue an enrollment token and run
+  `tools/provenza_sign.py enroll` where the agent lives. Existing agents
+  keep working; their keys rotate with `provenza_sign.py rotate`.
+- **Teams** (migration `c6e8a0b2d4f7`): every distinct `owner_team` of an
+  organization's agents and open enrollment tokens becomes a team, and those
+  agents and tokens are linked to it. No roles are created - existing agents
+  keep their own rights until you assign one.
+- **Kill switch** (migration `f1c3e5a7b9d2`): agents killed before this
+  release have no stop to lift and stay suspended until reactivated as
+  before. Killing a retired agent now answers `409 agent.retired_final`;
+  killing an agent again returns its existing stop.
+- **Policy hierarchy** (migration `e9b1d3f5a7c2`): new dependency PyYAML -
+  run `pip install -r requirements.txt`. No level exists after upgrading, so
+  nothing is enforced differently until an admin writes one.
+- **Attestation** (migration `d7f9b1c3e5a8`): no behaviour changes until a
+  role requires attestation. A role that had *require attestation* ticked
+  before this release names no policy: its agents are refused
+  (`agent.attestation_policy_missing`) until you pick a policy or untick it.
 - **Removed features keep their data.** The tables of the removed MLOps and
   RAG features (`datasets`, `training_jobs`, `model_deployments`,
   `prediction_logs`, `document_collections`, `rag_documents`,

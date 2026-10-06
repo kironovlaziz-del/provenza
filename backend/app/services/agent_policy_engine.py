@@ -13,8 +13,8 @@ The check order (cheapest and most fundamental first):
   1. tool allowed for this agent?
   2. model allowed (for model-invoking tools)?
   3. delegation depth within the agent's limit?
-  4. the action's capabilities still a subset of the chain's granted set
-     (no escalation mid-chain)?
+  4. the capabilities the tool requires (Tool Registry) within the agent's
+     rights in the chain (no escalation mid-chain)?
   5. custom agent policies (JSON rules) - evaluated last, can only
      further restrict.
 
@@ -44,6 +44,8 @@ class Decision:
     reason: str
     incident_type: Optional[str] = None  # capability_escalation | depth_exceeded | policy_violation
     matched_policy_id: Optional[int] = None
+    # what the action needed (Tool Registry), recorded with the check
+    required_capabilities: List[str] = field(default_factory=list)
 
 
 @dataclass
@@ -53,7 +55,8 @@ class ActionContext:
     tool_name: Optional[str]
     action_type: Optional[str]
     input_data: Dict[str, Any] = field(default_factory=dict)
-    # the capabilities this action requires/claims (subset check target)
+    # the capabilities this action requires - derived by the server from the
+    # Tool Registry, never declared by the caller
     action_capabilities: List[str] = field(default_factory=list)
     violation: Optional[str] = None  # set by argument rules (ASI02)
 
@@ -74,6 +77,8 @@ class ChainView:
     status: str = "active"  # chain status: active, tripped, violated, terminated, completed
     granted_capabilities: List[str] = field(default_factory=list)
     delegation_expires_at: object = None  # datetime or None; None = no time bound
+    member: bool = True  # False: the agent is neither the chain's root nor reached by a hop
+    root_agent_id: Optional[int] = None
 
 
 # Tools that invoke a model and therefore trigger the model-allowlist
@@ -101,9 +106,16 @@ def evaluate_custom_rule(rule: Dict[str, Any], ctx: ActionContext) -> str:
           -> "approval" if the action's tool is in the list (the action
              is otherwise permitted, but a human must approve it first)
 
+    Pattern versions (fnmatch, "kb.*"), written by the policy hierarchy
+    (services/hier_policy.py), one rule set per level:
+      allow_only_tool_patterns, deny_tool_patterns,
+      require_approval_tool_patterns, allow_only_model_patterns (the model
+      of a model-invoking tool)
+
     Unknown rule keys are ignored, so a typo can't silently block or gate
     everything.
     """
+    from app.core.policy_doc import matches
     tool = ctx.tool_name
     ctx.violation = None
     arg_verdict = "ok"
@@ -121,11 +133,24 @@ def evaluate_custom_rule(rule: Dict[str, Any], ctx: ActionContext) -> str:
     if "allow_only_tools" in rule:
         if tool not in set(rule.get("allow_only_tools") or []):
             return "deny"
+    if "deny_tool_patterns" in rule:
+        if tool and matches(tool, rule.get("deny_tool_patterns") or []):
+            return "deny"
+    if "allow_only_tool_patterns" in rule:
+        if not tool or not matches(tool, rule.get("allow_only_tool_patterns") or []):
+            return "deny"
+    if "allow_only_model_patterns" in rule and tool in _MODEL_INVOKING_TOOLS:
+        model = (ctx.input_data or {}).get("model")
+        if model and not matches(str(model), rule.get("allow_only_model_patterns") or []):
+            return "deny"
     if "deny_action_types" in rule:
         if ctx.action_type in set(rule.get("deny_action_types") or []):
             return "deny"
     if "require_approval_tools" in rule:
         if tool in set(rule.get("require_approval_tools") or []):
+            return "approval"
+    if "require_approval_tool_patterns" in rule:
+        if tool and matches(tool, rule.get("require_approval_tool_patterns") or []):
             return "approval"
     if arg_verdict == "approval":
         return "approval"
@@ -148,6 +173,8 @@ def check_action(
         return Decision(DENIED, "Chain halted by the circuit breaker (ASI08); an admin must resume it", None)
     if chain.status != "active":
         return Decision(DENIED, f"Chain is {chain.status}; no further actions are allowed", None)
+    if not chain.member:
+        return Decision(DENIED, "Agent is not part of this delegation chain", "not_in_chain")
 
     # 1. tool allowlist
     if ctx.tool_name and ctx.tool_name not in set(agent.allowed_tools or []):
@@ -188,8 +215,7 @@ def check_action(
     # 5. custom policies (can only further restrict). A deny wins
     # outright; an approval requirement is remembered and applied only if
     # nothing denies the action - so "deny" always beats "needs approval".
-    approval_policy_id = None
-    approval_reason = None
+    approval = None  # (policy id, reason): the first approval requirement found
     for policy in custom_policies or []:
         rules = policy.get("rules") or {}
         # rules can be a single rule dict or a list of them
@@ -204,15 +230,15 @@ def check_action(
                     "policy_violation",
                     matched_policy_id=policy.get("id"),
                 )
-            if verdict == "approval" and approval_policy_id is None:
-                approval_policy_id = policy.get("id")
-                approval_reason = (
+            if verdict == "approval" and approval is None:
+                # policies of the hierarchy have no id: a marker, not the id, says "found"
+                approval = (policy.get("id"), (
                     f"Action requires human approval per policy "
                     f"'{policy.get('name', policy.get('id'))}'"
                     + (f": {ctx.violation}" if ctx.violation else "")
-                )
+                ))
 
-    if approval_policy_id is not None:
-        return Decision(PENDING_APPROVAL, approval_reason, None, matched_policy_id=approval_policy_id)
+    if approval is not None:
+        return Decision(PENDING_APPROVAL, approval[1], None, matched_policy_id=approval[0])
 
     return Decision(ALLOWED, "Action permitted")

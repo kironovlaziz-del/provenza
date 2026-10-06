@@ -42,6 +42,9 @@ class ToolRegistryEntry(Base):
     approved_by = Column(Integer, ForeignKey("users.id"))
     approved_at = Column(DateTime(timezone=True))
     drift_details = Column(JSONB)
+    # capabilities an agent must hold (in its chain) to call a matching tool -
+    # what actions are checked against, instead of anything the caller claims
+    required_capabilities = Column(JSONB(none_as_null=True))
     notes = Column(Text)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())

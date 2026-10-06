@@ -406,8 +406,12 @@ export async function listAuditLogs(filters?: {
   entity_type?: string;
   entity_id?: number;
   actor_user_id?: number;
+  skip?: number;
+  limit?: number;
 }) {
   const params = new URLSearchParams();
+  if (filters?.skip) params.set("skip", String(filters.skip));
+  if (filters?.limit) params.set("limit", String(filters.limit));
   if (filters?.entity_type) params.set("entity_type", filters.entity_type);
   if (filters?.entity_id != null) params.set("entity_id", String(filters.entity_id));
   if (filters?.actor_user_id != null)

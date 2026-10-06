@@ -20,7 +20,7 @@ def _sign(agent, payload, body):
 
 
 def delegation_body(from_agent, to_agent_id, task, caps, *, chain_id=None,
-                    expires_in=None, nonce=None, issued_at=None):
+                    expires_in=None, nonce=None, issued_at=None, tools=None):
     """from_agent is the dict returned by /agents/register (has id + private_key)."""
     nonce = nonce or secrets.token_hex(16)
     issued_at = int(time.time()) if issued_at is None else issued_at
@@ -34,7 +34,12 @@ def delegation_body(from_agent, to_agent_id, task, caps, *, chain_id=None,
         "nonce": nonce,
         "issued_at": issued_at,
     }
+    extra = {}
+    if tools is not None:  # signed only when sent, like the server does
+        payload["delegated_tools"] = sorted(set(tools))
+        extra["delegated_tools"] = tools
     return _sign(from_agent, payload, {
+        **extra,
         "to_agent_id": to_agent_id,
         "task": task,
         "delegated_capabilities": caps,

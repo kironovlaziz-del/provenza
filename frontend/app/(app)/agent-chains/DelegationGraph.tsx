@@ -400,6 +400,13 @@ function EdgeInspector({ edge, onClose }: { edge: GraphEdgeT; onClose: () => voi
             <div style={{ color: "#94a3b8", marginTop: 4 }}>{t("agent_map.sig_compare")}</div>
           </div>
         )}
+        {evidence?.revocation && result.status === "verified" && (
+          <div style={{ color: evidence.trusted ? "#94a3b8" : "#ef4444", marginTop: 6, fontWeight: evidence.trusted ? 400 : 600 }}>
+            {evidence.trusted
+              ? t("agent_map.sig_revoked_after", { time: new Date(evidence.revocation.untrusted_from).toLocaleString() })
+              : t("agent_map.sig_revoked_untrusted", { time: new Date(evidence.revocation.untrusted_from).toLocaleString(), reason: evidence.revocation.reason })}
+          </div>
+        )}
         {evidence?.key_origin === "server" && result.status === "verified" && (
           <div style={{ color: "#f59e0b", marginTop: 6 }}>{t("agent_map.sig_server_key")}</div>
         )}

@@ -79,6 +79,20 @@ credit cards, SSNs, phone numbers, IP addresses, API keys) is masked
 before storage and before the provider ever sees it. Any prompt
 containing a blocked term is rejected and never sent.
 
+### 4.1 Policy hierarchy
+
+Policies → **Policy hierarchy**: one policy at three levels -
+organization, team (and its sub-teams), agent - edited as a form or as
+YAML. A lower level can only tighten: the smallest limit wins, every
+level's allow list must allow, all deny / approval lists and blocked terms
+apply, and a switch turned on anywhere stays on. It applies to the gateway
+(limits, models, providers, blocked terms), to agent actions (tools,
+delegation depth) and - the organization level - to user requests
+(providers, blocked terms, approval). While you edit, *Effective policy*
+shows every value with the level it comes from and lists what has no
+effect because a level above is stricter. Every save is in the audit log.
+Details: docs/policies.md.
+
 ---
 
 ## 5. Use Cases
@@ -184,7 +198,8 @@ only which product it found and how it recognized it; the process
 command line, which can contain API keys, never leaves the machine.
 
 - **Discovery → Agents Found** lists each agent per device, newest to
-  review first. **Register** opens agent registration with the name and
+  review first. **Register** opens agent registration (an enrollment token,
+  see below) with the name and
   type filled in; once registered, the finding is linked to the governed
   agent and comes under its policies. **Ignore** hides a finding (it can
   be restored).
@@ -212,6 +227,88 @@ them once.
 
 Both pages are visible to admins and approvers; only admins register or
 ignore findings.
+
+### 8.4.2 Enrolling an agent
+
+Registry → Agents → **New agent**: fill in what the agent may do
+(capabilities, tools, models, delegation depth, team) and **Issue
+enrollment token**. Give the token to whoever runs the agent; on that
+machine they run the command shown, e.g.
+
+    python tools/provenza_sign.py enroll --server https://provenza.example.com --token pvz_enr_...
+
+Or press **Enroll in this browser**: the keys are made on the page and
+downloaded as `provenza-agent.json` (never sent to the server); move that
+file to the agent's machine. The command needs Python and
+`pip install cryptography`; the page warns about it.
+
+The agent's keys are generated there and never leave it; it proves it holds
+them by signing a challenge, and only then appears in the registry - with
+exactly the rights you set. The token works once and expires (1 hour to
+7 days). Open and used tokens are listed on Agent Identity.
+
+Keys rotate with `python tools/provenza_sign.py rotate` (the old key
+consents, the new one proves itself). If a key is lost, revoke it on the
+agent's page and **Issue re-key token**.
+
+### 8.4.3 Teams and role templates
+
+Registry → **Teams & Roles**. Teams form a tree (organization → team →
+sub-team → agent); an agent belongs to a team by its id, so renaming a team
+renames it everywhere.
+
+A **role template** is a named set of rights: capabilities, tools, models,
+delegation depth, and whether a hybrid key (and, later, attestation) is
+required. An agent with a role has exactly the role's rights - you cannot
+edit them on the agent - and editing the role updates every agent that has
+it (the page tells you how many). An org-wide role can be given to any
+agent, a team's role only to agents of that team.
+
+Pick the team and role on **New agent** (the rights fields are replaced by
+the role's), or change them on the agent's page (**Team and role →
+Change**). Taking an agent off its role keeps its current rights, now
+editable per agent. A team or role still in use (agents, sub-teams, open
+tokens) is not deleted. Existing `owner_team` names become teams when you
+upgrade.
+
+### 8.4.4 Workload attestation
+
+Registry → **Attestation**. A policy says where agents must prove they run:
+your Kubernetes cluster (its issuer and signing keys - `kubectl get --raw
+/openid/v1/jwks`), the token audience (the same value goes into the pod
+spec), the allowed namespaces / service accounts, and how long a proof lasts.
+In Teams & Roles tick **Require attestation** on a role and pick the policy:
+its agents cannot act until they attest. **Setup** on a policy shows the pod
+spec fragment and the command the agent runs (`provenza_sign.py attest
+--every 10`); **Test a token** checks a token without recording anything.
+Every attempt is listed on the page and written to the audit log; the
+agent's page shows whether it is attested and why not. Details:
+docs/attestation.md.
+
+A **retired** agent (agent page → Retire) is final: it cannot act, does not
+count toward its team or role, and cannot be switched back on. A suspended
+(killed) agent can be reactivated - unless a kill-switch stop still holds
+it: then lift that stop (8.4.5).
+
+### 8.4.5 Kill switch
+
+Enforcement → **Kill switch** stops AI in four steps: one **agent**, a
+**team** (with its sub-teams), **all agents**, or **all AI traffic** (every
+agent plus the gateway, AI requests and the playground). Each stop needs a
+reason; the two organization-wide levels also ask you to type `STOP`.
+Stopped agents are suspended and, unless you untick it, their delegation
+chains end. While a stop is in force, whatever it covers stays stopped:
+agents created or moved into its scope start suspended, and an agent it
+holds cannot be switched back on by hand.
+
+**Lift** undoes one stop and gives back exactly what it stopped: agents
+that were stopped earlier for another reason stay stopped, agents changed
+since (e.g. retired) are left alone, and an agent still held by another
+stop is handed over to it. Ended delegation chains are not resumed. Every
+stop and lift is in the history on the page, in the audit log and - if you
+subscribe a channel to `kill_switch` - in your notifications. **Kill** on an
+agent's page is the same as an agent-level stop. Details:
+docs/kill-switch.md.
 
 ### 8.5 Deploying the browser extension
 

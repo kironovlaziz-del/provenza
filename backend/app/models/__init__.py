@@ -31,7 +31,7 @@ from app.models.rag_document import Document
 from app.models.document_chunk import DocumentChunk
 from app.models.discovered_service import DiscoveredService
 from app.models.service_connection import ServiceConnection
-from app.models.agent import Agent, AgentPolicy, AgentSigningKey
+from app.models.agent import Agent, AgentKeyRevocation, AgentPolicy, AgentSigningKey
 from app.models.delegation import DelegationChain, DelegationHop, DelegationNonce
 from app.models.agent_action import AgentAction, AgentIncident, ActionCheck
 from app.models.ai_system import AISystem, AISystemDataLink
@@ -50,6 +50,11 @@ from app.models.org_key import ByokJob, OrgKey
 from app.models.rag_query_log import RagQueryLog
 from app.models.compliance import ComplianceAttestation, ComplianceReport
 from app.models.endpoint_device import DiscoveredAgent, EndpointDevice
+from app.models.enrollment import AgentEnrollment
+from app.models.team import RoleTemplate, Team
+from app.models.attestation import AgentAttestation, AttestationPolicy
+from app.models.policy_layer import PolicyLayer
+from app.models.kill_switch import KillSwitchEvent
 
 __all__ = [
     "Organization",
@@ -88,6 +93,10 @@ __all__ = [
     "Agent",
     "AgentPolicy",
     "AgentSigningKey",
+    "AgentKeyRevocation",
+    "AgentEnrollment",
+    "Team",
+    "RoleTemplate",
     "DelegationChain",
     "DelegationHop",
     "AgentAction",

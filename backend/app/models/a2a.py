@@ -15,7 +15,7 @@ class A2ASettings(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     org_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, unique=True)
-    mode = Column(String(20), nullable=False, default="monitor")      # off, monitor, enforce
+    mode = Column(String(20), nullable=False, default="enforce")      # off, monitor, enforce
     allow_same_chain = Column(Boolean, nullable=False, default=True)  # members of one chain may talk
     max_age_seconds = Column(Integer, nullable=False, default=300)    # envelope freshness
     message_ttl_seconds = Column(Integer, nullable=False, default=3600)  # how long it may be received

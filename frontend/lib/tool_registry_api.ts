@@ -26,6 +26,8 @@ export interface ToolEntry {
     detected_at?: string;
   } | null;
   notes?: string | null;
+  /** Capabilities an agent must hold (in its chain) to call a matching tool. */
+  required_capabilities?: string[] | null;
 }
 
 export interface ToolEntryInput {
@@ -38,6 +40,12 @@ export interface ToolEntryInput {
   pinned_digest?: string;
   status?: "approved" | "pending" | "blocked";
   notes?: string;
+  required_capabilities?: string[];
+}
+
+/** "payments, email.send" -> ["email.send", "payments"] */
+export function parseCapabilities(text: string): string[] {
+  return Array.from(new Set(text.split(/[,\s]+/).map((c) => c.trim()).filter(Boolean))).sort();
 }
 
 export async function getSupplyChainMode() {
@@ -62,7 +70,7 @@ export async function createToolEntry(payload: ToolEntryInput) {
 
 export async function updateToolEntry(
   id: number,
-  payload: { pinned_version?: string | null; pinned_digest?: string | null; publisher?: string | null; source?: string | null; notes?: string | null },
+  payload: { pinned_version?: string | null; pinned_digest?: string | null; publisher?: string | null; source?: string | null; notes?: string | null; required_capabilities?: string[] | null },
 ) {
   const { data } = await api.patch<ToolEntry>(`/tool-registry/${id}`, payload);
   return data;
