@@ -70,28 +70,14 @@ TOP_LEVEL = set(SECTIONS) | {"version", "description"}
 
 
 # ------------------------------------------------------------------- YAML
-_loader_cls = None
-
-
-def _no_alias_loader():
-    """safe_load without anchors/aliases: a few lines of aliases can expand
-    into gigabytes ("billion laughs"), and a policy never needs them.
-    Built on first use, so code that only matches patterns (the agent policy
-    engine) does not need PyYAML."""
-    global _loader_cls
-    if _loader_cls is None:
-        import yaml
-
-        class _NoAliasLoader(yaml.SafeLoader):
-            def compose_node(self, parent, index):
-                ev = self.peek_event()
-                if isinstance(ev, yaml.AliasEvent) or getattr(ev, "anchor", None):
-                    raise PolicyDocError("policy.yaml_alias", f"line {ev.start_mark.line + 1}",
-                                         "anchors and aliases are not allowed")
-                return super().compose_node(parent, index)
-
-        _loader_cls = _NoAliasLoader
-    return _loader_cls
+def _refuse_aliases(yaml, text: str) -> None:
+    """No anchors or aliases: a few lines of aliases can expand into
+    gigabytes ("billion laughs"), and a policy never needs them. Checked on
+    the parser's events, before anything is built from the text."""
+    for ev in yaml.parse(text, Loader=yaml.SafeLoader):
+        if isinstance(ev, yaml.AliasEvent) or getattr(ev, "anchor", None):
+            raise PolicyDocError("policy.yaml_alias", f"line {ev.start_mark.line + 1}",
+                                 "anchors and aliases are not allowed")
 
 
 def parse_yaml(text: str) -> Dict[str, Any]:
@@ -113,7 +99,8 @@ def parse_yaml(text: str) -> Dict[str, Any]:
     if deepest > MAX_NESTING:
         raise PolicyDocError("policy.too_deep", "", f"at most {MAX_NESTING} levels of brackets")
     try:
-        doc = yaml.load(text, Loader=_no_alias_loader())  # noqa: S506  # nosec B506 - a SafeLoader subclass
+        _refuse_aliases(yaml, text)
+        doc = yaml.safe_load(text)
     except PolicyDocError:
         raise
     except RecursionError:
