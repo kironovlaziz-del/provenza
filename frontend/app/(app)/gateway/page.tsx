@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { PageHeader } from "@/components/PageHeader";
@@ -33,7 +34,6 @@ export default function GatewayPage() {
 
   const [data, setData] = useState<GatewayOverview | null>(null);
   const [form, setForm] = useState<GatewaySettings | null>(null);
-  const [termsText, setTermsText] = useState("");
   const [rModel, setRModel] = useState("");
   const [rProvider, setRProvider] = useState<number | "">("");
   const [rUpstream, setRUpstream] = useState("");
@@ -46,7 +46,6 @@ export default function GatewayPage() {
       .then((d) => {
         setData(d);
         setForm({ ...d.settings });
-        setTermsText(d.settings.blocked_terms.join("\n"));
       })
       .catch((e) => setError(gatewayError(e, t("gateway.load_failed", "Could not load the gateway."))));
   }, [t]);
@@ -75,7 +74,6 @@ export default function GatewayPage() {
   }
 
   const fmt = (iso: string) => new Date(iso).toLocaleString();
-  const terms = termsText.split("\n").map((s) => s.trim()).filter(Boolean);
 
   if (!data || !form) {
     return (
@@ -265,15 +263,16 @@ export default function GatewayPage() {
                   onChange={(e) => setForm({ ...form, max_tokens_cap: Number(e.target.value) })} />
               </div>
               <div className="field" style={{ margin: 0 }}>
-                <label htmlFor="gw-terms">{t("gateway.blocked_terms", "Blocked terms (one per line)")}</label>
-                <textarea id="gw-terms" rows={3} value={termsText} disabled={!isAdmin} onChange={(e) => setTermsText(e.target.value)}
-                  style={{ width: "100%", fontSize: 13 }} />
+                <label>{t("gateway.blocked_terms", "Blocked terms")}</label>
+                <p className="hint-text" style={{ margin: 0 }}>
+                  {t("gateway.blocked_terms_moved")} <Link href="/blocked-terms">{t("sidebar.nav.blocked_terms")}</Link>
+                </p>
               </div>
             </div>
             {isAdmin && (
               <button className="btn btn-primary btn-sm" style={{ marginTop: 12 }}
-                disabled={busy || form.rpm_per_agent < 1 || form.rpm_per_agent > 6000 || form.max_tokens_cap < 16 || form.max_tokens_cap > 200000 || terms.length > 200 || terms.some((x) => x.length > 100)}
-                onClick={() => run(() => saveGatewaySettings({ ...form, blocked_terms: terms }), t("gateway.saved", "Saved"))}>
+                disabled={busy || form.rpm_per_agent < 1 || form.rpm_per_agent > 6000 || form.max_tokens_cap < 16 || form.max_tokens_cap > 200000}
+                onClick={() => run(() => saveGatewaySettings(form), t("gateway.saved", "Saved"))}>
                 {t("gateway.save", "Save")}
               </button>
             )}

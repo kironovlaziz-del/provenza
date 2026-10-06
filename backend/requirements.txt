@@ -35,6 +35,8 @@ httpx==0.28.1
 
 # Policy documents (hierarchical policies, YAML tab)
 PyYAML==6.0.3
+# PII rules: custom patterns run with a time limit (core/pii_patterns.py)
+regex==2026.9.29
 
 # ---------------------------------------------------------------------------
 # Development / testing

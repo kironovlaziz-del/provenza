@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from datetime import datetime
 from typing import Optional, Dict, Any
 
@@ -20,6 +20,16 @@ class PolicyOut(PolicyBase):
 
 class PolicyVersionCreate(BaseModel):
     rules_json: Dict[str, Any]
+
+    @field_validator("rules_json")
+    @classmethod
+    def _no_terms(cls, v: Dict[str, Any]) -> Dict[str, Any]:
+        # blocked terms of a policy are kept on the Blocked terms page (scope "policy")
+        if v.get("blocked_terms"):
+            raise ValueError("blocked terms are kept on the Blocked terms page (/blocked-terms), scope: policy")
+        v = dict(v)
+        v.pop("blocked_terms", None)
+        return v
 
 class PolicyVersionOut(BaseModel):
     id: int

@@ -20,7 +20,6 @@ tools:
   deny: ["shell.*"]
   require_approval: ["email.send"]
 content:
-  blocked_terms: ["project titan"]
   scan_output: true
 requests:
   require_approval: true       # user requests (organization level)
@@ -38,7 +37,7 @@ brackets deep. The `requests` section belongs to the organization level only
 |---|---|
 | limits (`requests_per_minute`, `max_tokens`, `max_delegation_depth`) | the smallest wins |
 | allow lists (`models`, `providers`, `tools.allow`) | every level that has one must allow the value; a level without one does not restrict; `allow: []` allows nothing |
-| deny / approval lists, blocked terms | all of them apply |
+| deny / approval lists | all of them apply |
 | switches (`scan_output`, `requests.require_approval`) | on at any level = on |
 
 A team or agent level that tries to loosen — a higher limit, a switch turned
@@ -50,9 +49,9 @@ value of the effective policy shows the level it comes from.
 
 | | levels | fields |
 |---|---|---|
-| **Gateway** (agents' LLM calls) | gateway settings → organization → teams → agent | limits, models, providers, blocked terms, output scanning |
+| **Gateway** (agents' LLM calls) | gateway settings → organization → teams → agent | limits, models, providers, output scanning |
 | **Agent actions** (`/agents/actions/check`, delegation) | organization → teams → agent | tools allow / deny / approval, models of model-invoking tools, delegation depth |
-| **User requests** (Policy Center) | organization | providers, blocked terms, approval required — on top of the use case's policy |
+| **User requests** (Policy Center) | organization | providers, approval required — on top of the use case's policy |
 
 The gateway settings take part as the topmost level, so nothing changes on
 upgrade: until an admin writes a level, the effective policy is exactly the
@@ -76,8 +75,10 @@ A refusal names the level: `Blocked by policy 'team support policy'`,
   with the document before and after. A team whose level still has rules is
   not deleted; once its level is cleared, deleting the team removes the empty
   level with it.
-* **Who** — admins edit; admins and approvers read (the levels include the
-  blocked terms the firewall looks for).
+* **Who** — admins edit; admins and approvers read.
+* **Blocked terms** are not part of a level: they are kept on the Blocked
+  terms page with the same levels and more ([blocked-terms.md](blocked-terms.md));
+  `content.blocked_terms` in a document is refused (`policy.blocked_terms_moved`).
 * **Form or YAML** — an empty allow list (`allow: []`, "allow nothing") can
   only be written and edited as YAML.
 

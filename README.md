@@ -99,7 +99,7 @@ What this does and does not guarantee is spelled out in the [Security Model](#se
 
 |  | Layer | For | What it does |
 |--|-------|-----|--------------|
-| 🛡️ | **Policy & Prompt Firewall** | everyone | Secrets (cards, keys, IDs) masked before any prompt leaves. Every call logged. Rules built visually — no JSON required. |
+| 🛡️ | **Policy & Prompt Firewall** | everyone | Secrets (cards, keys, IDs) masked before any prompt leaves; each type set to mask or block, plus your own patterns (ПИНФЛ, ИНН, contract numbers) guarded against slow regex. Every call logged. Rules built visually — no JSON required. |
 | 👁️ | **Shadow AI Monitor** | unsanctioned AI | Endpoint agent finds local models; browser extension warns before a secret is pasted; passive network discovery — nothing auto-connects. |
 | 🤖 | **Agent Governance** | autonomous agents | Registry with scoped tools & delegation limits, teams and role templates (an agent's rights follow its role); workload attestation (Kubernetes ServiceAccount tokens); a policy hierarchy (organization → team → agent, YAML or forms, lower levels only tighten); delegating more than an agent holds is rejected and raised as an incident; a kill switch in levels (agent → team → all agents → all AI traffic) with exact undo; the live verifiable graph above. |
 
@@ -120,8 +120,9 @@ real policy applied to live traffic.
 - **Approval Workflow** — requests that require sign-off are routed
   to designated approvers; decisions are logged.
 - **Prompt Firewall** — automatic masking of PII (email, credit card,
-  SSN, phone, API keys) and blocking of terms listed in the active
-  policy version. The provider never sees raw input.
+  SSN, phone, API keys) and blocked terms - one list with scopes
+  (organization, agents, team, agent, policy), whole-word matching that sees
+  through disguises, block or monitor. The provider never sees raw input.
 - **Connections (Vendor Risk Desk)** — manage AI provider credentials
   (OpenAI, Anthropic, Azure OpenAI, or any custom HTTP endpoint) with
   SLA and risk scoring. Keys are encrypted at rest with Fernet.
@@ -498,9 +499,9 @@ when `ENVIRONMENT=production`).
 - **PII masking** — the Prompt Firewall replaces emails, credit card
   numbers, SSNs, IP addresses, API keys, and phone numbers with
   `[MASKED:TYPE]` before storage and before the provider call.
-- **Blocked terms** — the active policy version can declare substrings
-  that cause a prompt to be rejected (`blocked`) before reaching a
-  provider.
+- **Blocked terms** — kept on one page with scopes; a prompt containing a
+  blocking term is rejected (`blocked`) before reaching a provider, a
+  monitored one is let through and counted.
 - **Provider credentials** — encrypted at rest with Fernet. The API
   never returns the key, only `has_credentials: true/false`.
 - **Machine vs. user auth** — collectors (agent, extension) authenticate

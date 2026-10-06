@@ -10,7 +10,7 @@ export interface PolicyDocument {
   models?: { allow?: string[] };
   providers?: { allow?: string[] };
   tools?: { allow?: string[]; deny?: string[]; require_approval?: string[] };
-  content?: { blocked_terms?: string[]; scan_output?: boolean };
+  content?: { scan_output?: boolean };
   requests?: { require_approval?: boolean };
 }
 
@@ -88,7 +88,6 @@ export const FIELD_ORDER: { field: string; kind: "min" | "allow" | "union" | "or
   { field: "tools.allow", kind: "allow" },
   { field: "tools.deny", kind: "union" },
   { field: "tools.require_approval", kind: "union" },
-  { field: "content.blocked_terms", kind: "union" },
   { field: "content.scan_output", kind: "or" },
   { field: "requests.require_approval", kind: "or" },
 ];

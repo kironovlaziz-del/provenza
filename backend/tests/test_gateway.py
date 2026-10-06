@@ -56,7 +56,7 @@ async def _setup(client, token, db, models=("gpt-4o-mini",), route="gpt-4o-mini"
     db.add(p)
     await db.commit()
     await db.refresh(p)
-    body = {"enabled": True, "rpm_per_agent": 60, "max_tokens_cap": 4096, "blocked_terms": [], "scan_output": True}
+    body = {"enabled": True, "rpm_per_agent": 60, "max_tokens_cap": 4096, "scan_output": True}
     body.update(settings)
     r = await client.put(G + "/settings", json=body, headers=auth_headers(token))
     assert r.status_code == 200, r.text
@@ -159,7 +159,10 @@ class TestRefusals:
 
     @pytest.mark.asyncio
     async def test_blocked_term(self, client, admin_token, db_session, fake):
-        a, _, rid = await _setup(client, admin_token, db_session, blocked_terms=["project-zeus"])
+        a, _, rid = await _setup(client, admin_token, db_session)
+        r = await client.post("/api/v1/blocked-terms", json={"term": "project-zeus", "scope": "agents"},
+                              headers=auth_headers(admin_token))
+        assert r.status_code == 201, r.text
         try:
             r = await _chat(client, a, msgs(("user", "summarise project-zeus plans")))
             assert r.status_code == 403 and r.json()["error"]["code"] == "blocked_by_firewall" and fake.calls == []
@@ -234,8 +237,11 @@ class TestAdmin:
             assert dup.status_code == 409
             assert (await client.post(G + "/routes", json={"model": "x", "provider_id": 99999999},
                                       headers=auth_headers(admin_token))).status_code == 404
-            for bad in ({"enabled": True, "rpm_per_agent": 0, "max_tokens_cap": 4096, "blocked_terms": [], "scan_output": True},
-                        {"enabled": True, "rpm_per_agent": 60, "max_tokens_cap": 1, "blocked_terms": [], "scan_output": True}):
+            for bad in ({"enabled": True, "rpm_per_agent": 0, "max_tokens_cap": 4096, "scan_output": True},
+                        {"enabled": True, "rpm_per_agent": 60, "max_tokens_cap": 1, "scan_output": True},
+                        # blocked terms moved to their own page: refused, not silently dropped
+                        {"enabled": True, "rpm_per_agent": 60, "max_tokens_cap": 4096, "scan_output": True,
+                         "blocked_terms": ["x"]}):
                 assert (await client.put(G + "/settings", json=bad, headers=auth_headers(admin_token))).status_code == 422
             assert (await client.put(G + "/settings", json={"enabled": False, "rpm_per_agent": 60, "max_tokens_cap": 4096,
                                                             "blocked_terms": [], "scan_output": True},

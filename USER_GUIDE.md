@@ -69,29 +69,56 @@ Policies define what is allowed and how prompts are filtered.
 
 1. Sidebar → **Policies → Policy Center** → **New policy**.
 2. Open the policy and **create a version**. A version holds the JSON
-   rules: masking settings and a list of **blocked terms**.
+   rules (approval required or not). The policy's **blocked terms** are
+   kept on the Blocked terms page (4.3), applying to: Policy.
 3. **Approve** the version to make it active. Versions are immutable —
    to change rules, create and approve a new version.
 4. Bind the active version to a **use case** (see below).
 
 **Prompt Firewall:** when a request runs under a policy, PII (emails,
 credit cards, SSNs, phone numbers, IP addresses, API keys) is masked
-before storage and before the provider ever sees it. Any prompt
-containing a blocked term is rejected and never sent.
+before storage and before the provider ever sees it (4.2). A prompt
+containing a blocked term is rejected and never sent (4.3).
 
 ### 4.1 Policy hierarchy
 
 Policies → **Policy hierarchy**: one policy at three levels -
 organization, team (and its sub-teams), agent - edited as a form or as
 YAML. A lower level can only tighten: the smallest limit wins, every
-level's allow list must allow, all deny / approval lists and blocked terms
-apply, and a switch turned on anywhere stays on. It applies to the gateway
-(limits, models, providers, blocked terms), to agent actions (tools,
-delegation depth) and - the organization level - to user requests
-(providers, blocked terms, approval). While you edit, *Effective policy*
+level's allow list must allow, all deny / approval lists apply, and a
+switch turned on anywhere stays on. It applies to the gateway (limits,
+models, providers), to agent actions (tools, delegation depth) and - the
+organization level - to user requests (providers, approval). While you edit, *Effective policy*
 shows every value with the level it comes from and lists what has no
 effect because a level above is stricter. Every save is in the audit log.
 Details: docs/policies.md.
+
+### 4.2 PII rules
+
+Policies → **PII rules**: switch each built-in type (email, phone, card,
+SSN, IP address, API key, names, organizations, places) on or off and choose
+**Mask** (the value becomes `[MASKED:TYPE]`) or **Block** (the prompt is
+refused). Under *Your rules* add patterns for your own identifiers - start
+from the ПИНФЛ, ИНН, passport or contract-number preset - and check them in
+*Try it* before saving: it highlights what the rule finds and shows what the
+provider would get. Patterns that could run too long are refused with the
+reason; a saved rule that still runs out of time refuses that prompt and
+shows a warning. Details: docs/pii-rules.md.
+
+### 4.3 Blocked terms
+
+Policies → **Blocked terms** is the one place for words a prompt must not
+contain. For each term choose where it applies (the whole organization,
+all agents, a team with its sub-teams, one agent, or a policy's use cases),
+how it is found (**whole word** - also spelt apart, joined, with digits for
+letters or look-alike letters - or **anywhere**) and what happens
+(**Block** refuses the prompt; **Monitor** lets it through and counts it -
+try a new term in Monitor first). Group terms in **categories** and switch
+a category off to pause its terms. The list shows how often each term was
+seen; **Import CSV** previews before adding, **Export CSV** downloads the
+list; **Try it** shows what a sample would trip. Terms that were in the
+gateway settings, the policy hierarchy or policy versions were moved here
+when upgrading. Details: docs/blocked-terms.md.
 
 ---
 

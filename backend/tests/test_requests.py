@@ -83,18 +83,28 @@ async def test_request_raw_text_encrypted_at_rest(
 
 async def test_blocked_term_short_circuits(client, org_and_users, admin_token):
     """A prompt containing a blocked term is rejected and never sent."""
-    # Policy with blocked_terms, attached to a use case
+    # A policy with a policy-scoped blocked term, attached to a use case
     policy = await client.post(
         "/api/v1/policies/",
         json={"name": "Firewall"},
         headers=auth_headers(admin_token),
     )
     pid = policy.json()["id"]
-    ver = await client.post(
+    # terms in a policy version are refused now: they live on the Blocked terms page
+    bad = await client.post(
         f"/api/v1/policies/{pid}/versions",
         json={"rules_json": {"blocked_terms": ["forbidden"]}},
         headers=auth_headers(admin_token),
     )
+    assert bad.status_code == 422
+    ver = await client.post(
+        f"/api/v1/policies/{pid}/versions",
+        json={"rules_json": {}},
+        headers=auth_headers(admin_token),
+    )
+    t = await client.post("/api/v1/blocked-terms", json={"term": "forbidden", "scope": "policy", "target_id": pid},
+                          headers=auth_headers(admin_token))
+    assert t.status_code == 201, t.text
     vid = ver.json()["id"]
     await client.post(
         f"/api/v1/policies/{pid}/versions/{vid}/approve",

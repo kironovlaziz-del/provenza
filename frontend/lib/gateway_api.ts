@@ -5,7 +5,6 @@ export interface GatewaySettings {
   enabled: boolean;
   rpm_per_agent: number;
   max_tokens_cap: number;
-  blocked_terms: string[];
   scan_output: boolean;
   source?: "default" | "org";
 }
@@ -64,7 +63,6 @@ export async function saveGatewaySettings(s: GatewaySettings) {
     enabled: s.enabled,
     rpm_per_agent: s.rpm_per_agent,
     max_tokens_cap: s.max_tokens_cap,
-    blocked_terms: s.blocked_terms,
     scan_output: s.scan_output,
   });
   return data;

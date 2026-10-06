@@ -117,6 +117,31 @@ this project adheres to [Semantic Versioning](https://semver.org/).
   the source of every value and lists what a level tried to loosen.
   Concurrent edits are refused rather than overwritten; every save is
   audited with the document before and after. API: `/policy-layers/*`.
+- **Blocked terms in one place** ([docs/blocked-terms.md](docs/blocked-terms.md)).
+  Policies → Blocked terms replaces the term lists of the gateway settings,
+  the policy hierarchy levels and policy versions. Each term applies to the
+  whole organization, all agents, a team (with its sub-teams), one agent or
+  a policy's use cases; matches as a whole word - seeing through spacing,
+  `_`/`-`, digits for letters, look-alike Cyrillic/Greek letters, accents,
+  full-width and invisible characters, without gluing ordinary words
+  together - or anywhere; and blocks or only monitors (let through and
+  counted, not shown to whoever is watched). Categories
+  switch groups of terms on and off; hit counts and last seen; CSV export
+  (formula-safe) and import with a preview; a tester. Audited; terms are
+  never hard-deleted; a team with terms scoped to it is not deleted.
+  API: `/blocked-terms/*`.
+- **PII rules** ([docs/pii-rules.md](docs/pii-rules.md)). Policies → PII
+  rules: every built-in type of the Prompt Firewall (email, phone, card,
+  SSN, IP address, API key, person, organization, place) can be switched
+  off or set to block the prompt instead of masking it, and organizations
+  add their own patterns (ПИНФЛ, ИНН, passport, contract numbers - presets
+  included) with mask or block. Own patterns are checked first. Patterns
+  are refused when they could backtrack catastrophically (nested or
+  alternated repetition, back references, open-ended `.*`-like runs) or run
+  slowly on long text, and run with a 250 ms limit; a rule out of time
+  refuses the prompt and is counted. A tester shows what a rule finds and what the provider would get.
+  Applied in the gateway, user requests, the playground and masked views.
+  Audited; rules are never hard-deleted. API: `/pii/*`.
 - **Kill switch with levels and undo** ([docs/kill-switch.md](docs/kill-switch.md)).
   Enforcement → Kill switch stops one agent, a team with its sub-teams, all
   agents, or all AI traffic (every agent plus the gateway, AI requests and
@@ -323,6 +348,21 @@ this project adheres to [Semantic Versioning](https://semver.org/).
   organization's agents and open enrollment tokens becomes a team, and those
   agents and tokens are linked to it. No roles are created - existing agents
   keep their own rights until you assign one.
+- **Blocked terms** (migration `b5e7a9c1d3f6`): existing terms move to the
+  Blocked terms page and keep applying where they did - gateway settings →
+  all agents, policy hierarchy levels → organization / team / agent (the
+  key is removed from the level, whose YAML is then shown from the
+  document), policy versions → that policy (latest approved version and
+  versions linked to use cases). They keep "anywhere" matching; switch them
+  to whole word on the page. What applies widens slightly: organization-wide
+  terms now also apply to the playground; a policy's terms apply to all its
+  use cases whichever version they are pinned to, and to the playground
+  while the policy is active. A hierarchy level that had terms loses its
+  stored YAML text (comments) - it is shown from the document. `blocked_terms` in gateway settings, in a hierarchy document
+  or in a new policy version is refused with a pointer to the page.
+- **PII rules** (migration `a3d5f7b9c1e4`): new dependency `regex` - run
+  `pip install -r requirements.txt`. Nothing changes until an admin edits the
+  page: every built-in type stays on and masks.
 - **Kill switch** (migration `f1c3e5a7b9d2`): agents killed before this
   release have no stop to lift and stay suspended until reactivated as
   before. Killing a retired agent now answers `409 agent.retired_final`;

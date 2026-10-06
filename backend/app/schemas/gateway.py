@@ -7,22 +7,16 @@ class GatewaySettingsIn(BaseModel):
     enabled: bool
     rpm_per_agent: int = Field(ge=1, le=6000)
     max_tokens_cap: int = Field(ge=16, le=200_000)
-    blocked_terms: List[str] = Field(max_length=200)
     scan_output: bool
+    # moved to the Blocked terms page; refused rather than silently dropped
+    blocked_terms: Optional[List[str]] = None
 
     @field_validator("blocked_terms")
     @classmethod
-    def _terms(cls, v: List[str]) -> List[str]:
-        out = []
-        for t in v:
-            t = t.strip()
-            if not t:
-                continue
-            if len(t) > 100:
-                raise ValueError("a blocked term is at most 100 characters")
-            if t not in out:
-                out.append(t)
-        return out
+    def _terms(cls, v: Optional[List[str]]) -> None:
+        if v and any((t or "").strip() for t in v):
+            raise ValueError("blocked terms are kept on the Blocked terms page (/blocked-terms)")
+        return None
 
 
 class GatewayRouteIn(BaseModel):
