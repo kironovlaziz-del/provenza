@@ -1338,6 +1338,9 @@ tbody tr.clickable:hover {
 .agent-page .ks-event-head { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .agent-page .ks-event-head .ag-row-actions { margin-left: auto; min-width: 0; }
 .agent-page .ks-names { font-size: 12px; overflow-wrap: anywhere; }
+/* PII rules page */
+.agent-page .pii-sample { white-space: pre-wrap; }
+.agent-page mark.pii-hit { background: var(--risk-medium-bg); color: var(--text-primary); border-bottom: 2px solid var(--risk-medium); padding: 0 1px; border-radius: 2px; }
 @media (max-width: 639px) {
   .agent-page .ag-grid { grid-template-columns: 1fr; }
   .agent-page .ag-facts { gap: 18px; }

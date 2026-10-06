@@ -28,6 +28,7 @@ agent's own key; every call then goes through:
 Errors are returned in the OpenAI shape {"error": {"message", "type", "code"}}.
 """
 
+import asyncio
 import fnmatch
 import json
 import time
@@ -250,9 +251,15 @@ class GatewayService:
         flags: List[str] = []
         outgoing: List[Dict[str, Any]] = []
         injection_hits: List[str] = []
+        from app.services import pii_rules
+
+        pii_cfg = await pii_rules.config(self.db, org_id, request_budget=1.0)  # all messages together
         for i, m in enumerate(body["messages"]):
             text = _text(m.get("content"))
-            fw = prompt_firewall.scan(text, blocked_terms=blocked_terms) if text else None
+            # in a thread: custom PII rules may run up to their time limit
+            fw = await asyncio.to_thread(prompt_firewall.scan, text, blocked_terms, "en", pii_cfg) if text else None
+            if fw is not None and fw.timed_out:
+                await pii_rules.note_timeouts(self.db, org_id, fw.timed_out)
             if fw is not None and fw.blocked:
                 await self._record(org_id, agent_id, model, "blocked", fw.blocked_reason, list(fw.flags), provider_id)
                 raise GatewayError(403, "blocked_by_firewall", fw.blocked_reason or "Blocked by the Prompt Firewall.",

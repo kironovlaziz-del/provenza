@@ -97,11 +97,15 @@ class RequestService:
 
         # Prompt Firewall runs before anything is persisted: a blocked
         # prompt never reaches the policy engine or a provider.
-        firewall_result = prompt_firewall.scan(
-            data.input_text,
-            blocked_terms=blocked_terms,
-            language=getattr(data, "language", None) or "en",
+        import asyncio
+
+        from app.services import pii_rules
+
+        pii_cfg = await pii_rules.config(self.db, org_id)
+        firewall_result = await asyncio.to_thread(
+            prompt_firewall.scan, data.input_text, blocked_terms, getattr(data, "language", None) or "en", pii_cfg,
         )
+        await pii_rules.note_timeouts(self.db, org_id, firewall_result.timed_out)
 
         # The raw prompt is only ever stored Fernet-encrypted, and never
         # returned by the API. Anything downstream (UI, provider call,

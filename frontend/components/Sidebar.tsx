@@ -76,6 +76,7 @@ const NAV: Group[] = [
     items: [
       { href: "/policies", labelKey: "sidebar.nav.policies" },
       { href: "/policy-hierarchy", labelKey: "sidebar.nav.policy_hierarchy", reviewOnly: true },
+      { href: "/pii-rules", labelKey: "sidebar.nav.pii_rules", reviewOnly: true },
       { href: "/agent-policies", labelKey: "sidebar.nav.agent_policies", adminOnly: true },
       { href: "/use-cases", labelKey: "sidebar.nav.use_cases" },
       { href: "/compliance", labelKey: "sidebar.nav.compliance" },

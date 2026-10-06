@@ -160,7 +160,13 @@ async def governed_chat(
     # 1. firewall the user's message, enforcing the org's active policy
     active_policy_rules = await _active_policy_rules(db, current_user.org_id)
     blocked_terms = active_policy_rules.get("blocked_terms") or []
-    fw = prompt_firewall.scan(data.message, blocked_terms=blocked_terms, language="en")
+    import asyncio
+
+    from app.services import pii_rules
+
+    pii_cfg = await pii_rules.config(db, current_user.org_id)
+    fw = await asyncio.to_thread(prompt_firewall.scan, data.message, blocked_terms, "en", pii_cfg)
+    await pii_rules.note_timeouts(db, current_user.org_id, fw.timed_out)
 
     # policy may require human approval for every request under it
     if active_policy_rules.get("effect") == "require_approval" and not fw.blocked:

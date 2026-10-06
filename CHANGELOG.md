@@ -117,6 +117,18 @@ this project adheres to [Semantic Versioning](https://semver.org/).
   the source of every value and lists what a level tried to loosen.
   Concurrent edits are refused rather than overwritten; every save is
   audited with the document before and after. API: `/policy-layers/*`.
+- **PII rules** ([docs/pii-rules.md](docs/pii-rules.md)). Policies → PII
+  rules: every built-in type of the Prompt Firewall (email, phone, card,
+  SSN, IP address, API key, person, organization, place) can be switched
+  off or set to block the prompt instead of masking it, and organizations
+  add their own patterns (ПИНФЛ, ИНН, passport, contract numbers - presets
+  included) with mask or block. Own patterns are checked first. Patterns
+  are refused when they could backtrack catastrophically (nested or
+  alternated repetition, back references, open-ended `.*`-like runs) or run
+  slowly on long text, and run with a 250 ms limit; a rule out of time
+  refuses the prompt and is counted. A tester shows what a rule finds and what the provider would get.
+  Applied in the gateway, user requests, the playground and masked views.
+  Audited; rules are never hard-deleted. API: `/pii/*`.
 - **Kill switch with levels and undo** ([docs/kill-switch.md](docs/kill-switch.md)).
   Enforcement → Kill switch stops one agent, a team with its sub-teams, all
   agents, or all AI traffic (every agent plus the gateway, AI requests and
@@ -323,6 +335,9 @@ this project adheres to [Semantic Versioning](https://semver.org/).
   organization's agents and open enrollment tokens becomes a team, and those
   agents and tokens are linked to it. No roles are created - existing agents
   keep their own rights until you assign one.
+- **PII rules** (migration `a3d5f7b9c1e4`): new dependency `regex` - run
+  `pip install -r requirements.txt`. Nothing changes until an admin edits the
+  page: every built-in type stays on and masks.
 - **Kill switch** (migration `f1c3e5a7b9d2`): agents killed before this
   release have no stop to lift and stay suspended until reactivated as
   before. Killing a retired agent now answers `409 agent.retired_final`;

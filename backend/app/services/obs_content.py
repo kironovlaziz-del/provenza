@@ -50,13 +50,15 @@ def _cut(text: str, limit: int) -> str:
     return text if len(text) <= limit else f"{text[:limit]} … (+{len(text) - limit} chars)"
 
 
-def _mask_many(texts: List[str]) -> List[str]:
+def _mask_many(texts: List[str], pii=None) -> List[str]:
+    """Masked for display with the organization's PII settings; block
+    rules mask here (mask_only), nothing is refused."""
     from app.services import prompt_firewall
 
     out = []
     for t in texts:
         try:
-            out.append(prompt_firewall.scan(t).masked_text if t else t)
+            out.append(prompt_firewall.scan(t, pii=pii, mask_only=True).masked_text if t else t)
         except Exception:  # noqa: BLE001
             out.append(WITHHELD)
     return out
@@ -160,7 +162,12 @@ async def attach(db: AsyncSession, org_id: int, events: List[dict]) -> None:
             found[(kind, i)] = secs
 
     pending = [s for secs in found.values() for s in secs if not s["pre_masked"]]
-    masked = await asyncio.to_thread(_mask_many, [_cut(s["text"], MASK_LIMIT) for s in pending]) if pending else []
+    masked = []
+    if pending:
+        from app.services import pii_rules
+
+        pii_cfg = await pii_rules.config(db, org_id)
+        masked = await asyncio.to_thread(_mask_many, [_cut(s["text"], MASK_LIMIT) for s in pending], pii_cfg)
     for s, m in zip(pending, masked):
         s["text"] = m
     for ev in events:

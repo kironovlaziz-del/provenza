@@ -103,6 +103,19 @@ policy* har bir qiymatni u kelgan daraja bilan ko'rsatadi va yuqoridagi
 daraja qattiqroq bo'lgani uchun ta'siri yo'q narsalarni sanab beradi. Har
 bir saqlash audit jurnalida. Batafsil: docs/policies.md.
 
+### 4.2 Shaxsiy ma'lumot qoidalari
+
+Policies → **PII rules**: har bir o'rnatilgan turni (email, telefon, karta,
+SSN, IP manzil, API kalit, ismlar, tashkilotlar, joylar) yoqing yoki
+o'chiring va **Mask** (qiymat `[MASKED:TYPE]` bo'ladi) yoki **Block**
+(prompt rad etiladi) ni tanlang. *Your rules* bo'limida o'z
+identifikatorlaringiz uchun shablon qo'shing - ПИНФЛ, ИНН, pasport yoki
+shartnoma raqami namunasidan boshlang - va saqlashdan oldin *Try it* da
+tekshiring: u qoida nimani topishini belgilaydi va provayder nima olishini
+ko'rsatadi. Juda uzoq ishlashi mumkin bo'lgan shablonlar sababi bilan rad
+etiladi; saqlangan qoida baribir vaqtdan oshsa, o'sha prompt rad etiladi va
+ogohlantirish chiqadi. Batafsil: docs/pii-rules.md.
+
 ---
 
 ## 5. Foydalanish holatlari (Use Cases)

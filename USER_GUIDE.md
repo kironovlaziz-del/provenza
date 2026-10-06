@@ -93,6 +93,18 @@ shows every value with the level it comes from and lists what has no
 effect because a level above is stricter. Every save is in the audit log.
 Details: docs/policies.md.
 
+### 4.2 PII rules
+
+Policies → **PII rules**: switch each built-in type (email, phone, card,
+SSN, IP address, API key, names, organizations, places) on or off and choose
+**Mask** (the value becomes `[MASKED:TYPE]`) or **Block** (the prompt is
+refused). Under *Your rules* add patterns for your own identifiers - start
+from the ПИНФЛ, ИНН, passport or contract-number preset - and check them in
+*Try it* before saving: it highlights what the rule finds and shows what the
+provider would get. Patterns that could run too long are refused with the
+reason; a saved rule that still runs out of time refuses that prompt and
+shows a warning. Details: docs/pii-rules.md.
+
 ---
 
 ## 5. Use Cases
