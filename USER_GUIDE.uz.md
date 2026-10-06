@@ -285,6 +285,26 @@ Yon menyu → **Audit → Audit Log**. Platforma orqali qilingan har bir
 o‘zgarish — kim, nimani, qaysi obyektga, qachon qilgani — filtrlash va
 ko‘rib chiqish mumkin bo‘lgan faqat qo‘shiladigan jurnalga yoziladi.
 
+Jurnalni sezdirmasdan o‘zgartirib bo‘lmaydi (batafsil: `docs/audit-proofs.md`):
+
+- **Yaxlitlik** paneli: zanjirdagi yozuvlar soni, oxirgi imzolangan nazorat
+  nuqtasi va uning imzosi brauzeringizda tasdiqlanganmi. **Nazorat nuqtasini
+  yuklab oling** va faylni Provenzadan tashqarida saqlang (auditorda,
+  repozitoriyda) — keyingi jurnallar uni davom ettirishini isbotlash mumkin.
+- Qatordagi **Tekshirish** shu yozuvni brauzeringizda tekshiradi: xeshi,
+  imzolangan jurnaldagi o‘rni va imzo. **Isbotni yuklab olish** har kim
+  oflayn tekshira oladigan fayl beradi:
+  `python tools/provenza_audit.py verify proof.json --fingerprint <audit kaliti>`.
+- Adminlar: **Hozir imzolash** nazorat nuqtasini darhol imzolaydi (aks holda
+  har 5 daqiqada); **Butun jurnalni tekshirish** butun zanjirni qayta
+  hisoblaydi va o‘zgartirilgan yoki o‘chirilgan yozuvlarni ko‘rsatadi.
+- **Audit kaliti**: uni brauzeringizda bir marta mahkamlang; kalit almashgach
+  sahifa eski kalit yangisiga topshirganini ko‘rsatadi. Kalitni almashtirish
+  uchun admin uni taklif qiladi, yangi barmoq izi Provenzadan tashqarida
+  e’lon qilinadi, yetarli adminlar e’lon qilingan barmoq izini kiritib
+  tasdiqlaydi va e’lon muddatidan (standart 24 soat) keyin eski kalit
+  topshiradi. Undan oldin istalgan admin bekor qila oladi.
+
 ---
 
 ## 12. Maslahatlar

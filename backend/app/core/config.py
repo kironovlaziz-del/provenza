@@ -73,6 +73,14 @@ class Settings(BaseSettings):
     OUTBOUND_PROXY: str = ""
 
 
+    # Audit key rotation (docs/audit-proofs.md): how many distinct admins of
+    # the organization must approve a new audit key, and how long its
+    # fingerprint must be announced before it can take effect - time to
+    # publish it outside Provenza. Lower the quorum to 1 only for
+    # organizations that really have a single admin.
+    AUDIT_KEY_ROTATION_QUORUM: int = 2
+    AUDIT_KEY_ROTATION_NOTICE_HOURS: float = 24.0
+
     # Database
     POSTGRES_USER: str = "ai_user"
     POSTGRES_PASSWORD: str = "ai_password"
@@ -159,6 +167,14 @@ class Settings(BaseSettings):
             p = Path(value)
             if not p.is_absolute():
                 setattr(self, field, str((backend_root / p).resolve()))
+        return self
+
+    @model_validator(mode="after")
+    def _audit_rotation_bounds(self):
+        if self.AUDIT_KEY_ROTATION_QUORUM < 1:
+            raise ValueError("AUDIT_KEY_ROTATION_QUORUM must be at least 1")
+        if self.AUDIT_KEY_ROTATION_NOTICE_HOURS < 0:
+            raise ValueError("AUDIT_KEY_ROTATION_NOTICE_HOURS must not be negative")
         return self
 
     @model_validator(mode="after")

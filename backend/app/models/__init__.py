@@ -14,7 +14,8 @@ from app.models.ai_response import AIResponse
 from app.models.ai_action import AIAction
 from app.models.ai_approval import AIApproval
 from app.models.ai_incident import AIIncident
-from app.models.audit_log import AIAuditLog
+from app.models.audit_log import (AIAuditLog, AuditCheckpoint, AuditKeyHandover, AuditKeyRotation,
+                                  AuditKeyRotationApproval, AuditSigningKey)
 from app.models.ai_override import AIOverride
 from app.models.shadow_ai_sighting import ShadowAISighting
 from app.models.dataset import Dataset
@@ -64,6 +65,11 @@ __all__ = [
     "AIApproval",
     "AIIncident",
     "AIAuditLog",
+    "AuditCheckpoint",
+    "AuditSigningKey",
+    "AuditKeyRotation",
+    "AuditKeyRotationApproval",
+    "AuditKeyHandover",
     "AIOverride",
     "ShadowAISighting",
     "Dataset",

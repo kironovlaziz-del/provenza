@@ -12,6 +12,9 @@ class AuditLogOut(BaseModel):
     action: str
     metadata_json: Optional[Dict[str, Any]]
     created_at: datetime
+    seq: Optional[int] = None
+    prev_hash: Optional[str] = None
+    record_hash: Optional[str] = None
 
     class Config:
         from_attributes = True

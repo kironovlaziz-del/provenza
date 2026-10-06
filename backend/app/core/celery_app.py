@@ -59,6 +59,12 @@ celery_app.conf.beat_schedule = {
         "task": "requests.sweep",
         "schedule": crontab(minute="*/5"),
     },
+    # Sign a checkpoint (Merkle root) of every audit log that grew since its
+    # last one - what proofs and offline verification are anchored to.
+    "audit-checkpoints": {
+        "task": "audit.checkpoint",
+        "schedule": crontab(minute="2-59/5"),
+    },
 }
 
 from app.workers import (  # noqa: E402,F401
@@ -68,6 +74,7 @@ from app.workers import (  # noqa: E402,F401
     queue_tasks,
     byok_tasks,
     system_tasks,
+    audit_tasks,
 )
 
 

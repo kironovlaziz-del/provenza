@@ -138,7 +138,7 @@ export default function AgentsFoundPage() {
             </select>
           </div>
           <div style={{ overflowX: "auto" }}>
-            <table>
+            <table className="table-cards">
               <thead>
                 <tr>
                   <th>{t("found.col_agent")}</th>
@@ -156,7 +156,7 @@ export default function AgentsFoundPage() {
                 )}
                 {items?.map((f) => (
                   <tr key={f.id}>
-                    <td>
+                    <td data-label={t("found.col_agent")}>
                       <div style={{ fontWeight: 600 }}>{f.name}</div>
                       <div className="hint-text" style={{ fontSize: 11 }}>
                         {[f.vendor, t(`found.category_${f.category}`, f.category)].filter(Boolean).join(" · ")}
@@ -164,23 +164,23 @@ export default function AgentsFoundPage() {
                       </div>
                       {f.evidence?.matched_by === "behavior" && <Signals ev={f.evidence} />}
                     </td>
-                    <td>
+                    <td data-label={t("found.col_device")}>
                       <Link href={`/devices?focus=${f.device_id}`} className="mono" style={{ fontSize: 12 }}>{f.device_host}</Link>
                       {f.device_user && <div className="hint-text" style={{ fontSize: 11 }}>{f.device_user}</div>}
                     </td>
-                    <td>
+                    <td data-label={t("found.col_risk")}>
                       <span className={`pill ${riskPill(f.risk_score)}`}>
                         {f.risk_score == null ? "—" : f.risk_score.toFixed(1)}
                       </span>
                     </td>
-                    <td style={{ fontSize: 12 }}>
+                    <td data-label={t("found.col_seen")} style={{ fontSize: 12 }}>
                       <div title={new Date(f.last_seen_at).toLocaleString(i18n.language)}>{ago(f.last_seen_at, i18n.language)}</div>
                       <div className="hint-text" style={{ fontSize: 11 }}>
                         {t("found.first_seen", { when: new Date(f.first_seen_at).toLocaleDateString(i18n.language) })}
                         {f.seen_count > 1 ? ` · ×${f.seen_count}` : ""}
                       </div>
                     </td>
-                    <td>
+                    <td data-label={t("found.col_status")}>
                       <span className={`pill ${STATUS_PILL[f.status]}`}>{t(`found.status_${f.status}`)}</span>
                       {f.registered_agent && (
                         <div style={{ fontSize: 11, marginTop: 4 }}>

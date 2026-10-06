@@ -27,6 +27,27 @@ this project adheres to [Semantic Versioning](https://semver.org/).
   jiter, tiktoken, tokenizers); LLM API key variable names in its
   environment raise the confidence - names only, never values. Agents
   Found shows the signals and a high / medium confidence.
+- **Tamper-evident audit log** ([docs/audit-proofs.md](docs/audit-proofs.md)).
+  Audit records are hash-chained per organization (`seq`, `prev_hash`,
+  `record_hash`); every 5 minutes the server signs the Merkle root of each
+  log that grew (RFC 9162 hashing, Ed25519 + ML-DSA-65 audit key). New
+  endpoints: `GET /audit-logs/{id}/proof` (inclusion proof),
+  `GET /audit-logs/consistency` (a later checkpoint extends an earlier
+  one), `GET/POST /audit-logs/checkpoints`, `GET /audit-logs/integrity`,
+  `POST /audit-logs/verify` (admin: recompute the whole chain). The Audit
+  Log page shows the integrity status, checks a record's proof in the
+  browser and downloads proofs and checkpoints; `tools/provenza_audit.py`
+  verifies them offline without trusting the server.
+- **Audit key rotation with quorum.** Each organization has its own audit
+  key. A new one is proposed by an admin, approved by
+  `AUDIT_KEY_ROTATION_QUORUM` admins (default 2) who each type its
+  fingerprint as published outside Provenza, and takes effect after
+  `AUDIT_KEY_ROTATION_NOTICE_HOURS` (default 24): the old key then signs a
+  handover, countersigned by the new key. Verifiers - the offline tool and
+  the browser - accept the new key only with both the valid handover chain
+  and the independently confirmed fingerprint; on failure the tool prints
+  the trust chain first. Any admin can cancel. New notification event
+  `audit_key_rotation`. API: `/audit-logs/keys`.
 
 - **Agent-held signing keys.** An agent can register its own Ed25519 public
   key (at registration or later via `POST /agents/{id}/signing-key`); the
@@ -96,6 +117,15 @@ this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Security
 
+- **Rotating `ENCRYPTION_KEY` re-encrypts the audit keys too**
+  (`scripts/rotate_encryption_key.py`); before, checkpoints would have
+  stopped after a master key rotation.
+- **The audit log is append-only in the database.** A trigger refuses
+  `UPDATE`, `DELETE` and `TRUNCATE` on `ai_audit_logs` and
+  `audit_checkpoints`; only `scripts/delete_org.py` may delete, by setting
+  `provenza.allow_purge` for its own transaction. Changes made by someone
+  who can bypass the trigger are caught by the hash chain and the signed
+  checkpoints.
 - **Process command lines no longer leave the endpoint.** The endpoint
   agent sent the full command line of matched processes, which can carry
   API keys and tokens. It now sends only the product it recognized and
@@ -161,6 +191,20 @@ this project adheres to [Semantic Versioning](https://semver.org/).
   (their process command lines are now dropped on arrival). Run
   `alembic upgrade head` (new tables `endpoint_devices`,
   `discovered_agents`).
+- **Audit log migration** (`alembic upgrade head`, revision
+  `d5e8a1c3f7b2`): chains the existing records of each organization in the
+  order they were written, adds `audit_checkpoints` and
+  `audit_signing_keys` and installs the append-only triggers. Restart
+  `celery beat` so checkpoints are signed. The audit key is encrypted with
+  `ENCRYPTION_KEY` - keep that key as you already must. Audit records can
+  no longer be inserted with raw SQL (the demo seed no longer does);
+  deleting an organization's records needs `scripts/delete_org.py`.
+- **Audit key rotation migration** (`e3b6d9f2a4c8`): per-organization audit
+  keys, `audit_key_rotations`, `audit_key_rotation_approvals`,
+  `audit_key_handovers`. Existing organizations keep the server-wide key
+  until they rotate. Organizations with a single admin cannot rotate until
+  they add a second one - or the operator sets `AUDIT_KEY_ROTATION_QUORUM=1`
+  (server-wide).
 - **Removed features keep their data.** The tables of the removed MLOps and
   RAG features (`datasets`, `training_jobs`, `model_deployments`,
   `prediction_logs`, `document_collections`, `rag_documents`,

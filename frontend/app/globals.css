@@ -1039,6 +1039,40 @@ tbody tr.clickable:hover {
   }
 }
 
+/* Tables that become one card per row on phones: give every <td> a
+   data-label with its column name. */
+@media (max-width: 639px) {
+  table.table-cards thead {
+    display: none;
+  }
+  table.table-cards,
+  table.table-cards tbody,
+  table.table-cards tr,
+  table.table-cards td {
+    display: block;
+    width: 100%;
+  }
+  table.table-cards tr {
+    border-bottom: 1px solid var(--border);
+    padding: 10px 14px;
+  }
+  table.table-cards td {
+    border: none;
+    padding: 4px 0;
+  }
+  table.table-cards td[data-label]::before {
+    content: attr(data-label);
+    display: block;
+    font-size: 11px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+  table.table-cards tr.empty-row td::before {
+    content: none;
+  }
+}
+
 /* ==== provenza-ui: theme + sidebar (managed block, re-applied by apply_ui.py) ==== */
 
 /* Dark is the default; light only when data-theme="light" is set. */

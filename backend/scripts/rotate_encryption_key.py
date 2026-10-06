@@ -7,6 +7,7 @@ The master key encrypts, directly:
   - service_connections.bind_password_encrypted   directory passwords
   - org_keys.config_secret_encrypted        BYOK: Vault token / AWS secret
   - org_keys.wrapped_dek  (provider=local)  BYOK: the organizations' data keys
+  - audit_signing_keys.private_key_enc / pq_seed_enc   audit keys (checkpoints)
 Values in the "pvz2:<key>:..." format belong to an organization key (BYOK)
 and are not touched - rotating the master key re-wraps that key instead.
 
@@ -74,6 +75,11 @@ def targets():
         from app.models.org_key import OrgKey
         out.append((OrgKey, "config_secret_encrypted", None))
         out.append((OrgKey, "wrapped_dek", OrgKey.provider == "local"))
+    if "audit_signing_keys" in tables:
+        # forgetting these would stop every checkpoint the moment ENCRYPTION_KEY changes
+        from app.models.audit_log import AuditSigningKey
+        out.append((AuditSigningKey, "private_key_enc", None))
+        out.append((AuditSigningKey, "pq_seed_enc", None))
     return out
 
 

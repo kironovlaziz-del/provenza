@@ -116,6 +116,10 @@ export interface AuditLog {
   action: string;
   metadata_json?: Record<string, unknown> | null;
   created_at: string;
+  /** Position in the organization's hash chain (docs/audit-proofs.md). */
+  seq?: number | null;
+  prev_hash?: string | null;
+  record_hash?: string | null;
 }
 
 export type OverrideType = "stop" | "edit" | "rollback";

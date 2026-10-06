@@ -10,7 +10,9 @@ Delete one organization and everything that belongs to it.
 
 Meant for organizations created by mistake (a demo stack started against the
 production database). Real customers are offboarded through the product,
-which keeps the audit trail; this removes it.
+which keeps the audit trail; this removes it. The audit log is append-only
+(a database trigger refuses DELETE); this script lifts that for its own
+transaction only, by setting provenza.allow_purge.
 
 How it finds the data - from the live database schema, not a hand-kept list:
   1. every table with an org_id column: rows of this organization;
@@ -161,6 +163,9 @@ async def main(args) -> int:
             if answer.strip() != str(org["id"]):
                 print("aborted")
                 return 1
+        # the audit log and its checkpoints are append-only (database
+        # trigger); this transaction - and only this one - may delete them
+        await db.execute(text("SELECT set_config('provenza.allow_purge', 'on', true)"))
         deleted = defaultdict(int)
         for name in order:
             if counts[name]:

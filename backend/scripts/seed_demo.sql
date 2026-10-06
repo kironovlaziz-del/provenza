@@ -218,17 +218,8 @@ BEGIN
     END LOOP;
 
     -- === AUDIT LOGS ===
-    INSERT INTO ai_audit_logs (org_id,actor_user_id,entity_type,entity_id,action,metadata_json,created_at) VALUES
-      (v_org_id,v_admin_id,'policy',v_pol1,'created','{"name":"PII Protection"}'::jsonb,now()-interval '30 days'),
-      (v_org_id,v_admin_id,'policy',v_pol1,'approved','{"version":1}'::jsonb,now()-interval '30 days'),
-      (v_org_id,v_admin_id,'policy',v_pol2,'created','{"name":"Shadow AI Detection"}'::jsonb,now()-interval '20 days'),
-      (v_org_id,v_admin_id,'policy',v_pol2,'approved','{"version":1}'::jsonb,now()-interval '20 days'),
-      (v_org_id,v_admin_id,'policy',v_pol3,'created','{"name":"Agent Delegation Controls"}'::jsonb,now()-interval '10 days'),
-      (v_org_id,v_admin_id,'agent',v_ag1,'registered','{"team":"marketing"}'::jsonb,now()-interval '7 days'),
-      (v_org_id,v_admin_id,'agent',v_ag2,'registered','{"team":"data"}'::jsonb,now()-interval '7 days'),
-      (v_org_id,v_admin_id,'agent',v_ag3,'registered','{"team":"data"}'::jsonb,now()-interval '7 days'),
-      (v_org_id,v_admin_id,'provider',v_p_openai,'connected','{"risk_score":7.5}'::jsonb,now()-interval '25 days'),
-      (v_org_id,v_admin_id,'sighting',null,'resolved','{"tool":"Midjourney"}'::jsonb,now()-interval '10 days');
+    -- Not seeded: audit records are hash-chained and can only be written by
+    -- the application (AuditService.log). Using the demo creates them.
 
     RAISE NOTICE 'Demo data seeded successfully';
 END $$;
