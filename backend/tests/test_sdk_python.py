@@ -1,0 +1,74 @@
+# Copyright (c) 2026 Laziz Kironov
+# Licensed under the Apache License, Version 2.0.
+# Part of Provenza — https://github.com/kironovlaziz-del/provenza
+
+"""
+The Python SDK (sdk/python) against this server - not a fake.
+
+The agent is enrolled the way tools/provenza_sign.py enrolls (keys made on
+the agent's side), its identity file is written in the CLI's format, and the
+SDK takes it from there: governed async tools, a denied tool, and a receipt
+that the standalone verifier accepts for the agent's own key fingerprint.
+"""
+
+import importlib.util
+import sys
+from pathlib import Path
+
+import pytest
+from httpx import ASGITransport
+
+from app.main import app
+from tests.conftest import auth_headers
+from tests.enrollment_helpers import enroll
+
+ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "sdk" / "python" / "src"))
+
+from provenza import Agent, ProvenzaDenied  # noqa: E402
+from provenza import identity as ids  # noqa: E402
+from provenza.crypto import Keys  # noqa: E402
+
+_spec = importlib.util.spec_from_file_location("provenza_audit_tool_sdk", ROOT / "tools" / "provenza_audit.py")
+tool = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(tool)
+
+
+async def _sdk_agent(client, admin_token, tmp_path):
+    enrolled = await enroll(client, admin_token, name="sdk-bot", capabilities=("read",), allowed_tools=("db.read",))
+    path = tmp_path / "sdk-bot.json"
+    ids.save(ids.Identity(keys=Keys(enrolled["private_key"], enrolled["public_key"]), server="http://test",
+                          agent_id=enrolled["id"], api_key=enrolled["api_key"], name="sdk-bot"), path)
+    return Agent("sdk-bot", server_url="http://test", identity_path=str(path),
+                 async_transport=ASGITransport(app=app))
+
+
+@pytest.mark.asyncio
+async def test_sdk_governs_records_and_proves(client, admin_token, tmp_path):
+    agent = await _sdk_agent(client, admin_token, tmp_path)
+
+    @agent.tool(name="db.read")
+    async def read(query: str) -> dict:
+        return {"rows": 2, "query": query}
+
+    @agent.tool(name="stripe.charge")
+    async def charge(amount: int) -> dict:
+        raise AssertionError("a denied tool must not run")
+
+    assert await read("select 1") == {"rows": 2, "query": "select 1"}
+    with pytest.raises(ProvenzaDenied) as denied:
+        await charge(100)
+    assert denied.value.action_id is not None          # the refused attempt is on record
+
+    actions = (await client.get("/api/v1/agents/actions/", params={"agent_id": agent.agent_id},
+                                headers=auth_headers(admin_token))).json()["items"]
+    by_tool = {a["tool_name"]: a for a in actions}
+    assert by_tool["db.read"]["policy_check_result"] == "allowed" and by_tool["db.read"]["signature"]
+    assert by_tool["stripe.charge"]["policy_check_result"] == "denied"
+
+    receipt = (await client.get(f"/api/v1/pvp/receipts/{by_tool['db.read']['id']}",
+                                headers=auth_headers(admin_token))).json()
+    # the auditor checks the signature against the fingerprint the agent's owner holds
+    action, _, _ = tool.check_receipt(receipt, tool.Trust(), agent.fingerprint)
+    assert action["tool_name"] == "db.read"
+    await agent.aclose()

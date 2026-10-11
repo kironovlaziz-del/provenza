@@ -1,0 +1,80 @@
+name: Release Python SDK
+
+# Publishes sdk/python to PyPI when a tag "sdk-python-v<version>" is pushed,
+# e.g. sdk-python-v0.1.0. The tag must equal provenza.__version__.
+#
+# No PyPI token is stored anywhere: PyPI trusts this workflow through OIDC
+# (Trusted Publishing). One-time setup on pypi.org, see sdk/python/RELEASING.md.
+
+on:
+  push:
+    tags: ["sdk-python-v*"]
+
+permissions: {}
+
+jobs:
+  build:
+    name: Build and check
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: sdk/python
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: The tag names the version being released
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          version=$(sed -n 's/^__version__ = "\(.*\)"$/\1/p' src/provenza/__init__.py)
+          if [ "sdk-python-v${version}" != "${TAG}" ]; then
+            echo "tag ${TAG} does not match provenza.__version__ ${version}" >&2
+            exit 1
+          fi
+
+      - name: Test
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+          pytest -q
+
+      - name: Build sdist and wheel
+        run: |
+          pip install build twine
+          python -m build
+          twine check --strict dist/*
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: sdk/python/dist/
+          if-no-files-found: error
+
+  publish:
+    name: Publish to PyPI
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: pypi
+      url: https://pypi.org/p/provenza
+    permissions:
+      id-token: write   # the OIDC token PyPI trusts - nothing else
+
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - name: Publish
+        uses: pypa/gh-action-pypi-publish@release/v1

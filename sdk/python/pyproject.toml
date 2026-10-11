@@ -1,0 +1,55 @@
+[build-system]
+requires = ["setuptools>=77"]   # PEP 639 license metadata
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "provenza"
+dynamic = ["version"]           # from provenza.__version__
+description = "Provenza SDK: governed, signed and auditable actions for AI agents"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE"]
+authors = [{name = "Laziz Kironov"}]
+keywords = ["ai-governance", "agents", "audit", "mcp", "a2a", "security"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Topic :: Security",
+    "Typing :: Typed",
+]
+# Only what every agent needs. Everything else is an extra (decided 2026-10-11):
+dependencies = [
+    "cryptography>=42",
+    "httpx>=0.27",
+]
+
+[project.optional-dependencies]
+keychain = ["keyring>=24"]        # keep the agent's private keys in the OS keychain
+pq = ["cryptography>=48"]         # hybrid Ed25519 + ML-DSA-65 keys
+# frameworks (src/provenza/integrations): never required - crewai and autogen-core
+# even pin conflicting protobuf versions, so one environment may hold only one of them
+openai = ["openai>=1.40"]
+langchain = ["langchain-core>=0.3"]
+autogen = ["autogen-core>=0.4"]
+crewai = ["crewai>=1.0"]
+dev = ["pytest>=8", "pytest-asyncio>=0.23"]
+
+[project.urls]
+Homepage = "https://github.com/kironovlaziz-del/provenza"
+Documentation = "https://github.com/kironovlaziz-del/provenza/tree/main/sdk/python"
+
+[tool.setuptools.dynamic]
+version = {attr = "provenza.__version__"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+provenza = ["py.typed"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"

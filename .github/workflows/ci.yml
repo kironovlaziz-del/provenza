@@ -94,6 +94,67 @@ jobs:
           path: backend/coverage.xml
           if-no-files-found: warn
 
+  sdk-python:
+    name: Python SDK (pytest, wheel)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.12"]   # the oldest supported and the current
+
+    defaults:
+      run:
+        working-directory: sdk/python
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install the SDK with its test extras
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Run pytest
+        run: pytest -q
+
+      - name: Build the wheel
+        run: pip wheel --no-deps . -w dist
+
+  sdk-python-integrations:
+    name: Python SDK integrations (${{ matrix.extras }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        # crewai and autogen-core pin conflicting protobuf versions: separate environments
+        extras: ["openai,langchain,autogen", "crewai"]
+
+    defaults:
+      run:
+        working-directory: sdk/python
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install the SDK with ${{ matrix.extras }}
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev,${{ matrix.extras }}]"
+
+      - name: Run the integration tests
+        run: pytest -q tests/test_integrations.py
+
   frontend:
     name: Frontend (build)
     runs-on: ubuntu-latest
