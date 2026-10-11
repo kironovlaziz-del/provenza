@@ -65,6 +65,13 @@ celery_app.conf.beat_schedule = {
         "task": "audit.checkpoint",
         "schedule": crontab(minute="2-59/5"),
     },
+    # Commit recorded agent actions to the audit log in batches (one record
+    # per organization and run), so the next checkpoint covers them and
+    # PVP receipts are provable offline (app/pvp/seal.py).
+    "pvp-seal-actions": {
+        "task": "pvp.seal_actions",
+        "schedule": 60.0,
+    },
 }
 
 from app.workers import (  # noqa: E402,F401
@@ -75,6 +82,7 @@ from app.workers import (  # noqa: E402,F401
     byok_tasks,
     system_tasks,
     audit_tasks,
+    pvp_tasks,
 )
 
 

@@ -1,0 +1,168 @@
+{
+  "$id": "urn:provenza:pvp:1:agent.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "An agent as PVP knows it. The rights are the registered ones - the\nceiling; what an agent may use in a delegation chain is narrower and is\ncomputed by the server, never read from a message.",
+  "properties": {
+    "allowed_models": {
+      "items": {
+        "maxLength": 100,
+        "minLength": 1,
+        "type": "string"
+      },
+      "maxItems": 200,
+      "title": "Allowed Models",
+      "type": "array"
+    },
+    "allowed_tools": {
+      "items": {
+        "maxLength": 100,
+        "minLength": 1,
+        "type": "string"
+      },
+      "maxItems": 200,
+      "title": "Allowed Tools",
+      "type": "array"
+    },
+    "capabilities": {
+      "items": {
+        "maxLength": 100,
+        "minLength": 1,
+        "type": "string"
+      },
+      "maxItems": 200,
+      "title": "Capabilities",
+      "type": "array"
+    },
+    "id": {
+      "maximum": 2147483647,
+      "minimum": 1,
+      "title": "Id",
+      "type": "integer"
+    },
+    "key_origin": {
+      "anyOf": [
+        {
+          "enum": [
+            "agent",
+            "server"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Key Origin"
+    },
+    "max_delegation_depth": {
+      "maximum": 100,
+      "minimum": 0,
+      "title": "Max Delegation Depth",
+      "type": "integer"
+    },
+    "name": {
+      "maxLength": 255,
+      "minLength": 1,
+      "title": "Name",
+      "type": "string"
+    },
+    "org_id": {
+      "maximum": 2147483647,
+      "minimum": 1,
+      "title": "Org Id",
+      "type": "integer"
+    },
+    "pq_public_key": {
+      "anyOf": [
+        {
+          "maxLength": 6000,
+          "minLength": 4,
+          "pattern": "^[A-Za-z0-9+/]+={0,2}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Pq Public Key"
+    },
+    "public_key": {
+      "anyOf": [
+        {
+          "maxLength": 6000,
+          "minLength": 4,
+          "pattern": "^[A-Za-z0-9+/]+={0,2}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Public Key"
+    },
+    "pvp": {
+      "const": "pvp/1",
+      "default": "pvp/1",
+      "title": "Pvp",
+      "type": "string"
+    },
+    "scheme": {
+      "anyOf": [
+        {
+          "enum": [
+            "ed25519",
+            "ed25519+ml-dsa-65"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Scheme"
+    },
+    "status": {
+      "enum": [
+        "active",
+        "suspended",
+        "retired"
+      ],
+      "title": "Status",
+      "type": "string"
+    },
+    "team_id": {
+      "anyOf": [
+        {
+          "maximum": 2147483647,
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Team Id"
+    },
+    "type": {
+      "const": "agent",
+      "default": "agent",
+      "title": "Type",
+      "type": "string"
+    }
+  },
+  "required": [
+    "id",
+    "org_id",
+    "name",
+    "status",
+    "max_delegation_depth"
+  ],
+  "title": "PVPAgent",
+  "type": "object"
+}

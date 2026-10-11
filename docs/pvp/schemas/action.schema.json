@@ -1,0 +1,250 @@
+{
+  "$defs": {
+    "PVPSignature": {
+      "additionalProperties": false,
+      "description": "A signature as evidence: the bytes signed are canonical_bytes of the\nrecord's signed_payload; the keys are the ones that verified it when the\nrecord was made (never \"the agent's current key\"). Hybrid: Ed25519 AND\nML-DSA-65 over the same bytes, both must verify.",
+      "properties": {
+        "pq_public_key": {
+          "anyOf": [
+            {
+              "maxLength": 6000,
+              "minLength": 4,
+              "pattern": "^[A-Za-z0-9+/]+={0,2}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Pq Public Key"
+        },
+        "pq_signature": {
+          "anyOf": [
+            {
+              "maxLength": 6000,
+              "minLength": 4,
+              "pattern": "^[A-Za-z0-9+/]+={0,2}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Pq Signature"
+        },
+        "public_key": {
+          "maxLength": 6000,
+          "minLength": 4,
+          "pattern": "^[A-Za-z0-9+/]+={0,2}$",
+          "title": "Public Key",
+          "type": "string"
+        },
+        "scheme": {
+          "enum": [
+            "ed25519",
+            "ed25519+ml-dsa-65"
+          ],
+          "title": "Scheme",
+          "type": "string"
+        },
+        "signature": {
+          "maxLength": 6000,
+          "minLength": 4,
+          "pattern": "^[A-Za-z0-9+/]+={0,2}$",
+          "title": "Signature",
+          "type": "string"
+        }
+      },
+      "required": [
+        "scheme",
+        "public_key",
+        "signature"
+      ],
+      "title": "PVPSignature",
+      "type": "object"
+    }
+  },
+  "$id": "urn:provenza:pvp:1:action.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "A recorded action - allowed or not: refused attempts are recorded too.",
+  "properties": {
+    "action_id": {
+      "maximum": 2147483647,
+      "minimum": 1,
+      "title": "Action Id",
+      "type": "integer"
+    },
+    "action_type": {
+      "default": "tool_call",
+      "maxLength": 50,
+      "minLength": 1,
+      "pattern": "^[a-z][a-z0-9_.-]*$",
+      "title": "Action Type",
+      "type": "string"
+    },
+    "agent_id": {
+      "maximum": 2147483647,
+      "minimum": 1,
+      "title": "Agent Id",
+      "type": "integer"
+    },
+    "chain_id": {
+      "anyOf": [
+        {
+          "maximum": 2147483647,
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Chain Id"
+    },
+    "check_id": {
+      "anyOf": [
+        {
+          "maxLength": 64,
+          "minLength": 16,
+          "pattern": "^[A-Za-z0-9_-]+$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Check Id"
+    },
+    "decision": {
+      "enum": [
+        "allowed",
+        "denied",
+        "pending_approval"
+      ],
+      "title": "Decision",
+      "type": "string"
+    },
+    "duration_ms": {
+      "anyOf": [
+        {
+          "maximum": 2147483647,
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Duration Ms"
+    },
+    "executed_by": {
+      "anyOf": [
+        {
+          "enum": [
+            "mcp_gateway",
+            "a2a_gateway"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Executed By"
+    },
+    "input_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Input Sha256",
+      "type": "string"
+    },
+    "output_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Output Sha256",
+      "type": "string"
+    },
+    "policy_id": {
+      "anyOf": [
+        {
+          "maximum": 2147483647,
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Policy Id"
+    },
+    "pvp": {
+      "const": "pvp/1",
+      "default": "pvp/1",
+      "title": "Pvp",
+      "type": "string"
+    },
+    "reason": {
+      "default": "",
+      "title": "Reason",
+      "type": "string"
+    },
+    "recorded_at": {
+      "maximum": 9007199254740991,
+      "minimum": 0,
+      "title": "Recorded At",
+      "type": "integer"
+    },
+    "signed_by": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/PVPSignature"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "signed_payload": {
+      "anyOf": [
+        {
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Signed Payload"
+    },
+    "tool_name": {
+      "maxLength": 100,
+      "minLength": 1,
+      "title": "Tool Name",
+      "type": "string"
+    },
+    "type": {
+      "const": "action",
+      "default": "action",
+      "title": "Type",
+      "type": "string"
+    }
+  },
+  "required": [
+    "agent_id",
+    "tool_name",
+    "action_id",
+    "decision",
+    "input_sha256",
+    "output_sha256",
+    "recorded_at"
+  ],
+  "title": "PVPAction",
+  "type": "object"
+}

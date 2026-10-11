@@ -182,6 +182,8 @@ class AgentAudit:
         signer_public_key: Optional[str] = None,
         pq_signature: Optional[str] = None,
         signer_pq_public_key: Optional[str] = None,
+        executed_by: Optional[str] = None,
+        check_token: Optional[str] = None,
     ) -> AgentAction:
         """
         Persist an action row. If a Decision is supplied, its verdict and
@@ -207,8 +209,17 @@ class AgentAudit:
             signer_public_key=signer_public_key if signature else None,
             pq_signature=pq_signature if signature else None,
             signer_pq_public_key=signer_pq_public_key if signature else None,
+            executed_by=executed_by,
+            # set here, not by the database, so the evidence below can carry it
+            created_at=datetime.now(timezone.utc),
         )
         self.db.add(action)
+        if decision is not None:
+            # the PVP evidence of the action as recorded (app/pvp/evidence.py)
+            from app.pvp.evidence import stamp
+
+            await self.db.flush()
+            stamp(action, check_token)
 
         if decision and decision.result == DENIED and decision.incident_type:
             self.db.add(

@@ -109,6 +109,13 @@ async def lock_org(db: AsyncSession, org_id: int) -> None:
                      {"ns": ac.LOCK_CHECKPOINT, "org": int(org_id)})
 
 
+def private_keys(key: AuditSigningKey) -> Dict[str, Optional[str]]:
+    """{"ed": Ed25519 private key, "pq": ML-DSA-65 seed or None} (base64) - for
+    signers that need raw bytes signed, not a canonical payload (the TRACE
+    export signs a JWS signing input)."""
+    return _private(key)
+
+
 def _private(key: AuditSigningKey) -> Dict[str, Optional[str]]:
     if key.id not in _KEY_CACHE:
         _KEY_CACHE[key.id] = {

@@ -1,0 +1,90 @@
+{
+  "$id": "urn:provenza:pvp:1:action.request.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "An agent asks whether it may perform an action. What the action needs\ncomes from the Tool Registry, so the request carries no capabilities.",
+  "properties": {
+    "action_type": {
+      "default": "tool_call",
+      "maxLength": 50,
+      "minLength": 1,
+      "pattern": "^[a-z][a-z0-9_.-]*$",
+      "title": "Action Type",
+      "type": "string"
+    },
+    "agent_id": {
+      "maximum": 2147483647,
+      "minimum": 1,
+      "title": "Agent Id",
+      "type": "integer"
+    },
+    "chain_id": {
+      "anyOf": [
+        {
+          "maximum": 2147483647,
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Chain Id"
+    },
+    "input": {
+      "title": "Input",
+      "type": "object"
+    },
+    "pvp": {
+      "const": "pvp/1",
+      "default": "pvp/1",
+      "title": "Pvp",
+      "type": "string"
+    },
+    "tool_digest": {
+      "anyOf": [
+        {
+          "maxLength": 100,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Tool Digest"
+    },
+    "tool_name": {
+      "maxLength": 100,
+      "minLength": 1,
+      "title": "Tool Name",
+      "type": "string"
+    },
+    "tool_version": {
+      "anyOf": [
+        {
+          "maxLength": 100,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Tool Version"
+    },
+    "type": {
+      "const": "action.request",
+      "default": "action.request",
+      "title": "Type",
+      "type": "string"
+    }
+  },
+  "required": [
+    "agent_id",
+    "tool_name"
+  ],
+  "title": "PVPActionRequest",
+  "type": "object"
+}

@@ -21,6 +21,19 @@ not share code with one, so what it says does not depend on trusting either.
         or removed. With --pinned, the older checkpoint must also be the one
         you saved earlier
 
+  receipt RECEIPT.json [--fingerprint SHA256:...]... [--agent-fingerprint SHA256:...]
+        a PVP receipt (GET /pvp/receipts/{action_id}): the action is signed
+        by its agent (or was executed by a Provenza gateway), its signed
+        payload names this very action, it matches its check, it is a leaf
+        of a seal, the seal is a record of the audit log, and that log is
+        signed - action -> seal -> audit record -> checkpoint
+  trace EXPORT.json [--fingerprint SHA256:...]...
+        a TRACE v0.2 Trust Record export (GET /pvp/receipts/{id}/trace or
+        /pvp/chains/{id}/trace): the JWT is signed EdDSA by the key in
+        cnf.jwk (and ML-DSA-65 beside it for a hybrid key), its claims hash
+        the receipts it carries (RFC 8785 JCS, implemented here), and every
+        receipt verifies as above
+
 --fingerprint names an audit key you trust (repeat it for several): take it
 from a checkpoint you saved earlier or from where the organization
 published it - never from the file you are checking. Without any, the tool
@@ -424,6 +437,191 @@ def check_consistency(doc, pinned=None, pin=None):
     return old, new, fp_old, fp_new
 
 
+# ---------------------------------------------------------------------------
+# PVP receipts and TRACE exports
+# ---------------------------------------------------------------------------
+
+SEAL_ENTITY = "pvp_action_seal"
+TRACE_PROFILE = "tag:agentrust-io.com,2026:trace-v0.2"
+ACTION_FIELDS = ("check_id", "agent_id", "chain_id", "action_type", "tool_name", "input_sha256", "output_sha256")
+
+
+def check_receipt(doc, trust=None, agent_fp=None):
+    """Returns (action, checkpoint, audit key fingerprint)."""
+    if doc.get("pvp") != "pvp/1" or doc.get("type") != "receipt":
+        raise Fail("not a PVP receipt (pvp/1)")
+    action, seal = doc.get("action") or {}, doc.get("seal")
+    if seal is None or doc.get("audit_proof") is None:
+        raise Fail("the receipt carries no seal / audit proof - it is not anchored to the audit log")
+    # 1. the audit log: the seal's record is in a signed checkpoint
+    payload, cp, fp = check_proof(doc["audit_proof"], trust if trust is not None else Trust())
+    meta = payload.get("metadata") or {}
+    if (payload.get("entity_type"), payload.get("entity_id")) != (SEAL_ENTITY, seal["seal_id"]) \
+            or doc["audit_proof"]["record"].get("id") != seal["audit_log_id"]:
+        raise Fail("the audit record is not this receipt's seal")
+    if meta.get("root") != seal["root"] or meta.get("size") != seal["size"]:
+        raise Fail("the seal differs from what the audit log recorded for it")
+    # 2. the seal: the action's evidence is one of its leaves
+    leaf = hashlib.sha256(canonical(action)).digest()
+    path = [_hex32(x, "seal path") for x in seal.get("inclusion_path") or []]
+    if not inclusion_ok(seal["leaf_index"], seal["size"], leaf, path, bytes.fromhex(seal["root"])):
+        raise Fail("the action is not in its seal - its evidence was altered")
+    # 3. the action: signed by its agent, and the signature is about this action
+    signed_by = action.get("signed_by")
+    if signed_by is None:
+        if not action.get("executed_by"):
+            raise Fail("the action is not signed and no Provenza gateway executed it")
+    else:
+        sp = action.get("signed_payload") or {}
+        if set(sp) != set(ACTION_FIELDS) or any(sp[k] != action.get(k) for k in ACTION_FIELDS):
+            raise Fail("the signed payload does not name this action")
+        _verify_pair("agent signature", signed_by["public_key"], signed_by.get("pq_public_key"),
+                     signed_by["signature"], signed_by.get("pq_signature"), canonical(sp))
+        if agent_fp and fingerprint(signed_by["public_key"], signed_by.get("pq_public_key")) != agent_fp:
+            raise Fail("the action was signed by another key than the agent fingerprint you gave")
+    # 4. the check it was recorded under
+    check = doc.get("check")
+    if check is not None:
+        for k in ("check_id", "agent_id", "chain_id", "action_type", "tool_name", "input_sha256"):
+            if check.get(k) != action.get(k):
+                raise Fail(f"the action differs from its check ({k})")
+        if check.get("decision") != "allowed" and action.get("decision") == "allowed":
+            raise Fail("the check refused the action, yet it is recorded as allowed")
+    return action, cp, fp
+
+
+def _jcs_number(x):
+    if isinstance(x, bool):
+        raise ValueError("bool is not a number")
+    if isinstance(x, int):
+        if abs(x) > 2 ** 53 - 1:
+            raise ValueError("integer outside the I-JSON range")
+        return str(x)
+    from decimal import Decimal
+    import math
+    if not math.isfinite(x):
+        raise ValueError("non-finite number")
+    if x == 0:
+        return "0"
+    _, digits, exp = Decimal(repr(abs(x))).as_tuple()
+    digits = list(digits)
+    while len(digits) > 1 and digits[-1] == 0:
+        digits.pop()
+        exp += 1
+    d = "".join(map(str, digits))
+    k, n = len(d), exp + len(d)
+    sign = "-" if x < 0 else ""
+    if k <= n <= 21:
+        return sign + d + "0" * (n - k)
+    if 0 < n <= 21:
+        return sign + d[:n] + "." + d[n:]
+    if -6 < n <= 0:
+        return sign + "0." + "0" * (-n) + d
+    e = n - 1
+    return f"{sign}{d[0]}{'.' + d[1:] if k > 1 else ''}e{'+' if e > 0 else '-'}{abs(e)}"
+
+
+def jcs(v) -> bytes:
+    """RFC 8785, written independently of the server's app/pvp/jcs.py."""
+    def ser(v):
+        if v is None:
+            return "null"
+        if v is True or v is False:
+            return "true" if v else "false"
+        if isinstance(v, (int, float)):
+            return _jcs_number(v)
+        if isinstance(v, str):
+            return json.dumps(v, ensure_ascii=False)
+        if isinstance(v, list):
+            return "[" + ",".join(ser(i) for i in v) + "]"
+        if isinstance(v, dict):
+            keys = sorted(v, key=lambda k: k.encode("utf-16-be", "surrogatepass"))
+            return "{" + ",".join(json.dumps(k, ensure_ascii=False) + ":" + ser(v[k]) for k in keys) + "}"
+        raise ValueError("not a JSON value")
+    return ser(v).encode("utf-8")
+
+
+def _b64url_decode(text):
+    return base64.urlsafe_b64decode(text + "=" * (-len(text) % 4))
+
+
+def _jcs_digest(v):
+    return "sha256:" + hashlib.sha256(jcs(v)).hexdigest()
+
+
+def check_trace(doc, trust):
+    if doc.get("format") != "provenza.trace-export/1":
+        raise Fail("not a Provenza TRACE export (format)")
+    parts = (doc.get("jwt") or "").split(".")
+    if len(parts) != 3:
+        raise Fail("jwt: not a compact JWS")
+    header, claims = json.loads(_b64url_decode(parts[0])), json.loads(_b64url_decode(parts[1]))
+    if header.get("alg") != "EdDSA":
+        raise Fail("jwt: alg must be EdDSA")
+    if claims.get("eat_profile") != TRACE_PROFILE:
+        raise Fail("jwt: not a TRACE v0.2 record (eat_profile)")
+    if doc.get("claims") is not None and doc["claims"] != claims:
+        raise Fail("the claims shown beside the JWT are not the signed ones")
+    jwk = (claims.get("cnf") or {}).get("jwk") or {}
+    if (jwk.get("kty"), jwk.get("crv")) != ("OKP", "Ed25519"):
+        raise Fail("cnf.jwk is not an Ed25519 key")
+    pub = base64.b64encode(_b64url_decode(jwk["x"])).decode()
+    key = doc.get("key") or {}
+    if key.get("public_key") != pub:
+        raise Fail("the export's key is not the key in cnf.jwk")
+    fp = fingerprint(pub, key.get("pq_public_key"))
+    if header.get("kid") != fp or jwk.get("kid") != fp:
+        raise Fail("kid does not name the signing key")
+    if trust:
+        _require_trust(fp, {}, trust, "the trust record")
+    _verify_pair("trust record", pub, key.get("pq_public_key"), base64.b64encode(_b64url_decode(parts[2])).decode(),
+                 doc.get("pq_signature"), f"{parts[0]}.{parts[1]}".encode("ascii"))
+    receipts = doc.get("receipts") or []
+    refs = {r["id"]: r for r in claims.get("references") or [] if r.get("rel") == "pvp-receipt"}
+    if not receipts or len(refs) != len(receipts):
+        raise Fail("the export does not carry the receipts the record references")
+    for r in receipts:
+        ref = refs.get(str((r.get("action") or {}).get("action_id")))
+        if ref is None or ref.get("digest") != _jcs_digest(r):
+            raise Fail("a receipt differs from the one the signed record references")
+        check_receipt(r, trust)
+    transcript = (claims.get("tool_transcript") or {})
+    if transcript.get("hash") != _jcs_digest([r["action"] for r in receipts]) \
+            or transcript.get("call_count") != len(receipts):
+        raise Fail("tool_transcript does not hash the actions carried")
+    return claims, fp
+
+
+def cmd_receipt(args) -> int:
+    doc = _load(args.file)
+    trust = Trust(args.fingerprint)
+    action, cp, fp = check_receipt(doc, trust, args.agent_fingerprint)
+    who = (f"signed by agent key {fingerprint(action['signed_by']['public_key'], action['signed_by'].get('pq_public_key'))}"
+           if action.get("signed_by") else f"executed and witnessed by the Provenza {action['executed_by']}")
+    print(f"VERIFIED  action {action['action_id']} ({action['tool_name']}, {action['decision']}) of agent "
+          f"{action['agent_id']}: {who}")
+    print(f"          sealed in seal {doc['seal']['seal_id']}, audit record of organization {cp['org_id']}, "
+          f"checkpoint of {cp['tree_size']} records signed by {fp}")
+    if doc.get("current_decision") and doc["current_decision"] != action["decision"]:
+        print(f"          decided later: {doc['current_decision']} (a human approval; not part of the proof)")
+    if not args.agent_fingerprint and action.get("signed_by"):
+        print("note: no --agent-fingerprint given - this proves the action was signed, not by whose key")
+    _note(trust)
+    return 0
+
+
+def cmd_trace(args) -> int:
+    doc = _load(args.file)
+    trust = Trust(args.fingerprint)
+    claims, fp = check_trace(doc, trust)
+    print(f"VERIFIED  TRACE v0.2 trust record (level {doc.get('level')}) for {claims['subject']}: "
+          f"{claims['tool_transcript']['call_count']} action(s), appraisal {claims['appraisal']['status']}, "
+          f"policy {claims['policy']['enforcement_mode']}")
+    print(f"          signed EdDSA{' + ML-DSA-65' if doc.get('pq_signature') else ''} by {fp}; every receipt verifies")
+    _note(trust)
+    return 0
+
+
 def _load(path):
     try:
         with open(path, encoding="utf-8") as f:
@@ -496,9 +694,17 @@ def main(argv=None) -> int:
     s.add_argument("file")
     s.add_argument("--pinned")
     s.add_argument("--fingerprint", action="append", default=[])
+    r = sub.add_parser("receipt")
+    r.add_argument("file")
+    r.add_argument("--fingerprint", action="append", default=[])
+    r.add_argument("--agent-fingerprint")
+    t = sub.add_parser("trace")
+    t.add_argument("file")
+    t.add_argument("--fingerprint", action="append", default=[])
     args = p.parse_args(argv)
     try:
-        return {"verify": cmd_verify, "checkpoint": cmd_checkpoint, "consistency": cmd_consistency}[args.cmd](args)
+        return {"verify": cmd_verify, "checkpoint": cmd_checkpoint, "consistency": cmd_consistency,
+                "receipt": cmd_receipt, "trace": cmd_trace}[args.cmd](args)
     except TrustFail as e:
         for line in e.lines:  # the trust chain first: it, not the signature, is the usual culprit
             print(line)

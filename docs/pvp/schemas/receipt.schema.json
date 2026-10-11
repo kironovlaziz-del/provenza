@@ -1,0 +1,635 @@
+{
+  "$defs": {
+    "PVPAction": {
+      "additionalProperties": false,
+      "description": "A recorded action - allowed or not: refused attempts are recorded too.",
+      "properties": {
+        "action_id": {
+          "maximum": 2147483647,
+          "minimum": 1,
+          "title": "Action Id",
+          "type": "integer"
+        },
+        "action_type": {
+          "default": "tool_call",
+          "maxLength": 50,
+          "minLength": 1,
+          "pattern": "^[a-z][a-z0-9_.-]*$",
+          "title": "Action Type",
+          "type": "string"
+        },
+        "agent_id": {
+          "maximum": 2147483647,
+          "minimum": 1,
+          "title": "Agent Id",
+          "type": "integer"
+        },
+        "chain_id": {
+          "anyOf": [
+            {
+              "maximum": 2147483647,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Chain Id"
+        },
+        "check_id": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "minLength": 16,
+              "pattern": "^[A-Za-z0-9_-]+$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Check Id"
+        },
+        "decision": {
+          "enum": [
+            "allowed",
+            "denied",
+            "pending_approval"
+          ],
+          "title": "Decision",
+          "type": "string"
+        },
+        "duration_ms": {
+          "anyOf": [
+            {
+              "maximum": 2147483647,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Duration Ms"
+        },
+        "executed_by": {
+          "anyOf": [
+            {
+              "enum": [
+                "mcp_gateway",
+                "a2a_gateway"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Executed By"
+        },
+        "input_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Input Sha256",
+          "type": "string"
+        },
+        "output_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Output Sha256",
+          "type": "string"
+        },
+        "policy_id": {
+          "anyOf": [
+            {
+              "maximum": 2147483647,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Policy Id"
+        },
+        "pvp": {
+          "const": "pvp/1",
+          "default": "pvp/1",
+          "title": "Pvp",
+          "type": "string"
+        },
+        "reason": {
+          "default": "",
+          "title": "Reason",
+          "type": "string"
+        },
+        "recorded_at": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "title": "Recorded At",
+          "type": "integer"
+        },
+        "signed_by": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PVPSignature"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "signed_payload": {
+          "anyOf": [
+            {
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Signed Payload"
+        },
+        "tool_name": {
+          "maxLength": 100,
+          "minLength": 1,
+          "title": "Tool Name",
+          "type": "string"
+        },
+        "type": {
+          "const": "action",
+          "default": "action",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "agent_id",
+        "tool_name",
+        "action_id",
+        "decision",
+        "input_sha256",
+        "output_sha256",
+        "recorded_at"
+      ],
+      "title": "PVPAction",
+      "type": "object"
+    },
+    "PVPCheck": {
+      "additionalProperties": false,
+      "description": "The verdict for one proposed action, bound to it by input_sha256. The\ncheck_id is single-use and expires: recording presents it once, for\nexactly this action.",
+      "properties": {
+        "action_type": {
+          "default": "tool_call",
+          "maxLength": 50,
+          "minLength": 1,
+          "pattern": "^[a-z][a-z0-9_.-]*$",
+          "title": "Action Type",
+          "type": "string"
+        },
+        "agent_id": {
+          "maximum": 2147483647,
+          "minimum": 1,
+          "title": "Agent Id",
+          "type": "integer"
+        },
+        "chain_id": {
+          "anyOf": [
+            {
+              "maximum": 2147483647,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Chain Id"
+        },
+        "check_id": {
+          "maxLength": 64,
+          "minLength": 16,
+          "pattern": "^[A-Za-z0-9_-]+$",
+          "title": "Check Id",
+          "type": "string"
+        },
+        "decision": {
+          "enum": [
+            "allowed",
+            "denied",
+            "pending_approval"
+          ],
+          "title": "Decision",
+          "type": "string"
+        },
+        "expires_at": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "title": "Expires At",
+          "type": "integer"
+        },
+        "incident_type": {
+          "anyOf": [
+            {
+              "maxLength": 100,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Incident Type"
+        },
+        "input_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Input Sha256",
+          "type": "string"
+        },
+        "policy_id": {
+          "anyOf": [
+            {
+              "maximum": 2147483647,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Policy Id"
+        },
+        "pvp": {
+          "const": "pvp/1",
+          "default": "pvp/1",
+          "title": "Pvp",
+          "type": "string"
+        },
+        "reason": {
+          "default": "",
+          "title": "Reason",
+          "type": "string"
+        },
+        "required_capabilities": {
+          "items": {
+            "maxLength": 100,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 200,
+          "title": "Required Capabilities",
+          "type": "array"
+        },
+        "tool_name": {
+          "maxLength": 100,
+          "minLength": 1,
+          "title": "Tool Name",
+          "type": "string"
+        },
+        "type": {
+          "const": "action.check",
+          "default": "action.check",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "agent_id",
+        "tool_name",
+        "check_id",
+        "input_sha256",
+        "decision",
+        "expires_at"
+      ],
+      "title": "PVPCheck",
+      "type": "object"
+    },
+    "PVPCheckpoint": {
+      "additionalProperties": false,
+      "description": "A signed Merkle root of an organization's audit log - the same object\nGET /audit-logs/checkpoints returns (app/services/audit_proofs.py).\nissued_at is the string the signed statement carries.",
+      "properties": {
+        "algorithm": {
+          "enum": [
+            "ed25519",
+            "ed25519+ml-dsa-65"
+          ],
+          "title": "Algorithm",
+          "type": "string"
+        },
+        "issued_at": {
+          "title": "Issued At",
+          "type": "string"
+        },
+        "key_fingerprint": {
+          "maxLength": 80,
+          "title": "Key Fingerprint",
+          "type": "string"
+        },
+        "org_id": {
+          "maximum": 2147483647,
+          "minimum": 1,
+          "title": "Org Id",
+          "type": "integer"
+        },
+        "pq_public_key": {
+          "anyOf": [
+            {
+              "maxLength": 6000,
+              "minLength": 4,
+              "pattern": "^[A-Za-z0-9+/]+={0,2}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Pq Public Key"
+        },
+        "pq_signature": {
+          "anyOf": [
+            {
+              "maxLength": 6000,
+              "minLength": 4,
+              "pattern": "^[A-Za-z0-9+/]+={0,2}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Pq Signature"
+        },
+        "public_key": {
+          "maxLength": 6000,
+          "minLength": 4,
+          "pattern": "^[A-Za-z0-9+/]+={0,2}$",
+          "title": "Public Key",
+          "type": "string"
+        },
+        "pvp": {
+          "const": "pvp/1",
+          "default": "pvp/1",
+          "title": "Pvp",
+          "type": "string"
+        },
+        "root_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Root Hash",
+          "type": "string"
+        },
+        "signature": {
+          "maxLength": 6000,
+          "minLength": 4,
+          "pattern": "^[A-Za-z0-9+/]+={0,2}$",
+          "title": "Signature",
+          "type": "string"
+        },
+        "statement": {
+          "maxLength": 4000,
+          "title": "Statement",
+          "type": "string"
+        },
+        "tree_size": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "title": "Tree Size",
+          "type": "integer"
+        },
+        "type": {
+          "const": "checkpoint",
+          "default": "checkpoint",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "org_id",
+        "tree_size",
+        "root_hash",
+        "issued_at",
+        "algorithm",
+        "statement",
+        "signature",
+        "public_key",
+        "key_fingerprint"
+      ],
+      "title": "PVPCheckpoint",
+      "type": "object"
+    },
+    "PVPSeal": {
+      "additionalProperties": false,
+      "description": "Where an action's evidence sits in a seal (app/pvp/seal.py): leaf\nleaf_index of a Merkle tree (RFC 9162) of `size` evidence hashes whose\nroot is written in audit record audit_log_id.",
+      "properties": {
+        "audit_log_id": {
+          "maximum": 2147483647,
+          "minimum": 1,
+          "title": "Audit Log Id",
+          "type": "integer"
+        },
+        "inclusion_path": {
+          "items": {
+            "pattern": "^[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "maxItems": 64,
+          "title": "Inclusion Path",
+          "type": "array"
+        },
+        "leaf_index": {
+          "minimum": 0,
+          "title": "Leaf Index",
+          "type": "integer"
+        },
+        "root": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Root",
+          "type": "string"
+        },
+        "seal_id": {
+          "maximum": 2147483647,
+          "minimum": 1,
+          "title": "Seal Id",
+          "type": "integer"
+        },
+        "size": {
+          "minimum": 1,
+          "title": "Size",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "seal_id",
+        "leaf_index",
+        "size",
+        "root",
+        "audit_log_id"
+      ],
+      "title": "PVPSeal",
+      "type": "object"
+    },
+    "PVPSignature": {
+      "additionalProperties": false,
+      "description": "A signature as evidence: the bytes signed are canonical_bytes of the\nrecord's signed_payload; the keys are the ones that verified it when the\nrecord was made (never \"the agent's current key\"). Hybrid: Ed25519 AND\nML-DSA-65 over the same bytes, both must verify.",
+      "properties": {
+        "pq_public_key": {
+          "anyOf": [
+            {
+              "maxLength": 6000,
+              "minLength": 4,
+              "pattern": "^[A-Za-z0-9+/]+={0,2}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Pq Public Key"
+        },
+        "pq_signature": {
+          "anyOf": [
+            {
+              "maxLength": 6000,
+              "minLength": 4,
+              "pattern": "^[A-Za-z0-9+/]+={0,2}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Pq Signature"
+        },
+        "public_key": {
+          "maxLength": 6000,
+          "minLength": 4,
+          "pattern": "^[A-Za-z0-9+/]+={0,2}$",
+          "title": "Public Key",
+          "type": "string"
+        },
+        "scheme": {
+          "enum": [
+            "ed25519",
+            "ed25519+ml-dsa-65"
+          ],
+          "title": "Scheme",
+          "type": "string"
+        },
+        "signature": {
+          "maxLength": 6000,
+          "minLength": 4,
+          "pattern": "^[A-Za-z0-9+/]+={0,2}$",
+          "title": "Signature",
+          "type": "string"
+        }
+      },
+      "required": [
+        "scheme",
+        "public_key",
+        "signature"
+      ],
+      "title": "PVPSignature",
+      "type": "object"
+    }
+  },
+  "$id": "urn:provenza:pvp:1:receipt.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Everything needed to show, without trusting the server, that an\naction was checked, performed as checked, signed by its agent (or\nwitnessed by a Provenza gateway), and committed to the signed audit log:\n\n    action (evidence as recorded) -> seal leaf -> seal record in the\n    audit log (audit_proof, provenza.audit.proof/1) -> signed checkpoint\n\ncurrent_decision is what the action's verdict is now (a human approval\nmay have changed a pending one) - informational, not part of the proof.",
+  "properties": {
+    "action": {
+      "$ref": "#/$defs/PVPAction"
+    },
+    "audit_proof": {
+      "anyOf": [
+        {
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Audit Proof"
+    },
+    "check": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/PVPCheck"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "checkpoint": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/PVPCheckpoint"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "current_decision": {
+      "anyOf": [
+        {
+          "enum": [
+            "allowed",
+            "denied",
+            "pending_approval"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Current Decision"
+    },
+    "pvp": {
+      "const": "pvp/1",
+      "default": "pvp/1",
+      "title": "Pvp",
+      "type": "string"
+    },
+    "seal": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/PVPSeal"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "type": {
+      "const": "receipt",
+      "default": "receipt",
+      "title": "Type",
+      "type": "string"
+    }
+  },
+  "required": [
+    "action"
+  ],
+  "title": "PVPReceipt",
+  "type": "object"
+}

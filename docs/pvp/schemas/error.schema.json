@@ -1,0 +1,41 @@
+{
+  "$id": "urn:provenza:pvp:1:error.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "A refusal. code is a stable dotted identifier (e.g. agent.key_required);\nmessage is for humans and never echoes the refused content.",
+  "properties": {
+    "code": {
+      "maxLength": 100,
+      "pattern": "^[a-z0-9_]+(\\.[a-z0-9_]+)+$",
+      "title": "Code",
+      "type": "string"
+    },
+    "details": {
+      "title": "Details",
+      "type": "object"
+    },
+    "message": {
+      "default": "",
+      "maxLength": 500,
+      "title": "Message",
+      "type": "string"
+    },
+    "pvp": {
+      "const": "pvp/1",
+      "default": "pvp/1",
+      "title": "Pvp",
+      "type": "string"
+    },
+    "type": {
+      "const": "error",
+      "default": "error",
+      "title": "Type",
+      "type": "string"
+    }
+  },
+  "required": [
+    "code"
+  ],
+  "title": "PVPError",
+  "type": "object"
+}

@@ -1,0 +1,116 @@
+{
+  "$id": "urn:provenza:pvp:1:checkpoint.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "A signed Merkle root of an organization's audit log - the same object\nGET /audit-logs/checkpoints returns (app/services/audit_proofs.py).\nissued_at is the string the signed statement carries.",
+  "properties": {
+    "algorithm": {
+      "enum": [
+        "ed25519",
+        "ed25519+ml-dsa-65"
+      ],
+      "title": "Algorithm",
+      "type": "string"
+    },
+    "issued_at": {
+      "title": "Issued At",
+      "type": "string"
+    },
+    "key_fingerprint": {
+      "maxLength": 80,
+      "title": "Key Fingerprint",
+      "type": "string"
+    },
+    "org_id": {
+      "maximum": 2147483647,
+      "minimum": 1,
+      "title": "Org Id",
+      "type": "integer"
+    },
+    "pq_public_key": {
+      "anyOf": [
+        {
+          "maxLength": 6000,
+          "minLength": 4,
+          "pattern": "^[A-Za-z0-9+/]+={0,2}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Pq Public Key"
+    },
+    "pq_signature": {
+      "anyOf": [
+        {
+          "maxLength": 6000,
+          "minLength": 4,
+          "pattern": "^[A-Za-z0-9+/]+={0,2}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Pq Signature"
+    },
+    "public_key": {
+      "maxLength": 6000,
+      "minLength": 4,
+      "pattern": "^[A-Za-z0-9+/]+={0,2}$",
+      "title": "Public Key",
+      "type": "string"
+    },
+    "pvp": {
+      "const": "pvp/1",
+      "default": "pvp/1",
+      "title": "Pvp",
+      "type": "string"
+    },
+    "root_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Root Hash",
+      "type": "string"
+    },
+    "signature": {
+      "maxLength": 6000,
+      "minLength": 4,
+      "pattern": "^[A-Za-z0-9+/]+={0,2}$",
+      "title": "Signature",
+      "type": "string"
+    },
+    "statement": {
+      "maxLength": 4000,
+      "title": "Statement",
+      "type": "string"
+    },
+    "tree_size": {
+      "maximum": 9007199254740991,
+      "minimum": 0,
+      "title": "Tree Size",
+      "type": "integer"
+    },
+    "type": {
+      "const": "checkpoint",
+      "default": "checkpoint",
+      "title": "Type",
+      "type": "string"
+    }
+  },
+  "required": [
+    "org_id",
+    "tree_size",
+    "root_hash",
+    "issued_at",
+    "algorithm",
+    "statement",
+    "signature",
+    "public_key",
+    "key_fingerprint"
+  ],
+  "title": "PVPCheckpoint",
+  "type": "object"
+}

@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Text, Boolean, DateTime, ForeignKey, func
+from sqlalchemy import Column, Integer, String, Text, Boolean, DateTime, ForeignKey, Index, func, text
 from sqlalchemy.dialects.postgresql import JSONB
 from app.core.database import Base
 
@@ -17,6 +17,11 @@ class AgentAction(Base):
     """
 
     __tablename__ = "agent_actions"
+    __table_args__ = (
+        # what the sealer looks for (app/pvp/seal.py): evidence present, not sealed yet
+        Index("ix_agent_actions_unsealed", "org_id", "id",
+              postgresql_where=text("evidence_sha256 IS NOT NULL AND seal_id IS NULL")),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     org_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
@@ -38,6 +43,17 @@ class AgentAction(Base):
     signer_public_key = Column(Text)  # key that verified `signature` (survives key changes)
     pq_signature = Column(Text)          # ML-DSA-65 signature (hybrid signers)
     signer_pq_public_key = Column(Text)
+    # who performed the call: NULL = the agent itself (it reports and signs);
+    # "mcp_gateway" = Provenza made the call on the agent's behalf - the record
+    # is the gateway's own witness, not an agent signature
+    executed_by = Column(String(20))
+    # The action as PVP evidence at the moment it was recorded (app/pvp/evidence.py):
+    # ids, hashes and signatures only - no content, so retention leaves it alone -
+    # and never changed afterwards (an approval later is its own record). Its
+    # SHA-256 is the leaf a seal commits to (app/pvp/seal.py).
+    evidence = Column(JSONB)
+    evidence_sha256 = Column(String(64))
+    seal_id = Column(Integer, ForeignKey("pvp_action_seals.id"), index=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
 
 

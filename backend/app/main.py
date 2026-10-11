@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
+from app.pvp.guard import BodyLimitMiddleware
 from app.api import auth, users, policies, use_cases
 from app.api import auth, users, policies, use_cases, requests
 from app.api import auth, users, policies, use_cases, requests, approvals
@@ -38,6 +39,9 @@ from app.api import byok
 from app.api import compliance
 from app.api import observability
 from app.api import system
+from app.api import pvp as pvp_api
+from app.api import mcp as mcp_api
+from app.api import a2a_gateway as a2a_gateway_api
 
 
 _is_prod = settings.ENVIRONMENT == "production"
@@ -56,6 +60,10 @@ app = FastAPI(
 # browsers reject that combination, and it would let any site issue
 # authenticated requests as the logged-in user.
 _origins = [o.strip() for o in settings.CORS_ORIGINS.split(",") if o.strip()]
+
+# PVP Input Guard, step 1: oversized bodies on the PVP routes are refused
+# before anything reads them (app/pvp/guard.py)
+app.add_middleware(BodyLimitMiddleware)
 
 app.add_middleware(
     CORSMiddleware,
@@ -107,6 +115,11 @@ app.include_router(byok.router, prefix=f"{settings.API_V1_STR}/byok", tags=["sec
 app.include_router(compliance.router, prefix=f"{settings.API_V1_STR}/compliance", tags=["compliance"])
 app.include_router(observability.router, prefix=f"{settings.API_V1_STR}/observability", tags=["agents"])
 app.include_router(system.router, prefix=f"{settings.API_V1_STR}/system", tags=["system"])
+app.include_router(pvp_api.router, prefix=f"{settings.API_V1_STR}/pvp", tags=["agent-governance"])
+app.include_router(mcp_api.agent_router, prefix=f"{settings.API_V1_STR}/mcp", tags=["mcp"])
+app.include_router(mcp_api.admin_router, prefix=f"{settings.API_V1_STR}/mcp-servers", tags=["mcp"])
+app.include_router(a2a_gateway_api.agent_router, prefix=f"{settings.API_V1_STR}/a2a-gateway", tags=["a2a"])
+app.include_router(a2a_gateway_api.admin_router, prefix=f"{settings.API_V1_STR}/a2a-peers", tags=["a2a"])
 
 
 

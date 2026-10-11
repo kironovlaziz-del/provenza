@@ -57,6 +57,10 @@ from app.models.policy_layer import PolicyLayer
 from app.models.kill_switch import KillSwitchEvent
 from app.models.pii import PiiRule, PiiSettings
 from app.models.blocked_term import BlockedTerm, BlockedTermCategory
+from app.models.pvp_guard import PVPGuardLog
+from app.models.mcp import MCPServer, MCPTool
+from app.models.a2a_gateway import A2APeer, A2ATask
+from app.models.pvp_seal import PVPActionSeal
 
 __all__ = [
     "Organization",
