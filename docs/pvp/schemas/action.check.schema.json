@@ -1,0 +1,134 @@
+{
+  "$id": "urn:provenza:pvp:1:action.check.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "The verdict for one proposed action, bound to it by input_sha256. The\ncheck_id is single-use and expires: recording presents it once, for\nexactly this action.",
+  "properties": {
+    "action_type": {
+      "default": "tool_call",
+      "maxLength": 50,
+      "minLength": 1,
+      "pattern": "^[a-z][a-z0-9_.-]*$",
+      "title": "Action Type",
+      "type": "string"
+    },
+    "agent_id": {
+      "maximum": 2147483647,
+      "minimum": 1,
+      "title": "Agent Id",
+      "type": "integer"
+    },
+    "chain_id": {
+      "anyOf": [
+        {
+          "maximum": 2147483647,
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Chain Id"
+    },
+    "check_id": {
+      "maxLength": 64,
+      "minLength": 16,
+      "pattern": "^[A-Za-z0-9_-]+$",
+      "title": "Check Id",
+      "type": "string"
+    },
+    "decision": {
+      "enum": [
+        "allowed",
+        "denied",
+        "pending_approval"
+      ],
+      "title": "Decision",
+      "type": "string"
+    },
+    "expires_at": {
+      "maximum": 9007199254740991,
+      "minimum": 0,
+      "title": "Expires At",
+      "type": "integer"
+    },
+    "incident_type": {
+      "anyOf": [
+        {
+          "maxLength": 100,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Incident Type"
+    },
+    "input_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Input Sha256",
+      "type": "string"
+    },
+    "policy_id": {
+      "anyOf": [
+        {
+          "maximum": 2147483647,
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Policy Id"
+    },
+    "pvp": {
+      "const": "pvp/1",
+      "default": "pvp/1",
+      "title": "Pvp",
+      "type": "string"
+    },
+    "reason": {
+      "default": "",
+      "title": "Reason",
+      "type": "string"
+    },
+    "required_capabilities": {
+      "items": {
+        "maxLength": 100,
+        "minLength": 1,
+        "type": "string"
+      },
+      "maxItems": 200,
+      "title": "Required Capabilities",
+      "type": "array"
+    },
+    "tool_name": {
+      "maxLength": 100,
+      "minLength": 1,
+      "title": "Tool Name",
+      "type": "string"
+    },
+    "type": {
+      "const": "action.check",
+      "default": "action.check",
+      "title": "Type",
+      "type": "string"
+    }
+  },
+  "required": [
+    "agent_id",
+    "tool_name",
+    "check_id",
+    "input_sha256",
+    "decision",
+    "expires_at"
+  ],
+  "title": "PVPCheck",
+  "type": "object"
+}

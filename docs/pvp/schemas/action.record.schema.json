@@ -1,0 +1,135 @@
+{
+  "$id": "urn:provenza:pvp:1:action.record.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "An agent reports an action it performed. Agents with a key must\npresent the check_id and sign signed_payload().",
+  "properties": {
+    "action_type": {
+      "default": "tool_call",
+      "maxLength": 50,
+      "minLength": 1,
+      "pattern": "^[a-z][a-z0-9_.-]*$",
+      "title": "Action Type",
+      "type": "string"
+    },
+    "agent_id": {
+      "maximum": 2147483647,
+      "minimum": 1,
+      "title": "Agent Id",
+      "type": "integer"
+    },
+    "chain_id": {
+      "anyOf": [
+        {
+          "maximum": 2147483647,
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Chain Id"
+    },
+    "check_id": {
+      "anyOf": [
+        {
+          "maxLength": 64,
+          "minLength": 16,
+          "pattern": "^[A-Za-z0-9_-]+$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Check Id"
+    },
+    "duration_ms": {
+      "anyOf": [
+        {
+          "maximum": 2147483647,
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Duration Ms"
+    },
+    "input": {
+      "title": "Input",
+      "type": "object"
+    },
+    "output": {
+      "anyOf": [
+        {
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Output"
+    },
+    "pq_signature": {
+      "anyOf": [
+        {
+          "maxLength": 6000,
+          "minLength": 4,
+          "pattern": "^[A-Za-z0-9+/]+={0,2}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Pq Signature"
+    },
+    "pvp": {
+      "const": "pvp/1",
+      "default": "pvp/1",
+      "title": "Pvp",
+      "type": "string"
+    },
+    "signature": {
+      "anyOf": [
+        {
+          "maxLength": 6000,
+          "minLength": 4,
+          "pattern": "^[A-Za-z0-9+/]+={0,2}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Signature"
+    },
+    "tool_name": {
+      "maxLength": 100,
+      "minLength": 1,
+      "title": "Tool Name",
+      "type": "string"
+    },
+    "type": {
+      "const": "action.record",
+      "default": "action.record",
+      "title": "Type",
+      "type": "string"
+    }
+  },
+  "required": [
+    "agent_id",
+    "tool_name"
+  ],
+  "title": "PVPActionRecord",
+  "type": "object"
+}

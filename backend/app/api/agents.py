@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, Request
@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.pagination import PaginationParams
-from app.core.agent_signing import verify_agent_signature, verify_payload
+from app.core.agent_signing import verify_payload
 from app.schemas.pagination import Page
 from app.schemas.enrollment import AttestIn, RotateIn
 from app.schemas.agent import (
@@ -19,7 +19,6 @@ from app.schemas.agent import (
     GovernanceGraph, KeyRevokeIn, SigningKeyIn, SigningKeyOut, AgentAssignment,
 )
 from app.services.agent_registry import AgentRegistry
-from app.services.agent_identity import keyless_refused, pq_signature_required
 from app.services.delegation_service import DelegationService
 from app.services.agent_audit import AgentAudit
 from app.services.governance_graph_service import GovernanceGraphService
@@ -28,6 +27,9 @@ from app.models.agent import Agent, AgentPolicy
 from app.models.agent_action import AgentIncident
 from app.models.user import User, UserRole
 from app.api.deps import get_current_user, require_role
+from app.pvp.model import PVPActionRecord, PVPActionRequest, PVPDelegation
+from app.pvp.orchestrator import PVPOrchestrator
+from app.pvp import guard as pvp_guard
 
 router = APIRouter()
 
@@ -447,15 +449,27 @@ async def kill_agent(
 
 # ========================= Delegation =========================
 
-# Replay protection for signed delegations
-DELEGATION_MAX_AGE_SECONDS = 300     # reject requests older than 5 minutes
-DELEGATION_CLOCK_SKEW_SECONDS = 30   # tolerate small clock drift
+def _pvp(model, **fields):
+    """A REST body as a PVP message (the orchestrator speaks nothing else).
+    A body PVP refuses is a 422, like any other validation error; the
+    refused input is not echoed back."""
+    from fastapi.exceptions import RequestValidationError
+    from pydantic import ValidationError
+
+    try:
+        return model(**fields)
+    except ValidationError as e:
+        raise RequestValidationError([
+            {**err, "loc": ("body", *err["loc"])}
+            for err in e.errors(include_url=False, include_context=False, include_input=False)
+        ])
 
 
 @router.post("/{agent_id}/delegate", response_model=DelegateResponse)
 async def delegate(
     agent_id: int,
     data: DelegateRequest,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -463,139 +477,25 @@ async def delegate(
     Record a delegation from `agent_id` to `to_agent_id`. If a signature
     is supplied, it is verified against the delegating agent's public key
     over the canonical delegation payload; an invalid signature is
-    rejected before any chain state changes.
+    rejected before any chain state changes (app/pvp/orchestrator.py).
     """
-    service = DelegationService(db)
-    registry = AgentRegistry(db)
-
-    # The canonical payload that the delegating agent signs. Built the
-    # same way regardless of whether a signature was supplied, and stored
-    # on the hop so offline verification reconstructs nothing.
-    signed_payload = {
-        "from_agent_id": agent_id,
-        "to_agent_id": data.to_agent_id,
-        "task": data.task,
-        "delegated_capabilities": sorted(data.delegated_capabilities or []),
-        "chain_id": data.chain_id,
-        "nonce": data.nonce,
-        "issued_at": data.issued_at,
-        "expires_in": data.expires_in,
-    }
-    if data.delegated_tools is not None:
-        # signed only when sent, so payloads of agents that do not delegate tools stay as they were
-        signed_payload["delegated_tools"] = sorted(set(data.delegated_tools))
-
-    from fastapi import HTTPException, status as st
-    from sqlalchemy.exc import IntegrityError
-    from app.models.delegation import DelegationNonce
-
-    from_agent = await registry.get_agent(agent_id, current_user.org_id)
-    now = datetime.now(timezone.utc)
-
-    # 0. Only an active agent acts, and - unless the organization allows
-    #    keyless agents - only one that can sign.
-    if from_agent.status != "active":
-        raise HTTPException(status_code=st.HTTP_409_CONFLICT,
-                            detail=f"delegation.agent_not_active: agent {from_agent.id} is {from_agent.status}")
-    if await keyless_refused(db, from_agent):
-        raise HTTPException(status_code=st.HTTP_403_FORBIDDEN, detail="agent.key_required")
-
-    # 1. An agent with a registered public key MUST sign its delegations.
-    #    Keyless agents (only where the organization allows them) delegate unsigned.
-    if from_agent.public_key and not data.signature:
-        raise HTTPException(
-            status_code=st.HTTP_401_UNAUTHORIZED,
-            detail="This agent has a registered public key; delegations must be signed",
-        )
-
-    # 1b. With require_pq_signatures on, only a hybrid key may delegate
-    #     (an Ed25519-only key or no key at all is refused).
-    if await pq_signature_required(db, from_agent):
-        raise HTTPException(status_code=st.HTTP_403_FORBIDDEN, detail="agent.pq_required")
-    await _attested(db, from_agent)
-
-    # 2. A signed delegation must carry replay-protection fields.
-    if data.signature and (not data.nonce or data.issued_at is None):
-        raise HTTPException(
-            status_code=st.HTTP_400_BAD_REQUEST,
-            detail="Signed delegations must include nonce and issued_at",
-        )
-
-    # 3. Signature over the canonical payload (which includes nonce + issued_at).
-    verified = False
-    if data.signature:
-        # Ed25519 AND, for a hybrid agent, ML-DSA-65 over the same bytes
-        verified = verify_agent_signature(signed_payload, data.signature, data.pq_signature,
-                                          from_agent.public_key, from_agent.pq_public_key)
-        if not verified:
-            raise HTTPException(
-                status_code=st.HTTP_400_BAD_REQUEST,
-                detail="Invalid delegation signature",
-            )
-
-    # 4. Freshness window: an old signed request cannot be replayed later.
-    if data.issued_at is not None:
-        age = now.timestamp() - data.issued_at
-        if age > DELEGATION_MAX_AGE_SECONDS:
-            raise HTTPException(
-                status_code=st.HTTP_400_BAD_REQUEST,
-                detail=f"Delegation request is stale (issued {int(age)}s ago, max {DELEGATION_MAX_AGE_SECONDS}s)",
-            )
-        if age < -DELEGATION_CLOCK_SKEW_SECONDS:
-            raise HTTPException(
-                status_code=st.HTTP_400_BAD_REQUEST,
-                detail="Delegation issued_at is in the future",
-            )
-
-    # 5. Single-use nonce, enforced by a unique constraint.
-    if data.nonce:
-        db.add(DelegationNonce(org_id=current_user.org_id, from_agent_id=agent_id, nonce=data.nonce))
-        try:
-            await db.flush()
-        except IntegrityError:
-            await db.rollback()
-            raise HTTPException(
-                status_code=st.HTTP_409_CONFLICT,
-                detail="Replayed delegation: nonce already used",
-            )
-
-    # TTL counts from the signed issued_at, not from server receive time,
-    # so a late resend can never extend a delegation's lifetime.
-    expires_at = None
-    if data.expires_in:
-        base = datetime.fromtimestamp(data.issued_at, tz=timezone.utc) if data.issued_at is not None else now
-        expires_at = base + timedelta(seconds=data.expires_in)
-
-    if data.chain_id is not None:
-        from app.services.circuit_breaker import CircuitBreaker
-        await CircuitBreaker(db).evaluate(current_user.org_id, data.chain_id)
-    chain, hop = await service.delegate(
-        org_id=current_user.org_id,
-        from_agent_id=agent_id,
-        to_agent_id=data.to_agent_id,
-        task=data.task,
-        delegated_capabilities=data.delegated_capabilities or [],
-        signature=data.signature,
-        chain_id=data.chain_id,
-        expires_at=expires_at,
-        signed_payload=signed_payload if data.signature else None,
-        signer_public_key=from_agent.public_key if data.signature else None,
-        pq_signature=data.pq_signature if data.signature and from_agent.pq_public_key else None,
-        signer_pq_public_key=from_agent.pq_public_key if data.signature else None,
-        delegated_tools=data.delegated_tools,
-        verified=verified,
+    await pvp_guard.admit(
+        request, db, current_user, protocol="rest", route="delegation",
+        identifiers={"delegated_capabilities": list(data.delegated_capabilities or []),
+                     "delegated_tools": list(data.delegated_tools or [])},
+        values={"task": data.task},
     )
-    from app.services.agent_rights import hop_rights
-
-    to_agent = await registry.get_agent(data.to_agent_id, current_user.org_id)
-    root = await registry.get_agent(chain.root_agent_id, current_user.org_id)
-    # how much deeper the RECEIVER may still delegate: its own and the root's limit
-    remaining = max(min(to_agent.max_delegation_depth, root.max_delegation_depth) - hop.depth, 0)
-    effective = hop_rights(to_agent, hop)
+    d = _pvp(
+        PVPDelegation, from_agent_id=agent_id, to_agent_id=data.to_agent_id, task=data.task,
+        delegated_capabilities=data.delegated_capabilities or [], delegated_tools=data.delegated_tools,
+        chain_id=data.chain_id, nonce=data.nonce, issued_at=data.issued_at, expires_in=data.expires_in,
+        signature=data.signature, pq_signature=data.pq_signature,
+    )
+    out = await PVPOrchestrator(db).delegate(current_user.org_id, d)
     return DelegateResponse(
-        chain_id=chain.id, hop_id=hop.id, depth=hop.depth,
-        max_depth_remaining=remaining, verified=verified,
-        effective_capabilities=effective.capabilities, effective_tools=effective.tools,
+        chain_id=out.chain.id, hop_id=out.hop.id, depth=out.hop.depth,
+        max_depth_remaining=out.max_depth_remaining, verified=out.verified,
+        effective_capabilities=out.effective_capabilities, effective_tools=out.effective_tools,
     )
 
 
@@ -627,21 +527,10 @@ async def get_chain(
 
 # ========================== Actions ==========================
 
-async def _attested(db: AsyncSession, agent) -> None:
-    """Agents of a role that requires attestation act only with a current
-    one - also when a user session acts in their name (relaxed organizations)."""
-    from fastapi import HTTPException, status as st
-
-    from app.services.attestation import refusal
-
-    code = await refusal(db, agent)
-    if code:
-        raise HTTPException(status_code=st.HTTP_403_FORBIDDEN, detail=code)
-
-
 @router.post("/actions/check", response_model=ActionCheckResponse)
 async def check_action_endpoint(
     data: ActionCheckRequest,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -651,50 +540,26 @@ async def check_action_endpoint(
     capabilities, verdict). /actions/record must present it, so what gets
     recorded is provably the action that was checked.
     """
-    checked = (await db.execute(select(Agent).where(
-        Agent.id == data.agent_id, Agent.org_id == current_user.org_id))).scalar_one_or_none()
-    if checked is not None:
-        await _attested(db, checked)
-    if data.chain_id is not None:
-        # ASI08: trip the chain first if prior events crossed a threshold,
-        # so this very request is already refused
-        from app.services.circuit_breaker import CircuitBreaker
-        await CircuitBreaker(db).evaluate(current_user.org_id, data.chain_id)
-    # ASI10: score the agent against its behavioural baseline first, so a
-    # quarantine decided now already applies to this very request
-    from app.services.behavior_monitor import BehaviorMonitor
-    await BehaviorMonitor(db).evaluate(current_user.org_id, data.agent_id, data.tool_name)
-    audit = AgentAudit(db)
-    decision = await audit.check(
-        org_id=current_user.org_id,
-        agent_id=data.agent_id,
-        chain_id=data.chain_id,
-        action_type=data.action_type,
-        tool_name=data.tool_name,
-        input_data=data.input,
-        tool_version=data.tool_version,
-        tool_digest=data.tool_digest,
+    await pvp_guard.admit(
+        request, db, current_user, protocol="rest", route="action.request",
+        identifiers={"tool_name": data.tool_name, "action_type": data.action_type},
+        values={"input": data.input},
     )
-    chk = await audit.issue_check(
-        org_id=current_user.org_id,
-        agent_id=data.agent_id,
-        chain_id=data.chain_id,
-        action_type=data.action_type,
-        tool_name=data.tool_name,
-        input_data=data.input,
-        action_capabilities=decision.required_capabilities,
-        decision=decision,
+    req = _pvp(
+        PVPActionRequest, agent_id=data.agent_id, chain_id=data.chain_id, action_type=data.action_type,
+        tool_name=data.tool_name, input=data.input, tool_version=data.tool_version, tool_digest=data.tool_digest,
     )
+    chk = await PVPOrchestrator(db).check(current_user.org_id, req)
     return ActionCheckResponse(
-        decision=decision.result, reason=decision.reason,
-        incident_type=decision.incident_type, policy_id=decision.matched_policy_id,
-        check_id=chk.token, expires_at=chk.expires_at,
+        decision=chk.decision, reason=chk.reason, incident_type=chk.incident_type, policy_id=chk.policy_id,
+        check_id=chk.check_id, expires_at=datetime.fromtimestamp(chk.expires_at, tz=timezone.utc),
     )
 
 
 @router.post("/actions/record", response_model=ActionOut)
 async def record_action_endpoint(
     data: ActionRecordRequest,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -711,87 +576,17 @@ async def record_action_endpoint(
     incident. Keyless agents keep the cooperative path (verdict computed
     here, from the capabilities the Tool Registry requires).
     """
-    from fastapi import HTTPException, status as st
-    from app.core.agent_signing import content_hash, verify_payload
-
-    audit = AgentAudit(db)
-    agent = await AgentRegistry(db).get_agent(data.agent_id, current_user.org_id)
-
-    if await keyless_refused(db, agent):
-        raise HTTPException(status_code=st.HTTP_403_FORBIDDEN, detail="agent.key_required")
-    if agent.public_key and not data.check_id:
-        raise HTTPException(
-            status_code=st.HTTP_401_UNAUTHORIZED,
-            detail="This agent has a registered public key; record requires a check_id from /actions/check",
-        )
-    if agent.public_key and not data.signature:
-        raise HTTPException(
-            status_code=st.HTTP_401_UNAUTHORIZED,
-            detail="This agent has a registered public key; actions must be signed",
-        )
-    if await pq_signature_required(db, agent):
-        raise HTTPException(status_code=st.HTTP_403_FORBIDDEN, detail="agent.pq_required")
-    await _attested(db, agent)
-
-    check = None
-    signed_payload = None
-    if data.check_id:
-        signed_payload = {
-            "check_id": data.check_id,
-            "agent_id": data.agent_id,
-            "chain_id": data.chain_id,
-            "action_type": data.action_type,
-            "tool_name": data.tool_name,
-            "input_sha256": content_hash(data.input or {}),
-            "output_sha256": content_hash(data.output),
-        }
-        # Verify BEFORE consuming the check, so a forged request cannot
-        # burn a legitimate check_id.
-        if data.signature and not verify_agent_signature(signed_payload, data.signature, data.pq_signature,
-                                                         agent.public_key, agent.pq_public_key):
-            raise HTTPException(status_code=st.HTTP_400_BAD_REQUEST, detail="Invalid action signature")
-        check, decision = await audit.consume_check(
-            current_user.org_id, data.check_id,
-            agent_id=data.agent_id, chain_id=data.chain_id, action_type=data.action_type,
-            tool_name=data.tool_name, input_data=data.input,
-        )
-    else:
-        decision = await audit.check(
-            org_id=current_user.org_id,
-            agent_id=data.agent_id,
-            chain_id=data.chain_id,
-            action_type=data.action_type,
-            tool_name=data.tool_name,
-            input_data=data.input,
-        )
-
-    verified = bool(check and data.signature)
-    action = await audit.record(
-        org_id=current_user.org_id,
-        agent_id=data.agent_id,
-        chain_id=data.chain_id,
-        action_type=data.action_type,
-        tool_name=data.tool_name,
-        input_data=data.input,
-        output_data=data.output,
-        signature=data.signature if verified else None,
-        duration_ms=data.duration_ms,
-        decision=decision,
-        check_id=check.id if check else None,
-        signed_payload=signed_payload if verified else None,
-        signer_public_key=agent.public_key if verified else None,
-        pq_signature=data.pq_signature if verified and agent.pq_public_key else None,
-        signer_pq_public_key=agent.pq_public_key if verified else None,
+    await pvp_guard.admit(
+        request, db, current_user, protocol="rest", route="action.record",
+        identifiers={"tool_name": data.tool_name, "action_type": data.action_type},
+        values={"input": data.input, "output": data.output},
     )
-    # ASI01: an instruction hidden in the tool output (indirect injection);
-    # before the breaker, so it already counts the new incident
-    from app.services.injection_guard import InjectionGuard
-    await InjectionGuard(db).scan_output(current_user.org_id, data.agent_id, data.chain_id,
-                                         getattr(action, "id", None), data.tool_name, data.output)
-    if data.chain_id is not None:
-        from app.services.circuit_breaker import CircuitBreaker
-        await CircuitBreaker(db).evaluate(current_user.org_id, data.chain_id)
-    return action
+    rec = _pvp(
+        PVPActionRecord, agent_id=data.agent_id, chain_id=data.chain_id, action_type=data.action_type,
+        tool_name=data.tool_name, input=data.input, output=data.output, duration_ms=data.duration_ms,
+        check_id=data.check_id, signature=data.signature, pq_signature=data.pq_signature,
+    )
+    return await PVPOrchestrator(db).record(current_user.org_id, rec)
 
 
 @router.get("/actions/", response_model=Page[ActionOut])

@@ -59,6 +59,16 @@ class Settings(BaseSettings):
     # teammates by invitation; turn this on only for a public demo/SaaS.
     ALLOW_PUBLIC_SIGNUP: bool = False
 
+    # PVP Input Guard (app/pvp/guard.py): requests per minute one agent key -
+    # or one user acting for agents - may send to the PVP endpoints
+    # (check, record, delegate) together. Over it: 429 pvp.rate_limited.
+    PVP_RATE_LIMIT_PER_MINUTE: int = 1200
+
+    # The address agents reach this server at, e.g. "https://provenza.example.com".
+    # Agent cards served by the A2A gateway point there. Empty = taken from the
+    # request (fine when the reverse proxy passes the original host and scheme).
+    PUBLIC_BASE_URL: str = ""
+
     # Outbound calls to user-configured URLs (AI providers, gateway
     # upstreams, Vault Transit, webhooks) are refused when the target is a
     # private, loopback or reserved address - see core/outbound.py. List

@@ -1,0 +1,158 @@
+{
+  "$id": "urn:provenza:pvp:1:delegation.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "One agent hands a task, and a subset of its rights, to another. The\nserver checks the subset (child <= parent), the depth and that the\nlifetime never grows down the chain; expires_in counts from the signed\nissued_at, so a late resend cannot extend it.",
+  "properties": {
+    "chain_id": {
+      "anyOf": [
+        {
+          "maximum": 2147483647,
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Chain Id"
+    },
+    "delegated_capabilities": {
+      "items": {
+        "maxLength": 100,
+        "minLength": 1,
+        "type": "string"
+      },
+      "maxItems": 200,
+      "title": "Delegated Capabilities",
+      "type": "array"
+    },
+    "delegated_tools": {
+      "anyOf": [
+        {
+          "items": {
+            "maxLength": 100,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 200,
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Delegated Tools"
+    },
+    "expires_in": {
+      "anyOf": [
+        {
+          "maximum": 2592000,
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Expires In"
+    },
+    "from_agent_id": {
+      "maximum": 2147483647,
+      "minimum": 1,
+      "title": "From Agent Id",
+      "type": "integer"
+    },
+    "issued_at": {
+      "anyOf": [
+        {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Issued At"
+    },
+    "nonce": {
+      "anyOf": [
+        {
+          "maxLength": 128,
+          "minLength": 16,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Nonce"
+    },
+    "pq_signature": {
+      "anyOf": [
+        {
+          "maxLength": 6000,
+          "minLength": 4,
+          "pattern": "^[A-Za-z0-9+/]+={0,2}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Pq Signature"
+    },
+    "pvp": {
+      "const": "pvp/1",
+      "default": "pvp/1",
+      "title": "Pvp",
+      "type": "string"
+    },
+    "signature": {
+      "anyOf": [
+        {
+          "maxLength": 6000,
+          "minLength": 4,
+          "pattern": "^[A-Za-z0-9+/]+={0,2}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Signature"
+    },
+    "task": {
+      "maxLength": 10000,
+      "title": "Task",
+      "type": "string"
+    },
+    "to_agent_id": {
+      "maximum": 2147483647,
+      "minimum": 1,
+      "title": "To Agent Id",
+      "type": "integer"
+    },
+    "type": {
+      "const": "delegation",
+      "default": "delegation",
+      "title": "Type",
+      "type": "string"
+    }
+  },
+  "required": [
+    "from_agent_id",
+    "to_agent_id",
+    "task"
+  ],
+  "title": "PVPDelegation",
+  "type": "object"
+}

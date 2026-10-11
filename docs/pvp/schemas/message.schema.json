@@ -1,0 +1,1395 @@
+{
+  "$defs": {
+    "PVPAction": {
+      "additionalProperties": false,
+      "description": "A recorded action - allowed or not: refused attempts are recorded too.",
+      "properties": {
+        "action_id": {
+          "maximum": 2147483647,
+          "minimum": 1,
+          "title": "Action Id",
+          "type": "integer"
+        },
+        "action_type": {
+          "default": "tool_call",
+          "maxLength": 50,
+          "minLength": 1,
+          "pattern": "^[a-z][a-z0-9_.-]*$",
+          "title": "Action Type",
+          "type": "string"
+        },
+        "agent_id": {
+          "maximum": 2147483647,
+          "minimum": 1,
+          "title": "Agent Id",
+          "type": "integer"
+        },
+        "chain_id": {
+          "anyOf": [
+            {
+              "maximum": 2147483647,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Chain Id"
+        },
+        "check_id": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "minLength": 16,
+              "pattern": "^[A-Za-z0-9_-]+$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Check Id"
+        },
+        "decision": {
+          "enum": [
+            "allowed",
+            "denied",
+            "pending_approval"
+          ],
+          "title": "Decision",
+          "type": "string"
+        },
+        "duration_ms": {
+          "anyOf": [
+            {
+              "maximum": 2147483647,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Duration Ms"
+        },
+        "executed_by": {
+          "anyOf": [
+            {
+              "enum": [
+                "mcp_gateway",
+                "a2a_gateway"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Executed By"
+        },
+        "input_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Input Sha256",
+          "type": "string"
+        },
+        "output_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Output Sha256",
+          "type": "string"
+        },
+        "policy_id": {
+          "anyOf": [
+            {
+              "maximum": 2147483647,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Policy Id"
+        },
+        "pvp": {
+          "const": "pvp/1",
+          "default": "pvp/1",
+          "title": "Pvp",
+          "type": "string"
+        },
+        "reason": {
+          "default": "",
+          "title": "Reason",
+          "type": "string"
+        },
+        "recorded_at": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "title": "Recorded At",
+          "type": "integer"
+        },
+        "signed_by": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PVPSignature"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "signed_payload": {
+          "anyOf": [
+            {
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Signed Payload"
+        },
+        "tool_name": {
+          "maxLength": 100,
+          "minLength": 1,
+          "title": "Tool Name",
+          "type": "string"
+        },
+        "type": {
+          "const": "action",
+          "default": "action",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "agent_id",
+        "tool_name",
+        "action_id",
+        "decision",
+        "input_sha256",
+        "output_sha256",
+        "recorded_at"
+      ],
+      "title": "PVPAction",
+      "type": "object"
+    },
+    "PVPActionRecord": {
+      "additionalProperties": false,
+      "description": "An agent reports an action it performed. Agents with a key must\npresent the check_id and sign signed_payload().",
+      "properties": {
+        "action_type": {
+          "default": "tool_call",
+          "maxLength": 50,
+          "minLength": 1,
+          "pattern": "^[a-z][a-z0-9_.-]*$",
+          "title": "Action Type",
+          "type": "string"
+        },
+        "agent_id": {
+          "maximum": 2147483647,
+          "minimum": 1,
+          "title": "Agent Id",
+          "type": "integer"
+        },
+        "chain_id": {
+          "anyOf": [
+            {
+              "maximum": 2147483647,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Chain Id"
+        },
+        "check_id": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "minLength": 16,
+              "pattern": "^[A-Za-z0-9_-]+$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Check Id"
+        },
+        "duration_ms": {
+          "anyOf": [
+            {
+              "maximum": 2147483647,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Duration Ms"
+        },
+        "input": {
+          "title": "Input",
+          "type": "object"
+        },
+        "output": {
+          "anyOf": [
+            {
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Output"
+        },
+        "pq_signature": {
+          "anyOf": [
+            {
+              "maxLength": 6000,
+              "minLength": 4,
+              "pattern": "^[A-Za-z0-9+/]+={0,2}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Pq Signature"
+        },
+        "pvp": {
+          "const": "pvp/1",
+          "default": "pvp/1",
+          "title": "Pvp",
+          "type": "string"
+        },
+        "signature": {
+          "anyOf": [
+            {
+              "maxLength": 6000,
+              "minLength": 4,
+              "pattern": "^[A-Za-z0-9+/]+={0,2}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Signature"
+        },
+        "tool_name": {
+          "maxLength": 100,
+          "minLength": 1,
+          "title": "Tool Name",
+          "type": "string"
+        },
+        "type": {
+          "const": "action.record",
+          "default": "action.record",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "agent_id",
+        "tool_name"
+      ],
+      "title": "PVPActionRecord",
+      "type": "object"
+    },
+    "PVPActionRequest": {
+      "additionalProperties": false,
+      "description": "An agent asks whether it may perform an action. What the action needs\ncomes from the Tool Registry, so the request carries no capabilities.",
+      "properties": {
+        "action_type": {
+          "default": "tool_call",
+          "maxLength": 50,
+          "minLength": 1,
+          "pattern": "^[a-z][a-z0-9_.-]*$",
+          "title": "Action Type",
+          "type": "string"
+        },
+        "agent_id": {
+          "maximum": 2147483647,
+          "minimum": 1,
+          "title": "Agent Id",
+          "type": "integer"
+        },
+        "chain_id": {
+          "anyOf": [
+            {
+              "maximum": 2147483647,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Chain Id"
+        },
+        "input": {
+          "title": "Input",
+          "type": "object"
+        },
+        "pvp": {
+          "const": "pvp/1",
+          "default": "pvp/1",
+          "title": "Pvp",
+          "type": "string"
+        },
+        "tool_digest": {
+          "anyOf": [
+            {
+              "maxLength": 100,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tool Digest"
+        },
+        "tool_name": {
+          "maxLength": 100,
+          "minLength": 1,
+          "title": "Tool Name",
+          "type": "string"
+        },
+        "tool_version": {
+          "anyOf": [
+            {
+              "maxLength": 100,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tool Version"
+        },
+        "type": {
+          "const": "action.request",
+          "default": "action.request",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "agent_id",
+        "tool_name"
+      ],
+      "title": "PVPActionRequest",
+      "type": "object"
+    },
+    "PVPAgent": {
+      "additionalProperties": false,
+      "description": "An agent as PVP knows it. The rights are the registered ones - the\nceiling; what an agent may use in a delegation chain is narrower and is\ncomputed by the server, never read from a message.",
+      "properties": {
+        "allowed_models": {
+          "items": {
+            "maxLength": 100,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 200,
+          "title": "Allowed Models",
+          "type": "array"
+        },
+        "allowed_tools": {
+          "items": {
+            "maxLength": 100,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 200,
+          "title": "Allowed Tools",
+          "type": "array"
+        },
+        "capabilities": {
+          "items": {
+            "maxLength": 100,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 200,
+          "title": "Capabilities",
+          "type": "array"
+        },
+        "id": {
+          "maximum": 2147483647,
+          "minimum": 1,
+          "title": "Id",
+          "type": "integer"
+        },
+        "key_origin": {
+          "anyOf": [
+            {
+              "enum": [
+                "agent",
+                "server"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Key Origin"
+        },
+        "max_delegation_depth": {
+          "maximum": 100,
+          "minimum": 0,
+          "title": "Max Delegation Depth",
+          "type": "integer"
+        },
+        "name": {
+          "maxLength": 255,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "org_id": {
+          "maximum": 2147483647,
+          "minimum": 1,
+          "title": "Org Id",
+          "type": "integer"
+        },
+        "pq_public_key": {
+          "anyOf": [
+            {
+              "maxLength": 6000,
+              "minLength": 4,
+              "pattern": "^[A-Za-z0-9+/]+={0,2}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Pq Public Key"
+        },
+        "public_key": {
+          "anyOf": [
+            {
+              "maxLength": 6000,
+              "minLength": 4,
+              "pattern": "^[A-Za-z0-9+/]+={0,2}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Public Key"
+        },
+        "pvp": {
+          "const": "pvp/1",
+          "default": "pvp/1",
+          "title": "Pvp",
+          "type": "string"
+        },
+        "scheme": {
+          "anyOf": [
+            {
+              "enum": [
+                "ed25519",
+                "ed25519+ml-dsa-65"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Scheme"
+        },
+        "status": {
+          "enum": [
+            "active",
+            "suspended",
+            "retired"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "team_id": {
+          "anyOf": [
+            {
+              "maximum": 2147483647,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Team Id"
+        },
+        "type": {
+          "const": "agent",
+          "default": "agent",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "org_id",
+        "name",
+        "status",
+        "max_delegation_depth"
+      ],
+      "title": "PVPAgent",
+      "type": "object"
+    },
+    "PVPAttestation": {
+      "additionalProperties": false,
+      "description": "Where an agent proved it runs, and until when that proof counts\n(services/attestation.py). Only the claims a policy matched are kept.",
+      "properties": {
+        "agent_id": {
+          "maximum": 2147483647,
+          "minimum": 1,
+          "title": "Agent Id",
+          "type": "integer"
+        },
+        "attested_at": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "title": "Attested At",
+          "type": "integer"
+        },
+        "claims": {
+          "additionalProperties": {
+            "maxLength": 500,
+            "type": "string"
+          },
+          "propertyNames": {
+            "maxLength": 100,
+            "minLength": 1
+          },
+          "title": "Claims",
+          "type": "object"
+        },
+        "expires_at": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "title": "Expires At",
+          "type": "integer"
+        },
+        "kind": {
+          "const": "k8s_sa",
+          "title": "Kind",
+          "type": "string"
+        },
+        "policy_id": {
+          "anyOf": [
+            {
+              "maximum": 2147483647,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Policy Id"
+        },
+        "pvp": {
+          "const": "pvp/1",
+          "default": "pvp/1",
+          "title": "Pvp",
+          "type": "string"
+        },
+        "type": {
+          "const": "attestation",
+          "default": "attestation",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "agent_id",
+        "kind",
+        "attested_at",
+        "expires_at"
+      ],
+      "title": "PVPAttestation",
+      "type": "object"
+    },
+    "PVPCheck": {
+      "additionalProperties": false,
+      "description": "The verdict for one proposed action, bound to it by input_sha256. The\ncheck_id is single-use and expires: recording presents it once, for\nexactly this action.",
+      "properties": {
+        "action_type": {
+          "default": "tool_call",
+          "maxLength": 50,
+          "minLength": 1,
+          "pattern": "^[a-z][a-z0-9_.-]*$",
+          "title": "Action Type",
+          "type": "string"
+        },
+        "agent_id": {
+          "maximum": 2147483647,
+          "minimum": 1,
+          "title": "Agent Id",
+          "type": "integer"
+        },
+        "chain_id": {
+          "anyOf": [
+            {
+              "maximum": 2147483647,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Chain Id"
+        },
+        "check_id": {
+          "maxLength": 64,
+          "minLength": 16,
+          "pattern": "^[A-Za-z0-9_-]+$",
+          "title": "Check Id",
+          "type": "string"
+        },
+        "decision": {
+          "enum": [
+            "allowed",
+            "denied",
+            "pending_approval"
+          ],
+          "title": "Decision",
+          "type": "string"
+        },
+        "expires_at": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "title": "Expires At",
+          "type": "integer"
+        },
+        "incident_type": {
+          "anyOf": [
+            {
+              "maxLength": 100,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Incident Type"
+        },
+        "input_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Input Sha256",
+          "type": "string"
+        },
+        "policy_id": {
+          "anyOf": [
+            {
+              "maximum": 2147483647,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Policy Id"
+        },
+        "pvp": {
+          "const": "pvp/1",
+          "default": "pvp/1",
+          "title": "Pvp",
+          "type": "string"
+        },
+        "reason": {
+          "default": "",
+          "title": "Reason",
+          "type": "string"
+        },
+        "required_capabilities": {
+          "items": {
+            "maxLength": 100,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 200,
+          "title": "Required Capabilities",
+          "type": "array"
+        },
+        "tool_name": {
+          "maxLength": 100,
+          "minLength": 1,
+          "title": "Tool Name",
+          "type": "string"
+        },
+        "type": {
+          "const": "action.check",
+          "default": "action.check",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "agent_id",
+        "tool_name",
+        "check_id",
+        "input_sha256",
+        "decision",
+        "expires_at"
+      ],
+      "title": "PVPCheck",
+      "type": "object"
+    },
+    "PVPCheckpoint": {
+      "additionalProperties": false,
+      "description": "A signed Merkle root of an organization's audit log - the same object\nGET /audit-logs/checkpoints returns (app/services/audit_proofs.py).\nissued_at is the string the signed statement carries.",
+      "properties": {
+        "algorithm": {
+          "enum": [
+            "ed25519",
+            "ed25519+ml-dsa-65"
+          ],
+          "title": "Algorithm",
+          "type": "string"
+        },
+        "issued_at": {
+          "title": "Issued At",
+          "type": "string"
+        },
+        "key_fingerprint": {
+          "maxLength": 80,
+          "title": "Key Fingerprint",
+          "type": "string"
+        },
+        "org_id": {
+          "maximum": 2147483647,
+          "minimum": 1,
+          "title": "Org Id",
+          "type": "integer"
+        },
+        "pq_public_key": {
+          "anyOf": [
+            {
+              "maxLength": 6000,
+              "minLength": 4,
+              "pattern": "^[A-Za-z0-9+/]+={0,2}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Pq Public Key"
+        },
+        "pq_signature": {
+          "anyOf": [
+            {
+              "maxLength": 6000,
+              "minLength": 4,
+              "pattern": "^[A-Za-z0-9+/]+={0,2}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Pq Signature"
+        },
+        "public_key": {
+          "maxLength": 6000,
+          "minLength": 4,
+          "pattern": "^[A-Za-z0-9+/]+={0,2}$",
+          "title": "Public Key",
+          "type": "string"
+        },
+        "pvp": {
+          "const": "pvp/1",
+          "default": "pvp/1",
+          "title": "Pvp",
+          "type": "string"
+        },
+        "root_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Root Hash",
+          "type": "string"
+        },
+        "signature": {
+          "maxLength": 6000,
+          "minLength": 4,
+          "pattern": "^[A-Za-z0-9+/]+={0,2}$",
+          "title": "Signature",
+          "type": "string"
+        },
+        "statement": {
+          "maxLength": 4000,
+          "title": "Statement",
+          "type": "string"
+        },
+        "tree_size": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "title": "Tree Size",
+          "type": "integer"
+        },
+        "type": {
+          "const": "checkpoint",
+          "default": "checkpoint",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "org_id",
+        "tree_size",
+        "root_hash",
+        "issued_at",
+        "algorithm",
+        "statement",
+        "signature",
+        "public_key",
+        "key_fingerprint"
+      ],
+      "title": "PVPCheckpoint",
+      "type": "object"
+    },
+    "PVPDelegation": {
+      "additionalProperties": false,
+      "description": "One agent hands a task, and a subset of its rights, to another. The\nserver checks the subset (child <= parent), the depth and that the\nlifetime never grows down the chain; expires_in counts from the signed\nissued_at, so a late resend cannot extend it.",
+      "properties": {
+        "chain_id": {
+          "anyOf": [
+            {
+              "maximum": 2147483647,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Chain Id"
+        },
+        "delegated_capabilities": {
+          "items": {
+            "maxLength": 100,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 200,
+          "title": "Delegated Capabilities",
+          "type": "array"
+        },
+        "delegated_tools": {
+          "anyOf": [
+            {
+              "items": {
+                "maxLength": 100,
+                "minLength": 1,
+                "type": "string"
+              },
+              "maxItems": 200,
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Delegated Tools"
+        },
+        "expires_in": {
+          "anyOf": [
+            {
+              "maximum": 2592000,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Expires In"
+        },
+        "from_agent_id": {
+          "maximum": 2147483647,
+          "minimum": 1,
+          "title": "From Agent Id",
+          "type": "integer"
+        },
+        "issued_at": {
+          "anyOf": [
+            {
+              "maximum": 9007199254740991,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Issued At"
+        },
+        "nonce": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 16,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Nonce"
+        },
+        "pq_signature": {
+          "anyOf": [
+            {
+              "maxLength": 6000,
+              "minLength": 4,
+              "pattern": "^[A-Za-z0-9+/]+={0,2}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Pq Signature"
+        },
+        "pvp": {
+          "const": "pvp/1",
+          "default": "pvp/1",
+          "title": "Pvp",
+          "type": "string"
+        },
+        "signature": {
+          "anyOf": [
+            {
+              "maxLength": 6000,
+              "minLength": 4,
+              "pattern": "^[A-Za-z0-9+/]+={0,2}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Signature"
+        },
+        "task": {
+          "maxLength": 10000,
+          "title": "Task",
+          "type": "string"
+        },
+        "to_agent_id": {
+          "maximum": 2147483647,
+          "minimum": 1,
+          "title": "To Agent Id",
+          "type": "integer"
+        },
+        "type": {
+          "const": "delegation",
+          "default": "delegation",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "from_agent_id",
+        "to_agent_id",
+        "task"
+      ],
+      "title": "PVPDelegation",
+      "type": "object"
+    },
+    "PVPError": {
+      "additionalProperties": false,
+      "description": "A refusal. code is a stable dotted identifier (e.g. agent.key_required);\nmessage is for humans and never echoes the refused content.",
+      "properties": {
+        "code": {
+          "maxLength": 100,
+          "pattern": "^[a-z0-9_]+(\\.[a-z0-9_]+)+$",
+          "title": "Code",
+          "type": "string"
+        },
+        "details": {
+          "title": "Details",
+          "type": "object"
+        },
+        "message": {
+          "default": "",
+          "maxLength": 500,
+          "title": "Message",
+          "type": "string"
+        },
+        "pvp": {
+          "const": "pvp/1",
+          "default": "pvp/1",
+          "title": "Pvp",
+          "type": "string"
+        },
+        "type": {
+          "const": "error",
+          "default": "error",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "code"
+      ],
+      "title": "PVPError",
+      "type": "object"
+    },
+    "PVPQuery": {
+      "additionalProperties": false,
+      "description": "A request for evidence. format \"trace\" asks for a TRACE Trust Record\nexport (step P6) instead of the PVP form.",
+      "properties": {
+        "format": {
+          "default": "pvp",
+          "enum": [
+            "pvp",
+            "trace"
+          ],
+          "title": "Format",
+          "type": "string"
+        },
+        "id": {
+          "maximum": 2147483647,
+          "minimum": 1,
+          "title": "Id",
+          "type": "integer"
+        },
+        "pvp": {
+          "const": "pvp/1",
+          "default": "pvp/1",
+          "title": "Pvp",
+          "type": "string"
+        },
+        "subject": {
+          "enum": [
+            "receipt",
+            "action",
+            "chain",
+            "checkpoint"
+          ],
+          "title": "Subject",
+          "type": "string"
+        },
+        "type": {
+          "const": "query",
+          "default": "query",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "subject",
+        "id"
+      ],
+      "title": "PVPQuery",
+      "type": "object"
+    },
+    "PVPReceipt": {
+      "additionalProperties": false,
+      "description": "Everything needed to show, without trusting the server, that an\naction was checked, performed as checked, signed by its agent (or\nwitnessed by a Provenza gateway), and committed to the signed audit log:\n\n    action (evidence as recorded) -> seal leaf -> seal record in the\n    audit log (audit_proof, provenza.audit.proof/1) -> signed checkpoint\n\ncurrent_decision is what the action's verdict is now (a human approval\nmay have changed a pending one) - informational, not part of the proof.",
+      "properties": {
+        "action": {
+          "$ref": "#/$defs/PVPAction"
+        },
+        "audit_proof": {
+          "anyOf": [
+            {
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Audit Proof"
+        },
+        "check": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PVPCheck"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "checkpoint": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PVPCheckpoint"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "current_decision": {
+          "anyOf": [
+            {
+              "enum": [
+                "allowed",
+                "denied",
+                "pending_approval"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Current Decision"
+        },
+        "pvp": {
+          "const": "pvp/1",
+          "default": "pvp/1",
+          "title": "Pvp",
+          "type": "string"
+        },
+        "seal": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PVPSeal"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "type": {
+          "const": "receipt",
+          "default": "receipt",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "action"
+      ],
+      "title": "PVPReceipt",
+      "type": "object"
+    },
+    "PVPSeal": {
+      "additionalProperties": false,
+      "description": "Where an action's evidence sits in a seal (app/pvp/seal.py): leaf\nleaf_index of a Merkle tree (RFC 9162) of `size` evidence hashes whose\nroot is written in audit record audit_log_id.",
+      "properties": {
+        "audit_log_id": {
+          "maximum": 2147483647,
+          "minimum": 1,
+          "title": "Audit Log Id",
+          "type": "integer"
+        },
+        "inclusion_path": {
+          "items": {
+            "pattern": "^[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "maxItems": 64,
+          "title": "Inclusion Path",
+          "type": "array"
+        },
+        "leaf_index": {
+          "minimum": 0,
+          "title": "Leaf Index",
+          "type": "integer"
+        },
+        "root": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Root",
+          "type": "string"
+        },
+        "seal_id": {
+          "maximum": 2147483647,
+          "minimum": 1,
+          "title": "Seal Id",
+          "type": "integer"
+        },
+        "size": {
+          "minimum": 1,
+          "title": "Size",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "seal_id",
+        "leaf_index",
+        "size",
+        "root",
+        "audit_log_id"
+      ],
+      "title": "PVPSeal",
+      "type": "object"
+    },
+    "PVPSignature": {
+      "additionalProperties": false,
+      "description": "A signature as evidence: the bytes signed are canonical_bytes of the\nrecord's signed_payload; the keys are the ones that verified it when the\nrecord was made (never \"the agent's current key\"). Hybrid: Ed25519 AND\nML-DSA-65 over the same bytes, both must verify.",
+      "properties": {
+        "pq_public_key": {
+          "anyOf": [
+            {
+              "maxLength": 6000,
+              "minLength": 4,
+              "pattern": "^[A-Za-z0-9+/]+={0,2}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Pq Public Key"
+        },
+        "pq_signature": {
+          "anyOf": [
+            {
+              "maxLength": 6000,
+              "minLength": 4,
+              "pattern": "^[A-Za-z0-9+/]+={0,2}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Pq Signature"
+        },
+        "public_key": {
+          "maxLength": 6000,
+          "minLength": 4,
+          "pattern": "^[A-Za-z0-9+/]+={0,2}$",
+          "title": "Public Key",
+          "type": "string"
+        },
+        "scheme": {
+          "enum": [
+            "ed25519",
+            "ed25519+ml-dsa-65"
+          ],
+          "title": "Scheme",
+          "type": "string"
+        },
+        "signature": {
+          "maxLength": 6000,
+          "minLength": 4,
+          "pattern": "^[A-Za-z0-9+/]+={0,2}$",
+          "title": "Signature",
+          "type": "string"
+        }
+      },
+      "required": [
+        "scheme",
+        "public_key",
+        "signature"
+      ],
+      "title": "PVPSignature",
+      "type": "object"
+    }
+  },
+  "$id": "urn:provenza:pvp:1:message.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "discriminator": {
+    "mapping": {
+      "action": "#/$defs/PVPAction",
+      "action.check": "#/$defs/PVPCheck",
+      "action.record": "#/$defs/PVPActionRecord",
+      "action.request": "#/$defs/PVPActionRequest",
+      "agent": "#/$defs/PVPAgent",
+      "attestation": "#/$defs/PVPAttestation",
+      "checkpoint": "#/$defs/PVPCheckpoint",
+      "delegation": "#/$defs/PVPDelegation",
+      "error": "#/$defs/PVPError",
+      "query": "#/$defs/PVPQuery",
+      "receipt": "#/$defs/PVPReceipt"
+    },
+    "propertyName": "type"
+  },
+  "oneOf": [
+    {
+      "$ref": "#/$defs/PVPAgent"
+    },
+    {
+      "$ref": "#/$defs/PVPAttestation"
+    },
+    {
+      "$ref": "#/$defs/PVPActionRequest"
+    },
+    {
+      "$ref": "#/$defs/PVPCheck"
+    },
+    {
+      "$ref": "#/$defs/PVPActionRecord"
+    },
+    {
+      "$ref": "#/$defs/PVPAction"
+    },
+    {
+      "$ref": "#/$defs/PVPDelegation"
+    },
+    {
+      "$ref": "#/$defs/PVPCheckpoint"
+    },
+    {
+      "$ref": "#/$defs/PVPReceipt"
+    },
+    {
+      "$ref": "#/$defs/PVPQuery"
+    },
+    {
+      "$ref": "#/$defs/PVPError"
+    }
+  ],
+  "title": "PVP message (pvp/1)"
+}

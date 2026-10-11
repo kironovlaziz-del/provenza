@@ -1,0 +1,77 @@
+{
+  "$id": "urn:provenza:pvp:1:attestation.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Where an agent proved it runs, and until when that proof counts\n(services/attestation.py). Only the claims a policy matched are kept.",
+  "properties": {
+    "agent_id": {
+      "maximum": 2147483647,
+      "minimum": 1,
+      "title": "Agent Id",
+      "type": "integer"
+    },
+    "attested_at": {
+      "maximum": 9007199254740991,
+      "minimum": 0,
+      "title": "Attested At",
+      "type": "integer"
+    },
+    "claims": {
+      "additionalProperties": {
+        "maxLength": 500,
+        "type": "string"
+      },
+      "propertyNames": {
+        "maxLength": 100,
+        "minLength": 1
+      },
+      "title": "Claims",
+      "type": "object"
+    },
+    "expires_at": {
+      "maximum": 9007199254740991,
+      "minimum": 0,
+      "title": "Expires At",
+      "type": "integer"
+    },
+    "kind": {
+      "const": "k8s_sa",
+      "title": "Kind",
+      "type": "string"
+    },
+    "policy_id": {
+      "anyOf": [
+        {
+          "maximum": 2147483647,
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Policy Id"
+    },
+    "pvp": {
+      "const": "pvp/1",
+      "default": "pvp/1",
+      "title": "Pvp",
+      "type": "string"
+    },
+    "type": {
+      "const": "attestation",
+      "default": "attestation",
+      "title": "Type",
+      "type": "string"
+    }
+  },
+  "required": [
+    "agent_id",
+    "kind",
+    "attested_at",
+    "expires_at"
+  ],
+  "title": "PVPAttestation",
+  "type": "object"
+}

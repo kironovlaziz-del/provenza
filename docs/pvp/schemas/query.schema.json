@@ -1,0 +1,51 @@
+{
+  "$id": "urn:provenza:pvp:1:query.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "A request for evidence. format \"trace\" asks for a TRACE Trust Record\nexport (step P6) instead of the PVP form.",
+  "properties": {
+    "format": {
+      "default": "pvp",
+      "enum": [
+        "pvp",
+        "trace"
+      ],
+      "title": "Format",
+      "type": "string"
+    },
+    "id": {
+      "maximum": 2147483647,
+      "minimum": 1,
+      "title": "Id",
+      "type": "integer"
+    },
+    "pvp": {
+      "const": "pvp/1",
+      "default": "pvp/1",
+      "title": "Pvp",
+      "type": "string"
+    },
+    "subject": {
+      "enum": [
+        "receipt",
+        "action",
+        "chain",
+        "checkpoint"
+      ],
+      "title": "Subject",
+      "type": "string"
+    },
+    "type": {
+      "const": "query",
+      "default": "query",
+      "title": "Type",
+      "type": "string"
+    }
+  },
+  "required": [
+    "subject",
+    "id"
+  ],
+  "title": "PVPQuery",
+  "type": "object"
+}
