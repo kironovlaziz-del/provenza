@@ -84,8 +84,12 @@ class TestHttpx:
         assert r.status_code == 200 and len(_egress(server)) == 1
 
     def test_uninstrument_restores(self, agent, server):
+        import importlib.util
+
         auto.instrument(agent)
-        assert auto.instrumented() == ["httpx", "requests"]
+        # a library that is not installed is skipped (CI installs only the SDK's own dependencies)
+        expected = ["httpx"] + (["requests"] if importlib.util.find_spec("requests") else [])
+        assert auto.instrumented() == expected
         auto.uninstrument()
         provider = Provider()
         with httpx.Client(transport=httpx.MockTransport(provider.handle)) as c:
