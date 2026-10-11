@@ -433,6 +433,25 @@ field for it. `tools/provenza_audit.py trace EXPORT.json` verifies the JWT,
 recomputes the JCS digests with its own RFC 8785 implementation and checks
 every receipt.
 
+### 5.4 Egress actions (SDK auto-instrumentation)
+
+`provenza.auto` in the Python SDK reports a process's direct calls to AI
+providers as actions with `action_type: "egress"`, `tool_name:
+"egress.<host>"` and `input` {host, method, path, body_sha256, body_bytes}.
+The input holds hashes only, never the prompt.
+
+The organization's AI domain catalog is the right for these actions, not
+the agent's `allowed_tools`:
+
+- `blocked`: denied, with incident `ai_domain_blocked`;
+- `allowed`, or not classified yet: allowed.
+
+Policies, the behaviour baseline and the breaker still apply. The Tool
+Registry does not: provider hosts are managed in the catalog. `tool_name`
+must name `input.host`. Agents read the catalog at
+`GET /api/v1/pvp/egress-catalog`: the organization's entries, followed by
+the built-in hints it has not classified. Code: `backend/app/pvp/egress.py`.
+
 ## 6. Versioning
 
 `pvp/1` changes only compatibly: new message types, or new optional

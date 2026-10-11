@@ -1,6 +1,15 @@
 # Changelog
 
-## 0.1.0 (unreleased)
+## Unreleased
+
+- `provenza.auto.instrument(agent)`: direct calls to AI providers (httpx
+  sync and async, requests) become governed "egress" actions, decided by
+  the server against the organization's AI domain catalog. A refusal is an
+  HTTP 403 that provider SDKs do not retry. Only hashes of request bodies
+  are recorded, never prompts.
+- `agent.call(..., output_of=...)` chooses what is recorded of a result.
+
+## 0.1.0 (2026-10-11)
 
 First release.
 

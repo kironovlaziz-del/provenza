@@ -96,6 +96,13 @@ class Client:
             raise ProvenzaUnavailable(f"{path}: {type(exc).__name__}: {exc}") from exc
         return _result(path, resp)
 
+    def get(self, path: str, *, authenticated: bool = True) -> Any:
+        try:
+            resp = self.sync.get(path, headers=self._headers(authenticated))
+        except httpx.HTTPError as exc:
+            raise ProvenzaUnavailable(f"{path}: {type(exc).__name__}: {exc}") from exc
+        return _result(path, resp)
+
     def close(self) -> None:
         if self._sync is not None:
             self._sync.close()

@@ -87,6 +87,8 @@ AGENT_ROUTES = [
     ("GET", _P + r"/gateway/v1/.*$", None, True),
     # the MCP gateway (app/api/mcp.py): the key's agent is implied
     ("POST", _P + r"/mcp/?$", None, True),
+    # what provenza.auto intercepts (app/pvp/egress.py)
+    ("GET", _P + r"/pvp/egress-catalog/?$", None, False),
     # the A2A gateway (app/api/a2a_gateway.py): a peer's card, and JSON-RPC to it
     ("GET", _P + r"/a2a-gateway/[a-z0-9-]+/\.well-known/agent-card\.json$", None, True),
     ("POST", _P + r"/a2a-gateway/[a-z0-9-]+/?$", None, True),

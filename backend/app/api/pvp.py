@@ -10,6 +10,8 @@ PVP evidence and administration.
   GET /pvp/receipts/{action_id}/trace    the same as a TRACE v0.2 Trust Record (app/pvp/trace.py)
   GET /pvp/chains/{chain_id}/trace       one Trust Record for a whole delegation chain
   GET /pvp/guard-log                     what the Input Guard refused (admins)
+  GET /pvp/egress-catalog                AI provider domains an agent process must route
+                                         through governance (app/pvp/egress.py); agent keys too
 """
 
 from datetime import datetime
@@ -127,3 +129,13 @@ async def chain_trace(chain_id: int, request: Request, db: AsyncSession = Depend
     receipts = [await build(db, org_id, i, proofs) for i in ids]
     agent = await db.get(Agent, root_agent_id)
     return await trace.export(db, org_id, agent, receipts, _base(request))
+
+
+@router.get("/egress-catalog")
+async def egress_catalog(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    """The hosts provenza.auto intercepts. The decision for each call is still
+    the server's (an "egress" action checked against this catalog)."""
+    from app.pvp import egress
+
+    return {"action_type": egress.ACTION_TYPE, "tool_prefix": egress.PREFIX,
+            "domains": await egress.catalog(db, user.org_id)}

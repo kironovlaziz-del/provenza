@@ -50,6 +50,9 @@ class FakeProvenza:
             return self._json(200, {"agent_id": 42, "api_key": "pvz_agent_key", "name": body["name"],
                                     "key_fingerprint": fingerprint(body["public_key"])})
         assert request.headers.get("x-agent-key") == "pvz_agent_key"
+        if path == "/pvp/egress-catalog":
+            return self._json(200, {"action_type": "egress", "tool_prefix": "egress.", "domains": [
+                {"domain": "openai.com", "status": "allowed"}, {"domain": "blocked-ai.com", "status": "blocked"}]})
         if path == "/agents/actions/check":
             self.n += 1
             token = f"chk_{self.n:040d}"
