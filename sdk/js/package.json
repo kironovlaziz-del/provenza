@@ -1,0 +1,76 @@
+{
+  "name": "provenza",
+  "version": "0.1.0",
+  "description": "Provenza SDK: governed, signed and auditable actions for AI agents",
+  "license": "Apache-2.0",
+  "author": "Laziz Kironov",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kironovlaziz-del/provenza.git",
+    "directory": "sdk/js"
+  },
+  "homepage": "https://github.com/kironovlaziz-del/provenza/tree/main/sdk/js",
+  "keywords": [
+    "ai-governance",
+    "agents",
+    "audit",
+    "mcp",
+    "a2a",
+    "security"
+  ],
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./integrations/openai": {
+      "types": "./dist/integrations/openai.d.ts",
+      "import": "./dist/integrations/openai.js"
+    },
+    "./integrations/mcp": {
+      "types": "./dist/integrations/mcp.d.ts",
+      "import": "./dist/integrations/mcp.js"
+    },
+    "./auto": {
+      "types": "./dist/auto.d.ts",
+      "import": "./dist/auto.js"
+    },
+    "./integrations/langchain": {
+      "types": "./dist/integrations/langchain.d.ts",
+      "import": "./dist/integrations/langchain.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE",
+    "NOTICE"
+  ],
+  "engines": {
+    "node": ">=20.19"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "npm run build && node --test --test-timeout=60000 --test-force-exit --test-reporter=spec",
+    "prepublishOnly": "npm test"
+  },
+  "dependencies": {
+    "@noble/post-quantum": "^0.7.1"
+  },
+  "devDependencies": {
+    "@langchain/core": "^1.2.17",
+    "@types/node": "^20.19.0",
+    "openai": "^7.32.0",
+    "typescript": "^7.0.2"
+  },
+  "peerDependencies": {
+    "@langchain/core": ">=0.3"
+  },
+  "peerDependenciesMeta": {
+    "@langchain/core": {
+      "optional": true
+    }
+  }
+}

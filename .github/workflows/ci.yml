@@ -7,6 +7,10 @@ on:
     branches: [main]
   workflow_dispatch:
 
+# Every job only reads the repository; nothing here needs a token that can write.
+permissions:
+  contents: read
+
 # Cancel an in-progress run when a new commit arrives on the same branch.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -78,6 +82,19 @@ jobs:
           psql -h localhost -U ai_user -d ai_control_tower \
             -c "CREATE DATABASE ai_control_tower_test OWNER ai_user;"
 
+      - name: Set up Node (cross-language SDK tests)
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: sdk/js/package-lock.json
+
+      - name: Build the JS SDK (tests/test_sdk_js.py runs it against this server)
+        working-directory: sdk/js
+        run: |
+          npm ci
+          npm run build
+
       - name: Verify app imports
         run: |
           python -c "import app.main" && echo "app.main imports OK"
@@ -124,6 +141,37 @@ jobs:
 
       - name: Build the wheel
         run: pip wheel --no-deps . -w dist
+
+  sdk-js:
+    name: JS SDK (node ${{ matrix.node-version }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      matrix:
+        node-version: ["20.19", "22"]   # the oldest supported and a current LTS
+
+    defaults:
+      run:
+        working-directory: sdk/js
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: npm
+          cache-dependency-path: sdk/js/package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      - name: Build and test
+        run: npm test
+
+      - name: Pack (what npm would publish)
+        run: npm pack --dry-run
 
   sdk-python-integrations:
     name: Python SDK integrations (${{ matrix.extras }})
