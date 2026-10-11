@@ -45,6 +45,17 @@ SEED_DOMAINS: list[SeedDomainHint] = [
     {"domain": "grammarly.com", "tool_name": "Grammarly", "category": "writing_assistant"},
     {"domain": "jasper.ai", "tool_name": "Jasper", "category": "writing_assistant"},
     {"domain": "otter.ai", "tool_name": "Otter.ai", "category": "transcription"},
+    # API hosts agents call directly (provenza.auto in the SDK intercepts these)
+    {"domain": "generativelanguage.googleapis.com", "tool_name": "Gemini API", "category": "api_provider"},
+    {"domain": "aiplatform.googleapis.com", "tool_name": "Vertex AI", "category": "api_provider"},
+    {"domain": "openai.azure.com", "tool_name": "Azure OpenAI", "category": "api_provider"},
+    {"domain": "bedrock-runtime.amazonaws.com", "tool_name": "Amazon Bedrock", "category": "api_provider"},
+    {"domain": "deepseek.com", "tool_name": "DeepSeek", "category": "api_provider"},
+    {"domain": "x.ai", "tool_name": "xAI Grok", "category": "api_provider"},
+    {"domain": "groq.com", "tool_name": "Groq", "category": "api_provider"},
+    {"domain": "openrouter.ai", "tool_name": "OpenRouter", "category": "api_provider"},
+    {"domain": "together.xyz", "tool_name": "Together AI", "category": "api_provider"},
+    {"domain": "fireworks.ai", "tool_name": "Fireworks AI", "category": "api_provider"},
 ]
 
 

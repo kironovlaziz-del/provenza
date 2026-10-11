@@ -127,6 +127,34 @@ queued; that is the price of not waiting.
 Refusals are always recorded before the exception is raised, so
 `ProvenzaDenied.action_id` is known at once.
 
+## Auto-instrumentation
+
+```python
+import provenza.auto
+provenza.auto.instrument(agent)        # httpx (sync and async) and requests
+```
+
+Every **direct** call from this process to an AI provider becomes a
+governed action. That covers the OpenAI, Anthropic, Mistral, Cohere and
+Gemini SDKs, LangChain's provider clients, or plain HTTP. The provider
+hosts come from your organization's AI domain catalog (Shadow AI), and the
+**server** decides each call:
+
+| catalog status | result |
+|---|---|
+| `blocked` | refused; incident `ai_domain_blocked` |
+| `allowed` | sent, unless a policy refuses it |
+| not classified | sent, unless a policy refuses it; recorded for an admin to classify |
+
+Only the host, method, path (without the query string), and the hash and
+size of the body are recorded. The prompt is never recorded.
+
+A refusal comes back as an HTTP answer: 403 with an OpenAI-style error
+body and `x-should-retry: false`. Provider SDKs therefore raise their usual
+permission error with Provenza's reason and do not retry. With the server
+unreachable, nothing is sent (503). Other hosts, and calls to Provenza
+itself, are untouched. `provenza.auto.uninstrument()` puts everything back.
+
 ## Integrations
 
 Each framework is an optional extra. The SDK never requires one: `crewai`

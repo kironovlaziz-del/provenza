@@ -1,0 +1,5 @@
+# local builds and environments (python -m build, venvs)
+.venv*/
+build/
+dist/
+*.egg-info/

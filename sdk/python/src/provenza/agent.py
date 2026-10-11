@@ -397,15 +397,17 @@ class Agent:
     # the one governed path: everything above and every integration ends here
 
     def call(self, tool: str, arguments: Dict[str, Any], fn: Callable[[], Any], *,
-             action_type: str = "tool_call") -> Any:
+             action_type: str = "tool_call", output_of: Optional[Callable[[Any], Any]] = None) -> Any:
         """Govern one call whose arguments you already have as a dict -
-        check, run fn() only if allowed, record. What the integrations use."""
-        return self._govern(ToolSpec(tool, action_type), _json_value(arguments, "tool arguments"), fn)
+        check, run fn() only if allowed, record. What the integrations use.
+        output_of(result) chooses what is recorded (default: the result)."""
+        return self._govern(ToolSpec(tool, action_type), _json_value(arguments, "tool arguments"), fn, output_of)
 
     async def acall(self, tool: str, arguments: Dict[str, Any], fn: Callable[[], Any], *,
-                    action_type: str = "tool_call") -> Any:
+                    action_type: str = "tool_call", output_of: Optional[Callable[[Any], Any]] = None) -> Any:
         """call() for a coroutine: fn() returns an awaitable."""
-        return await self._agovern(ToolSpec(tool, action_type), _json_value(arguments, "tool arguments"), fn)
+        return await self._agovern(ToolSpec(tool, action_type), _json_value(arguments, "tool arguments"), fn,
+                                   output_of)
 
     def _run(self, spec: ToolSpec, f: Callable, args: tuple, kwargs: dict) -> Any:
         return self._govern(spec, _arguments(f, args, kwargs), lambda: f(*args, **kwargs))
@@ -413,10 +415,11 @@ class Agent:
     async def _arun(self, spec: ToolSpec, f: Callable, args: tuple, kwargs: dict) -> Any:
         return await self._agovern(spec, _arguments(f, args, kwargs), lambda: f(*args, **kwargs))
 
-    def _govern(self, spec: ToolSpec, inp: Dict[str, Any], fn: Callable[[], Any]) -> Any:
+    def _govern(self, spec: ToolSpec, inp: Dict[str, Any], fn: Callable[[], Any], output_of=None) -> Any:
+        out = (lambda r: _output(output_of(r))) if output_of else _output
         if self.mode == "standalone":
             self._local_refusal(spec, inp)
-            return self._timed_local(spec, fn, inp, "recorded")
+            return self._timed_local(spec, fn, inp, "recorded", out)
         try:
             res = self._connected().post("/agents/actions/check", self._check_body(spec, inp, _chain.get()))
         except ProvenzaUnavailable:
@@ -424,7 +427,7 @@ class Agent:
                 raise
             warnings.warn(f"{spec.name}: Provenza unreachable, running unchecked (fail_open)", ProvenzaWarning,
                           stacklevel=4)
-            return self._timed_local(spec, fn, inp, "unchecked")
+            return self._timed_local(spec, fn, inp, "unchecked", out)
         chk = self._check_of(res, spec, inp, _chain.get())
         if not chk.allowed:
             raise self._refused(spec, chk, self._try_record(spec, chk, None, None))
@@ -434,7 +437,7 @@ class Agent:
         except Exception as exc:
             self._record_after(spec, chk, {"error": type(exc).__name__}, int((time.monotonic() - started) * 1000))
             raise
-        self._record_after(spec, chk, _output(result), int((time.monotonic() - started) * 1000))
+        self._record_after(spec, chk, out(result), int((time.monotonic() - started) * 1000))
         return result
 
     def _record_after(self, spec, chk, output, duration_ms) -> None:
@@ -445,12 +448,13 @@ class Agent:
         else:
             self._try_record(spec, chk, output, duration_ms)
 
-    async def _agovern(self, spec: ToolSpec, inp: Dict[str, Any], fn: Callable[[], Any]) -> Any:
+    async def _agovern(self, spec: ToolSpec, inp: Dict[str, Any], fn: Callable[[], Any], output_of=None) -> Any:
+        out = (lambda r: _output(output_of(r))) if output_of else _output
         if self.mode == "standalone":
             self._local_refusal(spec, inp)
             started = time.monotonic()
             result = await fn()
-            self._local(spec, inp, "recorded", _output(result), int((time.monotonic() - started) * 1000))
+            self._local(spec, inp, "recorded", out(result), int((time.monotonic() - started) * 1000))
             return result
         try:
             res = await self._connected().apost("/agents/actions/check", self._check_body(spec, inp, _chain.get()))
@@ -461,7 +465,7 @@ class Agent:
                           stacklevel=4)
             started = time.monotonic()
             result = await fn()
-            self._local(spec, inp, "unchecked", _output(result), int((time.monotonic() - started) * 1000))
+            self._local(spec, inp, "unchecked", out(result), int((time.monotonic() - started) * 1000))
             return result
         chk = self._check_of(res, spec, inp, _chain.get())
         if not chk.allowed:
@@ -473,7 +477,7 @@ class Agent:
             await self._arecord_after(spec, chk, {"error": type(exc).__name__},
                                       int((time.monotonic() - started) * 1000))
             raise
-        await self._arecord_after(spec, chk, _output(result), int((time.monotonic() - started) * 1000))
+        await self._arecord_after(spec, chk, out(result), int((time.monotonic() - started) * 1000))
         return result
 
     async def _arecord_after(self, spec, chk, output, duration_ms) -> None:
@@ -484,10 +488,10 @@ class Agent:
         else:
             await self._atry_record(spec, chk, output, duration_ms)
 
-    def _timed_local(self, spec: ToolSpec, fn: Callable[[], Any], inp, status: str) -> Any:
+    def _timed_local(self, spec: ToolSpec, fn: Callable[[], Any], inp, status: str, out=_output) -> Any:
         started = time.monotonic()
         result = fn()
-        self._local(spec, inp, status, _output(result), int((time.monotonic() - started) * 1000))
+        self._local(spec, inp, status, out(result), int((time.monotonic() - started) * 1000))
         return result
 
     def _try_record(self, spec, chk, output, duration_ms) -> Optional[Dict[str, Any]]:

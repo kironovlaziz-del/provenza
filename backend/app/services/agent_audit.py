@@ -135,6 +135,14 @@ class AgentAudit:
             max_delegation_depth=depth_limit,
             status=agent.status,
         )
+        if action_type == "egress":
+            # a direct call to an AI provider: the AI domain catalog is the right (app/pvp/egress.py)
+            from app.pvp import egress
+
+            _, refusal = await egress.classify(self.db, org_id, tool_name, input_data)
+            if refusal is not None:
+                return refusal
+            agent_view.allowed_tools.append(tool_name)
         required = await required_capabilities(self.db, org_id, tool_name)
         ctx = ActionContext(
             tool_name=tool_name,
@@ -151,9 +159,11 @@ class AgentAudit:
                       agent_view, chain_view, ctx):
         policies = await self._custom_policies(org_id, agent_id)
         decision = check_action(agent_view, chain_view, ctx, policies)
-        # ASI04: Tool Registry (also records usage when the policy already denied)
+        # ASI04: Tool Registry (also records usage when the policy already denied);
+        # provider hosts of egress actions live in the AI domain catalog instead
         from app.services.supply_chain import SupplyChain
-        supply = await SupplyChain(self.db).verify(org_id, agent_id, tool_name, tool_version, tool_digest)
+        supply = None if ctx.action_type == "egress" else \
+            await SupplyChain(self.db).verify(org_id, agent_id, tool_name, tool_version, tool_digest)
         if decision.result == DENIED:
             return decision
         if supply is not None:
