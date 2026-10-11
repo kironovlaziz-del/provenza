@@ -7,6 +7,10 @@ on:
     branches: [main]
   workflow_dispatch:
 
+# Every job only reads the repository; nothing here needs a token that can write.
+permissions:
+  contents: read
+
 # Cancel an in-progress run when a new commit arrives on the same branch.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}

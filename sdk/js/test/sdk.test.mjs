@@ -188,3 +188,13 @@ test("VERSION is the package's version", async () => {
   const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
   assert.equal(VERSION, pkg.version);
 });
+
+test("trimming is linear: no regex backtracking on long runs (CodeQL js/polynomial-redos)", async () => {
+  const { trim, trimEnd } = await import("../dist/text.js");
+  const evil = "/".repeat(200_000) + "x";
+  const started = performance.now();
+  assert.equal(trimEnd(evil, "/"), evil);
+  assert.equal(trim("-".repeat(200_000) + "a" + "-".repeat(200_000), "-"), "a");
+  assert.ok(performance.now() - started < 1000);
+  assert.equal(trimEnd("https://p.test///", "/"), "https://p.test");
+});

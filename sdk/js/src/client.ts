@@ -12,6 +12,7 @@
  */
 
 import { ProvenzaRequestError, ProvenzaUnavailable } from "./errors.js";
+import { trimEnd } from "./text.js";
 
 export type Fetch = typeof fetch;
 const API = "/api/v1";
@@ -22,7 +23,7 @@ export class Client {
   constructor(serverUrl: string, readonly apiKey: string | null = null,
               private readonly timeoutMs = 10_000, private readonly fetchImpl: Fetch = fetch) {
     if (!/^https?:\/\//.test(serverUrl)) throw new TypeError("serverUrl must start with https:// (or http:// for a local server)");
-    this.serverUrl = serverUrl.replace(/\/+$/, "");
+    this.serverUrl = trimEnd(serverUrl, "/");
   }
 
   private headers(authenticated: boolean): Record<string, string> {

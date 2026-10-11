@@ -22,6 +22,7 @@ import { dirname, join } from "node:path";
 import { Client } from "./client.js";
 import { Keys } from "./crypto.js";
 import { ProvenzaConfigError } from "./errors.js";
+import { trim } from "./text.js";
 
 export interface Identity {
   keys: Keys;
@@ -36,7 +37,8 @@ export function configDir(): string {
 }
 
 export function defaultPath(name: string): string {
-  const slug = name.replace(/[^A-Za-z0-9_.-]+/g, "-").replace(/^[-.]+|[-.]+$/g, "") || "agent";
+  // a character class without anchors is linear; the ends are trimmed without a regex
+  const slug = trim(name.replace(/[^A-Za-z0-9_.-]+/g, "-"), "-.") || "agent";
   return join(configDir(), `${slug}.json`);
 }
 

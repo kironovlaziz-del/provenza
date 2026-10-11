@@ -20,6 +20,7 @@ import { createHash, createPrivateKey, generateKeyPairSync, randomBytes, sign as
 import { ml_dsa65 } from "@noble/post-quantum/ml-dsa.js";
 
 import { canonical } from "./canonical.js";
+import { trimEnd } from "./text.js";
 
 const b64 = (bytes: Uint8Array): string => Buffer.from(bytes).toString("base64");
 const unb64 = (text: string): Buffer => Buffer.from(text, "base64");
@@ -31,7 +32,7 @@ export function contentHash(value: unknown): string {
 
 export function fingerprint(publicKey: string, pqPublicKey?: string | null): string {
   const raw = pqPublicKey ? Buffer.concat([unb64(publicKey), unb64(pqPublicKey)]) : unb64(publicKey);
-  return "SHA256:" + createHash("sha256").update(raw).digest("base64").replace(/=+$/, "");
+  return "SHA256:" + trimEnd(createHash("sha256").update(raw).digest("base64"), "=");
 }
 
 export interface KeyMaterial {

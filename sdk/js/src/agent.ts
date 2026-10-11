@@ -30,6 +30,7 @@ import { Client, Fetch } from "./client.js";
 import { contentHash, Keys } from "./crypto.js";
 import { ProvenzaApprovalRequired, ProvenzaConfigError, ProvenzaDenied, ProvenzaRequestError, ProvenzaUnavailable } from "./errors.js";
 import * as ids from "./identity.js";
+import { trimEnd } from "./text.js";
 
 export interface ToolSpec {
   name: string;
@@ -140,9 +141,9 @@ export class Agent {
         ids.save(identity, identityPath);
       }
     } else {
-      serverUrl = (serverUrl || identity?.server || "").replace(/\/+$/, "");
+      serverUrl = trimEnd(serverUrl || identity?.server || "", "/");
       if (!serverUrl) throw new ProvenzaConfigError("connected mode needs serverUrl (or PROVENZA_URL)");
-      if (identity?.server && identity.server.replace(/\/+$/, "") !== serverUrl) {
+      if (identity?.server && trimEnd(identity.server, "/") !== serverUrl) {
         // never present this agent's key to a server it was not enrolled with
         throw new ProvenzaConfigError(`${identityPath} belongs to ${identity.server}, not ${serverUrl}`);
       }
