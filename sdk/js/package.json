@@ -53,7 +53,7 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "test": "npm run build && node --test",
+    "test": "npm run build && node --test --test-timeout=60000 --test-force-exit --test-reporter=spec",
     "prepublishOnly": "npm test"
   },
   "dependencies": {
