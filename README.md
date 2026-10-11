@@ -19,6 +19,9 @@
   <img src="https://img.shields.io/github/stars/kironovlaziz-del/provenza?style=flat&color=yellow" alt="Stars">
   <a href="CODE_OF_CONDUCT.md"><img src="https://img.shields.io/badge/Contributor%20Covenant-2.1-4baaaa.svg" alt="Contributor Covenant"></a>
   <a href="CONTRIBUTING.md"><img src="https://img.shields.io/badge/PRs-welcome-brightgreen.svg" alt="PRs Welcome"></a>
+  <a href="https://pypi.org/project/provenza/"><img src="https://img.shields.io/pypi/v/provenza?label=PyPI&color=blue" alt="PyPI"></a>
+  <a href="https://pypi.org/project/provenza/"><img src="https://img.shields.io/pypi/pyversions/provenza?label=Python" alt="Python versions"></a>
+  <a href="https://pypi.org/project/provenza/"><img src="https://img.shields.io/pypi/dm/provenza?label=Downloads" alt="Downloads"></a>
 </p>
 
 <p align="center">
