@@ -712,8 +712,7 @@
       "request_blocked": "So'rov Prompt Firewall tomonidan bloklandi",
       "agent_discovered": "Qurilmada AI agent topildi",
       "audit_key_rotation": "Audit kalitini almashtirish taklif qilindi, tasdiqlandi yoki yakunlandi",
-      "kill_switch": "Favqulodda to'xtatish: yoqildi yoki bekor qilindi",
-      "runtime_violation": "Runtime: boshqariladigan ish yuki o'z siyosatidan tashqariga ulandi"
+      "kill_switch": "Favqulodda to'xtatish: yoqildi yoki bekor qilindi"
     }
   },
   "users": {

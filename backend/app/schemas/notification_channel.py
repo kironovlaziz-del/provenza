@@ -12,7 +12,6 @@ EVENT_TYPES = [
     "agent_discovered",
     "audit_key_rotation",
     "kill_switch",
-    "runtime_violation",
 ]
 
 

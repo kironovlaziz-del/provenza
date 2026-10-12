@@ -712,8 +712,7 @@
       "request_blocked": "Request blocked by Prompt Firewall",
       "agent_discovered": "AI agent found on a device",
       "audit_key_rotation": "Audit key change proposed, approved or completed",
-      "kill_switch": "Kill switch: a stop engaged or lifted",
-      "runtime_violation": "Runtime: a governed workload connected outside its policy"
+      "kill_switch": "Kill switch: a stop engaged or lifted"
     }
   },
   "users": {
