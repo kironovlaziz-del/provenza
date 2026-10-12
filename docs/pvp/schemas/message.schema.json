@@ -81,7 +81,8 @@
             {
               "enum": [
                 "mcp_gateway",
-                "a2a_gateway"
+                "a2a_gateway",
+                "egress_proxy"
               ],
               "type": "string"
             },

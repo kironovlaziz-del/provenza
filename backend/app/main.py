@@ -42,6 +42,7 @@ from app.api import system
 from app.api import pvp as pvp_api
 from app.api import mcp as mcp_api
 from app.api import a2a_gateway as a2a_gateway_api
+from app.api import egress_proxy as egress_proxy_api
 
 
 _is_prod = settings.ENVIRONMENT == "production"
@@ -120,6 +121,8 @@ app.include_router(mcp_api.agent_router, prefix=f"{settings.API_V1_STR}/mcp", ta
 app.include_router(mcp_api.admin_router, prefix=f"{settings.API_V1_STR}/mcp-servers", tags=["mcp"])
 app.include_router(a2a_gateway_api.agent_router, prefix=f"{settings.API_V1_STR}/a2a-gateway", tags=["a2a"])
 app.include_router(a2a_gateway_api.admin_router, prefix=f"{settings.API_V1_STR}/a2a-peers", tags=["a2a"])
+app.include_router(egress_proxy_api.admin_router, prefix=f"{settings.API_V1_STR}/egress", tags=["egress"])
+app.include_router(egress_proxy_api.proxy_router, prefix=f"{settings.API_V1_STR}/egress-proxy", tags=["egress"])
 
 
 

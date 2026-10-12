@@ -143,6 +143,14 @@ class AgentAudit:
             if refusal is not None:
                 return refusal
             agent_view.allowed_tools.append(tool_name)
+        elif action_type == "proxy":
+            # a request through an egress proxy: the route's own rules first (app/pvp/egress_proxy.py);
+            # the right to the route is "proxy.<route>" in the agent's tools, as for any tool
+            from app.pvp import egress_proxy
+
+            refusal = await egress_proxy.route_refusal(self.db, org_id, tool_name, input_data)
+            if refusal is not None:
+                return refusal
         required = await required_capabilities(self.db, org_id, tool_name)
         ctx = ActionContext(
             tool_name=tool_name,
@@ -162,7 +170,8 @@ class AgentAudit:
         # ASI04: Tool Registry (also records usage when the policy already denied);
         # provider hosts of egress actions live in the AI domain catalog instead
         from app.services.supply_chain import SupplyChain
-        supply = None if ctx.action_type == "egress" else \
+        # (and egress-proxy routes in the route table)
+        supply = None if ctx.action_type in ("egress", "proxy") else \
             await SupplyChain(self.db).verify(org_id, agent_id, tool_name, tool_version, tool_digest)
         if decision.result == DENIED:
             return decision

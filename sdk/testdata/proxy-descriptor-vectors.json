@@ -1,0 +1,65 @@
+{
+  "comment": "egress proxy request descriptors (docs/pvp/spec.md 5.5): the proxy (Go) and every SDK must compute the same input for the same request",
+  "vectors": [
+    {
+      "route": "stripe",
+      "method": "POST",
+      "path": "/v1/charges",
+      "query": "",
+      "body": "{\"amount\":1000,\"currency\":\"usd\"}",
+      "descriptor": {
+        "route": "stripe",
+        "method": "POST",
+        "path": "/v1/charges",
+        "query_sha256": null,
+        "body_sha256": "a223b60dc6adbc2911e7c073889b220df1181c5534fa6be58c3a70981c354c54",
+        "body_bytes": 32
+      }
+    },
+    {
+      "route": "stripe",
+      "method": "GET",
+      "path": "/v1/charges/ch_1",
+      "query": "expand%5B%5D=customer&limit=3",
+      "body": "",
+      "descriptor": {
+        "route": "stripe",
+        "method": "GET",
+        "path": "/v1/charges/ch_1",
+        "query_sha256": "44f0941abbb518f8baa3e70528bd97c2dcf5e211c53a75f35499e05d2b7dd313",
+        "body_sha256": null,
+        "body_bytes": 0
+      }
+    },
+    {
+      "route": "openai",
+      "method": "POST",
+      "path": "/v1/chat/completions",
+      "query": "",
+      "body": "{\"model\":\"gpt\",\"messages\":[{\"role\":\"user\",\"content\":\"привет\"}]}",
+      "descriptor": {
+        "route": "openai",
+        "method": "POST",
+        "path": "/v1/chat/completions",
+        "query_sha256": null,
+        "body_sha256": "086305b421a83aa0ff9c0cacda02333a5b9c519f53909d5c54f739c79644ffe0",
+        "body_bytes": 69
+      }
+    },
+    {
+      "route": "files",
+      "method": "GET",
+      "path": "/v1/files/a%20b.txt",
+      "query": "",
+      "body": "",
+      "descriptor": {
+        "route": "files",
+        "method": "GET",
+        "path": "/v1/files/a%20b.txt",
+        "query_sha256": null,
+        "body_sha256": null,
+        "body_bytes": 0
+      }
+    }
+  ]
+}

@@ -1,0 +1,30 @@
+# systemd unit for the Provenza egress proxy on a host running agents.
+# Pair it with a firewall rule so agents cannot reach the APIs directly, e.g.
+#   nft add rule inet filter output meta skuid != provenza-proxy tcp dport 443 ip daddr <api ranges> reject
+[Unit]
+Description=Provenza egress proxy
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=provenza-proxy
+ExecStart=/usr/local/bin/provenza-proxy -config /etc/provenza/proxy.json
+Restart=on-failure
+RestartSec=2s
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+CapabilityBoundingSet=
+ReadOnlyPaths=/etc/provenza
+
+[Install]
+WantedBy=multi-user.target

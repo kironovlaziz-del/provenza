@@ -452,6 +452,64 @@ must name `input.host`. Agents read the catalog at
 `GET /api/v1/pvp/egress-catalog`: the organization's entries, followed by
 the built-in hints it has not classified. Code: `backend/app/pvp/egress.py`.
 
+### 5.5 Egress proxy
+
+Code: `proxy/` (the proxy, Go), `backend/app/pvp/egress_proxy.py`
+(decisions), `app/api/egress_proxy.py` (endpoints and their administration).
+
+Agents reach an external API only as `http://<proxy>/<route>/<path>`. The
+route is administered in Provenza: upstream URL, methods, path prefixes,
+body limit and credential. The credential is either held by Provenza,
+encrypted, and handed to authenticated proxies, which keep it in memory
+only, or held by the proxy alone. The request chooses neither the upstream
+nor the credential.
+
+Each request is a PVP action with `action_type: "proxy"`, `tool_name:
+"proxy.<route>"` and `input`:
+
+    {"route", "method", "path", "query_sha256", "body_sha256", "body_bytes"}
+
+- `path` is the path after the route segment, exactly as sent, with its
+  percent-encoding kept;
+- the query string and the body are hashed as raw bytes;
+- a hash is `null` when the query or the body is empty.
+
+The agent needs `proxy.<route>` in its rights, and then policies, argument
+rules, the behaviour baseline and the breaker apply as to any action. The
+route's own rules are checked as well: the method, a path prefix, no `.` or
+`..` segment or encoded `/` or `\` (an upstream that normalizes them would
+escape the prefix), and the body limit.
+
+There are two ways to obtain the check:
+
+| | who checks | the agent sends |
+|---|---|---|
+| mediated | the proxy, with the agent's key | `X-Agent-Key` |
+| SDK | the agent | `X-Provenza-Check-Id` |
+
+Both continue the same way. **Redeem** (`POST /egress-proxy/redeem`,
+`X-Proxy-Key`): the proxy describes the request it is about to send.
+- If it is not exactly the checked one, the check is burned and an
+  `action_mismatch` incident is raised.
+- A refused check is recorded at this point.
+- An allowed check is reserved, so neither the agent nor another proxy can
+  use it.
+
+The proxy then forwards the request. It never passes on `Authorization`,
+`Cookie`, `X-Agent-Key`, `X-Provenza-*` or hop-by-hop headers, and it does
+not follow redirects. **Complete** (`POST /egress-proxy/complete`) records
+the action with the upstream status and the response hash and size
+(`status: 0` and an `error` code when there was no response), with
+`executed_by: "egress_proxy"`.
+
+A reserved check that is never completed stays visible to admins as an
+open redemption (`GET /api/v1/egress/redemptions?open=true`). The proxy is
+fail-closed: without Provenza nothing is sent.
+
+**Limitation:** the proxy governs only what goes through it. Each
+deployment has to close the direct paths to the upstreams with a network
+policy or firewall (`proxy/deploy/`).
+
 ## 6. Versioning
 
 `pvp/1` changes only compatibly: new message types, or new optional
