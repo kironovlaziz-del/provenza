@@ -89,6 +89,12 @@ jobs:
           cache: npm
           cache-dependency-path: sdk/js/package-lock.json
 
+      - name: Set up Go (tests/test_sdk_go.py builds the Go SDK)
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: sdk/go/go.mod
+          cache: false   # standard library only: no go.sum, nothing to cache
+
       - name: Build the JS SDK (tests/test_sdk_js.py runs it against this server)
         working-directory: sdk/js
         run: |
@@ -172,6 +178,33 @@ jobs:
 
       - name: Pack (what npm would publish)
         run: npm pack --dry-run
+
+  sdk-go:
+    name: Go SDK (vet, race tests)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    defaults:
+      run:
+        working-directory: sdk/go
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: sdk/go/go.mod   # 1.27: crypto/mldsa
+          cache: false   # standard library only: no go.sum, nothing to cache
+
+      - name: Formatted
+        run: test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test (race detector)
+        run: go test -race -count=1 ./...
 
   sdk-python-integrations:
     name: Python SDK integrations (${{ matrix.extras }})
