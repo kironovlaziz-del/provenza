@@ -983,7 +983,8 @@
     "mfa.invalid_code": "The code is not valid.",
     "mfa.not_enabled": "Two-factor sign-in is not on.",
     "mfa.required_by_policy": "Your organization requires two-factor sign-in, so it cannot be turned off.",
-    "user.not_found": "User not found."
+    "user.not_found": "User not found.",
+    "mfa.enroll_first": "Set up two-factor sign-in for yourself first (My profile), then require it."
   },
   "discovery": {
     "title": "Network Discovery",
@@ -3167,5 +3168,25 @@
     "policy_confirm": "Require two-factor sign-in? People without it will have to set it up before they can continue.",
     "reset": "Reset 2FA",
     "reset_confirm": "Reset two-factor sign-in for {{name}}? Use this for a lost phone: their sessions end and they set it up again."
+  },
+  "setup": {
+    "title": "Finish setting up Provenza",
+    "hint": "A few steps turn a fresh installation into a governed one.",
+    "show": "Show",
+    "hide": "Hide",
+    "go": "Open",
+    "optional": "optional",
+    "provider": "Connect an AI provider",
+    "provider_hint": "Add a provider with its API key: requests and the AI gateway go through it.",
+    "policy": "Activate a policy",
+    "policy_hint": "Policies decide what is allowed, blocked or needs approval.",
+    "agent": "Register your first agent",
+    "agent_hint": "Create an enrollment token, then pip install provenza and enroll the agent with it.",
+    "notifications": "Set up notifications",
+    "notifications_hint": "Email or a webhook (Slack, Teams) for incidents and approvals.",
+    "mfa": "Require two-factor sign-in",
+    "mfa_hint": "At least for admins and approvers. Set it up for yourself first in My profile.",
+    "discovery": "Find shadow AI",
+    "discovery_hint": "An ingestion key for the endpoint agent or the browser extension."
   }
 }

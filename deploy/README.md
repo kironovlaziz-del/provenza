@@ -28,6 +28,17 @@ reverse proxy.
 
 ## Install
 
+The recommended way is the installer at the repository root: it does the steps
+below, checks the host, waits for the stack and schedules backups. See
+[docs/self-hosting.md](../docs/self-hosting.md).
+
+```bash
+git clone https://github.com/kironovlaziz-del/provenza.git /opt/provenza
+cd /opt/provenza && ./install.sh
+```
+
+By hand, the same in four commands:
+
 ```bash
 git clone https://github.com/kironovlaziz-del/provenza.git /opt/provenza
 cd /opt/provenza/deploy
@@ -70,7 +81,7 @@ be read.
 |---|---|
 | Status | `docker compose ps` |
 | Logs | `docker compose logs -f backend worker` |
-| Upgrade | `git pull && docker compose up -d --build` (migrations run first) |
+| Upgrade | `cd .. && ./upgrade.sh` (backup first, automatic rollback; by hand: `git pull && docker compose up -d --build`) |
 | Stop / start | `docker compose stop` / `docker compose up -d` |
 | Another admin | `docker compose run --rm -it backend create-admin --org "Provenza" --email ...` |
 | Shell in the API | `docker compose exec backend sh` |

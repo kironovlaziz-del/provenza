@@ -983,7 +983,8 @@
     "mfa.invalid_code": "Kod noto'g'ri.",
     "mfa.not_enabled": "Ikki bosqichli kirish yoqilmagan.",
     "mfa.required_by_policy": "Tashkilotingiz ikki bosqichli kirishni talab qiladi, shuning uchun uni o'chirib bo'lmaydi.",
-    "user.not_found": "Foydalanuvchi topilmadi."
+    "user.not_found": "Foydalanuvchi topilmadi.",
+    "mfa.enroll_first": "Avval o'zingiz uchun ikki bosqichli kirishni sozlang (Mening profilim), keyin uni talab qiling."
   },
   "discovery": {
     "title": "Tarmoq kashfiyoti",
@@ -3167,5 +3168,25 @@
     "policy_confirm": "Ikki bosqichli kirish talab qilinsinmi? Uni sozlamaganlar davom etishdan oldin sozlashi kerak bo'ladi.",
     "reset": "2FA ni tiklash",
     "reset_confirm": "{{name}} uchun ikki bosqichli kirish tiklansinmi? Telefon yo'qolganda foydalaning: uning seanslari yakunlanadi va u qaytadan sozlaydi."
+  },
+  "setup": {
+    "title": "Provenza sozlashni yakunlang",
+    "hint": "Bir necha qadam yangi o'rnatishni boshqariladigan tizimga aylantiradi.",
+    "show": "Ko'rsatish",
+    "hide": "Yashirish",
+    "go": "Ochish",
+    "optional": "ixtiyoriy",
+    "provider": "AI provayderni ulang",
+    "provider_hint": "Provayderni API kaliti bilan qo'shing: so'rovlar va AI shlyuz u orqali o'tadi.",
+    "policy": "Siyosatni faollashtiring",
+    "policy_hint": "Siyosatlar nimaga ruxsat berilishi, nima bloklanishi yoki tasdiq talab qilishini belgilaydi.",
+    "agent": "Birinchi agentingizni ro'yxatdan o'tkazing",
+    "agent_hint": "Ro'yxatga olish tokenini yarating, so'ng pip install provenza va agentni u bilan ulang.",
+    "notifications": "Bildirishnomalarni sozlang",
+    "notifications_hint": "Hodisalar va tasdiqlashlar uchun email yoki webhook (Slack, Teams).",
+    "mfa": "Ikki bosqichli kirishni talab qiling",
+    "mfa_hint": "Hech bo'lmaganda adminlar va tasdiqlovchilar uchun. Avval o'zingiz uchun Mening profilimda sozlang.",
+    "discovery": "Shadow AI'ni toping",
+    "discovery_hint": "Endpoint agent yoki brauzer kengaytmasi uchun ingestion kaliti."
   }
 }

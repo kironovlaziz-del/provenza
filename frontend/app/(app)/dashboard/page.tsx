@@ -19,6 +19,7 @@ import {
   CartesianGrid,
 } from "recharts";
 import { PageHeader } from "@/components/PageHeader";
+import { SetupChecklist } from "@/components/SetupChecklist";
 import { RiskPill, StatusPill } from "@/components/Pill";
 import { listRequests, fetchDashboardStats, type DashboardStats } from "@/lib/api";
 import type { AIRequest } from "@/lib/types";
@@ -102,6 +103,7 @@ export default function DashboardPage() {
         }
       />
       <div className="content">
+        <SetupChecklist />
         <div className="stat-grid">
           <div className="stat">
             <div className="stat-label">{t("dashboard.stat_requests")}</div>

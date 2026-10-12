@@ -117,6 +117,22 @@ jobs:
           path: backend/coverage.xml
           if-no-files-found: warn
 
+  install-scripts:
+    name: Install and upgrade scripts (syntax, shellcheck)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Syntax
+        run: |
+          bash -n install.sh upgrade.sh
+          for f in deploy/scripts/*.sh deploy/backend-entrypoint.sh; do sh -n "$f"; done
+
+      - name: Shellcheck (errors)
+        run: shellcheck --severity=error install.sh upgrade.sh deploy/scripts/*.sh deploy/backend-entrypoint.sh
+
   dependency-audit:
     name: Dependency audit (known vulnerabilities)
     runs-on: ubuntu-latest
