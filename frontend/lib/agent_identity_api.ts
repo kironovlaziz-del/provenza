@@ -1,5 +1,6 @@
 // Agent identity API (X-Agent-Key lifecycle). Reuses the shared axios instance from api.ts.
 import { api } from "./api";
+import { apiErrorText } from "./errors";
 
 export interface IdentitySettings {
   require_agent_key: boolean;
@@ -60,8 +61,5 @@ export async function revokeKey(agentId: number) {
 }
 
 export function identityError(err: unknown, fallback: string): string {
-  const detail = (err as any)?.response?.data?.detail;
-  if (typeof detail === "string") return detail;
-  if (Array.isArray(detail) && detail[0]?.msg) return String(detail[0].msg);
-  return fallback;
+  return apiErrorText(err, fallback);
 }

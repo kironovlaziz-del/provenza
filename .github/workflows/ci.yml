@@ -117,6 +117,34 @@ jobs:
           path: backend/coverage.xml
           if-no-files-found: warn
 
+  dependency-audit:
+    name: Dependency audit (known vulnerabilities)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Backend (pip-audit)
+        run: |
+          python -m pip install --upgrade pip
+          pip install pip-audit==2.9.0
+          pip-audit -r backend/requirements.txt
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Frontend (npm audit, production dependencies)
+        working-directory: frontend
+        run: npm audit --omit=dev --package-lock-only --audit-level=high
+
   sdk-python:
     name: Python SDK (pytest, wheel)
     runs-on: ubuntu-latest

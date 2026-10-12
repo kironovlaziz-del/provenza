@@ -15,6 +15,7 @@ import {
   type MemoryOverview,
   type MemorySettings,
 } from "@/lib/memory_api";
+import { confirmDialog } from "@/components/Dialog";
 
 const MODES: MemoryMode[] = ["off", "monitor", "enforce"];
 const STATUS_PILL: Record<string, string> = {
@@ -70,10 +71,10 @@ export default function AgentMemoryPage() {
   const namespaces = nsText.split("\n").map((s) => s.trim()).filter(Boolean);
   const badNs = namespaces.filter((g) => !NS_GLOB.test(g));
 
-  function save() {
+  async function save() {
     if (!form || !data) return;
     if (form.mode === "enforce" && data.settings.mode !== "enforce") {
-      const ok = window.confirm(
+      const ok = await confirmDialog(
         t(
           "memory.confirm_enforce",
           "Switch to enforce? Poisoned memory entries will be quarantined and kept out of prompts, and writes into foreign namespaces will be rejected.",
@@ -179,8 +180,8 @@ export default function AgentMemoryPage() {
                           )}{" "}
                           {e.status !== "rejected" && e.status !== "revoked" && (
                             <button className="btn btn-sm" disabled={busy}
-                              onClick={() => {
-                                if (window.confirm(t("memory.confirm_revoke_entry", "Revoke this memory entry? Agents will stop using it at their next verification.")))
+                              onClick={async () => {
+                                if (await confirmDialog(t("memory.confirm_revoke_entry", "Revoke this memory entry? Agents will stop using it at their next verification.")))
                                   run(() => setEntryTrust(e.id, false), t("memory.saved", "Saved"));
                               }}>
                               {t("memory.revoke", "Revoke")}

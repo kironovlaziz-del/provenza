@@ -121,11 +121,30 @@ export async function createAgentPolicy(payload: {
 // ---- Incidents ----
 export async function listAgentIncidents(params?: {
   incident_type?: string;
+  severity?: string;
+  agent_id?: number;
   unresolved_only?: boolean;
   skip?: number;
   limit?: number;
 }) {
   const { data } = await api.get<Page<AgentIncidentT>>("/agents/incidents/", { params });
+  return data;
+}
+
+export interface AgentIncidentTypeCount {
+  incident_type: string | null;
+  total: number;
+  unresolved: number;
+}
+
+/** Every kind of agent incident the organization has, with counts. */
+export async function getAgentIncidentTypes() {
+  const { data } = await api.get<AgentIncidentTypeCount[]>("/agents/incidents/types");
+  return data;
+}
+
+export async function resolveAgentIncident(id: number, resolved: boolean, note?: string) {
+  const { data } = await api.post<AgentIncidentT>(`/agents/incidents/${id}/resolve`, { resolved, note });
   return data;
 }
 

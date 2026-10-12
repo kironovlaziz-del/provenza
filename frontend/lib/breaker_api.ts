@@ -1,5 +1,6 @@
 // ASI08 circuit breaker API. Reuses the shared axios instance from api.ts.
 import { api } from "./api";
+import { apiErrorText } from "./errors";
 
 export interface BreakerConfig {
   enabled: boolean;
@@ -74,8 +75,5 @@ export async function terminateChain(chainId: number) {
 }
 
 export function breakerError(err: unknown, fallback: string): string {
-  const detail = (err as any)?.response?.data?.detail;
-  if (typeof detail === "string") return detail;
-  if (Array.isArray(detail) && detail[0]?.msg) return String(detail[0].msg);
-  return fallback;
+  return apiErrorText(err, fallback);
 }

@@ -10,13 +10,14 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useTranslation } from "react-i18next";
 import { PageHeader } from "@/components/PageHeader";
 import { useAuth } from "@/lib/auth";
-import { translateApiError } from "@/lib/errors";
+import { errorMessage as apiError } from "@/lib/errors";
 import { listAgents } from "@/lib/agent_api";
 import type { Agent } from "@/lib/agent_types";
 import {
   FIELD_ORDER, getLayer, overview, previewLayer, saveLayer,
   type FieldValue, type LayerT, type OverviewT, type PolicyDocument, type PreviewT, type Scope,
 } from "@/lib/policy_layers_api";
+import { confirmDialog } from "@/components/Dialog";
 
 type Sel = { scope: Scope; id: number | null; label: string };
 type Tri = "" | "on" | "off";
@@ -75,15 +76,6 @@ function formCannotShow(d: PolicyDocument): boolean {
   return [d.models?.allow, d.providers?.allow, d.tools?.allow].some((v) => Array.isArray(v) && v.length === 0);
 }
 
-function apiError(err: unknown, t: ReturnType<typeof useTranslation>["t"], fallback: string) {
-  const detail = (err as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail;
-  const msg = Array.isArray(detail) && detail[0]?.msg ? String(detail[0].msg).replace(/^Value error, /, "") : null;
-  const d = detail as { code?: string; context?: { path?: string; detail?: string } } | undefined;
-  if (d?.code?.startsWith("policy.") && d.context?.path) {
-    return `${translateApiError({ code: d.code }, t, d.code)} — ${d.context.path}${d.context.detail ? `: ${d.context.detail}` : ""}`;
-  }
-  return msg ?? translateApiError(detail, t, fallback);
-}
 
 function Source({ s }: { s: string }) {
   const cls = s.startsWith("agent") ? "pill-accent" : s.startsWith("team") ? "pill-medium" : "pill-neutral";
@@ -177,8 +169,8 @@ export default function PolicyHierarchyPage() {
     return () => { if (timer.current) clearTimeout(timer.current); };
   }, [body, sel]);
 
-  function pick(s: Sel) {
-    if (dirty && !window.confirm(t("ph.discard_changes"))) return;
+  async function pick(s: Sel) {
+    if (dirty && !await confirmDialog(t("ph.discard_changes"))) return;
     setPreview(null);
     setSel(s);
   }
@@ -208,7 +200,7 @@ export default function PolicyHierarchyPage() {
 
   async function save(clear = false) {
     if (!layer) return;
-    if (clear && !window.confirm(t("ph.confirm_clear"))) return;
+    if (clear && !await confirmDialog(t("ph.confirm_clear"))) return;
     setBusy(true);
     setError(null);
     setNotice(null);

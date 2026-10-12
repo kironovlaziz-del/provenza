@@ -41,6 +41,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core import agent_signing as sig
 from app.core import k8s_attest
 from app.core.errors import api_error
+from app.core.outbound import guarded_async_client
 from app.core.k8s_attest import AttestationError
 from app.models.agent import Agent
 from app.models.attestation import AgentAttestation, AttestationPolicy
@@ -190,8 +191,12 @@ _last_refetch: Dict[str, float] = {}
 
 
 async def _fetch_json(url: str) -> Dict[str, Any]:
-    """GET an https JSON document: no redirects, 5 s, at most 256 KiB."""
-    async with httpx.AsyncClient(timeout=5.0, follow_redirects=False) as client:
+    """GET an https JSON document: no redirects, 5 s, at most 256 KiB, through
+    the outbound guard like every admin-typed address (app/core/outbound.py).
+    An in-cluster issuer (https://kubernetes.default.svc) resolves to a private
+    address: the operator allows it with OUTBOUND_PRIVATE_ALLOWLIST, or the
+    policy carries the keys pasted in."""
+    async with guarded_async_client(timeout=5.0) as client:
         async with client.stream("GET", url, headers={"Accept": "application/json"}) as r:
             r.raise_for_status()
             body = b""

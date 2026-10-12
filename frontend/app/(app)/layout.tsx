@@ -4,6 +4,7 @@ import React, { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "@/lib/auth";
+import { DialogHost } from "@/components/Dialog";
 import { Sidebar } from "@/components/Sidebar";
 import { SystemHealthBanner } from "@/components/SystemHealthBanner";
 
@@ -34,6 +35,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     <div className="shell">
       <Sidebar />
       <div className="main"><SystemHealthBanner />{children}</div>
+      <DialogHost />
     </div>
   );
 }

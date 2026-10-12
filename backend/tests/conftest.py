@@ -296,6 +296,13 @@ class _FakeRedis:
         self._store[key] = self._store.get(key, 0) - 1
         return self._store[key]
 
+    def set(self, key, value, ex=None):
+        self._store[key] = value
+        return True
+
+    def exists(self, *keys):
+        return sum(1 for k in keys if k in self._store)
+
     def close(self):
         pass
 

@@ -21,6 +21,7 @@ import {
   type ToolEntry,
   type ToolKind,
 } from "@/lib/tool_registry_api";
+import { confirmDialog } from "@/components/Dialog";
 
 const MODES: SupplyChainMode[] = ["off", "monitor", "enforce"];
 const STATUS_CLASS: Record<string, string> = {
@@ -82,10 +83,10 @@ export default function ToolRegistryPage() {
     }
   }
 
-  function changeMode(next: SupplyChainMode) {
+  async function changeMode(next: SupplyChainMode) {
     if (next === "enforce") {
       const pending = entries.filter((e) => e.status !== "approved").length;
-      const ok = window.confirm(
+      const ok = await confirmDialog(
         t("registry.confirm_enforce", {
           count: pending,
           defaultValue: `Switch to enforce? Only approved tools will run. ${pending} entries are not approved yet.`,
@@ -374,8 +375,8 @@ export default function ToolRegistryPage() {
                         <button
                           className="btn btn-sm"
                           disabled={busy}
-                          onClick={() => {
-                            if (window.confirm(t("registry.confirm_delete", "Remove this entry?")))
+                          onClick={async () => {
+                            if (await confirmDialog(t("registry.confirm_delete", "Remove this entry?")))
                               run(() => deleteToolEntry(e.id), t("registry.saved", "Saved"));
                           }}
                         >

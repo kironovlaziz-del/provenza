@@ -35,6 +35,7 @@ import {
   type SystemMetrics,
 } from "@/lib/inventory_types";
 import { AttentionList, StagePill, TierPill } from "../InventoryBadges";
+import { confirmDialog } from "@/components/Dialog";
 
 const SOURCE_PAGE: Record<string, string> = {
   agent: "/agents",
@@ -169,9 +170,9 @@ export default function InventorySystemPage() {
         ? t("inventory.detail.retire_provider", "The connection is disabled: requests, the gateway and the Playground stop using it.")
         : null;
 
-  function moveTo(stage: LifecycleStage) {
+  async function moveTo(stage: LifecycleStage) {
     if (stage === "retired" && retireEffect) {
-      const ok = window.confirm(
+      const ok = await confirmDialog(
         `${t("inventory.detail.retire_confirm", "Retire this system?")}\n\n${retireEffect}\n\n${t(
           "inventory.detail.retire_no_restart",
           "Moving it back later does not restart the source; that is done on its own page.",

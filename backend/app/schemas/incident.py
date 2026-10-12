@@ -1,21 +1,28 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from datetime import datetime
-from typing import Optional
+from typing import Literal, Optional
+
+Severity = Literal["low", "medium", "high", "critical"]
+IncidentStatus = Literal["open", "investigating", "resolved"]
+
 
 class IncidentCreate(BaseModel):
     request_id: Optional[int] = None
-    severity: str = "low"  # low, medium, high, critical
-    category: str
-    summary: str
-    impact: Optional[str] = None
+    severity: Severity = "low"
+    category: str = Field(min_length=1, max_length=100)
+    summary: str = Field(min_length=1, max_length=10000)
+    impact: Optional[str] = Field(default=None, max_length=10000)
+
 
 class IncidentUpdate(BaseModel):
-    severity: Optional[str] = None
-    category: Optional[str] = None
-    summary: Optional[str] = None
-    impact: Optional[str] = None
-    root_cause: Optional[str] = None
-    status: Optional[str] = None
+    """Triage (admin or approver): the values are fixed, so an incident cannot
+    be put into a state no list or report knows about."""
+    severity: Optional[Severity] = None
+    category: Optional[str] = Field(default=None, min_length=1, max_length=100)
+    summary: Optional[str] = Field(default=None, min_length=1, max_length=10000)
+    impact: Optional[str] = Field(default=None, max_length=10000)
+    root_cause: Optional[str] = Field(default=None, max_length=10000)
+    status: Optional[IncidentStatus] = None
 
 class IncidentOut(BaseModel):
     id: int

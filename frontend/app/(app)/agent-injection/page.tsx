@@ -17,6 +17,7 @@ import {
   type ScanResult,
   type Verdict,
 } from "@/lib/injection_api";
+import { confirmDialog } from "@/components/Dialog";
 
 const MODES: InjectionMode[] = ["off", "monitor", "enforce"];
 const VERDICT_PILL: Record<Verdict, string> = { clean: "pill-low", suspicious: "pill-medium", injection: "pill-critical" };
@@ -63,10 +64,10 @@ export default function AgentInjectionPage() {
     }
   }
 
-  function save() {
+  async function save() {
     if (!form || !data) return;
     if (form.mode === "enforce" && data.settings.mode !== "enforce") {
-      const ok = window.confirm(
+      const ok = await confirmDialog(
         t(
           "injection.confirm_enforce",
           "Switch to enforce? Tool calls whose arguments contain an injection will be refused, and every chain that receives an injected tool output will need human approval for each further action until an admin clears it.",
@@ -169,8 +170,8 @@ export default function AgentInjectionPage() {
                           <button
                             className="btn btn-sm btn-primary"
                             disabled={busy}
-                            onClick={() => {
-                              if (window.confirm(t("injection.confirm_clear", "Clear the taint? Actions in this chain will no longer need a human approval because of the injected output.")))
+                            onClick={async () => {
+                              if (await confirmDialog(t("injection.confirm_clear", "Clear the taint? Actions in this chain will no longer need a human approval because of the injected output.")))
                                 run(() => clearTaint(ch.chain_id), t("injection.cleared", "Taint cleared"));
                             }}
                           >

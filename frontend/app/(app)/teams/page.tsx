@@ -10,12 +10,13 @@ import { useTranslation } from "react-i18next";
 import { Form } from "@/components/Form";
 import { PageHeader } from "@/components/PageHeader";
 import { useAuth } from "@/lib/auth";
-import { translateApiError } from "@/lib/errors";
+import { errorMessage as apiError } from "@/lib/errors";
 import { listPolicies, type AttestationPolicyT } from "@/lib/attestation_api";
 import {
   createRole, createTeam, deleteRole, deleteTeam, listRoles, listTeams, splitList, teamPath, updateRole, updateTeam,
   type RoleT, type TeamT,
 } from "@/lib/teams_api";
+import { confirmDialog } from "@/components/Dialog";
 
 type TeamForm = { id: number | null; name: string; description: string; parent_id: string };
 type RoleForm = {
@@ -30,20 +31,6 @@ const EMPTY_ROLE: RoleForm = {
   max_delegation_depth: 3, require_hybrid: false, require_attestation: false, attestation_policy_id: "",
 };
 
-function apiError(err: unknown, t: ReturnType<typeof useTranslation>["t"], fallback: string) {
-  let detail = (err as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail;
-  const d = detail as { code?: string; context?: { parts?: string[]; agent_names?: string } } | undefined;
-  if (d?.code === "team.not_empty" && Array.isArray(d.context?.parts)) {
-    // what still uses the team, in the reader's language, naming the agents
-    const used = d.context.parts
-      .map((p) => (p === "agents" && d.context?.agent_names ? `${t("teams.part_agents")} (${d.context.agent_names})` : t(`teams.part_${p}`, p)))
-      .join(", ");
-    const msg = t("errors.team.not_empty", { used });
-    return d.context.parts.includes("agents") ? `${msg}. ${t("teams.not_empty_agents_hint")}` : msg;
-  }
-  const msg = Array.isArray(detail) && detail[0]?.msg ? String(detail[0].msg).replace(/^Value error, /, "") : null;
-  return msg ?? translateApiError(detail, t, fallback);
-}
 
 export default function TeamsPage() {
   const { t } = useTranslation();
@@ -111,7 +98,7 @@ export default function TeamsPage() {
     }, t("teams.saved"));
   }
 
-  function saveRole(e: React.FormEvent) {
+  async function saveRole(e: React.FormEvent) {
     e.preventDefault();
     if (!roleForm) return;
     const body = {
@@ -132,9 +119,9 @@ export default function TeamsPage() {
     }
     if (roleForm.id) {
       const current = roles.find((r) => r.id === roleForm.id);
-      if (current && current.agents > 0 && !window.confirm(t("teams.confirm_role_update", { count: current.agents }))) return;
+      if (current && current.agents > 0 && !await confirmDialog(t("teams.confirm_role_update", { count: current.agents }))) return;
       if (current && current.agents > 0 && roleForm.require_attestation && !current.require_attestation
-          && !window.confirm(t("teams.confirm_attestation_on", { count: current.agents }))) return;
+          && !await confirmDialog(t("teams.confirm_attestation_on", { count: current.agents }))) return;
     }
     let updated = 0;
     const id = roleForm.id;
@@ -239,8 +226,8 @@ export default function TeamsPage() {
                             id: team.id, name: team.name, description: team.description ?? "",
                             parent_id: team.parent_id ? String(team.parent_id) : "",
                           })}>{t("teams.edit")}</button>{" "}
-                          <button className="btn btn-sm btn-danger" disabled={busy} onClick={() => {
-                            if (window.confirm(t("teams.confirm_delete_team", { name: team.name }))) {
+                          <button className="btn btn-sm btn-danger" disabled={busy} onClick={async () => {
+                            if (await confirmDialog(t("teams.confirm_delete_team", { name: team.name }))) {
                               run(() => deleteTeam(team.id), t("teams.deleted"));
                             }
                           }}>{t("teams.delete")}</button>
@@ -389,8 +376,8 @@ export default function TeamsPage() {
                             require_attestation: r.require_attestation,
                             attestation_policy_id: r.attestation_policy_id ? String(r.attestation_policy_id) : "",
                           })}>{t("teams.edit")}</button>{" "}
-                          <button className="btn btn-sm btn-danger" disabled={busy} onClick={() => {
-                            if (window.confirm(t("teams.confirm_delete_role", { name: r.name }))) {
+                          <button className="btn btn-sm btn-danger" disabled={busy} onClick={async () => {
+                            if (await confirmDialog(t("teams.confirm_delete_role", { name: r.name }))) {
                               run(() => deleteRole(r.id), t("teams.deleted"));
                             }
                           }}>{t("teams.delete")}</button>

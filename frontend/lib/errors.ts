@@ -9,6 +9,7 @@
  * as-is so nothing breaks during the migration.
  */
 import type { TFunction } from "i18next";
+import i18n from "./i18n";
 
 export function translateApiError(
   detail: unknown,
@@ -36,4 +37,22 @@ export function translateApiError(
   }
 
   return fallback;
+}
+
+/**
+ * The message for a failed API call: a 422's first validation message, a
+ * translated error code, or the fallback. One helper for every page.
+ */
+export function errorMessage(err: unknown, t: TFunction, fallback: string): string {
+  const detail = (err as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail;
+  if (Array.isArray(detail) && detail[0] && typeof detail[0] === "object" && "msg" in detail[0]) {
+    const msg = String((detail[0] as { msg: unknown }).msg);
+    return msg.startsWith("Value error, ") ? msg.slice("Value error, ".length) : msg;
+  }
+  return translateApiError(detail, t, fallback);
+}
+
+/** errorMessage with the app's i18n instance - for API helpers that have no `t` at hand. */
+export function apiErrorText(err: unknown, fallback: string): string {
+  return errorMessage(err, i18n.t.bind(i18n) as TFunction, fallback);
 }

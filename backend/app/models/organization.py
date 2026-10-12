@@ -12,4 +12,6 @@ class Organization(Base):
     # 3-63 chars. Unique across the whole instance.
     slug = Column(String(63), unique=True, index=True, nullable=False)
     plan = Column(String(50), default="free")
+    # who must sign in with a second factor: none | reviewers (admins and approvers) | all
+    mfa_required = Column(String(10), nullable=False, default="none", server_default="none")
     created_at = Column(DateTime(timezone=True), server_default=func.now())

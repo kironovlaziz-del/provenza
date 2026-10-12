@@ -2,6 +2,7 @@
 // stream (fetch + ReadableStream, because EventSource cannot send the
 // Authorization header).
 import { api, getToken } from "./api";
+import { apiErrorText } from "./errors";
 
 export type ObsEventType =
   | "action.checked"
@@ -280,8 +281,5 @@ export function openObsStream(
 }
 
 export function obsError(err: unknown, fallback: string): string {
-  const detail = (err as any)?.response?.data?.detail;
-  if (typeof detail === "string") return detail;
-  if (Array.isArray(detail) && detail[0]?.msg) return String(detail[0].msg);
-  return fallback;
+  return apiErrorText(err, fallback);
 }

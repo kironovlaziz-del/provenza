@@ -1,3 +1,5 @@
+import time
+import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 import hashlib
@@ -21,7 +23,8 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
         expire = datetime.now(timezone.utc) + expires_delta
     else:
         expire = datetime.now(timezone.utc) + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-    to_encode.update({"exp": expire})
+    # iat: compared with users.sessions_valid_after; jti: what logout revokes (app/core/sessions.py)
+    to_encode.update({"exp": expire, "iat": round(time.time(), 3), "jti": uuid.uuid4().hex})
     if "sub" in to_encode:  # RFC 7519: "sub" is a string; PyJWT enforces it
         to_encode["sub"] = str(to_encode["sub"])
     encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)

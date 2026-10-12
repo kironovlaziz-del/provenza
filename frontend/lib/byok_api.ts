@@ -1,5 +1,6 @@
 // BYOK (organization encryption keys) API. Reuses the shared axios instance from api.ts.
 import { api } from "./api";
+import { apiErrorText } from "./errors";
 
 export type KeyProvider = "local" | "vault_transit" | "aws_kms";
 
@@ -93,8 +94,5 @@ export async function shredKeys(confirm: string) {
 }
 
 export function byokError(err: unknown, fallback: string): string {
-  const detail = (err as any)?.response?.data?.detail;
-  if (typeof detail === "string") return detail;
-  if (Array.isArray(detail) && detail[0]?.msg) return String(detail[0].msg);
-  return fallback;
+  return apiErrorText(err, fallback);
 }

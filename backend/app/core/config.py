@@ -64,6 +64,12 @@ class Settings(BaseSettings):
     # (check, record, delegate) together. Over it: 429 pvp.rate_limited.
     PVP_RATE_LIMIT_PER_MINUTE: int = 1200
 
+    # Telemetry ingestion (/api/v1/shadow-ai/ingest): batches per minute one
+    # ingestion key may send. A browser extension's key ships inside the
+    # extension, so anyone who has the extension has it: its limit is lower.
+    INGEST_BATCHES_PER_MINUTE: int = 120
+    INGEST_EXTENSION_BATCHES_PER_MINUTE: int = 30
+
     # The address agents reach this server at, e.g. "https://provenza.example.com".
     # Agent cards served by the A2A gateway point there. Empty = taken from the
     # request (fine when the reverse proxy passes the original host and scheme).

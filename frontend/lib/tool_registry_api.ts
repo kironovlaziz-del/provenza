@@ -1,5 +1,6 @@
 // ASI04 Tool Registry API. Reuses the shared axios instance from api.ts.
 import { api } from "./api";
+import { apiErrorText } from "./errors";
 
 export type SupplyChainMode = "off" | "monitor" | "enforce";
 export type ToolStatus = "approved" | "pending" | "blocked" | "drifted";
@@ -97,8 +98,5 @@ export async function computeManifestDigest(manifest: unknown) {
 }
 
 export function registryError(err: unknown, fallback: string): string {
-  const detail = (err as any)?.response?.data?.detail;
-  if (typeof detail === "string") return detail;
-  if (Array.isArray(detail) && detail[0]?.msg) return String(detail[0].msg);
-  return fallback;
+  return apiErrorText(err, fallback);
 }

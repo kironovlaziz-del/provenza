@@ -1,5 +1,6 @@
 // ASI07 agent-to-agent messages API. Reuses the shared axios instance from api.ts.
 import { api } from "./api";
+import { apiErrorText } from "./errors";
 
 export type A2AMode = "off" | "monitor" | "enforce";
 export type MsgStatus = "accepted" | "quarantined" | "rejected";
@@ -79,8 +80,5 @@ export async function releaseMessage(id: number) {
 }
 
 export function a2aError(err: unknown, fallback: string): string {
-  const detail = (err as any)?.response?.data?.detail;
-  if (typeof detail === "string") return detail;
-  if (Array.isArray(detail) && detail[0]?.msg) return String(detail[0].msg);
-  return fallback;
+  return apiErrorText(err, fallback);
 }

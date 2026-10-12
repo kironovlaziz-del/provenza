@@ -1,9 +1,12 @@
 "use client";
 
+// Agent actions held for a human (PVP pending_approval): the reviewer sees
+// what the server verified apart from what the agent claims, and approves the
+// exact arguments (their hash). Admins and approvers.
+
 import Link from "next/link";
 import React, { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { PageHeader } from "@/components/PageHeader";
 import {
   approvalError,
   approveReviewed,
@@ -13,6 +16,7 @@ import {
   type PendingApproval,
   type ReviewPacket,
 } from "@/lib/approvals_api";
+import { promptDialog } from "@/components/Dialog";
 
 function ExpiresIn({ iso }: { iso: string }) {
   const { t } = useTranslation();
@@ -53,7 +57,7 @@ function Review({ id, onDone }: { id: number; onDone: () => void }) {
       if (kind === "approve") {
         await approveReviewed(id, p.verified.input_sha256, confirmation);
       } else {
-        const reason = window.prompt(t("agent_approvals.deny_prompt") as string);
+        const reason = await promptDialog(t("agent_approvals.deny_prompt") as string);
         if (reason === null) {
           setBusy(false);
           return;
@@ -178,7 +182,7 @@ function Review({ id, onDone }: { id: number; onDone: () => void }) {
   );
 }
 
-export default function AgentApprovalsPage() {
+export function AgentActionApprovals({ onCount }: { onCount?: (n: number) => void }) {
   const { t } = useTranslation();
   const [pending, setPending] = useState<PendingApproval[]>([]);
   const [open, setOpen] = useState<number | null>(null);
@@ -190,18 +194,17 @@ export default function AgentApprovalsPage() {
     listPendingApprovals()
       .then((rows) => {
         setPending(rows);
+        onCount?.(rows.length);
         setError(null);
       })
       .catch((e) => setError(approvalError(e, t("agent_approvals.load_failed", "Could not load the review."))))
       .finally(() => setLoading(false));
-  }, [t]);
+  }, [t, onCount]);
 
   useEffect(refresh, [refresh]);
 
   return (
     <>
-      <PageHeader title={t("agent_approvals.title")} />
-      <div className="content">
         <p className="hint-text u-mb-16">{t("agent_approvals.hint")}</p>
         {error && <div style={{ color: "#ef4444", marginBottom: 12 }}>{error}</div>}
         <div className="panel">
@@ -240,8 +243,7 @@ export default function AgentApprovalsPage() {
               </div>
             ))}
           </div>
-        </div>
-      </div>
+                </div>
     </>
   );
 }

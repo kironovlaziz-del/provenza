@@ -13,7 +13,7 @@ from app.schemas.pagination import Page
 from app.services.notification_service import NotificationChannelService
 from app.services.audit_service import AuditService
 from app.models.user import User
-from app.api.deps import get_current_user, require_role
+from app.api.deps import require_role
 from app.models.user import UserRole
 
 router = APIRouter()
@@ -43,7 +43,7 @@ async def create_channel(
 async def list_channels(
     pagination: PaginationParams = Depends(),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_role(UserRole.admin)),  # targets are webhook URLs: secrets
 ):
     service = NotificationChannelService(db)
     items, total = await service.list_channels(
@@ -86,8 +86,9 @@ async def delete_channel(
 async def test_channel(
     channel_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_role(UserRole.admin)),
 ):
+    """Admins only: a test sends a real message to the channel's address."""
     service = NotificationChannelService(db)
     await service.send_test(channel_id, current_user.org_id)
     return {"status": "sent"}

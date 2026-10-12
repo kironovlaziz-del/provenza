@@ -7,12 +7,15 @@ import { useTranslation } from "react-i18next";
 import { PageHeader } from "@/components/PageHeader";
 import { RiskPill, StatusPill } from "@/components/Pill";
 import { getIncident, updateIncident } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
 import type { Incident } from "@/lib/types";
 
 export default function IncidentDetailPage() {
   const params = useParams<{ id: string }>();
   const incidentId = Number(params.id);
   const { t, i18n } = useTranslation();
+  const { user } = useAuth();
+  const canTriage = user?.role === "admin" || user?.role === "approver"; // the API refuses others
 
   const [incident, setIncident] = useState<Incident | null>(null);
   const [loading, setLoading] = useState(true);
@@ -106,7 +109,7 @@ export default function IncidentDetailPage() {
           </div>
         </div>
 
-        <div className="panel">
+        {canTriage && <div className="panel">
           <div className="panel-header">
             <h2>{t("incidents.detail.investigation_title")}</h2>
           </div>
@@ -132,7 +135,7 @@ export default function IncidentDetailPage() {
               {saving ? t("incidents.detail.saving") : t("incidents.detail.save")}
             </button>
           </div>
-        </div>
+        </div>}
       </div>
     </>
   );

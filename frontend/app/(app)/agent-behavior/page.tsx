@@ -15,6 +15,7 @@ import {
   type BehaviorOverview,
   type BehaviorSettings,
 } from "@/lib/behavior_api";
+import { confirmDialog } from "@/components/Dialog";
 
 const MODES: BehaviorMode[] = ["off", "monitor", "enforce"];
 
@@ -55,10 +56,10 @@ export default function AgentBehaviorPage() {
     }
   }
 
-  function save() {
+  async function save() {
     if (!form || !data) return;
     if (form.mode === "enforce" && data.settings.mode !== "enforce") {
-      const ok = window.confirm(
+      const ok = await confirmDialog(
         t(
           "behavior.confirm_enforce",
           "Switch to enforce? Agents whose score reaches the threshold will be quarantined automatically and every action they attempt will be refused until an admin releases them.",
@@ -113,8 +114,8 @@ export default function AgentBehaviorPage() {
                     <button
                       className="btn btn-sm btn-primary"
                       disabled={busy}
-                      onClick={() => {
-                        if (window.confirm(t("behavior.confirm_release", "Release this agent? Its actions will be evaluated normally again.")))
+                      onClick={async () => {
+                        if (await confirmDialog(t("behavior.confirm_release", "Release this agent? Its actions will be evaluated normally again.")))
                           run(() => releaseAgent(a.agent_id), t("behavior.released", "Agent released"));
                       }}
                     >

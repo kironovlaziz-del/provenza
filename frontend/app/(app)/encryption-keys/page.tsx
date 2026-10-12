@@ -16,6 +16,7 @@ import {
   type KeyConfig,
   type KeyProvider,
 } from "@/lib/byok_api";
+import { confirmDialog } from "@/components/Dialog";
 
 const STATUS_PILL: Record<string, string> = { active: "pill-low", retired: "pill-neutral", shredded: "pill-critical" };
 const JOB_PILL: Record<string, string> = { done: "pill-low", running: "pill-medium", queued: "pill-neutral", failed: "pill-critical" };
@@ -104,8 +105,8 @@ export default function EncryptionKeysPage() {
                   {t("byok.check", "Check key")}
                 </button>
                 <button className="btn btn-sm" disabled={busy}
-                  onClick={() => {
-                    if (window.confirm(t("byok.confirm_disable", "Turn BYOK off? All secrets are re-encrypted with the server key; the organization keys are retired.")))
+                  onClick={async () => {
+                    if (await confirmDialog(t("byok.confirm_disable", "Turn BYOK off? All secrets are re-encrypted with the server key; the organization keys are retired.")))
                       run(disableByok, jobMsg);
                   }}>
                   {t("byok.disable", "Turn off")}
@@ -218,11 +219,11 @@ export default function EncryptionKeysPage() {
                 {t("byok.new_key_hint", "A new data key is created, wrapped and unwrapped once to prove the key provider works, then every existing secret of the organization is re-encrypted with it. Secrets are stored encrypted; they are never shown again.")}
               </div>
               <button className="btn btn-primary btn-sm" style={{ marginTop: 10 }} disabled={busy || missing}
-                onClick={() => {
+                onClick={async () => {
                   const msg = data.enabled
                     ? t("byok.confirm_rotate", "Create a new data key and re-encrypt all secrets with it? The current key is retired but stays readable.")
                     : t("byok.confirm_enable", "Enable BYOK and re-encrypt all secrets of the organization with its own key?");
-                  if (window.confirm(msg)) run(() => newKey(cfg), jobMsg);
+                  if (await confirmDialog(msg)) run(() => newKey(cfg), jobMsg);
                 }}>
                 {data.enabled ? t("byok.rotate", "Rotate") : t("byok.enable", "Enable")}
               </button>
@@ -273,9 +274,9 @@ export default function EncryptionKeysPage() {
               </p>
               <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                 <input placeholder={t("byok.type_shred", 'type "SHRED"')} value={shredWord} onChange={(e) => setShredWord(e.target.value)} style={{ width: 180 }} />
-                <button className="btn btn-sm" style={{ background: "#ef4444", color: "#fff" }} disabled={busy || shredWord !== "SHRED"}
-                  onClick={() => {
-                    if (window.confirm(t("byok.confirm_shred", "Last chance: shred all organization keys? The data they protect will be lost permanently.")))
+                <button className="btn btn-sm btn-danger" disabled={busy || shredWord !== "SHRED"}
+                  onClick={async () => {
+                    if (await confirmDialog(t("byok.confirm_shred", "Last chance: shred all organization keys? The data they protect will be lost permanently.")))
                       run(() => shredKeys(shredWord), () => { setShredWord(""); return t("byok.shredded", "Organization keys shredded."); });
                   }}>
                   {t("byok.shred", "Shred keys")}

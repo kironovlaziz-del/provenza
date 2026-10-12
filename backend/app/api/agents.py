@@ -1,7 +1,8 @@
 from datetime import datetime, timezone
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -734,10 +735,30 @@ async def escalation_summary(
     }
 
 
+@router.get("/incidents/types")
+async def agent_incident_types(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Every kind of agent incident this organization has, with counts - so a
+    list can filter on all of them, not on a fixed few (a critical
+    action_mismatch must not be invisible)."""
+    from sqlalchemy import Integer, cast, func as sqlfunc
+    rows = (await db.execute(
+        select(AgentIncident.incident_type, sqlfunc.count().label("total"),
+               sqlfunc.sum(cast(AgentIncident.resolved == False, Integer)).label("unresolved"))  # noqa: E712
+        .where(AgentIncident.org_id == current_user.org_id)
+        .group_by(AgentIncident.incident_type).order_by(AgentIncident.incident_type))).all()
+    return [{"incident_type": r.incident_type, "total": int(r.total), "unresolved": int(r.unresolved or 0)}
+            for r in rows]
+
+
 @router.get("/incidents/", response_model=Page[AgentIncidentOut])
 async def list_agent_incidents(
     pagination: PaginationParams = Depends(),
     incident_type: str | None = None,
+    severity: str | None = None,
+    agent_id: int | None = None,
     unresolved_only: bool = False,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -746,6 +767,10 @@ async def list_agent_incidents(
     base = select(AgentIncident).where(AgentIncident.org_id == current_user.org_id)
     if incident_type:
         base = base.where(AgentIncident.incident_type == incident_type)
+    if severity:
+        base = base.where(AgentIncident.severity == severity)
+    if agent_id is not None:
+        base = base.where(AgentIncident.agent_id == agent_id)
     if unresolved_only:
         base = base.where(AgentIncident.resolved == False)  # noqa: E712
     total = await db.scalar(select(sqlfunc.count()).select_from(base.subquery()))
@@ -754,3 +779,30 @@ async def list_agent_incidents(
     )
     return Page(items=list(result.scalars().all()), total=int(total or 0),
                 skip=pagination.skip, limit=pagination.limit)
+
+
+class AgentIncidentResolve(BaseModel):
+    resolved: bool = True
+    note: Optional[str] = Field(default=None, max_length=2000)
+
+
+@router.post("/incidents/{incident_id}/resolve", response_model=AgentIncidentOut)
+async def resolve_agent_incident(
+    incident_id: int,
+    data: AgentIncidentResolve,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role(UserRole.admin, UserRole.approver)),
+):
+    """Mark an agent incident handled (or reopen it). Reviewers only; audited."""
+    org_id, user_id = current_user.org_id, current_user.id
+    inc = (await db.execute(select(AgentIncident).where(AgentIncident.id == incident_id,
+                                                        AgentIncident.org_id == org_id))).scalar_one_or_none()
+    if inc is None:
+        raise HTTPException(status_code=404, detail="agent_incident.not_found")
+    inc.resolved = data.resolved
+    await db.commit()
+    await AuditService(db).log(org_id, user_id, "agent_incident", incident_id,
+                               "resolved" if data.resolved else "reopened",
+                               {"incident_type": inc.incident_type, "note": data.note})
+    await db.refresh(inc)
+    return inc

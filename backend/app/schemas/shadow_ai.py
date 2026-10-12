@@ -1,6 +1,6 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from datetime import datetime
-from typing import Optional, Dict, Any
+from typing import Any, Dict, Literal, Optional
 
 
 class ShadowSightingCreate(BaseModel):
@@ -13,8 +13,9 @@ class ShadowSightingCreate(BaseModel):
 
 
 class ShadowSightingUpdate(BaseModel):
-    status: Optional[str] = None  # reviewing, confirmed_shadow, dismissed
-    notes: Optional[str] = None
+    """Review (admin or approver). "registered" is set only by /register."""
+    status: Optional[Literal["new", "reviewing", "confirmed_shadow", "dismissed"]] = None
+    notes: Optional[str] = Field(default=None, max_length=10000)
 
 
 class ShadowSightingRegister(BaseModel):

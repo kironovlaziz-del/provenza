@@ -1477,3 +1477,123 @@ button.sidebar-section:hover { background: var(--bg-sidebar-hover); color: var(-
 .sidebar-tools button:hover { color: var(--text-inverse); border-color: #3a3f52; }
 .sidebar.narrow .sidebar-footer { padding: 10px 6px; }
 /* ==== end provenza-ui ==== */
+
+/* Tabs (components/Tabs.tsx) */
+.tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 16px;
+  overflow-x: auto;
+}
+.tab {
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  padding: 8px 14px;
+  font: inherit;
+  font-size: 14px;
+  color: var(--text-muted);
+  cursor: pointer;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.tab:hover {
+  color: var(--text-primary);
+}
+.tab-active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+  font-weight: 600;
+}
+.tab-badge {
+  background: var(--accent-dim);
+  color: var(--accent);
+  border-radius: 10px;
+  padding: 0 7px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* Dialogs (components/Dialog.tsx) */
+.dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 18, 25, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 16px;
+}
+.dialog {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius, 8px);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.25);
+  width: 100%;
+  max-width: 440px;
+  padding: 20px;
+}
+.dialog-message {
+  margin: 0 0 14px;
+  color: var(--text-primary);
+  white-space: pre-wrap;
+}
+.dialog input {
+  width: 100%;
+  margin-bottom: 14px;
+}
+.dialog-actions {
+  justify-content: flex-end;
+}
+
+/* Sidebar: sections grouped (lib/navigation.ts) */
+.sidebar-group-label {
+  margin: 14px 18px 4px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-inverse-muted);
+  opacity: 0.7;
+}
+.sidebar-group:first-child .sidebar-group-label {
+  margin-top: 6px;
+}
+.sidebar-link.sidebar-section-link {
+  justify-content: flex-start;
+  gap: 10px;
+}
+.sidebar-hit-section {
+  opacity: 0.6;
+  font-size: 12px;
+}
+
+/* Section tabs under the page title (components/PageHeader.tsx) */
+.section-tabs {
+  display: flex;
+  gap: 2px;
+  padding: 0 24px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-panel);
+  overflow-x: auto;
+}
+.section-tab {
+  padding: 9px 12px;
+  font-size: 13px;
+  color: var(--text-muted);
+  text-decoration: none;
+  border-bottom: 2px solid transparent;
+  white-space: nowrap;
+}
+.section-tab:hover {
+  color: var(--text-primary);
+}
+.section-tab.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+  font-weight: 600;
+}

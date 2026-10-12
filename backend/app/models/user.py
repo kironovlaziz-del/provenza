@@ -1,12 +1,16 @@
 from sqlalchemy import (
+    BigInteger,
+    Boolean,
     Column,
     Integer,
     String,
+    Text,
     DateTime,
     ForeignKey,
     UniqueConstraint,
     func,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
 from app.core.database import Base
 import enum
@@ -46,6 +50,18 @@ class User(Base):
     # persists the answer here, per the Simple Mode plan's own framing
     # (choice made at login) - it must be remembered, not re-asked every time.
     ui_mode = Column(String(20))  # unused since Simple Mode was removed; column kept
+    # tokens issued before this are refused (app/core/sessions.py): set on a
+    # password change, so a stolen session ends with it
+    sessions_valid_after = Column(DateTime(timezone=True))
+    # Two-factor sign-in (app/core/totp.py): secrets encrypted with the
+    # organization's key; recovery codes stored as hashes; the last time step a
+    # code was accepted for, so a code cannot be used twice.
+    totp_enabled = Column(Boolean, nullable=False, default=False, server_default="false")
+    totp_secret_encrypted = Column(Text)
+    totp_pending_encrypted = Column(Text)
+    totp_last_counter = Column(BigInteger)
+    mfa_recovery_hashes = Column(JSONB)
+    mfa_enabled_at = Column(DateTime(timezone=True))
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     organization = relationship("Organization", backref="users")

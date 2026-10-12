@@ -22,6 +22,7 @@ import {
   type StreamState,
   type Timeseries,
 } from "@/lib/observability_api";
+import { promptDialog } from "@/components/Dialog";
 
 /* ------------------------------------------------------------------ palette */
 // Categorical slots (dark steps, validated against the panel surface #25262e):
@@ -392,7 +393,7 @@ function Terminal(props: {
       setRaw((r) => { const n = { ...r }; delete n[k]; return n; });
       return;
     }
-    const reason = window.prompt(t("obs.reveal_prompt", "Show this event WITHOUT PII masking? The request is recorded in the audit log. Reason:"), "");
+    const reason = await promptDialog(t("obs.reveal_prompt", "Show this event WITHOUT PII masking? The request is recorded in the audit log. Reason:"), "");
     if (reason === null) return;
     setRaw((r) => ({ ...r, [k]: "loading" }));
     try {
@@ -637,10 +638,10 @@ export default function AgentObservabilityPage() {
     { l: t("obs.k.events", "Events"), v: fmtNum(tt?.events), s: `${tt?.active_agents ?? "—"} ${t("obs.k.active_agents", "active agents")}` },
     { l: t("obs.k.decisions", "Decisions"), v: fmtNum(tt?.decisions), s: tt?.deny_rate != null ? `${tt.deny_rate}% ${t("obs.k.denied", "denied")}` : undefined },
     { l: t("obs.k.denied_n", "Denied"), v: fmtNum(tt?.denied), c: "#e66767" },
-    { l: t("obs.k.pending", "Waiting for approval"), v: fmtNum(tt?.pending), c: "#c98500", s: <Link href="/agent-approvals">{t("obs.review", "review")} →</Link> },
+    { l: t("obs.k.pending", "Waiting for approval"), v: fmtNum(tt?.pending), c: "#c98500", s: <Link href="/approvals?tab=agents">{t("obs.review", "review")} →</Link> },
     { l: t("obs.k.llm", "LLM calls"), v: fmtNum(tt?.llm_calls), s: tt ? `${tt.llm_errors} ${t("obs.k.errors", "blocked / failed")}` : undefined },
     { l: t("obs.k.tokens", "Tokens"), v: fmtNum(tt?.llm_tokens), s: tt?.llm_p95_ms != null ? `p95 ${Math.round(tt.llm_p95_ms)} ms` : undefined },
-    { l: t("obs.k.incidents", "Incidents"), v: fmtNum(tt?.incidents), c: "#e66767", s: tt ? <Link href="/agent-incidents">{t("obs.open", "open")}: {tt.open_incidents} →</Link> : undefined },
+    { l: t("obs.k.incidents", "Incidents"), v: fmtNum(tt?.incidents), c: "#e66767", s: tt ? <Link href="/incidents?tab=agents">{t("obs.open", "open")}: {tt.open_incidents} →</Link> : undefined },
     { l: t("obs.k.a2a", "A2A / delegations"), v: `${fmtNum(tt?.a2a_messages)} / ${fmtNum(tt?.delegations)}` },
   ];
   const chart = (id: string, opts: { height?: number; legendRight?: boolean } = {}) => (
