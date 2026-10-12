@@ -12,6 +12,7 @@ import {
   type QueueOverview,
   type QueueSettings,
 } from "@/lib/queue_api";
+import { confirmDialog } from "@/components/Dialog";
 
 const LIST: React.CSSProperties = { maxHeight: 380, overflowY: "auto", overflowX: "auto" };
 
@@ -62,11 +63,11 @@ export default function QueueTtlPage() {
     }
   }
 
-  function save() {
+  async function save() {
     if (!form) return;
     const payload = { ...form, raw_prompt_retention_days: keepForever ? null : form.raw_prompt_retention_days };
     if (!keepForever && data?.settings.raw_prompt_retention_days == null) {
-      const ok = window.confirm(
+      const ok = await confirmDialog(
         t(
           "queue.confirm_retention",
           "Turn on retention? Encrypted raw prompts older than this will be wiped permanently at the next sweep; the masked text and the audit trail stay.",

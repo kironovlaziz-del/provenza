@@ -14,6 +14,7 @@ import { EnrollPanel } from "@/components/EnrollPanel";
 import { AgentAssignment } from "@/components/AgentAssignment";
 import { AgentAttestation } from "@/components/AgentAttestation";
 import { translateApiError } from "@/lib/errors";
+import { confirmDialog, promptDialog } from "@/components/Dialog";
 
 export default function AgentDetailPage() {
   const params = useParams<{ id: string }>();
@@ -108,7 +109,7 @@ export default function AgentDetailPage() {
   const scheme = !agent.public_key ? "none" : agent.pq_public_key ? "hybrid" : "classic";
 
   async function kill() {
-    const reason = window.prompt(t("agents.kill_prompt", { name: agent?.name }) as string);
+    const reason = await promptDialog(t("agents.kill_prompt", { name: agent?.name }) as string);
     if (reason === null) return;
     setStatusError(null);
     try {
@@ -122,7 +123,7 @@ export default function AgentDetailPage() {
 
   async function changeStatus(next: "active" | "retired") {
     const question = next === "retired" ? t("agents.confirm_retire", { name: agent?.name }) : t("agents.confirm_reactivate", { name: agent?.name });
-    if (!window.confirm(question)) return;
+    if (!await confirmDialog(question)) return;
     setStatusError(null);
     try {
       setAgent(await updateAgent(agentId, { status: next }));

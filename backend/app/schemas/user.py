@@ -1,6 +1,7 @@
 import re
 from pydantic import BaseModel, EmailStr, Field, field_validator
 from datetime import datetime
+from typing import Literal, Optional
 from app.models.user import UserRole
 
 
@@ -61,6 +62,7 @@ class UserOut(UserBase):
     org_id: int
     status: str
     created_at: datetime
+    totp_enabled: bool = False      # two-factor sign-in is on
 
     class Config:
         from_attributes = True
@@ -78,3 +80,30 @@ class Token(BaseModel):
     token_type: str = "bearer"
 
 
+class LoginResult(BaseModel):
+    """Either a session (access_token), or - with two-factor sign-in on - a
+    short-lived mfa_token to exchange with a code at /auth/login/mfa."""
+    access_token: Optional[str] = None
+    token_type: str = "bearer"
+    mfa_required: bool = False
+    mfa_token: Optional[str] = None
+
+
+class MfaLogin(BaseModel):
+    mfa_token: str = Field(min_length=1, max_length=4000)
+    code: str = Field(min_length=6, max_length=32)   # a 6-digit code or a recovery code
+
+
+
+
+class MfaCode(BaseModel):
+    code: str = Field(min_length=6, max_length=32)
+
+
+class MfaDisable(BaseModel):
+    password: str = Field(min_length=1, max_length=200)
+    code: str = Field(min_length=6, max_length=32)
+
+
+class MfaPolicy(BaseModel):
+    mfa_required: Literal["none", "reviewers", "all"]

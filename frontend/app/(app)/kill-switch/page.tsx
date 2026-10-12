@@ -9,7 +9,7 @@ import Link from "next/link";
 import { useTranslation } from "react-i18next";
 import { PageHeader } from "@/components/PageHeader";
 import { useAuth } from "@/lib/auth";
-import { translateApiError } from "@/lib/errors";
+import { errorMessage as apiError } from "@/lib/errors";
 import { listAgents } from "@/lib/agent_api";
 import type { Agent } from "@/lib/agent_types";
 import { listTeams, type TeamT } from "@/lib/teams_api";
@@ -17,14 +17,10 @@ import {
   KILL_SCOPES, ORG_WIDE, killEvents, killOverview, liftStop, stopScope,
   type KillEventT, type KillOverviewT, type KillScope, type StoppedAgent,
 } from "@/lib/kill_switch_api";
+import { confirmDialog } from "@/components/Dialog";
 
 const CONFIRM_WORD = "STOP";
 
-function apiError(err: unknown, t: ReturnType<typeof useTranslation>["t"], fallback: string) {
-  const detail = (err as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail;
-  const msg = Array.isArray(detail) && detail[0]?.msg ? String(detail[0].msg).replace(/^Value error, /, "") : null;
-  return msg ?? translateApiError(detail, t, fallback);
-}
 
 function names(list: StoppedAgent[], max = 8) {
   const shown = list.slice(0, max).map((a) => a.name ?? `#${a.id}`).join(", ");
@@ -87,7 +83,7 @@ export default function KillSwitchPage() {
     if (!orgWide) {
       const name = scope === "agent" ? agents.find((a) => String(a.id) === targetId)?.name
         : teams.find((x) => String(x.id) === targetId)?.name;
-      if (!window.confirm(t(`ks.confirm_${scope}`, { name }))) return;
+      if (!await confirmDialog(t(`ks.confirm_${scope}`, { name }))) return;
     }
     setBusy(true);
     setError(null);

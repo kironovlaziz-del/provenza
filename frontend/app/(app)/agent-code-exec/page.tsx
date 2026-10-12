@@ -15,6 +15,7 @@ import {
   type ExecScanResult,
   type Severity,
 } from "@/lib/code_exec_api";
+import { confirmDialog } from "@/components/Dialog";
 
 const MODES: CodeExecMode[] = ["off", "monitor", "enforce"];
 const SEV_PILL: Record<Severity, string> = { none: "pill-neutral", medium: "pill-medium", high: "pill-high", critical: "pill-critical" };
@@ -57,7 +58,7 @@ export default function AgentCodeExecPage() {
   async function save() {
     if (!form || !data) return;
     if (form.mode === "enforce" && data.settings.mode !== "enforce") {
-      const ok = window.confirm(
+      const ok = await confirmDialog(
         t(
           "codeexec.confirm_enforce",
           "Switch to enforce? Calls with critical code (reverse shells, pipe-to-shell, disk wipes…) will be refused, and calls with high-risk code or to code tools will wait for a human approval.",

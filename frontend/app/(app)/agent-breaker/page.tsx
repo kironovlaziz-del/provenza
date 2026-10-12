@@ -21,6 +21,7 @@ import {
   type BreakerField,
   type BreakerSettings,
 } from "@/lib/breaker_api";
+import { confirmDialog } from "@/components/Dialog";
 
 const FIELDS: BreakerField[] = ["window_seconds", "max_denials", "max_incidents", "max_attempts"];
 
@@ -119,7 +120,7 @@ export default function AgentBreakerPage() {
     if (!org) return;
     let confirmDisable = false;
     if (!org.enabled && settings?.org.enabled) {
-      confirmDisable = window.confirm(
+      confirmDisable = await confirmDialog(
         t(
           "breaker.confirm_disable",
           "Turn the circuit breaker off? Failing agents will no longer be stopped automatically. This change is recorded in the audit log.",
@@ -182,8 +183,8 @@ export default function AgentBreakerPage() {
           <button
             className="btn btn-sm"
             disabled={busy}
-            onClick={() => {
-              if (window.confirm(t("breaker.confirm_terminate", "Terminate this chain for good?")))
+            onClick={async () => {
+              if (await confirmDialog(t("breaker.confirm_terminate", "Terminate this chain for good?")))
                 run(() => terminateChain(c.id), t("breaker.terminated", "Chain terminated"));
             }}
           >

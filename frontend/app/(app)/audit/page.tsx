@@ -1,8 +1,9 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { Suspense, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { PageHeader } from "@/components/PageHeader";
+import { Tabs, useTab } from "@/components/Tabs";
 import { useAuth } from "@/lib/auth";
 import { translateApiError } from "@/lib/errors";
 import { downloadEvidence } from "@/lib/ed25519_verify";
@@ -17,6 +18,7 @@ import {
 } from "@/lib/audit_api";
 import { AuditConsole } from "./AuditConsole";
 import { KeyPanel } from "./KeyPanel";
+import { PvpEvidence } from "./PvpEvidence";
 
 const short = (s: string | null | undefined, n = 12) => (s ? (s.length > n ? s.slice(0, n) + "…" : s) : "—");
 
@@ -147,17 +149,40 @@ function IntegrityPanel({ isAdmin }: { isAdmin: boolean }) {
   );
 }
 
-export default function AuditLogsPage() {
+function AuditInner() {
   const { t } = useTranslation();
   const { user } = useAuth();
   const isAdmin = user?.role === "admin";
+  const [tab, setTab] = useTab(["log", "evidence"]);
   return (
     <>
       <PageHeader title={t("audit.title")} />
       <div className="content">
-        <IntegrityPanel isAdmin={isAdmin} />
-        <AuditConsole />
+        <Tabs
+          current={tab}
+          onChange={setTab}
+          tabs={[
+            { key: "log", label: t("audit.tab_log") },
+            { key: "evidence", label: t("audit.tab_evidence") },
+          ]}
+        />
+        {tab === "log" ? (
+          <>
+            <IntegrityPanel isAdmin={isAdmin} />
+            <AuditConsole />
+          </>
+        ) : (
+          <PvpEvidence />
+        )}
       </div>
     </>
+  );
+}
+
+export default function AuditLogsPage() {
+  return (
+    <Suspense>
+      <AuditInner />
+    </Suspense>
   );
 }

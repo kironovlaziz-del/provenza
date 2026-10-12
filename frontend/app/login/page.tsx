@@ -13,7 +13,7 @@ import { Logo } from "@/components/Logo";
 const LAST_ORG_KEY = "ai_ct_last_org";
 
 export default function LoginPage() {
-  const { login } = useAuth();
+  const { login, completeMfa } = useAuth();
   const { t } = useTranslation();
   const [orgSlug, setOrgSlug] = useState("");
   const [email, setEmail] = useState("");
@@ -21,6 +21,9 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [signupEnabled, setSignupEnabled] = useState(false);
+  // second step of a two-factor sign-in
+  const [mfaToken, setMfaToken] = useState<string | null>(null);
+  const [code, setCode] = useState("");
 
   useEffect(() => {
     getAuthConfig()
@@ -39,8 +42,17 @@ export default function LoginPage() {
     setError(null);
     setSubmitting(true);
     try {
-      await login(orgSlug, email, password);
-      window.localStorage.setItem(LAST_ORG_KEY, orgSlug);
+      if (mfaToken) {
+        await completeMfa(mfaToken, code);
+      } else {
+        const { mfaToken: next } = await login(orgSlug, email, password);
+        window.localStorage.setItem(LAST_ORG_KEY, orgSlug);
+        if (next) {
+          setMfaToken(next);
+          setPassword("");
+          return;
+        }
+      }
     } catch (err: unknown) {
       const detail = (err as { response?: { data?: { detail?: unknown } } })
         ?.response?.data?.detail;
@@ -56,6 +68,35 @@ export default function LoginPage() {
         <div className="auth-brand" style={{ display: "flex", justifyContent: "center", marginBottom: 8 }}><Logo size="lg" center /></div>
         <LanguageSwitcher variant="light" />
         <h1 className="auth-title">{t("auth.login_title")}</h1>
+        {mfaToken ? (
+          <form onSubmit={handleSubmit}>
+            <p className="hint-text">{t("auth.mfa_prompt")}</p>
+            <div className="field">
+              <label htmlFor="mfa_code">{t("auth.mfa_code")}</label>
+              <input
+                id="mfa_code"
+                required
+                autoFocus
+                autoComplete="one-time-code"
+                inputMode="text"
+                maxLength={32}
+                value={code}
+                onChange={(e) => setCode(e.target.value)}
+                placeholder="123456"
+              />
+              <span className="hint-text">{t("auth.mfa_recovery_hint")}</span>
+            </div>
+            {error && <p className="error-text">{error}</p>}
+            <button type="submit" className="btn btn-primary" style={{ width: "100%", justifyContent: "center", marginTop: 4 }}
+              disabled={submitting}>
+              {submitting ? t("auth.login_button_loading") : t("auth.mfa_verify")}
+            </button>
+            <button type="button" className="btn" style={{ width: "100%", justifyContent: "center", marginTop: 8 }}
+              onClick={() => { setMfaToken(null); setCode(""); setError(null); }}>
+              {t("auth.mfa_back")}
+            </button>
+          </form>
+        ) : (
         <form onSubmit={handleSubmit}>
           <div className="field">
             <label htmlFor="org_slug">{t("auth.org_slug")}</label>
@@ -102,6 +143,7 @@ export default function LoginPage() {
             {submitting ? t("auth.login_button_loading") : t("auth.login_button")}
           </button>
         </form>
+        )}
         <ExtensionBanner />
         {signupEnabled && (
           <p className="auth-switch">

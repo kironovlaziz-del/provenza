@@ -49,6 +49,18 @@ def _one_line(text: str) -> str:
     return re.sub(r"[\r\n\t]+", " ", text)[:120]
 
 
+def _clean(text: str, limit: int = 80) -> str:
+    """A value from an event (a tool name, a domain, a device name) on its way
+    into a notification: printable characters only, short. An ingestion key -
+    an extension's ships inside it - must not be able to write arbitrary text
+    into the organization's mail and chat channels."""
+    return "".join(c if c.isprintable() else "?" for c in str(text))[:limit]
+
+
+# More new sightings of one kind than this in one batch: one summary instead
+# of a message each, so a burst (or a forged batch) cannot flood the channels.
+_MAX_SIGHTING_NOTIFICATIONS = 3
+
 _HOST = re.compile(r"[a-z0-9][a-z0-9.-]{0,99}")
 _ENV_NAME = re.compile(r"[A-Z][A-Z0-9_]{0,63}")
 _SDK = re.compile(r"[a-z0-9][a-z0-9-]{0,39}")
@@ -118,6 +130,8 @@ class TelemetryService:
         self.catalog = DomainCatalogService(db)
         self.shadow_ai = ShadowAIService(db)
         self.incidents = IncidentService(db)
+        # sighting notifications of this batch, sent after the commit - see _flush_notifications
+        self._pending: List[Tuple[str, str, str, dict]] = []
 
     async def ingest_events(
         self, org_id: int, ingestion_source_id: int, events: List[TelemetryEventIn]
@@ -159,6 +173,7 @@ class TelemetryService:
 
         await self.db.commit()
         await self._notify_new_agents(org_id, new_agents)
+        await self._flush_notifications(org_id)
 
         return TelemetryIngestResponse(
             received=len(events),
@@ -261,6 +276,28 @@ class TelemetryService:
             return None
         return {"id": found_id, "product": product, "host": _host_id(event)}
 
+    def _queue(self, event_type: str, subject: str, message: str, meta: dict) -> None:
+        self._pending.append((event_type, subject, message, meta))
+
+    async def _flush_notifications(self, org_id: int) -> None:
+        """After the batch is committed: each new sighting, or one summary per
+        kind when a batch brings more than _MAX_SIGHTING_NOTIFICATIONS."""
+        pending, self._pending = self._pending, []
+        by_type: Dict[str, List[Tuple[str, str, str, dict]]] = {}
+        for item in pending:
+            by_type.setdefault(item[0], []).append(item)
+        for event_type, items in by_type.items():
+            if len(items) <= _MAX_SIGHTING_NOTIFICATIONS:
+                for _, subject, message, meta in items:
+                    await notification_service.notify(self.db, org_id, event_type, subject, message, meta)
+                continue
+            what = "blocked AI domains" if event_type == "shadow_ai_blocked_domain" else "Shadow AI sightings"
+            await notification_service.notify(
+                self.db, org_id, event_type, f"{len(items)} new {what}",
+                "Detected automatically in one batch. Review them in Shadow AI Monitor.",
+                {"count": len(items), "sighting_ids": [m.get("sighting_id") for *_, m in items][:50]},
+            )
+
     async def _notify_new_agents(self, org_id: int, new_agents: List[dict]) -> None:
         """After the batch is committed: one message per new finding of a
         known product, or a single summary when a batch brings many (a
@@ -353,22 +390,18 @@ class TelemetryService:
                     ),
                 ),
             )
-            await notification_service.notify(
-                self.db,
-                org_id,
+            self._queue(
                 "shadow_ai_blocked_domain",
-                f"Blocked AI domain detected: {domain}",
+                f"Blocked AI domain detected: {_clean(domain)}",
                 f"Incident #{incident.id} was created automatically. "
                 f"Sighting #{sighting.id} in Shadow AI Monitor.",
                 {"sighting_id": sighting.id, "incident_id": incident.id},
             )
             return "blocked", 1, 1
 
-        await notification_service.notify(
-            self.db,
-            org_id,
+        self._queue(
             "shadow_ai_reported",
-            f"Unsanctioned AI usage detected: {sighting.tool_name}",
+            f"Unsanctioned AI usage detected: {_clean(sighting.tool_name)}",
             f"Detected automatically via {event.event_type}. "
             f"Needs review in Shadow AI Monitor.",
             {"sighting_id": sighting.id},
@@ -469,12 +502,10 @@ class TelemetryService:
                 notes=f"Auto-detected on endpoint '{event.agent_id or 'unknown'}' via {event.event_type}.",
             ),
         )
-        await notification_service.notify(
-            self.db,
-            org_id,
+        self._queue(
             "shadow_ai_reported",
-            f"Local AI tool detected: {sighting.tool_name}",
-            f"Found on device '{event.agent_id or 'unknown'}' via {event.event_type}. "
+            f"Local AI tool detected: {_clean(sighting.tool_name)}",
+            f"Found on device '{_clean(event.agent_id or 'unknown')}' via {event.event_type}. "
             f"Needs review in Shadow AI Monitor.",
             {"sighting_id": sighting.id},
         )

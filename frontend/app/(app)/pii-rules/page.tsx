@@ -8,11 +8,12 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { PageHeader } from "@/components/PageHeader";
 import { useAuth } from "@/lib/auth";
-import { translateApiError } from "@/lib/errors";
+import { errorMessage as apiError } from "@/lib/errors";
 import {
   createRule, deleteRule, piiOverview, saveBuiltin, testPii, updateRule,
   type PiiAction, type PiiOverviewT, type PiiRuleT, type PiiTestT,
 } from "@/lib/pii_api";
+import { confirmDialog } from "@/components/Dialog";
 
 type RuleForm = {
   id: number | null; revision: number | null; name: string; label: string; description: string;
@@ -30,11 +31,6 @@ const PRESETS: { key: string; name: string; label: string; pattern: string; samp
   { key: "contract", name: "Contract number", label: "CONTRACT", pattern: "\\b(?:ДОГ|DOG)-\\d{4}/\\d{1,6}\\b", sample: "по договору ДОГ-2026/1542" },
 ];
 
-function apiError(err: unknown, t: ReturnType<typeof useTranslation>["t"], fallback: string) {
-  const detail = (err as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail;
-  const msg = Array.isArray(detail) && detail[0]?.msg ? String(detail[0].msg).replace(/^Value error, /, "") : null;
-  return msg ?? translateApiError(detail, t, fallback);
-}
 
 function Highlighted({ text, spans }: { text: string; spans: { start: number; end: number }[] }) {
   // the server counts characters (code points); JS strings count UTF-16 units
@@ -169,7 +165,7 @@ export default function PiiRulesPage() {
   }
 
   async function remove(r: PiiRuleT) {
-    if (!window.confirm(t("pii.confirm_delete", { name: r.name }))) return;
+    if (!await confirmDialog(t("pii.confirm_delete", { name: r.name }))) return;
     setBusy(true);
     setError(null);
     try {

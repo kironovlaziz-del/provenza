@@ -5,6 +5,7 @@ import React, { useEffect, useState, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { PageHeader } from "@/components/PageHeader";
 import { StatusPill } from "@/components/Pill";
+import { useAuth } from "@/lib/auth";
 import {
   createShadowSighting,
   listShadowSightings,
@@ -109,6 +110,11 @@ export default function ShadowAIPage() {
       setSubmitting(false);
     }
   }
+
+  // what the API allows: review (take, dismiss) admin or approver, register admin
+  const { user } = useAuth();
+  const canReview = user?.role === "admin" || user?.role === "approver";
+  const canRegister = user?.role === "admin";
 
   async function handleSetStatus(id: number, status: string) {
     setBusyId(id);
@@ -495,7 +501,7 @@ export default function ShadowAIPage() {
                           gap: 6,
                         }}
                       >
-                        {s.status === "new" && (
+                        {canReview && s.status === "new" && (
                           <button
                             className="btn btn-sm"
                             disabled={busyId === s.id}
@@ -505,7 +511,7 @@ export default function ShadowAIPage() {
                             {t("shadow_ai.action_take")}
                           </button>
                         )}
-                        {s.status !== "registered" && (
+                        {canRegister && s.status !== "registered" && (
                           <button
                             className="btn btn-sm btn-primary"
                             disabled={busyId === s.id}
@@ -515,7 +521,7 @@ export default function ShadowAIPage() {
                             {t("shadow_ai.action_register")}
                           </button>
                         )}
-                        {s.status !== "dismissed" && s.status !== "registered" && (
+                        {canReview && s.status !== "dismissed" && s.status !== "registered" && (
                           <button
                             className="btn btn-sm"
                             disabled={busyId === s.id}

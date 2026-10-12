@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from datetime import datetime, timezone
 from app.core.database import get_db
+from app.core import sessions
 from app.core.config import settings
 from app.core.errors import api_error
 from app.core.security import hash_api_key
@@ -16,6 +17,11 @@ from app.models.ingestion_source import IngestionSource
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
 # auto_error=False: a request may authenticate with an agent key instead
 oauth2_scheme_optional = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login", auto_error=False)
+
+
+# what a user the organization requires a second factor of may still do before enrolling
+MFA_SETUP_PATHS = ("/users/me", "/users/me/mfa", "/users/me/mfa/setup", "/users/me/mfa/enable",
+                   "/users/me/password", "/auth/logout")
 
 
 async def get_current_user(
@@ -38,6 +44,10 @@ async def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
     user = await _user_from_token(token, db)
+    if not user.totp_enabled and not request.url.path.endswith(MFA_SETUP_PATHS):
+        from app.services import mfa
+        if await mfa.required_for(db, user):
+            raise api_error(status.HTTP_403_FORBIDDEN, "auth.mfa_setup_required")
     await enforce_user_session_policy(request, db, user)
     return user
 
@@ -58,6 +68,10 @@ async def _user_from_token(token: str, db: AsyncSession) -> User:
         user_id: str = payload.get("sub")
         if user_id is None:
             raise credentials_exception
+        if sessions.is_revoked(payload.get("jti")):       # logged out
+            raise credentials_exception
+        if payload.get("purpose"):                       # e.g. the half-way token of a two-factor sign-in
+            raise credentials_exception
     except JWTError:
         raise credentials_exception
 
@@ -69,6 +83,11 @@ async def _user_from_token(token: str, db: AsyncSession) -> User:
     user = result.scalar_one_or_none()
     if user is None:
         raise credentials_exception
+    # every session from before a password change has ended
+    if user.sessions_valid_after is not None:
+        issued = payload.get("iat")
+        if not isinstance(issued, (int, float)) or issued < user.sessions_valid_after.timestamp():
+            raise credentials_exception
 
     # A user whose status has been flipped to anything other than "active"
     # is treated as deactivated: their existing JWT stops working even if

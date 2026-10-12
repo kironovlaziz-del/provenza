@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.pvp.guard import BodyLimitMiddleware
+from app.core.security_headers import SecurityHeadersMiddleware
 from app.api import auth, users, policies, use_cases
 from app.api import auth, users, policies, use_cases, requests
 from app.api import auth, users, policies, use_cases, requests, approvals
@@ -65,6 +66,9 @@ _origins = [o.strip() for o in settings.CORS_ORIGINS.split(",") if o.strip()]
 # PVP Input Guard, step 1: oversized bodies on the PVP routes are refused
 # before anything reads them (app/pvp/guard.py)
 app.add_middleware(BodyLimitMiddleware)
+
+# Security headers on every response (app/core/security_headers.py)
+app.add_middleware(SecurityHeadersMiddleware)
 
 app.add_middleware(
     CORSMiddleware,

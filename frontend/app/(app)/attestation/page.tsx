@@ -10,11 +10,12 @@ import { useTranslation } from "react-i18next";
 import { Form } from "@/components/Form";
 import { PageHeader } from "@/components/PageHeader";
 import { useAuth } from "@/lib/auth";
-import { translateApiError } from "@/lib/errors";
+import { errorMessage as apiError } from "@/lib/errors";
 import {
   attestCommand, createPolicy, deletePolicy, listAttestations, listPolicies, podSpecSnippet, testPolicy,
   updatePolicy, type AttestationPolicyT, type AttestationT, type PolicyInput,
 } from "@/lib/attestation_api";
+import { confirmDialog } from "@/components/Dialog";
 
 type JwksMode = "paste" | "url" | "discovery";
 type PolicyForm = {
@@ -28,11 +29,6 @@ const EMPTY: PolicyForm = {
 
 const split = (s: string) => Array.from(new Set(s.split(/[,\s]+/).map((x) => x.trim()).filter(Boolean)));
 
-function apiError(err: unknown, t: ReturnType<typeof useTranslation>["t"], fallback: string) {
-  const detail = (err as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail;
-  const msg = Array.isArray(detail) && detail[0]?.msg ? String(detail[0].msg).replace(/^Value error, /, "") : null;
-  return msg ?? translateApiError(detail, t, fallback);
-}
 
 export default function AttestationPage() {
   const { t, i18n } = useTranslation();
@@ -99,7 +95,7 @@ export default function AttestationPage() {
     }
     if (form.id) {
       const current = policies.find((p) => p.id === form.id);
-      if (current && current.roles > 0 && !window.confirm(t("attest.confirm_update"))) return;
+      if (current && current.roles > 0 && !await confirmDialog(t("attest.confirm_update"))) return;
     }
     setBusy(true);
     setError(null);
@@ -118,7 +114,7 @@ export default function AttestationPage() {
   }
 
   async function remove(p: AttestationPolicyT) {
-    if (!window.confirm(t("attest.confirm_delete", { name: p.name }))) return;
+    if (!await confirmDialog(t("attest.confirm_delete", { name: p.name }))) return;
     setBusy(true);
     setError(null);
     try {

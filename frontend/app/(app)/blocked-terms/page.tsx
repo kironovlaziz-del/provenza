@@ -10,13 +10,14 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useTranslation } from "react-i18next";
 import { PageHeader } from "@/components/PageHeader";
 import { useAuth } from "@/lib/auth";
-import { translateApiError } from "@/lib/errors";
+import { errorMessage as apiError } from "@/lib/errors";
 import {
   TERM_SCOPES, createCategory, createTerm, deleteCategory, deleteTerm, exportTermsCsv, importTermsCsv, termsOverview,
   testTerms, updateCategory, updateTerm,
   type BlockedTermT, type ImportResultT, type TermAction, type TermInput, type TermMatch, type TermScope,
   type TermTestT, type TermsOverviewT,
 } from "@/lib/blocked_terms_api";
+import { confirmDialog } from "@/components/Dialog";
 
 type Form = TermInput & { id: number | null };
 const EMPTY: Form = {
@@ -24,11 +25,6 @@ const EMPTY: Form = {
   enabled: true, note: null,
 };
 
-function apiError(err: unknown, t: ReturnType<typeof useTranslation>["t"], fallback: string) {
-  const detail = (err as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail;
-  const msg = Array.isArray(detail) && detail[0]?.msg ? String(detail[0].msg).replace(/^Value error, /, "") : null;
-  return msg ?? translateApiError(detail, t, fallback);
-}
 
 function Highlighted({ text, spans }: { text: string; spans: { start: number; end: number }[] }) {
   const chars = Array.from(text); // the server counts code points
@@ -337,7 +333,7 @@ export default function BlockedTermsPage() {
                             {x.enabled ? t("bt.disable") : t("bt.enable")}
                           </button>
                           <button className="btn btn-sm btn-danger" disabled={busy}
-                            onClick={() => window.confirm(t("bt.confirm_delete", { term: x.term })) && act(() => deleteTerm(x.id), t("bt.deleted"))}>
+                            onClick={async () => await confirmDialog(t("bt.confirm_delete", { term: x.term })) && act(() => deleteTerm(x.id), t("bt.deleted"))}>
                             {t("bt.delete")}
                           </button>
                         </div>
@@ -365,7 +361,7 @@ export default function BlockedTermsPage() {
                 </label>
                 {isAdmin && (
                   <button className="btn btn-sm" disabled={busy}
-                    onClick={() => window.confirm(t("bt.confirm_delete_category", { name: c.name })) && act(() => deleteCategory(c.id), t("bt.deleted"))}>
+                    onClick={async () => await confirmDialog(t("bt.confirm_delete_category", { name: c.name })) && act(() => deleteCategory(c.id), t("bt.deleted"))}>
                     {t("bt.delete")}
                   </button>
                 )}

@@ -11,6 +11,7 @@ import type {
   SystemKind,
   SystemMetrics,
 } from "./inventory_types";
+import { apiErrorText } from "./errors";
 
 export interface InventoryFilters {
   kind?: string;
@@ -111,8 +112,5 @@ export async function syncInventory() {
 }
 
 export function apiErrorMessage(err: unknown, fallback: string): string {
-  const detail = (err as any)?.response?.data?.detail;
-  if (typeof detail === "string") return detail;
-  if (Array.isArray(detail) && detail[0]?.msg) return String(detail[0].msg);
-  return fallback;
+  return apiErrorText(err, fallback);
 }

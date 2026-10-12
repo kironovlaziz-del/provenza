@@ -1,5 +1,6 @@
 // ASI09 review-bound approvals. Reuses the shared axios instance from api.ts.
 import { api } from "./api";
+import { apiErrorText } from "./errors";
 
 export interface PendingApproval {
   id: number;
@@ -78,8 +79,5 @@ export async function denyReviewed(actionId: number, reason?: string) {
 }
 
 export function approvalError(err: unknown, fallback: string): string {
-  const detail = (err as any)?.response?.data?.detail;
-  if (typeof detail === "string") return detail;
-  if (Array.isArray(detail) && detail[0]?.msg) return String(detail[0].msg);
-  return fallback;
+  return apiErrorText(err, fallback);
 }

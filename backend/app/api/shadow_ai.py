@@ -8,7 +8,9 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Optional
 
+from app.core import rate_limit
 from app.core.config import settings
+from app.core.errors import api_error
 from app.core.database import get_db
 from app.core.pagination import PaginationParams
 from app.schemas.shadow_ai import (
@@ -18,6 +20,7 @@ from app.schemas.shadow_ai import (
     ShadowSightingOut,
 )
 from app.schemas.telemetry import (
+    DOMAIN_EVENT_TYPE,
     TelemetryIngestAcceptedResponse,
     TelemetryIngestRequest,
 )
@@ -37,6 +40,7 @@ router = APIRouter()
 
 @router.post("/ingest", response_model=TelemetryIngestAcceptedResponse, status_code=202)
 async def ingest_telemetry(
+    request: Request,
     data: TelemetryIngestRequest,
     source: IngestionSource = Depends(get_ingestion_source),
 ):
@@ -51,6 +55,14 @@ async def ingest_telemetry(
     for or poll the result, so this only ever reports that the batch was
     accepted, not what came of it.
     """
+    extension = source.source_type == "browser_extension"
+    rate_limit.enforce(
+        request, scope="ingest", extra_key=f"source-{source.id}", window_seconds=60,
+        limit=settings.INGEST_EXTENSION_BATCHES_PER_MINUTE if extension else settings.INGEST_BATCHES_PER_MINUTE,
+    )
+    # an extension's key is public: it may report domain visits, nothing else
+    if extension and any(e.event_type != DOMAIN_EVENT_TYPE for e in data.events):
+        raise api_error(status.HTTP_403_FORBIDDEN, "ingestion.event_type_not_allowed")
     raw_events = [e.model_dump(mode="json") for e in data.events]
     task = process_telemetry_batch.delay(source.org_id, source.id, raw_events)
     return TelemetryIngestAcceptedResponse(
@@ -112,8 +124,9 @@ async def update_sighting(
     sighting_id: int,
     data: ShadowSightingUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_role(UserRole.admin, UserRole.approver)),
 ):
+    """Reviewers only: dismissing a sighting hides unsanctioned AI use."""
     service = ShadowAIService(db)
     sighting = await service.update_status(sighting_id, current_user.org_id, data)
     await AuditService(db).log(

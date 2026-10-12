@@ -16,6 +16,7 @@ import {
   type A2ASettings,
   type MsgStatus,
 } from "@/lib/a2a_api";
+import { confirmDialog } from "@/components/Dialog";
 
 const MODES: A2AMode[] = ["off", "monitor", "enforce"];
 const STATUS_PILL: Record<string, string> = { accepted: "pill-low", quarantined: "pill-high", rejected: "pill-critical" };
@@ -63,10 +64,10 @@ export default function AgentMessagesPage() {
     }
   }
 
-  function save() {
+  async function save() {
     if (!form || !data) return;
     if (form.mode === "enforce" && data.settings.mode !== "enforce") {
-      const ok = window.confirm(
+      const ok = await confirmDialog(
         t(
           "a2a.confirm_enforce",
           "Switch to enforce? Messages with an invalid signature, a reused nonce, a stale timestamp or no allowed route will be rejected, and poisoned payloads quarantined. Make sure the channels your agents need exist first.",
@@ -173,8 +174,8 @@ export default function AgentMessagesPage() {
                         <td>
                           {m.status === "quarantined" && (
                             <button className="btn btn-sm btn-primary" disabled={busy}
-                              onClick={() => {
-                                if (window.confirm(t("a2a.confirm_release", "Release this message? The recipient will be allowed to act on it.")))
+                              onClick={async () => {
+                                if (await confirmDialog(t("a2a.confirm_release", "Release this message? The recipient will be allowed to act on it.")))
                                   run(() => releaseMessage(m.id), t("a2a.released", "Message released"));
                               }}>
                               {t("a2a.release", "Release")}
@@ -233,8 +234,8 @@ export default function AgentMessagesPage() {
                           {ch.enabled ? (
                             isAdmin && (
                               <button className="btn btn-sm" disabled={busy}
-                                onClick={() => {
-                                  if (window.confirm(t("a2a.confirm_disable", "Disable this channel? In enforce mode these agents will no longer be able to message each other unless they share a chain.")))
+                                onClick={async () => {
+                                  if (await confirmDialog(t("a2a.confirm_disable", "Disable this channel? In enforce mode these agents will no longer be able to message each other unless they share a chain.")))
                                     run(() => disableChannel(ch.id), t("a2a.channel_disabled", "Channel disabled"));
                                 }}>
                                 {t("a2a.disable", "Disable")}

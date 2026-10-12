@@ -1,5 +1,6 @@
 // ASI06 memory-integrity API. Reuses the shared axios instance from api.ts.
 import { api } from "./api";
+import { apiErrorText } from "./errors";
 
 export type MemoryMode = "off" | "monitor" | "enforce";
 export type EntryStatus = "trusted" | "quarantined" | "revoked" | "rejected";
@@ -65,8 +66,5 @@ export async function setEntryTrust(id: number, trusted: boolean) {
 }
 
 export function memoryError(err: unknown, fallback: string): string {
-  const detail = (err as any)?.response?.data?.detail;
-  if (typeof detail === "string") return detail;
-  if (Array.isArray(detail) && detail[0]?.msg) return String(detail[0].msg);
-  return fallback;
+  return apiErrorText(err, fallback);
 }

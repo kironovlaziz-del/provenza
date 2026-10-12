@@ -2,15 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "@/lib/auth";
 import { LanguageSwitcher } from "./LanguageSwitcher";
 import { Logo } from "@/components/Logo";
-
-// adminOnly: admins; reviewOnly: admins and approvers.
-type Item = { href: string; labelKey: string; adminOnly?: boolean; reviewOnly?: boolean };
-type Group = { sectionKey: string; icon: string; items: Item[] };
+import { pageMatches, sectionOf, visibleNav } from "@/lib/navigation";
 
 // Stroke icons (24x24, feather-style paths), one per section.
 const ICONS: Record<string, string> = {
@@ -27,6 +24,12 @@ const ICONS: Record<string, string> = {
   sun: "M12 17a5 5 0 1 0 0-10 5 5 0 0 0 0 10zM12 1v2M12 21v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M1 12h2M21 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4",
   moon: "M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z",
   logout: "M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9",
+  alert: "M12 9v4M12 17h.01M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z",
+  check: "M9 11l3 3L22 4M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11",
+  stop: "M7.9 2h8.2L22 7.9v8.2L16.1 22H7.9L2 16.1V7.9zM9 9h6v6H9z",
+  activity: "M22 12h-4l-3 9L9 3l-3 9H2",
+  agent: "M12 2a4 4 0 1 1 0 8 4 4 0 0 1 0-8zM4 22v-2a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v2",
+  gateway: "M3 12h18M12 3a15 15 0 0 1 0 18M12 3a15 15 0 0 0 0 18M12 3a9 9 0 1 1 0 18 9 9 0 0 1 0-18z",
 };
 
 function Icon({ name, size = 16 }: { name: string; size?: number }) {
@@ -38,93 +41,6 @@ function Icon({ name, size = 16 }: { name: string; size?: number }) {
   );
 }
 
-// Grouped by the lifecycle of an AI system in the organization:
-// found -> registered -> governed by rules -> controlled at runtime -> proven.
-const NAV: Group[] = [
-  { sectionKey: "sidebar.sections.overview", icon: "overview", items: [{ href: "/dashboard", labelKey: "sidebar.nav.dashboard" }] },
-  {
-    sectionKey: "sidebar.sections.discovery",
-    icon: "discovery",
-    items: [
-      { href: "/agent-map", labelKey: "sidebar.nav.agent_map" },
-      { href: "/agents-found", labelKey: "sidebar.nav.agents_found", reviewOnly: true },
-      { href: "/devices", labelKey: "sidebar.nav.devices", reviewOnly: true },
-      { href: "/agent-observability", labelKey: "sidebar.nav.agent_observability" },
-      { href: "/shadow-ai", labelKey: "sidebar.nav.shadow_ai" },
-      { href: "/discovery", labelKey: "sidebar.nav.discovery", adminOnly: true },
-      { href: "/domain-catalog", labelKey: "sidebar.nav.domain_catalog", adminOnly: true },
-      { href: "/ingestion-sources", labelKey: "sidebar.nav.ingestion_sources", adminOnly: true },
-    ],
-  },
-  {
-    sectionKey: "sidebar.sections.registry",
-    icon: "registry",
-    items: [
-      { href: "/inventory", labelKey: "sidebar.nav.inventory" },
-      { href: "/agents", labelKey: "sidebar.nav.agents" },
-      { href: "/teams", labelKey: "sidebar.nav.teams" },
-      { href: "/connections", labelKey: "sidebar.nav.connections" },
-      { href: "/providers", labelKey: "sidebar.nav.providers" },
-      { href: "/agent-identity", labelKey: "sidebar.nav.agent_identity", adminOnly: true },
-      { href: "/attestation", labelKey: "sidebar.nav.attestation", adminOnly: true },
-      { href: "/tool-registry", labelKey: "sidebar.nav.tool_registry", adminOnly: true },
-    ],
-  },
-  {
-    sectionKey: "sidebar.sections.policies",
-    icon: "policies",
-    items: [
-      { href: "/policies", labelKey: "sidebar.nav.policies" },
-      { href: "/policy-hierarchy", labelKey: "sidebar.nav.policy_hierarchy", reviewOnly: true },
-      { href: "/pii-rules", labelKey: "sidebar.nav.pii_rules", reviewOnly: true },
-      { href: "/blocked-terms", labelKey: "sidebar.nav.blocked_terms", reviewOnly: true },
-      { href: "/agent-policies", labelKey: "sidebar.nav.agent_policies", adminOnly: true },
-      { href: "/use-cases", labelKey: "sidebar.nav.use_cases" },
-      { href: "/compliance", labelKey: "sidebar.nav.compliance" },
-    ],
-  },
-  {
-    sectionKey: "sidebar.sections.enforcement",
-    icon: "security",
-    items: [
-      { href: "/kill-switch", labelKey: "sidebar.nav.kill_switch", reviewOnly: true },
-      { href: "/gateway", labelKey: "sidebar.nav.gateway", adminOnly: true },
-      { href: "/approvals", labelKey: "sidebar.nav.approvals" },
-      { href: "/agent-approvals", labelKey: "sidebar.nav.agent_approvals", adminOnly: true },
-      { href: "/agent-incidents", labelKey: "sidebar.nav.agent_incidents", adminOnly: true },
-      { href: "/agent-breaker", labelKey: "sidebar.nav.agent_breaker", adminOnly: true },
-      { href: "/agent-injection", labelKey: "sidebar.nav.agent_injection", adminOnly: true },
-      { href: "/agent-code-exec", labelKey: "sidebar.nav.agent_code_exec", adminOnly: true },
-      { href: "/agent-memory", labelKey: "sidebar.nav.agent_memory", adminOnly: true },
-      { href: "/agent-messages", labelKey: "sidebar.nav.agent_messages", adminOnly: true },
-      { href: "/agent-behavior", labelKey: "sidebar.nav.agent_behavior", adminOnly: true },
-      { href: "/provider-chat", labelKey: "sidebar.nav.provider_chat" },
-    ],
-  },
-  {
-    sectionKey: "sidebar.sections.audit",
-    icon: "audit",
-    items: [
-      { href: "/requests", labelKey: "sidebar.nav.requests" },
-      { href: "/audit", labelKey: "sidebar.nav.audit" },
-      { href: "/incidents", labelKey: "sidebar.nav.incidents" },
-      { href: "/agent-chains", labelKey: "sidebar.nav.agent_chains" },
-    ],
-  },
-  {
-    sectionKey: "sidebar.sections.settings",
-    icon: "settings",
-    items: [
-      { href: "/users", labelKey: "sidebar.nav.users", adminOnly: true },
-      { href: "/notifications", labelKey: "sidebar.nav.notifications" },
-      { href: "/encryption-keys", labelKey: "sidebar.nav.encryption_keys", adminOnly: true },
-      { href: "/queue-ttl", labelKey: "sidebar.nav.queue_ttl", adminOnly: true },
-      { href: "/system-status", labelKey: "sidebar.nav.system_status", adminOnly: true },
-    ],
-  },
-];
-
-const OPEN_KEY = "pvz.sidebar.open";
 const NARROW_KEY = "pvz.sidebar.narrow";
 const THEME_KEY = "pvz.theme";
 
@@ -153,54 +69,19 @@ export function Sidebar() {
   const pathname = usePathname();
   const { user, logout } = useAuth();
   const { t } = useTranslation();
-  const [open, setOpen] = useState<string[] | null>(null);
   const [narrow, setNarrow] = useState(false);
   const [theme, setTheme] = useState<"dark" | "light">("dark");
   const [query, setQuery] = useState("");
 
-  const isActive = (href: string) => pathname === href || !!pathname?.startsWith(href + "/");
-  const groups = useMemo(
-    () =>
-      NAV.map((g) => ({ ...g, items: g.items.filter((i) =>
-        i.adminOnly ? user?.role === "admin" : i.reviewOnly ? user?.role === "admin" || user?.role === "approver" : true,
-      ) })).filter((g) => g.items.length),
-    [user?.role],
-  );
-  const activeGroup = groups.find((g) => g.items.some((i) => isActive(i.href)))?.sectionKey;
+  const groups = useMemo(() => visibleNav(user?.role), [user?.role]);
+  const active = sectionOf(pathname, user?.role)?.key;
 
   useEffect(() => {
-    setOpen(load<string[]>(OPEN_KEY, ["sidebar.sections.overview", "sidebar.sections.discovery"]));
     setNarrow(load<boolean>(NARROW_KEY, false));
     const th = load<"dark" | "light">(THEME_KEY, "dark");
     setTheme(th);
     applyTheme(th);
   }, []);
-
-  // open the group of the current page when the user navigates to it - once
-  // per navigation, so the group can still be collapsed afterwards
-  const openedFor = useRef<string | null>(null);
-  useEffect(() => {
-    if (!open || !activeGroup || openedFor.current === pathname) return;
-    openedFor.current = pathname ?? null;
-    if (!open.includes(activeGroup)) {
-      const next = [...open, activeGroup];
-      setOpen(next);
-      save(OPEN_KEY, next);
-    }
-  }, [activeGroup, open, pathname]);
-
-  function toggle(key: string) {
-    const cur = open ?? [];
-    const next = cur.includes(key) ? cur.filter((k) => k !== key) : [...cur, key];
-    setOpen(next);
-    save(OPEN_KEY, next);
-  }
-
-  function setAll(expand: boolean) {
-    const next = expand ? groups.map((g) => g.sectionKey) : activeGroup ? [activeGroup] : [];
-    setOpen(next);
-    save(OPEN_KEY, next);
-  }
 
   function toggleNarrow() {
     setNarrow(!narrow);
@@ -214,12 +95,13 @@ export function Sidebar() {
     save(THEME_KEY, next);
   }
 
+  // search finds pages, not only sections: "PII" lands on PII rules directly
   const q = query.trim().toLowerCase();
-  const visible = q
-    ? groups
-        .map((g) => ({ ...g, items: g.items.filter((i) => t(i.labelKey).toLowerCase().includes(q) || i.href.includes(q)) }))
-        .filter((g) => g.items.length)
-    : groups;
+  const hits = q
+    ? groups.flatMap((g) => g.sections.flatMap((s) => s.pages.map((p) => ({ page: p, section: s }))))
+        .filter(({ page, section }) =>
+          t(page.labelKey).toLowerCase().includes(q) || t(section.labelKey).toLowerCase().includes(q) || page.href.includes(q))
+    : [];
 
   return (
     <aside className={`sidebar${narrow ? " narrow" : ""}`}>
@@ -231,61 +113,45 @@ export function Sidebar() {
       {!narrow && (
         <div className="sidebar-search">
           <Icon name="search" size={14} />
-          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t("sidebar.search", "Search menu…")}
-            aria-label={t("sidebar.search", "Search menu…")} />
-          {query && <button onClick={() => setQuery("")} aria-label="clear">×</button>}
-        </div>
-      )}
-      {!narrow && !q && (
-        <div className="sidebar-expand">
-          <button onClick={() => setAll(true)}>{t("sidebar.expand_all", "Expand all")}</button>
-          <button onClick={() => setAll(false)}>{t("sidebar.collapse_all", "Collapse all")}</button>
+          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t("sidebar.search")}
+            aria-label={t("sidebar.search")} />
+          {query && <button onClick={() => setQuery("")} aria-label={t("common.clear")}>×</button>}
         </div>
       )}
 
       <nav className="sidebar-nav">
-        {visible.map((group) => {
-          const expanded = !!q || (open ?? []).includes(group.sectionKey);
-          const containsActive = group.sectionKey === activeGroup;
-          if (narrow) {
-            const first = group.items[0];
-            return (
-              <Link key={group.sectionKey} href={first.href} title={t(group.sectionKey)}
-                className={`sidebar-icon-link${containsActive ? " active" : ""}`}
-                onClick={(e) => {
-                  // a group with several pages: open the wide sidebar on that group instead of jumping
-                  if (group.items.length > 1) {
-                    e.preventDefault();
-                    setNarrow(false);
-                    save(NARROW_KEY, false);
-                    if (!(open ?? []).includes(group.sectionKey)) toggle(group.sectionKey);
-                  }
-                }}>
-                <Icon name={group.icon} size={18} />
+        {q ? (
+          <div className="sidebar-items">
+            {hits.map(({ page, section }) => (
+              <Link key={page.href} href={page.href} onClick={() => setQuery("")}
+                className={`sidebar-link${pageMatches(page.href, pathname) ? " active" : ""}`}>
+                {t(page.labelKey)}
+                {section.pages.length > 1 && <span className="sidebar-hit-section"> · {t(section.labelKey)}</span>}
               </Link>
-            );
-          }
-          return (
-            <div key={group.sectionKey} className={`sidebar-group${containsActive ? " has-active" : ""}`}>
-              <button className="sidebar-section" onClick={() => toggle(group.sectionKey)} aria-expanded={expanded}>
-                <Icon name={group.icon} size={15} />
-                <span className="sidebar-section-label">{t(group.sectionKey)}</span>
-                <span className="sidebar-count">{group.items.length}</span>
-                <span className={`sidebar-chevron${expanded ? " open" : ""}`}><Icon name="chevron" size={13} /></span>
-              </button>
-              {expanded && (
-                <div className="sidebar-items">
-                  {group.items.map((item) => (
-                    <Link key={item.href} href={item.href} className={`sidebar-link${isActive(item.href) ? " active" : ""}`}>
-                      {t(item.labelKey)}
-                    </Link>
-                  ))}
-                </div>
+            ))}
+            {hits.length === 0 && <div className="sidebar-empty">{t("sidebar.no_match")}</div>}
+          </div>
+        ) : (
+          groups.map((group) => (
+            <div key={group.key} className="sidebar-group">
+              {!narrow && <div className="sidebar-group-label">{t(group.labelKey)}</div>}
+              {group.sections.map((section) =>
+                narrow ? (
+                  <Link key={section.key} href={section.pages[0].href} title={t(section.labelKey)}
+                    className={`sidebar-icon-link${active === section.key ? " active" : ""}`}>
+                    <Icon name={section.icon} size={18} />
+                  </Link>
+                ) : (
+                  <Link key={section.key} href={section.pages[0].href}
+                    className={`sidebar-link sidebar-section-link${active === section.key ? " active" : ""}`}>
+                    <Icon name={section.icon} size={15} />
+                    <span>{t(section.labelKey)}</span>
+                  </Link>
+                ),
               )}
             </div>
-          );
-        })}
-        {q && visible.length === 0 && <div className="sidebar-empty">{t("sidebar.no_match", "Nothing found")}</div>}
+          ))
+        )}
       </nav>
 
       <div className="sidebar-footer">

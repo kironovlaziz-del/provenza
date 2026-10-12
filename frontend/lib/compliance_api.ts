@@ -1,5 +1,6 @@
 // Compliance auto-mapping API. Reuses the shared axios instance from api.ts.
 import { api } from "./api";
+import { apiErrorText } from "./errors";
 
 export type CStatus = "pass" | "partial" | "fail" | "manual" | "na";
 export type FrameworkId = "eu_ai_act" | "gdpr" | "iso42001" | "nist_ai_rmf" | "owasp_agentic";
@@ -108,10 +109,7 @@ export async function getReport(id: number) {
 }
 
 export function complianceError(err: unknown, fallback: string): string {
-  const detail = (err as any)?.response?.data?.detail;
-  if (typeof detail === "string") return detail;
-  if (Array.isArray(detail) && detail[0]?.msg) return String(detail[0].msg);
-  return fallback;
+  return apiErrorText(err, fallback);
 }
 
 export const STATUS_PILL: Record<CStatus, string> = {

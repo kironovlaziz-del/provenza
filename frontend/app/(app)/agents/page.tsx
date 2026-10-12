@@ -8,6 +8,7 @@ import { listAgents, killAgent, updateAgent } from "@/lib/agent_api";
 import { useAuth } from "@/lib/auth";
 import { translateApiError } from "@/lib/errors";
 import type { Agent } from "@/lib/agent_types";
+import { confirmDialog, promptDialog } from "@/components/Dialog";
 
 function statusClass(s: string): string {
   switch (s) {
@@ -41,7 +42,7 @@ export default function AgentsPage() {
   useEffect(refresh, []);
 
   async function handleKill(a: Agent) {
-    const reason = window.prompt(t("agents.kill_prompt", { name: a.name }) as string);
+    const reason = await promptDialog(t("agents.kill_prompt", { name: a.name }) as string);
     if (reason === null) return; // cancelled
     setBusyId(a.id);
     setError(null);
@@ -57,7 +58,7 @@ export default function AgentsPage() {
   }
 
   async function handleReactivate(a: Agent) {
-    if (!window.confirm(t("agents.confirm_reactivate", { name: a.name }))) return;
+    if (!await confirmDialog(t("agents.confirm_reactivate", { name: a.name }))) return;
     setBusyId(a.id);
     setError(null);
     try {

@@ -10,6 +10,7 @@ export interface User {
   role: "admin" | "approver" | "user";
   status: string;
   created_at: string;
+  totp_enabled?: boolean;
 }
 
 export interface Policy {

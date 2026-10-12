@@ -10,8 +10,12 @@ dump="${1:?usage: restore.sh <path/to/provenza-TIMESTAMP.dump>}"
 files="${dump%.dump}.data.tar.gz"
 set -a; . ./.env; set +a
 
-printf "This replaces ALL current Provenza data with %s. Type 'restore' to continue: " "$dump"
-read -r answer
+# PROVENZA_RESTORE_CONFIRM=restore answers the question (upgrade.sh rolling back)
+answer="${PROVENZA_RESTORE_CONFIRM:-}"
+if [ -z "$answer" ]; then
+  printf "This replaces ALL current Provenza data with %s. Type 'restore' to continue: " "$dump"
+  read -r answer
+fi
 [ "$answer" = "restore" ] || { echo "aborted"; exit 1; }
 
 docker compose stop caddy frontend backend worker beat

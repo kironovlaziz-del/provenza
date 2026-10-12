@@ -85,13 +85,30 @@ api.interceptors.response.use(
       clearToken();
       window.location.href = "/login";
     }
+    // the organization requires a second factor this user has not set up yet
+    if (
+      typeof window !== "undefined" &&
+      error?.response?.status === 403 &&
+      error?.response?.data?.detail === "auth.mfa_setup_required" &&
+      window.location.pathname !== "/profile"
+    ) {
+      window.location.href = "/profile?mfa=required";
+    }
     return Promise.reject(error);
   }
 );
 
 // ---- Auth ----
+export interface LoginResult {
+  access_token: string | null;
+  token_type: string;
+  mfa_required: boolean;
+  mfa_token: string | null;
+}
+
+/** First step: the password. With two-factor sign-in on, an mfa_token comes back instead of a session. */
 export async function login(orgSlug: string, email: string, password: string) {
-  const { data } = await api.post<{ access_token: string; token_type: string }>(
+  const { data } = await api.post<LoginResult>(
     "/auth/login",
     { org_slug: orgSlug, email, password }
   );
@@ -112,6 +129,55 @@ export async function register(payload: {
   org_slug: string;
 }) {
   const { data } = await api.post<User>("/users/register", payload);
+  return data;
+}
+
+/** Second step: a code from the authenticator app, or a recovery code. */
+export async function loginMfa(mfaToken: string, code: string) {
+  const { data } = await api.post<{ access_token: string }>("/auth/login/mfa", { mfa_token: mfaToken, code });
+  return data;
+}
+
+// ---- Two-factor sign-in (own account; policy and reset for admins) ----
+export interface MyMfa {
+  enabled: boolean;
+  required: boolean;
+  recovery_codes_left: number;
+  enabled_at: string | null;
+}
+export type MfaPolicy = "none" | "reviewers" | "all";
+
+export const getMyMfa = async () => (await api.get<MyMfa>("/users/me/mfa")).data;
+export const setupMfa = async () => (await api.post<{ secret: string; otpauth_uri: string }>("/users/me/mfa/setup")).data;
+export const enableMfa = async (code: string) =>
+  (await api.post<{ recovery_codes: string[] }>("/users/me/mfa/enable", { code })).data;
+export const disableMfa = async (password: string, code: string) => {
+  await api.post("/users/me/mfa/disable", { password, code });
+};
+export const renewRecoveryCodes = async (code: string) =>
+  (await api.post<{ recovery_codes: string[] }>("/users/me/mfa/recovery-codes", { code })).data;
+export const getMfaPolicy = async () => (await api.get<{ mfa_required: MfaPolicy }>("/users/mfa-policy")).data;
+export const setMfaPolicy = async (mfa_required: MfaPolicy) =>
+  (await api.put<{ mfa_required: MfaPolicy }>("/users/mfa-policy", { mfa_required })).data;
+export const resetUserMfa = async (userId: number) => (await api.post<User>(`/users/${userId}/mfa/reset`)).data;
+
+/** Ends this session on the server too (the token is revoked), best effort. */
+export async function logoutRequest(token: string | null) {
+  if (!token) return;
+  try {
+    await api.post("/auth/logout", null, { headers: { Authorization: `Bearer ${token}` } });
+  } catch {
+    // offline or already invalid: forgetting the token locally still logs out here
+  }
+}
+
+/** Changing the password ends every other session; this one continues with the returned token. */
+export async function changeMyPassword(currentPassword: string, newPassword: string) {
+  const { data } = await api.post<{ status: string; access_token: string }>("/users/me/password", {
+    current_password: currentPassword,
+    new_password: newPassword,
+  });
+  setToken(data.access_token);
   return data;
 }
 

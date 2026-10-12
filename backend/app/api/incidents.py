@@ -8,8 +8,8 @@ from app.schemas.pagination import Page
 from app.services.incident_service import IncidentService
 from app.services.audit_service import AuditService
 from app.services import notification_service
-from app.models.user import User
-from app.api.deps import get_current_user
+from app.models.user import User, UserRole
+from app.api.deps import get_current_user, require_role
 
 router = APIRouter()
 
@@ -59,8 +59,10 @@ async def update_incident(
     incident_id: int,
     data: IncidentUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_role(UserRole.admin, UserRole.approver)),
 ):
+    """Triage is for reviewers: anyone may report an incident, but closing one
+    or lowering its severity is a decision."""
     service = IncidentService(db)
     incident = await service.update_incident(incident_id, current_user.org_id, data)
     await AuditService(db).log(

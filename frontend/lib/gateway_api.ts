@@ -1,5 +1,6 @@
 // LLM gateway admin API. Reuses the shared axios instance from api.ts.
 import { api } from "./api";
+import { apiErrorText } from "./errors";
 
 export interface GatewaySettings {
   enabled: boolean;
@@ -79,8 +80,5 @@ export async function disableRoute(id: number) {
 }
 
 export function gatewayError(err: unknown, fallback: string): string {
-  const detail = (err as any)?.response?.data?.detail;
-  if (typeof detail === "string") return detail;
-  if (Array.isArray(detail) && detail[0]?.msg) return String(detail[0].msg);
-  return fallback;
+  return apiErrorText(err, fallback);
 }

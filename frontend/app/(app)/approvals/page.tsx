@@ -1,157 +1,49 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
-import Link from "next/link";
+// One approvals inbox: agent actions held for a human (reviewers) and usage
+// requests. /agent-approvals redirects to the first tab (next.config.ts).
+
+import React, { Suspense, useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { PageHeader } from "@/components/PageHeader";
-import { StatusPill } from "@/components/Pill";
-import { decideApproval, listApprovals } from "@/lib/api";
-import type { Approval } from "@/lib/types";
+import { Tabs, useTab } from "@/components/Tabs";
+import { AgentActionApprovals } from "@/components/approvals/AgentActionApprovals";
+import { RequestApprovals } from "@/components/approvals/RequestApprovals";
+import { useAuth } from "@/lib/auth";
 
-export default function ApprovalsPage() {
-  const { t, i18n } = useTranslation();
-  const [approvals, setApprovals] = useState<Approval[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [busyId, setBusyId] = useState<number | null>(null);
-  const [reasonDraft, setReasonDraft] = useState<Record<number, string>>({});
-
-  function refresh() {
-    setLoading(true);
-    listApprovals()
-      .then(setApprovals)
-      .finally(() => setLoading(false));
-  }
-
-  useEffect(refresh, []);
-
-  async function decide(id: number, decision: "approved" | "rejected") {
-    setBusyId(id);
-    try {
-      await decideApproval(id, { decision, reason: reasonDraft[id] || undefined });
-      refresh();
-    } finally {
-      setBusyId(null);
-    }
-  }
-
-  const pending = approvals.filter((a) => !a.decision);
-  const decided = approvals.filter((a) => a.decision);
+function ApprovalsInner() {
+  const { t } = useTranslation();
+  const { user } = useAuth();
+  const reviewer = user?.role === "admin" || user?.role === "approver";
+  const keys = reviewer ? ["agents", "requests"] : ["requests"];
+  const [tab, setTab] = useTab(keys);
+  const [agentPending, setAgentPending] = useState(0);
+  const onCount = useCallback((n: number) => setAgentPending(n), []);
 
   return (
     <>
-      <PageHeader title={t("approvals.title")} />
+      <PageHeader title={t("approvals.title_all")} />
       <div className="content">
-        <div className="panel" style={{ marginBottom: 20 }}>
-          <div className="panel-header">
-            <h2>{t("approvals.pending_title")}</h2>
-          </div>
-          <table>
-            <thead>
-              <tr>
-                <th>{t("approvals.col_id")}</th>
-                <th>{t("approvals.col_request")}</th>
-                <th>{t("approvals.col_comment")}</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading && (
-                <tr className="empty-row">
-                  <td colSpan={4}>{t("approvals.loading")}</td>
-                </tr>
-              )}
-              {!loading && pending.length === 0 && (
-                <tr className="empty-row">
-                  <td colSpan={4}>{t("approvals.empty_pending")}</td>
-                </tr>
-              )}
-              {pending.map((a) => (
-                <tr key={a.id}>
-                  <td className="mono">#{a.id}</td>
-                  <td>
-                    <Link href={`/requests/${a.request_id}`}>
-                      {t("approvals.request_link", { id: a.request_id })}
-                    </Link>
-                  </td>
-                  <td>
-                    <input
-                      placeholder={t("approvals.comment_placeholder")}
-                      value={reasonDraft[a.id] || ""}
-                      onChange={(e) =>
-                        setReasonDraft((d) => ({ ...d, [a.id]: e.target.value }))
-                      }
-                      style={{
-                        border: "1px solid var(--border-strong)",
-                        borderRadius: 4,
-                        padding: "6px 8px",
-                        width: "100%",
-                      }}
-                    />
-                  </td>
-                  <td style={{ whiteSpace: "nowrap" }}>
-                    <button
-                      className="btn btn-sm btn-primary"
-                      style={{ marginRight: 6 }}
-                      disabled={busyId === a.id}
-                      onClick={() => decide(a.id, "approved")}
-                    >
-                      {t("approvals.approve")}
-                    </button>
-                    <button
-                      className="btn btn-sm btn-danger"
-                      disabled={busyId === a.id}
-                      onClick={() => decide(a.id, "rejected")}
-                    >
-                      {t("approvals.reject")}
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        <div className="panel">
-          <div className="panel-header">
-            <h2>{t("approvals.decided_title")}</h2>
-          </div>
-          <table>
-            <thead>
-              <tr>
-                <th>{t("approvals.col_id")}</th>
-                <th>{t("approvals.col_request")}</th>
-                <th>{t("approvals.col_decision")}</th>
-                <th>{t("approvals.col_reason")}</th>
-                <th>{t("approvals.col_date")}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {!loading && decided.length === 0 && (
-                <tr className="empty-row">
-                  <td colSpan={5}>{t("approvals.empty_decided")}</td>
-                </tr>
-              )}
-              {decided.map((a) => (
-                <tr key={a.id}>
-                  <td className="mono">#{a.id}</td>
-                  <td>
-                    <Link href={`/requests/${a.request_id}`}>
-                      {t("approvals.request_link", { id: a.request_id })}
-                    </Link>
-                  </td>
-                  <td>
-                    <StatusPill status={a.decision || ""} />
-                  </td>
-                  <td>{a.reason || "—"}</td>
-                  <td className="mono">
-                    {new Date(a.created_at).toLocaleString(i18n.language)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        {reviewer && (
+          <Tabs
+            current={tab}
+            onChange={setTab}
+            tabs={[
+              { key: "agents", label: t("approvals.tab_agents"), badge: agentPending },
+              { key: "requests", label: t("approvals.tab_requests") },
+            ]}
+          />
+        )}
+        {tab === "agents" && reviewer ? <AgentActionApprovals onCount={onCount} /> : <RequestApprovals />}
       </div>
     </>
+  );
+}
+
+export default function ApprovalsPage() {
+  return (
+    <Suspense>
+      <ApprovalsInner />
+    </Suspense>
   );
 }

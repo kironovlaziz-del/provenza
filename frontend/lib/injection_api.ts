@@ -1,5 +1,6 @@
 // ASI01 prompt-injection guard API. Reuses the shared axios instance from api.ts.
 import { api } from "./api";
+import { apiErrorText } from "./errors";
 
 export type InjectionMode = "off" | "monitor" | "enforce";
 export type Verdict = "clean" | "suspicious" | "injection";
@@ -77,8 +78,5 @@ export async function clearTaint(chainId: number) {
 }
 
 export function injectionError(err: unknown, fallback: string): string {
-  const detail = (err as any)?.response?.data?.detail;
-  if (typeof detail === "string") return detail;
-  if (Array.isArray(detail) && detail[0]?.msg) return String(detail[0].msg);
-  return fallback;
+  return apiErrorText(err, fallback);
 }

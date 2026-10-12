@@ -25,7 +25,7 @@
 </p>
 
 <p align="center">
-  <a href="#-quick-start"><b>🚀 Quick Start</b></a> &nbsp;·&nbsp;
+  <a href="#-deploy-on-your-server"><b>🚀 Deploy</b></a> &nbsp;·&nbsp;
   <a href="#-what-makes-it-different"><b>✨ Why it's different</b></a> &nbsp;·&nbsp;
   <a href="USER_GUIDE.md"><b>📖 Docs</b></a> &nbsp;·&nbsp;
   <a href="#-what-it-does"><b>🧩 Features</b></a>
@@ -37,6 +37,30 @@
 > autonomous agents delegating to each other, and no way to *prove* who authorized
 > what. Most governance tools watch one door. **Provenza covers them all,
 > under one set of rules.**
+
+## 🚀 Deploy on your server
+
+**Requirements:** Linux (Ubuntu 22.04+), 4 GB RAM, Docker with Compose v2, a domain
+pointing at the server.
+
+```bash
+git clone https://github.com/kironovlaziz-del/provenza.git /opt/provenza
+cd /opt/provenza
+./install.sh
+```
+
+The installer:
+
+- asks for your domain and the first administrator;
+- generates every secret;
+- starts PostgreSQL, Redis, the API, the workers and the web UI;
+- runs the migrations;
+- gets an HTTPS certificate (Caddy, Let's Encrypt);
+- schedules a daily backup.
+
+A few minutes later, `https://your-domain` is live. Upgrades are one command,
+`./upgrade.sh`: it backs up first and rolls back if the new version does not
+come up. The full guide is [docs/self-hosting.md](docs/self-hosting.md).
 
 ## ✨ What makes it different
 
@@ -235,19 +259,12 @@ collectors/discovery/      network discovery (DNS SRV, mDNS, LLMNR,
 
 ## 🏭 Production self-hosting (Docker)
 
-One `docker compose` stack with PostgreSQL, Redis, migrations, API, worker,
-scheduler, web UI and Caddy (automatic HTTPS). No demo data, no default
-secrets, only ports 80/443 exposed, non-root read-only containers, health
-checks, backups and restores.
-
-```bash
-cd deploy
-./scripts/init-env.sh provenza.example.com
-docker compose up -d --build
-docker compose run --rm -it backend create-admin --org "Provenza" --email admin@provenza.example.com
-```
-
-Full guide: [deploy/README.md](deploy/README.md).
+Use [`./install.sh`](#-deploy-on-your-server). It drives the production stack in
+[`deploy/`](deploy/), and that stack is described in
+[deploy/README.md](deploy/README.md): non-root, read-only containers, only
+ports 80/443 exposed, health checks, backups. Installation, upgrades,
+backups and troubleshooting are covered in
+[docs/self-hosting.md](docs/self-hosting.md).
 
 ## ⚡ Try it in 2 minutes (Docker)
 

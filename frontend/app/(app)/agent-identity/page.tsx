@@ -16,6 +16,7 @@ import {
 } from "@/lib/agent_identity_api";
 import Link from "next/link";
 import { listEnrollments, revokeEnrollment, type EnrollmentT } from "@/lib/enrollment_api";
+import { confirmDialog } from "@/components/Dialog";
 
 const LIST: React.CSSProperties = { maxHeight: 520, overflowY: "auto", overflowX: "auto" };
 
@@ -109,10 +110,10 @@ export default function AgentIdentityPage() {
     }
   }
 
-  function save() {
+  async function save() {
     if (!form || !data) return;
     if (form.require_agent_key && !data.settings.require_agent_key) {
-      const ok = window.confirm(
+      const ok = await confirmDialog(
         t(
           "identity.confirm_require",
           "Require agent keys? Agents that still call Provenza with a user's token will be refused on check, record, delegate, messages, memory and the gateway. Make sure every agent has its key first.",
@@ -123,12 +124,12 @@ export default function AgentIdentityPage() {
     const relaxing = (!form.require_agent_key && data.settings.require_agent_key)
       || (form.allow_keyless_agents && !data.settings.allow_keyless_agents)
       || (form.allow_direct_registration && !data.settings.allow_direct_registration);
-    if (relaxing && !window.confirm(t(
+    if (relaxing && !await confirmDialog(t(
       "identity.confirm_relax",
       "Relax agent identity? A user session will be able to act in an agent's name, or agents without a signing key will be able to act unsigned - neither can be verified later. Every change is in the audit log.",
     ))) return;
     if (form.require_pq_signatures && !data.settings.require_pq_signatures) {
-      const ok = window.confirm(
+      const ok = await confirmDialog(
         t(
           "identity.confirm_require_pq",
           "Require post-quantum signatures? Agents without a hybrid key (Ed25519-only or no signing key) will have their delegations, actions and messages refused until they get one.",
@@ -140,7 +141,7 @@ export default function AgentIdentityPage() {
   }
 
   async function rotate(id: number, name: string) {
-    if (!window.confirm(t("identity.confirm_rotate", "Issue a new key for this agent? The current key keeps working until the grace period ends."))) return;
+    if (!await confirmDialog(t("identity.confirm_rotate", "Issue a new key for this agent? The current key keeps working until the grace period ends."))) return;
     setBusy(true);
     setError(null);
     try {
@@ -276,8 +277,8 @@ export default function AgentIdentityPage() {
                         </button>{" "}
                         {!a.key_revoked_at && (
                           <button className="btn btn-sm" disabled={busy}
-                            onClick={() => {
-                              if (window.confirm(t("identity.confirm_revoke", "Revoke this agent's key now? It will be refused immediately until a new key is issued.")))
+                            onClick={async () => {
+                              if (await confirmDialog(t("identity.confirm_revoke", "Revoke this agent's key now? It will be refused immediately until a new key is issued.")))
                                 run(() => revokeKey(a.agent_id), t("identity.revoked_ok", "Key revoked"));
                             }}>
                             {t("identity.revoke", "Revoke")}

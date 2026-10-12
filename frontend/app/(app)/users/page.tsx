@@ -5,12 +5,15 @@ import { useTranslation } from "react-i18next";
 import { PageHeader } from "@/components/PageHeader";
 import { Form } from "@/components/Form";
 import { StatusPill } from "@/components/Pill";
+import { confirmDialog } from "@/components/Dialog";
+import { MfaPolicyPanel } from "@/components/profile/MfaPolicyPanel";
 import { useAuth } from "@/lib/auth";
 import {
   inviteUser,
   listUsers,
   updateUserRole,
   updateUserStatus,
+  resetUserMfa,
 } from "@/lib/api";
 import type { User, UserRole } from "@/lib/types";
 
@@ -108,6 +111,7 @@ export default function UsersPage() {
         }
       />
       <div className="content">
+        <MfaPolicyPanel />
         {showForm && (
           <div className="panel" style={{ marginBottom: 20 }}>
             <div className="panel-header">
@@ -188,21 +192,22 @@ export default function UsersPage() {
                   <th>{t("users.col_email")}</th>
                   <th style={{ width: 150 }}>{t("users.col_role")}</th>
                   <th style={{ width: 100 }}>{t("users.col_status")}</th>
+                  <th style={{ width: 80 }}>{t("users.col_mfa")}</th>
                   <th style={{ width: 180 }}>{t("users.col_created")}</th>
                   <th style={{ width: 120, textAlign: "right" }}>
-                    {t("users.col_actions") || "Actions"}
+                    {t("users.col_actions")}
                   </th>
                 </tr>
               </thead>
               <tbody>
                 {loading && (
                   <tr className="empty-row">
-                    <td colSpan={7}>{t("users.loading")}</td>
+                    <td colSpan={8}>{t("users.loading")}</td>
                   </tr>
                 )}
                 {!loading && users.length === 0 && (
                   <tr className="empty-row">
-                    <td colSpan={7}>{t("users.empty")}</td>
+                    <td colSpan={8}>{t("users.empty")}</td>
                   </tr>
                 )}
                 {users.map((u) => {
@@ -253,10 +258,30 @@ export default function UsersPage() {
                       <td>
                         <StatusPill status={u.status} />
                       </td>
+                      <td>
+                        <span className={`pill ${u.totp_enabled ? "pill-low" : "pill-neutral"}`}>
+                          {u.totp_enabled ? t("mfa.on") : t("mfa.off")}
+                        </span>
+                      </td>
                       <td className="mono" style={{ whiteSpace: "nowrap", fontSize: 12 }}>
                         {new Date(u.created_at).toLocaleString(i18n.language)}
                       </td>
                       <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                        {u.totp_enabled && !isMe && (
+                          <button className="btn btn-sm" style={{ marginRight: 6 }} disabled={busyId === u.id}
+                            onClick={async () => {
+                              if (!(await confirmDialog(t("mfa.reset_confirm", { name: u.name }), { danger: true }))) return;
+                              setBusyId(u.id);
+                              try {
+                                await resetUserMfa(u.id);
+                                refresh();
+                              } finally {
+                                setBusyId(null);
+                              }
+                            }}>
+                            {t("mfa.reset")}
+                          </button>
+                        )}
                         {!isMe && (
                           <button
                             className="btn btn-sm"
