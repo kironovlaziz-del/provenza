@@ -91,6 +91,23 @@ url, headers, _ := provenza.MCPConnection(agent)  // point any MCP client at Pro
 The gateways hold the provider and MCP server credentials, so the agent
 never has them, and every call is enforced on the server.
 
+## Egress proxy
+
+Behind a Provenza egress proxy (`proxy/` in the repository), the agent can
+send its key and let the proxy check each request. Or it can check a
+request itself and send the check id:
+
+```go
+chk, err := agent.ProxyCheck(ctx, "stripe", "POST", "/v1/charges", "", body)
+req, _ := http.NewRequestWithContext(ctx, "POST", "http://127.0.0.1:8443/stripe/v1/charges", bytes.NewReader(body))
+for k, v := range chk.ProxyHeaders() {
+	req.Header.Set(k, v)
+}
+```
+
+`path`, `query` and `body` must be exactly what goes on the wire; the proxy
+refuses any other request under that check, and records it itself.
+
 ## What this is, and what it is not
 
 The SDK runs inside your agent's process. It is the agent's honest record

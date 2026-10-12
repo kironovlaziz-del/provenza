@@ -8,6 +8,7 @@ SDK 0.1.
 - `Agent.create`: enrollment with keys generated on the agent's side. The
   identity file uses the shared format (mode 600). Optional hybrid
   Ed25519 + ML-DSA-65 keys.
+- `agent.proxyCheck` / `proxyHeaders`: SDK mode of the egress proxy.
 - `agent.tool`, `agent.call`, `check` / `record`, `delegate`, `withChain`.
   The SDK fails closed by default. Standalone mode writes a signed local
   audit log. Unrecorded actions become signed gaps.

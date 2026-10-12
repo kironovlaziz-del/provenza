@@ -8,6 +8,8 @@ export { Agent } from "./agent.js";
 export type { AgentOptions, CallOptions, Check, ToolSpec } from "./agent.js";
 export { verify as verifyAuditLog } from "./auditLog.js";
 export { canonical } from "./canonical.js";
+export { PROXY_HEADER, proxyDescriptor, proxyHeaders } from "./proxy.js";
+export type { ProxyDescriptor } from "./proxy.js";
 export { contentHash, fingerprint, Keys } from "./crypto.js";
 export { ProvenzaApprovalRequired, ProvenzaConfigError, ProvenzaDenied, ProvenzaError, ProvenzaRequestError,
          ProvenzaUnavailable } from "./errors.js";

@@ -30,6 +30,7 @@ import { Client, Fetch } from "./client.js";
 import { contentHash, Keys } from "./crypto.js";
 import { ProvenzaApprovalRequired, ProvenzaConfigError, ProvenzaDenied, ProvenzaRequestError, ProvenzaUnavailable } from "./errors.js";
 import * as ids from "./identity.js";
+import { PROXY_ACTION_TYPE, proxyDescriptor, RawBytes } from "./proxy.js";
 import { trimEnd } from "./text.js";
 
 export interface ToolSpec {
@@ -218,6 +219,14 @@ export class Agent {
     const chainId = opts.chainId !== undefined ? opts.chainId : chainStore.getStore() ?? null;
     return Agent.checkOf(await this.connected().post("/agents/actions/check", this.checkBody(spec, inp, chainId)), spec, inp,
                          chainId);
+  }
+
+  /** Check a request to send through the egress proxy (SDK mode). Send it with
+   *  proxyHeaders(check); the proxy records it - do not record() it. */
+  async proxyCheck(route: string, method: string, path: string,
+                   opts: { query?: RawBytes; body?: RawBytes; chainId?: number | null } = {}): Promise<Check> {
+    const input = proxyDescriptor(route, method, path, opts) as unknown as Record<string, unknown>;
+    return this.check("proxy." + route, input, { actionType: PROXY_ACTION_TYPE, chainId: opts.chainId });
   }
 
   /** Record what was done under a check (once); retries a server that is down. */

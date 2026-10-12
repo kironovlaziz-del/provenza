@@ -26,6 +26,7 @@ Used by `sdk/js/test/sdk.test.mjs` and `sdk/go/canonical_test.go`.
 `proxy-descriptor-vectors.json`: the checked input of a request through the
 egress proxy (docs/pvp/spec.md, 5.5): route, method, path as sent, raw query
 and body. The proxy (`proxy/internal/egress/proxy_test.go`, through its real
-handler) and the SDKs' proxy checks (`sdk/python/tests/test_proxy.py`) must
+handler) and the SDKs' proxy checks (`sdk/python/tests/test_proxy.py`, `sdk/js/test/sdk.test.mjs`,
+`sdk/go/proxy_test.go`) must
 compute exactly these descriptors, or every SDK-mode request is refused as a
 mismatch.

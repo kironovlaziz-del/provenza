@@ -8,6 +8,7 @@ and JS SDKs 0.1.
 - `New`: enrollment with keys generated on the agent's side, stored in the
   shared identity file format. Optional hybrid Ed25519 + ML-DSA-65 keys,
   using `crypto/mldsa` from the Go standard library.
+- `ProxyCheck` / `ProxyHeaders`: SDK mode of the egress proxy.
 - `Call` (generic), `Check` / `Record`, `Delegate`, `WithChain`. The SDK
   fails closed by default. Standalone mode writes a signed local audit
   log, and `VerifyAuditLog` checks it. Unrecorded actions become signed

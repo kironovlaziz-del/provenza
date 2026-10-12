@@ -9,7 +9,7 @@ import { join } from "node:path";
 import { test, describe } from "node:test";
 
 import { Agent, canonical, contentHash, ProvenzaApprovalRequired, ProvenzaConfigError, ProvenzaDenied,
-         ProvenzaUnavailable, verifyAuditLog } from "../dist/index.js";
+         ProvenzaUnavailable, proxyDescriptor, proxyHeaders, verifyAuditLog } from "../dist/index.js";
 import { RECORD_RETRIES_MS } from "../dist/agent.js";
 import { connection } from "../dist/integrations/mcp.js";
 import { gatewayOptions } from "../dist/integrations/openai.js";
@@ -197,4 +197,36 @@ test("trimming is linear: no regex backtracking on long runs (CodeQL js/polynomi
   assert.equal(trim("-".repeat(200_000) + "a" + "-".repeat(200_000), "-"), "a");
   assert.ok(performance.now() - started < 1000);
   assert.equal(trimEnd("https://p.test///", "/"), "https://p.test");
+});
+
+const proxyVectors = JSON.parse(readFileSync(new URL("../../testdata/proxy-descriptor-vectors.json", import.meta.url),
+                                             "utf8")).vectors;
+
+describe("egress proxy, SDK mode", () => {
+  for (const v of proxyVectors) {
+    test(`descriptor = the proxy's: ${v.method} ${v.path}`, () => {
+      assert.deepEqual(proxyDescriptor(v.route, v.method, v.path, { query: v.query, body: v.body }), v.descriptor);
+      assert.deepEqual(proxyDescriptor(v.route, v.method, v.path,
+                                       { query: Buffer.from(v.query), body: new TextEncoder().encode(v.body) }),
+                       v.descriptor);
+    });
+  }
+
+  test("refuses what the proxy would not see", () => {
+    assert.throws(() => proxyDescriptor("stripe", "GET", "v1/charges"), TypeError);
+    assert.throws(() => proxyDescriptor("stripe", "GET", "/v1/charges?limit=3"), TypeError);
+  });
+
+  test("proxyCheck asks the server and hands out the header", async () => {
+    const server = new FakeProvenza();
+    const { agent } = await connected(server);
+    const body = '{"amount":1000}';
+    const chk = await agent.proxyCheck("stripe", "post", "/v1/charges", { body });
+    const sent = server.checks.get(chk.checkId);
+    assert.equal(sent.action_type, "proxy");
+    assert.equal(sent.tool_name, "proxy.stripe");
+    assert.deepEqual(sent.input, proxyDescriptor("stripe", "POST", "/v1/charges", { body }));
+    assert.equal(chk.decision, "allowed");
+    assert.deepEqual(proxyHeaders(chk), { "X-Provenza-Check-Id": chk.checkId });
+  });
 });
