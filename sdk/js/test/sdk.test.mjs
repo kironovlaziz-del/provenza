@@ -15,7 +15,7 @@ import { connection } from "../dist/integrations/mcp.js";
 import { gatewayOptions } from "../dist/integrations/openai.js";
 import { FakeProvenza, SERVER } from "./fake-server.mjs";
 
-const vectors = JSON.parse(readFileSync(new URL("./vectors.json", import.meta.url), "utf8"));
+const vectors = JSON.parse(readFileSync(new URL("../../testdata/canonical-vectors.json", import.meta.url), "utf8"));
 const tmp = () => mkdtempSync(join(tmpdir(), "provenza-js-"));
 
 async function connected(server, extra = {}) {
