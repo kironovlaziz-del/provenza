@@ -984,7 +984,8 @@
     "mfa.not_enabled": "Two-factor sign-in is not on.",
     "mfa.required_by_policy": "Your organization requires two-factor sign-in, so it cannot be turned off.",
     "user.not_found": "User not found.",
-    "mfa.enroll_first": "Set up two-factor sign-in for yourself first (My profile), then require it."
+    "mfa.enroll_first": "Set up two-factor sign-in for yourself first (My profile), then require it.",
+    "provider.not_active": "The \"{{name}}\" connection is turned off and takes no requests."
   },
   "discovery": {
     "title": "Network Discovery",

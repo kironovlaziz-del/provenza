@@ -92,10 +92,27 @@ _DETECTORS: List[Tuple[str, Pattern[str]]] = [
     ("CREDIT_CARD", re.compile(r"\b(?:\d[ -]*?){13,19}\b")),
     ("SSN", re.compile(r"\b\d{3}-\d{2}-\d{4}\b")),
     ("IP_ADDRESS", re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b")),
+    # Private keys first: their base64 body would otherwise be cut up by the
+    # patterns below. Bounded, so text full of BEGIN lines stays linear.
+    (
+        "API_KEY",
+        re.compile(r"-----BEGIN [A-Z ]{0,40}PRIVATE KEY-----[A-Za-z0-9+/=\s]{20,10000}?-----END [A-Z ]{0,40}PRIVATE KEY-----"),
+    ),
     (
         "API_KEY",
         re.compile(r"\b(?:sk|pk|api|key)[-_][A-Za-z0-9]{12,}\b", re.IGNORECASE),
     ),
+    # Well-known credential formats, each specific enough not to hit prose:
+    # OpenAI / Anthropic style keys with dashes after the prefix (sk-proj-...,
+    # sk-ant-api03-..., sk-svcacct-...), Stripe, AWS access keys, GitHub,
+    # Slack and Google API keys, and JWTs (session and bearer tokens).
+    ("API_KEY", re.compile(r"\bsk-[A-Za-z0-9]{2,12}(?:-[A-Za-z0-9]{2,12}){0,2}-[A-Za-z0-9_-]{20,}")),
+    ("API_KEY", re.compile(r"\b(?:sk|rk|pk)_(?:live|test)_[A-Za-z0-9]{16,}\b")),
+    ("API_KEY", re.compile(r"\b(?:AKIA|ASIA)[0-9A-Z]{16}\b")),
+    ("API_KEY", re.compile(r"\b(?:gh[pousr]_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{40,})\b")),
+    ("API_KEY", re.compile(r"\bxox[abprs]-[A-Za-z0-9-]{10,}")),
+    ("API_KEY", re.compile(r"\bAIza[0-9A-Za-z_-]{35}\b")),
+    ("API_KEY", re.compile(r"\beyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}")),
     (
         "PHONE",
         re.compile(

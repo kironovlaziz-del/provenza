@@ -1,5 +1,7 @@
 """Prompt Firewall masking and blocking logic."""
 
+import pytest
+
 from app.services import prompt_firewall
 
 
@@ -87,3 +89,27 @@ def test_ner_does_not_double_mask_email():
     result = prompt_firewall.scan("Contact John at john@example.com")
     assert "john@example.com" not in result.masked_text
     assert "[MASKED:EMAIL]" in result.masked_text
+
+
+# Credential formats people actually paste: each is masked, ordinary words are not.
+@pytest.mark.parametrize("text", [
+    "use sk-proj-" + "Ab3" * 15,                       # OpenAI project key
+    "key sk-ant-api03-" + "x9Y_" * 10,                 # Anthropic
+    "sk_live_" + "a1B2" * 6,                           # Stripe
+    "AKIAIOSFODNN7EXAMPLE",                            # AWS access key id
+    "ghp_" + "A" * 36,                                 # GitHub token
+    "xoxb-1234567890-abcdefghij",                      # Slack
+    "AIza" + "B" * 35,                                 # Google API key
+    "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U",  # JWT
+    "-----BEGIN RSA PRIVATE KEY-----\nMIIEowIBAAKCAQEA" + "q" * 60 + "\n-----END RSA PRIVATE KEY-----",
+])
+def test_credential_formats_are_masked(text):
+    from app.services.prompt_firewall import scan
+    r = scan(text, [], "en", None)
+    assert "[MASKED:API_KEY]" in r.masked_text and "masked:api_key" in r.flags, r.masked_text
+
+
+def test_words_that_look_like_prefixes_are_left_alone():
+    from app.services.prompt_firewall import _DETECTORS
+    prose = "The skeleton key opens the door; sk-ate and api-calls are words; eyJ is not a token."
+    assert not [label for label, p in _DETECTORS if label == "API_KEY" and p.search(prose)]

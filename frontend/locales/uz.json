@@ -984,7 +984,8 @@
     "mfa.not_enabled": "Ikki bosqichli kirish yoqilmagan.",
     "mfa.required_by_policy": "Tashkilotingiz ikki bosqichli kirishni talab qiladi, shuning uchun uni o'chirib bo'lmaydi.",
     "user.not_found": "Foydalanuvchi topilmadi.",
-    "mfa.enroll_first": "Avval o'zingiz uchun ikki bosqichli kirishni sozlang (Mening profilim), keyin uni talab qiling."
+    "mfa.enroll_first": "Avval o'zingiz uchun ikki bosqichli kirishni sozlang (Mening profilim), keyin uni talab qiling.",
+    "provider.not_active": "\"{{name}}\" ulanishi o'chirilgan va so'rovlarni qabul qilmaydi."
   },
   "discovery": {
     "title": "Tarmoq kashfiyoti",
