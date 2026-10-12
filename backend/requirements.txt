@@ -28,7 +28,7 @@ redis==5.2.1
 psycopg2-binary==2.9.13
 
 # Crypto
-cryptography==50.0.1
+cryptography==50.0.2
 
 # HTTP client
 httpx==0.28.1
