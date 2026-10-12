@@ -136,6 +136,22 @@ import { connection } from "provenza/integrations/mcp";
 const { url, headers } = connection(agent);           // point any MCP client at Provenza
 ```
 
+## Egress proxy
+
+Behind a Provenza egress proxy (`proxy/` in the repository), the agent can
+send its key and let the proxy check each request. Or it can check a
+request itself and send the check id:
+
+```ts
+import { proxyHeaders } from "provenza";
+
+const chk = await agent.proxyCheck("stripe", "POST", "/v1/charges", { body });
+await fetch("http://127.0.0.1:8443/stripe/v1/charges", { method: "POST", body, headers: proxyHeaders(chk) });
+```
+
+`path`, `query` and `body` must be exactly what goes on the wire; the proxy
+refuses any other request under that check, and records it itself.
+
 ## What this is, and what it is not
 
 The SDK runs inside the agent's process. It is the agent's honest record
