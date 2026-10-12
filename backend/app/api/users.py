@@ -333,12 +333,15 @@ async def set_mfa_policy(data: MfaPolicy, db: AsyncSession = Depends(get_db),
     """Who must sign in with a second factor. Users it applies to who have not
     enrolled can do nothing but enroll until they do."""
     org_id, user_id = current_user.org_id, current_user.id
+    if mfa.policy_applies(data.mfa_required, current_user.role) and not current_user.totp_enabled:
+        # it would hold the admin who sets it to enrolling first: enroll, then require
+        raise api_error(status.HTTP_409_CONFLICT, "mfa.enroll_first")
     org = await db.get(Organization, org_id)
-    before = org.mfa_required
+    before = mfa.policy_name(org.mfa_required)
     org.mfa_required = data.mfa_required
     await db.commit()
     await AuditService(db).log(org_id, user_id, "organization", org_id, "mfa_policy_changed",
-                               {"before": before, "after": data.mfa_required})
+                               {"before": before, "after": mfa.policy_name(data.mfa_required)})
     return {"mfa_required": data.mfa_required}
 
 

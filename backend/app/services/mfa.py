@@ -31,6 +31,12 @@ from app.models.organization import Organization
 from app.models.user import User, UserRole
 
 POLICIES = ("none", "reviewers", "all")
+_POLICY_NAMES = {p: p for p in POLICIES}
+
+
+def policy_name(value: Optional[str]) -> str:
+    """The policy's canonical name (one of POLICIES) - what goes into the audit log."""
+    return _POLICY_NAMES.get(value or "none", "none")
 
 
 def policy_applies(policy: Optional[str], role: Optional[str]) -> bool:
