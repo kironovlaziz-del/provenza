@@ -7,6 +7,8 @@
   the server against the organization's AI domain catalog. A refusal is an
   HTTP 403 that provider SDKs do not retry. Only hashes of request bodies
   are recorded, never prompts.
+- `agent.proxy_check` / `aproxy_check`: SDK mode of the egress proxy. The
+  agent checks a request itself and sends `check.proxy_headers`.
 - `agent.call(..., output_of=...)` chooses what is recorded of a result.
 
 ## 0.1.0 (2026-10-11)

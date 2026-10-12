@@ -155,6 +155,23 @@ permission error with Provenza's reason and do not retry. With the server
 unreachable, nothing is sent (503). Other hosts, and calls to Provenza
 itself, are untouched. `provenza.auto.uninstrument()` puts everything back.
 
+## Egress proxy
+
+Behind a Provenza egress proxy (`proxy/` in the repository) the agent has
+two options. It can send its key and let the proxy check every request, or
+it can check a request itself and send the check id:
+
+```python
+body = json.dumps({"amount": 1000}).encode()
+chk = agent.proxy_check("stripe", "POST", "/v1/charges", body=body)
+if chk.allowed:
+    httpx.post("http://127.0.0.1:8443/stripe/v1/charges", content=body, headers=chk.proxy_headers)
+```
+
+`path`, `query` and `body` must be exactly what goes on the wire. The proxy
+refuses any other request under that check. The proxy records the request,
+so it is not passed to `record()`.
+
 ## Integrations
 
 Each framework is an optional extra. The SDK never requires one: `crewai`

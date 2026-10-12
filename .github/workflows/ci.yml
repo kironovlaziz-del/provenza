@@ -206,6 +206,36 @@ jobs:
       - name: Test (race detector)
         run: go test -race -count=1 ./...
 
+  egress-proxy:
+    name: Egress proxy (vet, race tests, static build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    defaults:
+      run:
+        working-directory: proxy
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: proxy/go.mod
+          cache: false   # standard library only
+
+      - name: Formatted
+        run: test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test (race detector)
+        run: go test -race -count=1 ./...
+
+      - name: Static build
+        run: CGO_ENABLED=0 go build -trimpath -o provenza-proxy .
+
   sdk-python-integrations:
     name: Python SDK integrations (${{ matrix.extras }})
     runs-on: ubuntu-latest

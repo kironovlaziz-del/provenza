@@ -289,7 +289,7 @@ class PVPAction(_ActionShape):
     # None = the agent performed the call and reported it; a gateway name =
     # Provenza performed it on the agent's behalf (no agent signature: the
     # gateway is the witness, and the audit log holds its record)
-    executed_by: Optional[Literal["mcp_gateway", "a2a_gateway"]] = None
+    executed_by: Optional[Literal["mcp_gateway", "a2a_gateway", "egress_proxy"]] = None
 
     @model_validator(mode="after")
     def _evidence(self):

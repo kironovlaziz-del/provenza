@@ -1,0 +1,77 @@
+# The proxy as a sidecar: the agent container reaches it on 127.0.0.1:8443 and
+# the NetworkPolicy below leaves the pod no other way out than Provenza and the
+# routes' upstreams. The containers share the pod's network, so the policy
+# applies to both: list only what the proxy needs (Provenza, the upstreams).
+apiVersion: v1
+kind: Secret
+metadata:
+  name: provenza-proxy
+type: Opaque
+stringData:
+  proxy.key: "pvz_proxy_..."   # from Provenza: Egress -> Proxies -> New (shown once)
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: provenza-proxy
+data:
+  proxy.json: |
+    {"server_url": "https://provenza.example.com",
+     "proxy_key_file": "/etc/provenza/secret/proxy.key",
+     "listen": "127.0.0.1:8443"}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: billing-agent
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: billing-agent}
+  template:
+    metadata:
+      labels: {app: billing-agent, provenza/egress: proxied}
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - name: agent
+          image: registry.example.com/billing-agent:1.0
+          env:
+            - {name: STRIPE_BASE_URL, value: "http://127.0.0.1:8443/stripe"}   # the route slug
+            - name: PROVENZA_AGENT_KEY
+              valueFrom: {secretKeyRef: {name: billing-agent, key: agent-key}}
+        - name: provenza-proxy
+          image: registry.example.com/provenza-proxy:0.1.0
+          args: ["-config", "/etc/provenza/proxy.json"]
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65532
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities: {drop: ["ALL"]}
+          volumeMounts:
+            - {name: config, mountPath: /etc/provenza/proxy.json, subPath: proxy.json, readOnly: true}
+            - {name: secret, mountPath: /etc/provenza/secret, readOnly: true}
+      volumes:
+        - name: config
+          configMap: {name: provenza-proxy}
+        - name: secret
+          secret: {secretName: provenza-proxy}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: provenza-egress-only
+spec:
+  podSelector:
+    matchLabels: {provenza/egress: proxied}
+  policyTypes: [Egress]
+  egress:
+    - to:   # DNS
+        - namespaceSelector: {}
+          podSelector: {matchLabels: {k8s-app: kube-dns}}
+      ports: [{protocol: UDP, port: 53}, {protocol: TCP, port: 53}]
+    - to:   # Provenza and the routes' upstreams - nothing else
+        - ipBlock: {cidr: 203.0.113.10/32}    # provenza.example.com
+        - ipBlock: {cidr: 198.51.100.0/24}    # the upstream API's published ranges
+      ports: [{protocol: TCP, port: 443}]

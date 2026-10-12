@@ -44,6 +44,7 @@ from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, Optional, TypeVar
 
 from provenza import identity as ids
+from provenza import proxy as egress_proxy
 from provenza.audit_log import AuditLog
 from provenza.client import Client
 from provenza.crypto import Keys, canonical, content_hash
@@ -84,6 +85,11 @@ class Check:
     @property
     def allowed(self) -> bool:
         return self.decision == "allowed"
+
+    @property
+    def proxy_headers(self) -> Dict[str, str]:
+        """For a proxy check: the header the egress proxy redeems."""
+        return {egress_proxy.HEADER: self.check_id}
 
 
 def _json_value(value: Any, what: str) -> Any:
@@ -281,6 +287,18 @@ class Agent:
         cid = chain_id if chain_id is not None else _chain.get()
         res = await self._connected().apost("/agents/actions/check", self._check_body(spec, inp, cid))
         return self._check_of(res, spec, inp, cid)
+
+    def proxy_check(self, route: str, method: str, path: str, *, query=None, body=None,
+                    chain_id: Optional[int] = None) -> Check:
+        """Check a request to send through the egress proxy (SDK mode). Send it
+        with check.proxy_headers; the proxy records it - do not record() it."""
+        return self.check(egress_proxy.tool_name(route), egress_proxy.descriptor(
+            route, method, path, query=query, body=body), action_type=egress_proxy.ACTION_TYPE, chain_id=chain_id)
+
+    async def aproxy_check(self, route: str, method: str, path: str, *, query=None, body=None,
+                           chain_id: Optional[int] = None) -> Check:
+        return await self.acheck(egress_proxy.tool_name(route), egress_proxy.descriptor(
+            route, method, path, query=query, body=body), action_type=egress_proxy.ACTION_TYPE, chain_id=chain_id)
 
     def record(self, check: Check, output: Any = None, duration_ms: Optional[int] = None) -> Dict[str, Any]:
         """Record what was done under a check (once). Retries a server that
