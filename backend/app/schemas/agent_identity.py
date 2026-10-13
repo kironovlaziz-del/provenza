@@ -10,3 +10,5 @@ class AgentIdentitySettingsIn(BaseModel):
     # cannot switch the policy off just by saving the other settings.
     require_pq_signatures: Optional[bool] = None
     allow_direct_registration: Optional[bool] = None
+    require_confined_egress: Optional[bool] = None
+    egress_check_max_age_hours: Optional[int] = Field(default=None, ge=1, le=720)

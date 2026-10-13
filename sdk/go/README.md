@@ -117,6 +117,17 @@ Provenza, and the agent never holds its key:
 out, err := agent.Invoke(ctx, "crm.set_tier", map[string]any{"id": "42", "tier": "gold"})   // *DeniedError on a refusal
 ```
 
+## Egress self-check
+
+Is this host confined to the Provenza egress proxy, its only way out? Run
+the check at start-up and then periodically. With **Require confined egress**
+on, an agent acts only while its latest check is `confined`. See
+`docs/egress-lockdown.md`.
+
+```go
+out, err := agent.EgressSelfcheck(ctx, 3*time.Second)   // out["verdict"]: "confined" | "open"
+```
+
 ## Permits for tools
 
 An allowed check carries `chk.Permit`, signed by the organization. Send it

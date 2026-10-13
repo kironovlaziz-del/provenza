@@ -28,6 +28,7 @@ import { AuditLog } from "./auditLog.js";
 import { Json, toJson } from "./canonical.js";
 import { Client, Fetch } from "./client.js";
 import { contentHash, Keys } from "./crypto.js";
+import { beacon as egressBeacon, connect as egressConnect, egressPayload } from "./egressCheck.js";
 import { ProvenzaApprovalRequired, ProvenzaConfigError, ProvenzaDenied, ProvenzaRequestError, ProvenzaUnavailable } from "./errors.js";
 import * as ids from "./identity.js";
 import { PROXY_ACTION_TYPE, proxyDescriptor, RawBytes } from "./proxy.js";
@@ -259,6 +260,25 @@ export class Agent {
       throw new Cls(tool, res.reason ?? "", res.decision ?? "denied", res.incident_type ?? null, null, res.action_id ?? null);
     }
     return res;
+  }
+
+  /**
+   * Is this host confined to the egress proxy? Tries the server's targets and
+   * beacon directly and reports, signed. Returns the server's verdict:
+   * { verdict: "confined" | "open", ... }. Run at start-up and periodically.
+   */
+  async egressSelfcheck(opts: { timeoutMs?: number; beaconFetch?: typeof fetch } = {}): Promise<any> {
+    const timeout = opts.timeoutMs ?? 3000;
+    const c = this.connected();
+    const started = await c.post("/agents/egress-check", {});
+    const reached = await Promise.all((started.targets as string[]).map((t) => egressConnect(t, timeout)));
+    const results = (started.targets as string[]).map((target, i) => ({ target, reachable: reached[i] ?? false }));
+    const beaconReached = await egressBeacon(started.beacon_url, timeout, opts.beaconFetch);
+    const [signature, pqSignature] = this.identity.keys.sign(egressPayload(this.agentId ?? 0, started.check_id, results,
+                                                                           beaconReached));
+    return c.post(`/agents/egress-check/${started.check_id}/report`, {
+      results, beacon_reached: beaconReached, signature, ...(pqSignature ? { pq_signature: pqSignature } : {}),
+    });
   }
 
   /** The HTTP tools this agent may invoke: name, description, method, input_schema. */

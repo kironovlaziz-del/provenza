@@ -8,8 +8,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"testing"
+	"time"
 )
 
 func jsonOf(t *testing.T, v any) string {
@@ -98,5 +102,30 @@ func TestInvokeHTTPTool(t *testing.T) {
 	var denied *DeniedError
 	if !errors.As(err, &denied) || !denied.ApprovalRequired() || denied.ActionID == nil || *denied.ActionID != 10 {
 		t.Fatalf("want approval required, got %v", err)
+	}
+}
+
+func TestEgressSelfcheck(t *testing.T) {
+	f := newFake(t)
+	a := connected(t, f)
+	f.beaconURL = "http://127.0.0.1:9/egress-beacon/tok" // nothing there
+	out, err := a.EgressSelfcheck(context.Background(), time.Second)
+	if err != nil || out["verdict"] != "confined" {
+		t.Fatal(out, err)
+	}
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+	f.egressTargets = []any{ln.Addr().String(), "127.0.0.1:9"}
+	if out, err := a.EgressSelfcheck(context.Background(), time.Second); err != nil || out["verdict"] != "open" {
+		t.Fatal(out, err)
+	}
+	beacon := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(204) }))
+	defer beacon.Close()
+	f.egressTargets, f.beaconURL = nil, beacon.URL+"/egress-beacon/tok"
+	if out, err := a.EgressSelfcheck(context.Background(), time.Second); err != nil || out["verdict"] != "open" {
+		t.Fatal(out, err)
 	}
 }

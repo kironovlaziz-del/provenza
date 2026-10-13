@@ -43,6 +43,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, Optional, TypeVar
 
+from provenza import egress_check
 from provenza import identity as ids
 from provenza import proxy as egress_proxy
 from provenza.audit_log import AuditLog
@@ -324,6 +325,33 @@ class Agent:
         cid = chain_id if chain_id is not None else _chain.get()
         return self._invoked(tool, await self._connected().apost("/http-tools/call",
                                                                  self._check_body(spec, inp, cid)))
+
+    def egress_selfcheck(self, timeout: float = 3.0) -> Dict[str, Any]:
+        """Is this host confined to the egress proxy? Tries the server's targets
+        and beacon directly and reports, signed (provenza.egress_check). Returns
+        the server's verdict: {"verdict": "confined" | "open", ...}."""
+        c = self._connected()
+        started = c.post("/agents/egress-check", {})
+        results = [{"target": t, "reachable": egress_check.connect(t, timeout)} for t in started["targets"]]
+        return c.post(f"/agents/egress-check/{started['check_id']}/report",
+                      self._egress_report(started, results, egress_check.beacon(started["beacon_url"], timeout)))
+
+    async def aegress_selfcheck(self, timeout: float = 3.0) -> Dict[str, Any]:
+        c = self._connected()
+        started = await c.apost("/agents/egress-check", {})
+        reached = await asyncio.gather(*(egress_check.aconnect(t, timeout) for t in started["targets"]))
+        results = [{"target": t, "reachable": r} for t, r in zip(started["targets"], reached)]
+        return await c.apost(f"/agents/egress-check/{started['check_id']}/report",
+                             self._egress_report(started, results,
+                                                 await egress_check.abeacon(started["beacon_url"], timeout)))
+
+    def _egress_report(self, started: Dict[str, Any], results: list, beacon_reached: bool) -> Dict[str, Any]:
+        sig, pq = self.identity.keys.sign(egress_check.payload(self.agent_id, started["check_id"], results,
+                                                               beacon_reached))
+        body = {"results": results, "beacon_reached": beacon_reached, "signature": sig}
+        if pq:
+            body["pq_signature"] = pq
+        return body
 
     def http_tools(self) -> list:
         """The HTTP tools this agent may invoke: name, description, method, input_schema."""

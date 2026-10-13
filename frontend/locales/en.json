@@ -1007,6 +1007,10 @@
     "permit.mismatch": "The permit was issued for another tool or input.",
     "permit.agent_inactive": "The permit's agent is no longer active.",
     "permit.unknown_issuer": "Unknown organization.",
+    "agent.egress_unchecked": "This agent has not run an egress self-check, and the organization requires a confined host.",
+    "agent.egress_unconfined": "This agent's host can reach more than the egress proxy, and the organization requires a confined host.",
+    "agent.egress_check_stale": "This agent's last egress self-check is too old; run it again.",
+    "egress_lockdown.ip_required": "nftables needs the proxy's IP address, not a name.",
     "runtime.workload_not_found": "Workload not found.",
     "runtime.agent_not_found": "Agent not found.",
     "runtime.name_taken": "A workload named {{name}} already exists.",
@@ -2109,7 +2113,16 @@
     "relaxed_hint": "What they do cannot be verified later. Turn it back on in Settings below once your agents use their own keys.",
     "relaxed_direct": "agents and keys can be registered without proof of possession",
     "allow_direct": "Allow registration without proof of possession (not recommended)",
-    "allow_direct_hint": "Off by default: agents join with a one-time enrollment token and prove they hold their key; keys change only with proof. On: admins can register agents and replace keys directly, as before."
+    "allow_direct_hint": "Off by default: agents join with a one-time enrollment token and prove they hold their key; keys change only with proof. On: admins can register agents and replace keys directly, as before.",
+    "col_egress": "Network",
+    "egress_confined": "confined",
+    "egress_open": "open",
+    "egress_pending": "pending",
+    "egress_unchecked": "not checked",
+    "require_egress": "Require confined egress",
+    "require_egress_hint": "An agent acts only while its latest egress self-check found its host able to reach the egress proxy and nothing else. Lock hosts down with Gateways -> Egress -> Lock agents down.",
+    "egress_age": "A check counts for, hours",
+    "confirm_require_egress": "Require confined egress? {{n}} active agents have no recent \"confined\" egress check: their actions will be refused until they run one from a locked-down host."
   },
   "gateway": {
     "title": "AI Gateway",
@@ -3129,6 +3142,24 @@
       "no_secret": "no secret",
       "permit_sent": "permit sent",
       "replace_secret": "Replace secret"
+    },
+    "lockdown": {
+      "title": "Lock agents down",
+      "hint": "Without a network rule every control is cooperative: an agent that never asks is never refused. These rules leave an agent one way out - the egress proxy, which also relays its calls to Provenza (relay_provenza). Apply them, then verify with the agent's egress self-check.",
+      "kind_kubernetes": "Kubernetes",
+      "kind_docker": "Docker compose",
+      "kind_nftables": "Host / VM (nftables)",
+      "namespace": "Agents' namespace",
+      "agent_label": "Agent pods' label",
+      "proxy_namespace": "Proxy namespace",
+      "agent_service": "Agent service",
+      "agent_user": "Agent's Unix user",
+      "proxy_ip": "Proxy IP address",
+      "proxy_port": "Proxy port",
+      "render": "Generate",
+      "agent_env": "The agent's environment",
+      "verify": "Verify:",
+      "verify_hint": "run agent.egress_selfcheck() (Python; egressSelfcheck in JS, EgressSelfcheck in Go) on the agent's host. Agent identity shows the verdict; \"Require confined egress\" makes it a condition of acting."
     }
   },
   "evidence": {

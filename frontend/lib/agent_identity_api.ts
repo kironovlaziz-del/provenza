@@ -9,6 +9,9 @@ export interface IdentitySettings {
   require_pq_signatures: boolean;
   /** Direct registration and admin key replacement without proof of possession. Off by default. */
   allow_direct_registration?: boolean;
+  /** Act only from a host whose latest egress check found it confined to the egress proxy. */
+  require_confined_egress?: boolean;
+  egress_check_max_age_hours?: number;
   source?: "default" | "org";
 }
 
@@ -41,6 +44,8 @@ export async function saveIdentitySettings(s: IdentitySettings) {
     rotation_grace_minutes: s.rotation_grace_minutes,
     require_pq_signatures: s.require_pq_signatures,
     allow_direct_registration: s.allow_direct_registration,
+    require_confined_egress: s.require_confined_egress,
+    egress_check_max_age_hours: s.egress_check_max_age_hours,
   });
   return data;
 }
@@ -59,4 +64,34 @@ export async function revokeKey(agentId: number) {
 
 export function identityError(err: unknown, fallback: string): string {
   return apiErrorText(err, fallback);
+}
+
+export interface EgressCheckT {
+  check_id: number;
+  agent_id: number;
+  verdict: "pending" | "confined" | "open";
+  targets: string[];
+  reported_at: string | null;
+  beacon_hit_at: string | null;
+  results: { target: string; reachable: boolean }[] | null;
+}
+
+/** Each agent's latest egress check (app/services/egress_check.py). */
+export async function listEgressChecks() {
+  const { data } = await api.get<{ checks: EgressCheckT[] }>("/agent-identity/egress");
+  return data.checks;
+}
+
+export type LockdownKind = "kubernetes" | "docker" | "nftables";
+export interface LockdownT {
+  kind: LockdownKind;
+  files: { name: string; content: string }[];
+  agent_env: Record<string, string>;
+  notes: string[];
+  verify: string;
+}
+
+export async function renderLockdown(params: Record<string, unknown>) {
+  const { data } = await api.post<LockdownT>("/egress-lockdown/render", params);
+  return data;
 }

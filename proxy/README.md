@@ -50,6 +50,7 @@ PROVENZA_PROXY_KEY=pvz_proxy_... ./provenza-proxy -config proxy.json
 | `listen` | `127.0.0.1:8443` | another address needs `allow_non_loopback`: whoever reaches it can use the credentials |
 | `local_secrets` | - | `{"<route>": {"header", "value_file" \| "value_env"}}`; a file is re-read on every request |
 | `upstream_timeout` / `server_timeout` | `60s` / `10s` | |
+| `relay_provenza` | `false` | relay `/_provenza/api/v1/...` to `server_url` unchanged, so an agent that may reach only this proxy still reaches Provenza (`PROVENZA_URL=http://<proxy>/_provenza`). Only `/api/v1` is relayed; the proxy's key and the agent's cookies are not passed |
 
 Unknown fields are an error: a typo in a security setting is not ignored.
 
@@ -76,6 +77,13 @@ Refusals come back as JSON with `X-Provenza-Refused: 1`:
 
 ## Make it the only way out
 
-The proxy governs what goes through it. Close the other paths:
-[NetworkPolicy and sidecar](deploy/kubernetes.yaml),
-[systemd unit](deploy/provenza-proxy.service) with an nftables rule per agent user.
+The proxy governs what goes through it. Close the other paths: an agent
+that may reach anything else can call APIs without asking. With
+`relay_provenza` the agent needs to reach this proxy and nothing else, and
+**Gateways → Egress → Lock agents down** in Provenza generates the rules for
+Kubernetes, Docker compose or nftables. To verify a host, run the SDKs' egress
+self-check. See [docs/egress-lockdown.md](../docs/egress-lockdown.md).
+
+[deploy/kubernetes.yaml](deploy/kubernetes.yaml) runs the proxy as a sidecar,
+which is simpler but weaker. The pod's NetworkPolicy must then let the
+upstreams through, and the agent container shares that network.

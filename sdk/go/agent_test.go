@@ -36,6 +36,8 @@ type fake struct {
 	nonces         map[string]bool
 	n              int
 	srv            *httptest.Server
+	egressTargets  []any  // what /agents/egress-check names (default: a closed local port)
+	beaconURL      string // where the beacon is
 }
 
 func newFake(t *testing.T) *fake {
@@ -118,6 +120,33 @@ func (f *fake) handle(w http.ResponseWriter, r *http.Request) {
 			out["permit"] = "permit-of-" + token
 		}
 		reply(w, 200, out)
+	case path == "/agents/egress-check":
+		targets := f.egressTargets
+		if targets == nil {
+			targets = []any{"127.0.0.1:9"}
+		}
+		reply(w, 200, map[string]any{"check_id": 5, "targets": targets, "beacon_url": f.beaconURL})
+	case path == "/agents/egress-check/5/report":
+		results, _ := body["results"].([]any)
+		sort.Slice(results, func(i, j int) bool {
+			return results[i].(map[string]any)["target"].(string) < results[j].(map[string]any)["target"].(string)
+		})
+		payload := map[string]any{"type": "egress.report", "agent_id": 42, "check_id": 5,
+			"results": results, "beacon_reached": body["beacon_reached"]}
+		sig, _ := body["signature"].(string)
+		if !verifySignatures(payload, sig, "", f.publicKey, "") {
+			reply(w, 401, map[string]any{"detail": "egress_check.invalid_signature"})
+			return
+		}
+		open := body["beacon_reached"] == true
+		for _, r := range results {
+			open = open || r.(map[string]any)["reachable"] == true
+		}
+		verdict := "confined"
+		if open {
+			verdict = "open"
+		}
+		reply(w, 200, map[string]any{"check_id": 5, "verdict": verdict})
 	case path == "/http-tools/call":
 		// the HTTP tool gateway: the same signed request; it checks, calls and records itself
 		inHash, _ := ContentHash(body["input"])

@@ -162,6 +162,17 @@ const out = await agent.invoke("crm.set_tier", { id: "42", tier: "gold" });   //
 const tools = await agent.httpTools();   // names, descriptions and input schemas, for the model
 ```
 
+## Egress self-check
+
+Is this host confined to the Provenza egress proxy, its only way out? Run
+the check at start-up and then periodically. With **Require confined egress**
+on, an agent acts only while its latest check is `confined`. See
+`docs/egress-lockdown.md`.
+
+```ts
+await agent.egressSelfcheck();     // { verdict: "confined" | "open", ... }
+```
+
 ## Permits for tools
 
 An allowed check carries a permit signed by the organization. The agent

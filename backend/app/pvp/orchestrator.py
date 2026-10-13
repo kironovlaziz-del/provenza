@@ -64,11 +64,15 @@ def _unix(dt: datetime) -> int:
 
 
 async def require_attestation(db: AsyncSession, agent: Agent) -> None:
-    """Agents of a role that requires attestation act only with a current
-    one - also when a user session acts in their name (relaxed organizations)."""
+    """Where the agent runs: agents of a role that requires attestation act
+    only with a current one, and - where the organization requires it - only
+    from a host whose latest egress check found it confined
+    (app/services/egress_check.py). Also when a user session acts in their
+    name (relaxed organizations)."""
+    from app.services import egress_check
     from app.services.attestation import refusal
 
-    code = await refusal(db, agent)
+    code = await refusal(db, agent) or await egress_check.refusal(db, agent)
     if code:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=code)
 

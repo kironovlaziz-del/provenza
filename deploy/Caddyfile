@@ -18,9 +18,10 @@
 		-Server
 	}
 
-	# API, agent gateway and health check -> FastAPI. flush_interval -1 lets
-	# the live streams (Server-Sent Events) through without buffering.
-	@api path /api/* /health
+	# API, agent gateway, health check and the egress-check beacon -> FastAPI.
+	# flush_interval -1 lets the live streams (Server-Sent Events) through
+	# without buffering.
+	@api path /api/* /health /egress-beacon/*
 	handle @api {
 		request_body {
 			max_size 200MB

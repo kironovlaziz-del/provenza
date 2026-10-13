@@ -245,3 +245,25 @@ describe("HTTP tools through Provenza", () => {
     await assert.rejects(agent.invoke("crm.wipe", {}), ProvenzaApprovalRequired);
   });
 });
+
+describe("egress self-check", () => {
+  test("a closed target is confined, a reachable one is open, the report is signed", async () => {
+    const { createServer } = await import("node:net");
+    const server = new FakeProvenza();
+    const { agent } = await connected(server);
+    const noBeacon = async () => { throw new Error("unreachable"); };
+    const closed = await agent.egressSelfcheck({ timeoutMs: 1000, beaconFetch: noBeacon });
+    assert.equal(closed.verdict, "confined");
+    const listener = createServer().listen(0, "127.0.0.1");
+    await new Promise((r) => listener.once("listening", r));
+    try {
+      server.egressTargets = [`127.0.0.1:${listener.address().port}`, "127.0.0.1:9"];
+      assert.equal((await agent.egressSelfcheck({ timeoutMs: 1000, beaconFetch: noBeacon })).verdict, "open");
+      server.egressTargets = ["127.0.0.1:9"];
+      const beaconSeen = async () => new Response(null, { status: 204 });
+      assert.equal((await agent.egressSelfcheck({ timeoutMs: 1000, beaconFetch: beaconSeen })).verdict, "open");
+    } finally {
+      listener.close();
+    }
+  });
+});

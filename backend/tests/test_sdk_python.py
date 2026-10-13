@@ -121,3 +121,30 @@ async def test_sdk_invokes_an_http_tool_through_provenza(client, admin_token, tm
         assert len(api.calls) == 1
     finally:
         api.close()
+
+
+@pytest.mark.asyncio
+async def test_sdk_egress_selfcheck(client, admin_token, tmp_path, monkeypatch):
+    """agent.aegress_selfcheck against this server: a closed target -> confined;
+    a target this host can reach -> open (and the server records it)."""
+    import socket
+
+    from app.core.config import settings
+
+    agent = await _sdk_agent(client, admin_token, tmp_path)
+    closed = socket.socket()
+    closed.bind(("127.0.0.1", 0))
+    port = closed.getsockname()[1]
+    closed.close()                                         # nothing listens there
+    monkeypatch.setattr(settings, "EGRESS_PROBE_TARGETS", f"127.0.0.1:{port}")
+    out = await agent.aegress_selfcheck(timeout=1.0)
+    assert out["verdict"] == "confined" and out["results"] == [{"target": f"127.0.0.1:{port}", "reachable": False}]
+
+    listening = socket.socket()
+    listening.bind(("127.0.0.1", 0))
+    listening.listen(1)
+    try:
+        monkeypatch.setattr(settings, "EGRESS_PROBE_TARGETS", f"127.0.0.1:{listening.getsockname()[1]}")
+        assert (await agent.aegress_selfcheck(timeout=1.0))["verdict"] == "open"
+    finally:
+        listening.close()

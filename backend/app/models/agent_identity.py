@@ -26,5 +26,9 @@ class AgentIdentitySettings(Base):
     # prove possession of their key; signing keys change only with proof.
     # On: the legacy direct registration and key replacement by an admin.
     allow_direct_registration = Column(Boolean, nullable=False, default=False, server_default=false())
+    # when on, an agent acts only while its latest egress check (app/services/egress_check.py)
+    # found its network confined to Provenza, and is no older than egress_check_max_age_hours
+    require_confined_egress = Column(Boolean, nullable=False, default=False, server_default=false())
+    egress_check_max_age_hours = Column(Integer, nullable=False, default=24, server_default="24")
     updated_by = Column(Integer, ForeignKey("users.id"))
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

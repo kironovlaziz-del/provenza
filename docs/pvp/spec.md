@@ -315,6 +315,14 @@ answers 409 `pvp.no_evidence`.
 | orchestrator | only PVP and its own records | verdicts, checks, audit |
 | executor | only the orchestrator | the credentials |
 
+The orchestrator decides only what reaches it. An agent whose network lets
+it call an API directly never asks. Confinement is the deployment's job:
+the agent should reach only the egress proxy, which also relays its calls to
+Provenza. Provenza generates the rules and checks that they hold: an egress
+self-check, signed by the agent, plus a beacon that the server observes
+itself. `require_confined_egress` makes a recent `confined` verdict a
+condition of acting (`docs/egress-lockdown.md`).
+
 Order of checks on an inbound request (P3 ✓, `backend/app/pvp/guard.py`).
 Cheap and authenticated checks come first, so that an unauthenticated
 request cannot spend the server's work or another agent's quota:

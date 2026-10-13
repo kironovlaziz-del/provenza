@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- `agent.egress_selfcheck()` / `aegress_selfcheck()`: is this host confined to
+  the egress proxy? Signed report; the server also watches a beacon.
 - `agent.invoke` / `ainvoke` / `http_tools()`: HTTP tools registered in
   Provenza, called through it with a signed request; the agent holds no
   credential.

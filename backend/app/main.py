@@ -42,6 +42,7 @@ from app.api import observability
 from app.api import system
 from app.api import pvp as pvp_api
 from app.api import http_tools as http_tools_api
+from app.api import egress_check as egress_check_api
 from app.api import mcp as mcp_api
 from app.api import a2a_gateway as a2a_gateway_api
 from app.api import egress_proxy as egress_proxy_api
@@ -126,6 +127,11 @@ app.include_router(pvp_api.router, prefix=f"{settings.API_V1_STR}/pvp", tags=["a
 app.include_router(mcp_api.agent_router, prefix=f"{settings.API_V1_STR}/mcp", tags=["mcp"])
 app.include_router(mcp_api.admin_router, prefix=f"{settings.API_V1_STR}/mcp-servers", tags=["mcp"])
 app.include_router(http_tools_api.router, prefix=f"{settings.API_V1_STR}/http-tools", tags=["http-tools"])
+app.include_router(egress_check_api.agent_router, prefix=f"{settings.API_V1_STR}/agents", tags=["egress"])
+app.include_router(egress_check_api.admin_router, prefix=f"{settings.API_V1_STR}/agent-identity", tags=["egress"])
+app.include_router(egress_check_api.lockdown_router, prefix=f"{settings.API_V1_STR}/egress-lockdown", tags=["egress"])
+# outside /api/v1 on purpose: the egress proxy's relay passes /api/v1 only (app/services/egress_check.py)
+app.include_router(egress_check_api.beacon_router, tags=["egress"])
 app.include_router(a2a_gateway_api.agent_router, prefix=f"{settings.API_V1_STR}/a2a-gateway", tags=["a2a"])
 app.include_router(a2a_gateway_api.admin_router, prefix=f"{settings.API_V1_STR}/a2a-peers", tags=["a2a"])
 app.include_router(egress_proxy_api.admin_router, prefix=f"{settings.API_V1_STR}/egress", tags=["egress"])

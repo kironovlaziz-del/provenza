@@ -64,6 +64,17 @@ export class FakeProvenza {
       this.checks.set(token, { ...body, decision });
       return ok(200, { decision, reason: `policy says ${decision}`, check_id: token, incident_type: null, policy_id: null });
     }
+    if (path === "/agents/egress-check") {
+      this.egress = { id: 5, targets: this.egressTargets ?? ["127.0.0.1:9"] };
+      return ok(200, { check_id: 5, targets: this.egress.targets, beacon_url: `${SERVER}/egress-beacon/tok`, expires_at: "x" });
+    }
+    if (path === "/agents/egress-check/5/report") {
+      const sorted = [...body.results].sort((a, b) => (a.target < b.target ? -1 : 1));
+      verifyEd25519(this.publicKey, body.signature, { type: "egress.report", agent_id: 42, check_id: 5,
+                                                      results: sorted, beacon_reached: body.beacon_reached });
+      const open = body.beacon_reached || body.results.some((r) => r.reachable);
+      return ok(200, { check_id: 5, verdict: open ? "open" : "confined", results: sorted });
+    }
     if (path === "/http-tools/call") {
       // the HTTP tool gateway: the same signed request; it checks, calls and records itself
       verifyEd25519(this.publicKey, body.signature, {

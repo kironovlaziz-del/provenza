@@ -217,6 +217,12 @@ server and listed in `OUTBOUND_PRIVATE_ALLOWLIST`, e.g.
 OpenAI-compatible connection with its base URL, such as
 `http://llm.corp.local:8000/v1`.
 
+## Locking agents down
+
+Network rules that leave agents only the egress proxy, and a check that they
+hold: [egress-lockdown.md](egress-lockdown.md). The bundled Caddy already
+routes the check's beacon (`/egress-beacon/`) to the backend.
+
 ## Troubleshooting
 
 | Symptom | What to do |
