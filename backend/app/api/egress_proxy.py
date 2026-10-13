@@ -14,6 +14,7 @@ Admins (/api/v1/egress):
 Proxies, with their key in X-Proxy-Key (/api/v1/egress-proxy):
   GET  /config     the organization's enabled routes (server-held secrets
                    decrypted: the proxy keeps them in memory only)
+  POST /check      mediated mode: check for the agent whose key it received
   POST /redeem     reserve a check for the request about to be sent
   POST /complete   record what it did
 """
@@ -341,6 +342,41 @@ class RedeemIn(BaseModel):
     query_sha256: Optional[str] = Field(default=None, pattern=HEX64)
     body_sha256: Optional[str] = Field(default=None, pattern=HEX64)
     body_bytes: int = Field(ge=0, le=MAX_BODY)
+
+
+class ProxyCheckIn(BaseModel):
+    """A request the proxy is about to forward, for the agent whose key it
+    received (mediated mode). The proxy cannot sign as the agent; it is the
+    witness, as the gateways are."""
+    model_config = ConfigDict(extra="forbid")
+    route: str = Field(pattern=SLUG)
+    method: Method
+    path: str = Field(min_length=1, max_length=2000)
+    query_sha256: Optional[str] = Field(default=None, pattern=HEX64)
+    body_sha256: Optional[str] = Field(default=None, pattern=HEX64)
+    body_bytes: int = Field(ge=0, le=MAX_BODY)
+
+
+@proxy_router.post("/check")
+async def proxy_check(data: ProxyCheckIn, db: AsyncSession = Depends(get_db),
+                      proxy: EgressProxy = Depends(current_proxy),
+                      x_agent_key: Optional[str] = Header(None, alias="X-Agent-Key")):
+    """Mediated mode: check on behalf of the agent that sent its key to the
+    proxy. Agents calling Provenza themselves use /agents/actions/check, signed."""
+    from app.pvp.model import PVPActionRequest
+    from app.pvp.orchestrator import PVPOrchestrator
+    from app.services.agent_identity import agent_by_key
+
+    agent = await agent_by_key(db, x_agent_key) if x_agent_key else None
+    if agent is None or agent.org_id != proxy.org_id:
+        raise api_error(status.HTTP_401_UNAUTHORIZED, "egress.agent_key_invalid")
+    if agent.status != "active":
+        raise api_error(status.HTTP_403_FORBIDDEN, "egress.agent_inactive")
+    desc = svc.descriptor(data.route, data.method, data.path, data.query_sha256, data.body_sha256, data.body_bytes)
+    req = PVPActionRequest(agent_id=agent.id, action_type=svc.ACTION_TYPE, tool_name=svc.PREFIX + data.route,
+                           input=desc)
+    chk = await PVPOrchestrator(db).check(proxy.org_id, req)
+    return {"decision": chk.decision, "reason": chk.reason, "check_id": chk.check_id}
 
 
 @proxy_router.post("/redeem")

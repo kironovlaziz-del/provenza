@@ -43,16 +43,16 @@ async def register_agent(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_role(UserRole.admin)),
 ):
-    """Direct registration (no proof that the agent holds its key) - only
-    where the organization allows it. Otherwise agents join with an
-    enrollment token: POST /agent-enrollment/tokens."""
+    """Direct registration with the agent's own public key (no proof that the
+    agent holds it) - only where the organization allows it. Otherwise agents
+    join with an enrollment token: POST /agent-enrollment/tokens."""
     from app.services.agent_identity import org_settings
 
     if not (await org_settings(db, current_user.org_id)).get("allow_direct_registration"):
         from app.core.errors import api_error
         raise api_error(403, "agent.enrollment_required")
     registry = AgentRegistry(db)
-    agent, raw_key, private_key = await registry.register(current_user.org_id, current_user.id, data)
+    agent, raw_key = await registry.register(current_user.org_id, current_user.id, data)
     await AuditService(db).log(
         current_user.org_id, current_user.id, "agent", agent.id, "registered",
         {"name": agent.name, "agent_type": agent.agent_type},
@@ -60,8 +60,6 @@ async def register_agent(
     return AgentCreated(
         **AgentOut.model_validate(agent).model_dump(),
         api_key=raw_key,
-        private_key=private_key,
-        pq_private_key=registry.generated_pq_private_key,
     )
 
 
@@ -549,8 +547,12 @@ async def check_action_endpoint(
     req = _pvp(
         PVPActionRequest, agent_id=data.agent_id, chain_id=data.chain_id, action_type=data.action_type,
         tool_name=data.tool_name, input=data.input, tool_version=data.tool_version, tool_digest=data.tool_digest,
+        nonce=data.nonce, issued_at=data.issued_at, signature=data.signature, pq_signature=data.pq_signature,
     )
-    chk = await PVPOrchestrator(db).check(current_user.org_id, req)
+    # the agent itself (its own key) must sign; a user session acting for an
+    # agent - only where the organization relaxed that - cannot
+    acting_agent = getattr(request.state, "agent", None)
+    chk = await PVPOrchestrator(db).check(current_user.org_id, req, require_signature=acting_agent is not None)
     return ActionCheckResponse(
         decision=chk.decision, reason=chk.reason, incident_type=chk.incident_type, policy_id=chk.policy_id,
         check_id=chk.check_id, expires_at=datetime.fromtimestamp(chk.expires_at, tz=timezone.utc),

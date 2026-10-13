@@ -6,7 +6,7 @@
 // through it, and it holds the credentials (docs/pvp/spec.md, 5.5).
 //
 //	agent ──HTTP──► 127.0.0.1:8443/<route>/<path>
-//	   mediated  X-Agent-Key: the proxy asks the server's check with that key
+//	   mediated  X-Agent-Key: the proxy checks for that agent (/egress-proxy/check)
 //	   SDK       X-Provenza-Check-Id: the agent already holds a check
 //	──► redeem (the exact request, hashes only) ──► upstream from the route table,
 //	    credential injected ──► response streamed back ──► complete (status, hash)
@@ -93,10 +93,9 @@ type Proxy struct {
 	upstream *http.Client
 	log      *slog.Logger
 
-	mu       sync.RWMutex
-	routes   map[string]Route
-	loaded   bool
-	agentIDs sync.Map // sha256(agent key) -> int64
+	mu     sync.RWMutex
+	routes map[string]Route
+	loaded bool
 }
 
 // New makes a proxy; Start loads the routes before it serves.
@@ -166,18 +165,6 @@ func refuse(w http.ResponseWriter, status int, code, message string) {
 	_ = json.NewEncoder(w).Encode(map[string]any{"error": map[string]string{"code": code, "message": message}})
 }
 
-func (p *Proxy) agentIDOf(ctx context.Context, key string) (int64, error) {
-	h := sha256.Sum256([]byte(key))
-	if v, ok := p.agentIDs.Load(h); ok {
-		return v.(int64), nil
-	}
-	id, err := p.srv.agentID(ctx, key)
-	if err == nil {
-		p.agentIDs.Store(h, id)
-	}
-	return id, err
-}
-
 func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// /<route>/<path>, on the raw (escaped) path: what is checked is what is sent
 	raw := r.URL.EscapedPath()
@@ -221,12 +208,7 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				"send the agent's key (X-Agent-Key), or a check id (X-Provenza-Check-Id)")
 			return
 		}
-		agentID, err := p.agentIDOf(ctx, key)
-		if err != nil {
-			p.serverFailure(w, err)
-			return
-		}
-		chk, err := p.srv.check(ctx, key, agentID, d)
+		chk, err := p.srv.check(ctx, key, d)
 		if err != nil {
 			p.serverFailure(w, err)
 			return

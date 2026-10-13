@@ -122,11 +122,10 @@ export default function AgentIdentityPage() {
       if (!ok) return;
     }
     const relaxing = (!form.require_agent_key && data.settings.require_agent_key)
-      || (form.allow_keyless_agents && !data.settings.allow_keyless_agents)
       || (form.allow_direct_registration && !data.settings.allow_direct_registration);
     if (relaxing && !await confirmDialog(t(
       "identity.confirm_relax",
-      "Relax agent identity? A user session will be able to act in an agent's name, or agents without a signing key will be able to act unsigned - neither can be verified later. Every change is in the audit log.",
+      "Relax agent identity? A user session will be able to act in an agent's name - it cannot be verified later. Every change is in the audit log.",
     ))) return;
     if (form.require_pq_signatures && !data.settings.require_pq_signatures) {
       const ok = await confirmDialog(
@@ -204,13 +203,12 @@ export default function AgentIdentityPage() {
           </div>
         )}
 
-        {(!data.settings.require_agent_key || data.settings.allow_keyless_agents || data.settings.allow_direct_registration) && (
+        {(!data.settings.require_agent_key || data.settings.allow_direct_registration) && (
           <div className="panel" style={{ marginBottom: 16, borderColor: "#ef4444" }}>
             <div className="panel-body" style={{ color: "#ef4444", fontSize: 13 }}>
               ⚠ {t("identity.relaxed_warning", "Agent identity is relaxed in this organization:")}{" "}
               {[
                 !data.settings.require_agent_key ? t("identity.relaxed_session", "user sessions can act in an agent's name") : null,
-                data.settings.allow_keyless_agents ? t("identity.relaxed_keyless", "agents without a signing key can act unsigned") : null,
                 data.settings.allow_direct_registration ? t("identity.relaxed_direct", "agents and keys can be registered without proof of possession") : null,
               ].filter(Boolean).join("; ")}.{" "}
               {t("identity.relaxed_hint", "What they do cannot be verified later. Turn it back on in Settings below once your agents use their own keys.")}
@@ -315,16 +313,6 @@ export default function AgentIdentityPage() {
                 <strong>{t("identity.require_pq", "Require post-quantum signatures")}</strong>
                 <span className="hint-text" style={{ display: "block", fontSize: 12 }}>
                   {t("identity.require_pq_hint", "New agents and key changes must use the hybrid Ed25519 + ML-DSA-65 scheme; agents without a hybrid key (Ed25519-only or no signing key) cannot delegate, record actions or send messages until they get one.")}
-                </span>
-              </span>
-            </label>
-            <label style={{ display: "flex", gap: 10, alignItems: "flex-start", marginBottom: 14 }}>
-              <input type="checkbox" checked={!!form.allow_keyless_agents} disabled={!isAdmin}
-                onChange={(e) => setForm({ ...form, allow_keyless_agents: e.target.checked })} style={{ width: "auto", marginTop: 3 }} />
-              <span>
-                <strong>{t("identity.allow_keyless", "Allow agents without a signing key (not recommended)")}</strong>
-                <span className="hint-text" style={{ display: "block", fontSize: 12 }}>
-                  {t("identity.allow_keyless_hint", "Off by default: an agent without a signing key cannot delegate or record actions, because nothing it does could be verified later. Turn on only temporarily, while agents get their keys.")}
                 </span>
               </span>
             </label>

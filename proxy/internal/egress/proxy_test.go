@@ -59,24 +59,14 @@ func (f *fakeProvenza) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		reply(200, map[string]any{"routes": f.routes, "refresh_seconds": 60})
-	case "/api/v1/agent-identity/me":
-		if !byAgent {
-			reply(401, map[string]any{"detail": "bad key"})
-			return
-		}
-		reply(200, map[string]any{"agent_id": 7})
-	case "/api/v1/agents/actions/check":
-		if !byAgent || body["agent_id"] != float64(7) || body["action_type"] != "proxy" {
-			reply(401, map[string]any{"detail": "bad check"})
+	case "/api/v1/egress-proxy/check":
+		if !byProxy || !byAgent {
+			reply(401, map[string]any{"detail": "egress.agent_key_invalid"})
 			return
 		}
 		f.checks++
 		id := "chk_" + strings.Repeat("a", 12) + string(rune('a'+f.checks))
-		f.checked[id] = body["input"].(map[string]any)
-		if body["tool_name"] != "proxy."+f.checked[id]["route"].(string) {
-			reply(400, map[string]any{"detail": "tool"})
-			return
-		}
+		f.checked[id] = body
 		decision := "allowed"
 		if f.deny != "" {
 			decision = "denied"

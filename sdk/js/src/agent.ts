@@ -200,9 +200,20 @@ export class Agent {
   // ------------------------------------------------------------------ protocol
 
   private checkBody(spec: ToolSpec, input: Json, chainId: number | null) {
+    const actionType = spec.actionType ?? "tool_call";
+    // signed, with a single-use nonce and the time: the server refuses a check
+    // the agent did not sign, so a stolen API key alone gets nothing
+    const nonce = randomBytes(16).toString("hex");
+    const issuedAt = Math.floor(Date.now() / 1000);
+    const [signature, pqSignature] = this.identity.keys.sign({
+      type: "action.request", agent_id: this.agentId, chain_id: chainId, action_type: actionType,
+      tool_name: spec.name, input_sha256: contentHash(input), tool_version: spec.version ?? null,
+      tool_digest: spec.digest ?? null, nonce, issued_at: issuedAt,
+    });
     return {
-      agent_id: this.agentId, chain_id: chainId, action_type: spec.actionType ?? "tool_call", tool_name: spec.name, input,
+      agent_id: this.agentId, chain_id: chainId, action_type: actionType, tool_name: spec.name, input,
       ...(spec.version ? { tool_version: spec.version } : {}), ...(spec.digest ? { tool_digest: spec.digest } : {}),
+      nonce, issued_at: issuedAt, signature, ...(pqSignature ? { pq_signature: pqSignature } : {}),
     };
   }
 

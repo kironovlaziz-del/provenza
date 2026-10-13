@@ -4,6 +4,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { PageHeader } from "@/components/PageHeader";
 import { listProviders, providerChat, listProviderModels } from "@/lib/api";
+import { errorMessage } from "@/lib/errors";
 
 interface Provider {
   id: number; name: string; type: string; default_model?: string | null; status: string;
@@ -72,8 +73,8 @@ export default function ProviderChatPage() {
       } else {
         setMessages((m) => [...m, { role: "assistant", text: res.answer, flags: res.flags }]);
       }
-    } catch {
-      setError(t("provider_chat.failed"));
+    } catch (err) {
+      setError(errorMessage(err, t, t("provider_chat.failed")));
     } finally {
       setSending(false);
     }

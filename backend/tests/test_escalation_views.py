@@ -12,7 +12,7 @@ import pytest
 from tests.conftest import auth_headers
 from app.models.agent_action import AgentIncident
 from app.services.agent_registry import AgentRegistry
-from app.schemas.agent import AgentCreate
+from tests.agent_keys import agent_create, register
 
 pytestmark = pytest.mark.asyncio
 
@@ -20,7 +20,7 @@ pytestmark = pytest.mark.asyncio
 async def _make_agent(db, org_id, name):
     """Create a real agent via the registry so incident FKs resolve."""
     reg = AgentRegistry(db)
-    agent, _, _ = await reg.register(org_id, None, AgentCreate(name=name, capabilities=["read"]))
+    agent, _, _ = await register(reg, org_id, None, agent_create(name=name, capabilities=["read"]))
     return agent.id
 
 

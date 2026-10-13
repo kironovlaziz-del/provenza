@@ -27,8 +27,6 @@ export interface Agent {
 
 export interface AgentCreated extends Agent {
   api_key: string;              // shown once
-  private_key?: string | null;  // shown once, only when the server generated the keypair
-  pq_private_key?: string | null;  // ML-DSA-65 seed, shown once, server-generated hybrid only
 }
 
 export interface SigningKeyT {

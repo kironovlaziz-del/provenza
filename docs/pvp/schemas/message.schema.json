@@ -351,11 +351,69 @@
           "title": "Input",
           "type": "object"
         },
+        "issued_at": {
+          "anyOf": [
+            {
+              "maximum": 9007199254740991,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Issued At"
+        },
+        "nonce": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 16,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Nonce"
+        },
+        "pq_signature": {
+          "anyOf": [
+            {
+              "maxLength": 6000,
+              "minLength": 4,
+              "pattern": "^[A-Za-z0-9+/]+={0,2}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Pq Signature"
+        },
         "pvp": {
           "const": "pvp/1",
           "default": "pvp/1",
           "title": "Pvp",
           "type": "string"
+        },
+        "signature": {
+          "anyOf": [
+            {
+              "maxLength": 6000,
+              "minLength": 4,
+              "pattern": "^[A-Za-z0-9+/]+={0,2}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Signature"
         },
         "tool_digest": {
           "anyOf": [

@@ -5,6 +5,8 @@
 First release. It has the same behaviour and the same bytes as the Python
 and JS SDKs 0.1.
 
+- Every `Check` is signed by the agent: a nonce, the time and a signature
+  over the request, which the server requires.
 - `New`: enrollment with keys generated on the agent's side, stored in the
   shared identity file format. Optional hybrid Ed25519 + ML-DSA-65 keys,
   using `crypto/mldsa` from the Go standard library.

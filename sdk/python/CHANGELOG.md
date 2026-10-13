@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Every `check` is signed by the agent: a nonce, the time and a signature
+  over the request (Ed25519, plus ML-DSA-65 for hybrid keys). The server
+  now refuses unsigned checks from agents.
 - `provenza.auto.instrument(agent)`: direct calls to AI providers (httpx
   sync and async, requests) become governed "egress" actions, decided by
   the server against the organization's AI domain catalog. A refusal is an

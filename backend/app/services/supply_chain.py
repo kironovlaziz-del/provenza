@@ -8,11 +8,13 @@ Tool Registry - OWASP Agentic Top 10, ASI04 (agentic supply chain).
 Every tool an agent calls is matched against the organization's registry:
 
   mode "off"      - registry ignored
-  mode "monitor"  - (default) nothing is blocked except explicitly blocked
-                    tools; unknown tools are added as "pending" so the
-                    registry fills itself from real traffic
-  mode "enforce"  - only approved tools may run; pinned tools must report a
-                    matching version / manifest digest
+  mode "monitor"  - nothing is blocked except explicitly blocked tools;
+                    unknown tools are added as "pending" so the registry
+                    fills itself from real traffic (for a first rollout)
+  mode "enforce"  - (default) only approved tools may run; a tool that is not
+                    in the registry is refused (and added as "pending" for an
+                    admin to approve); pinned tools must report a matching
+                    version / manifest digest
 
 Drift: when an approved, pinned tool reports a different version or
 manifest digest, the entry becomes "drifted" and a supply_chain_drift
@@ -41,7 +43,7 @@ from app.models.tool_registry import SupplyChainSettings, ToolRegistryEntry
 from app.services.agent_policy_engine import DENIED, Decision
 
 MODES = ("off", "monitor", "enforce")
-DEFAULT_MODE = "monitor"
+DEFAULT_MODE = "enforce"
 DRIFT_INCIDENT = "supply_chain_drift"
 VIOLATION = "supply_chain_violation"
 _GLOB_CHARS = set("*?[")

@@ -110,27 +110,20 @@ func (s *server) config(ctx context.Context) ([]Route, time.Duration, error) {
 	return out.Routes, every, nil
 }
 
-// agentID of an agent key (GET /agent-identity/me, called with that key).
-func (s *server) agentID(ctx context.Context, agentKey string) (int64, error) {
-	var out struct {
-		AgentID int64 `json:"agent_id"`
-	}
-	err := s.call(ctx, http.MethodGet, "/agent-identity/me", nil, map[string]string{"X-Agent-Key": agentKey}, &out)
-	return out.AgentID, err
-}
-
 type checkResult struct {
 	Decision string `json:"decision"`
 	Reason   string `json:"reason"`
 	CheckID  string `json:"check_id"`
 }
 
-// check asks the server on the agent's behalf, with the agent's own key.
-func (s *server) check(ctx context.Context, agentKey string, agentID int64, d Descriptor) (*checkResult, error) {
+// check asks the server on the agent's behalf (mediated mode): the proxy's own
+// key and the key the agent sent. The proxy cannot sign as the agent; like the
+// gateways, it is the witness.
+func (s *server) check(ctx context.Context, agentKey string, d Descriptor) (*checkResult, error) {
 	var out checkResult
-	err := s.call(ctx, http.MethodPost, "/agents/actions/check", map[string]any{
-		"agent_id": agentID, "action_type": "proxy", "tool_name": "proxy." + d.Route, "input": d,
-	}, map[string]string{"X-Agent-Key": agentKey}, &out)
+	headers := s.asProxy()
+	headers["X-Agent-Key"] = agentKey
+	err := s.call(ctx, http.MethodPost, "/egress-proxy/check", d, headers, &out)
 	return &out, err
 }
 

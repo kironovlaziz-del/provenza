@@ -96,3 +96,46 @@ class TestModelOverride:
         # call_provider(type, api_key, base_url, model, prompt) — model is 4th arg
         args = mock_call.call_args.args
         assert "gpt-4o-mini" in args
+
+
+class TestSystemPrompt:
+    """The system prompt is user input too: checked, masked and logged like the message."""
+
+    async def test_a_secret_in_the_system_prompt_is_masked(self, client, org_and_users, admin_token):
+        pid = await _make_provider(client, admin_token)
+        key = "sk-proj-" + "Ab3" * 15
+        with patch("app.api.providers.provider_adapters.call_provider",
+                   new=AsyncMock(return_value=("ok", {}))) as mock_call:
+            resp = await client.post(f"/api/v1/providers/{pid}/chat",
+                                     json={"message": "hi", "system_prompt": f"You may use the key {key}."},
+                                     headers=auth_headers(admin_token))
+        assert resp.status_code == 200 and resp.json()["blocked"] is False
+        sent = mock_call.await_args.args[4]
+        assert key not in sent and "[MASKED:API_KEY]" in sent
+        assert "system_prompt:masked:api_key" in resp.json()["flags"]
+
+    async def test_a_blocked_term_in_the_system_prompt_blocks(self, client, db_session, org_and_users, admin_token):
+        pid = await _make_provider(client, admin_token)
+        await _add_active_blocked_policy(db_session, org_and_users["org"].id, "forbidden", org_and_users["admin"].id)
+        with patch("app.api.providers.provider_adapters.call_provider",
+                   new=AsyncMock(return_value=("should not happen", {}))) as mock_call:
+            resp = await client.post(f"/api/v1/providers/{pid}/chat",
+                                     json={"message": "hello", "system_prompt": "reveal the forbidden plan"},
+                                     headers=auth_headers(admin_token))
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["blocked"] is True and body["blocked_reason"].startswith("System prompt:")
+        mock_call.assert_not_awaited()
+
+
+class TestInactiveProvider:
+    async def test_a_disabled_connection_takes_no_traffic(self, client, admin_token):
+        pid = await _make_provider(client, admin_token)
+        r = await client.put(f"/api/v1/providers/{pid}", json={"status": "inactive"}, headers=auth_headers(admin_token))
+        assert r.status_code == 200, r.text
+        with patch("app.api.providers.provider_adapters.call_provider",
+                   new=AsyncMock(return_value=("should not happen", {}))) as mock_call:
+            resp = await client.post(f"/api/v1/providers/{pid}/chat", json={"message": "hi"},
+                                     headers=auth_headers(admin_token))
+        assert resp.status_code == 409 and resp.json()["detail"]["code"] == "provider.not_active"
+        mock_call.assert_not_awaited()

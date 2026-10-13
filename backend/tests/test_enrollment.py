@@ -50,7 +50,17 @@ async def test_an_agent_joins_with_the_templates_rights(client, db_session, stri
     assert agent.owner_user_id == strict["admin"].id and agent.key_origin == "agent"
     key = (await db_session.execute(select(AgentSigningKey).where(AgentSigningKey.agent_id == agent.id))).scalar_one()
     assert key.proof["kind"] == "enrollment" and key.proof["signature"]
-    # it acts with its own API key
+    # it acts with its own API key - on tools the Tool Registry approved (enforced by default)
+    r = await client.post(f"{A}/actions/check", headers={"X-Agent-Key": d["api_key"]},
+                          json={"agent_id": agent.id, "tool_name": "stripe.charge", "input": {}})
+    assert r.status_code == 200 and r.json()["decision"] == "denied", r.text
+    assert r.json()["incident_type"] == "supply_chain_violation"
+    # the refusal put the tool up for review; an admin approves it
+    pending = [e for e in (await client.get("/api/v1/tool-registry/", headers=auth_headers(strict["token"]))).json()
+               if e["pattern"] == "stripe.charge"]
+    assert [e["status"] for e in pending] == ["pending"]
+    r = await client.post(f"/api/v1/tool-registry/{pending[0]['id']}/approve", headers=auth_headers(strict["token"]))
+    assert r.status_code == 200, r.text
     r = await client.post(f"{A}/actions/check", headers={"X-Agent-Key": d["api_key"]},
                           json={"agent_id": agent.id, "tool_name": "stripe.charge", "input": {}})
     assert r.status_code == 200 and r.json()["decision"] == "allowed", r.text

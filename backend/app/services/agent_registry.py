@@ -11,7 +11,7 @@ from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import generate_api_key, hash_api_key
-from app.core.agent_signing import generate_keypair, generate_pq_keypair, key_fingerprint
+from app.core.agent_signing import key_fingerprint
 from app.models.agent import Agent, AgentSigningKey
 from app.schemas.agent import AgentCreate, AgentUpdate
 
@@ -19,37 +19,25 @@ from app.schemas.agent import AgentCreate, AgentUpdate
 class AgentRegistry:
     def __init__(self, db: AsyncSession):
         self.db = db
-        # ML-DSA-65 seed of the last server-generated hybrid key (shown once
-        # by the register endpoint; never stored)
-        self.generated_pq_private_key: Optional[str] = None
         self.last_event = None  # the kill-switch event of the last kill_agent()
 
     async def register(
         self, org_id: int, created_by: Optional[int], data: AgentCreate
-    ) -> Tuple[Agent, str, Optional[str]]:
+    ) -> Tuple[Agent, str]:
         """
-        Register a new agent. Returns (agent, raw_api_key, private_key_b64).
-        The API key is shown ONCE and only its hash is stored.
+        Register a new agent. Returns (agent, raw_api_key); the API key is
+        shown ONCE and only its hash is stored.
 
-        Signing key: with data.public_key (and, for a hybrid key,
-        data.pq_public_key) the agent brought its own keys, the server never
-        sees the private halves and private_key_b64 is None (key_origin
-        "agent"). Without it the keys are generated here and returned once,
-        not stored (key_origin "server"); key_scheme "hybrid" adds ML-DSA-65,
-        whose seed is left in self.generated_pq_private_key.
+        The agent brings its own signing key: data.public_key and, for a
+        hybrid key, data.pq_public_key. The server never generates or sees an
+        agent's private key.
         """
+        # the agent makes its own keys; the server never holds an agent's private key
+        if not data.public_key:
+            raise api_error(status.HTTP_422_UNPROCESSABLE_ENTITY, "agent.public_key_required")
         raw_key = generate_api_key()
-        self.generated_pq_private_key = None
-        pq_public_key_b64 = None
-        if data.public_key:
-            await self._check_key_is_new(data.public_key, agent_id=None, pq_public_key=data.pq_public_key)
-            private_key_b64, public_key_b64, origin = None, data.public_key, "agent"
-            pq_public_key_b64 = data.pq_public_key
-        else:
-            private_key_b64, public_key_b64 = generate_keypair()
-            origin = "server"
-            if data.key_scheme == "hybrid":
-                self.generated_pq_private_key, pq_public_key_b64 = generate_pq_keypair()
+        await self._check_key_is_new(data.public_key, agent_id=None, pq_public_key=data.pq_public_key)
+        public_key_b64, pq_public_key_b64, origin = data.public_key, data.pq_public_key, "agent"
         await self._check_org_policy(org_id, pq_public_key_b64)
 
         agent = Agent(
@@ -81,7 +69,7 @@ class AgentRegistry:
         await kill_switch.hold_new_agent(self.db, agent)  # an organization-wide stop holds new agents too
         await self.db.commit()
         await self.db.refresh(agent)
-        return agent, raw_key, private_key_b64
+        return agent, raw_key
 
     async def list_agents(
         self, org_id: int, skip: int = 0, limit: int = 50

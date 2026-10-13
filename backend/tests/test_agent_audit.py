@@ -13,16 +13,16 @@ from sqlalchemy import select
 
 from app.services.agent_registry import AgentRegistry
 from app.services.agent_audit import AgentAudit
-from app.schemas.agent import AgentCreate
 from app.models.agent import AgentPolicy
 from app.models.agent_action import AgentAction, AgentIncident
+from tests.agent_keys import agent_create, register
 
 
 @pytest_asyncio.fixture
 async def agent(db_session, org_and_users):
     org = org_and_users["org"]
     reg = AgentRegistry(db_session)
-    a, _, _ = await reg.register(org.id, None, AgentCreate(
+    a, _, _ = await register(reg, org.id, None, agent_create(
         name="worker", capabilities=["read"], allowed_tools=["openai.chat", "db.read"],
         allowed_models=["gpt-4o-mini"], max_delegation_depth=2))
     return {"org": org, "agent": a}

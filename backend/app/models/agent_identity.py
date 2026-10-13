@@ -22,9 +22,6 @@ class AgentIdentitySettings(Base):
     # when on, agents must have a hybrid key (Ed25519 + ML-DSA-65): no new
     # agent or key change without the post-quantum half
     require_pq_signatures = Column(Boolean, nullable=False, default=False)
-    # off (default): an agent without a signing key can neither delegate nor
-    # record actions - nothing it does could be verified later
-    allow_keyless_agents = Column(Boolean, nullable=False, default=False, server_default=false())
     # off (default): agents join only with an admin-issued enrollment token and
     # prove possession of their key; signing keys change only with proof.
     # On: the legacy direct registration and key replacement by an admin.

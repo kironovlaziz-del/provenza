@@ -134,6 +134,28 @@ optional `tool_version` / `tool_digest` that the agent's runtime reports
 The request carries **no capabilities**. What the action needs comes from
 the Tool Registry. What the agent holds is computed by the server.
 
+Every agent has its own key: the server never generates one, and an agent
+without a key cannot act (`agent.key_required`). An agent asking for itself
+signs the request with `nonce`, `issued_at` and `signature` (plus
+`pq_signature` for a hybrid key) over:
+
+```json
+{"type": "action.request", "agent_id": 3, "chain_id": null,
+ "action_type": "tool_call", "tool_name": "db.read", "input_sha256": "<hex>",
+ "tool_version": null, "tool_digest": null, "nonce": "…", "issued_at": 1760000000}
+```
+
+The freshness and replay rules are those of a delegation (§3.3): 300 s old
+at most, 30 s in the future, `nonce` single-use per agent. A missing
+signature is `action.signature_required`, a wrong one
+`action.invalid_signature`, an old one `action.stale_request` and a repeated
+nonce `action.replayed_request` (409). A Provenza gateway or the egress
+proxy asks on the agent's behalf as a witness (`POST /egress-proxy/check`
+with the proxy's key and the agent's key) and does not sign as the agent.
+
+A tool the Tool Registry does not know is denied and added as `pending` for
+an administrator to approve: the registry's default mode is `enforce`.
+
 The answer is `action.check`: `decision` ∈ {`allowed`, `denied`,
 `pending_approval`}, `reason`, `incident_type`, `policy_id`,
 `required_capabilities`, and a `check_id` that

@@ -251,6 +251,16 @@ class Agent:
             body["tool_version"] = tool.version
         if tool.digest:
             body["tool_digest"] = tool.digest
+        # signed, with a single-use nonce and the time: the server refuses a
+        # check the agent did not sign, so a stolen API key alone gets nothing
+        nonce, issued_at = secrets.token_hex(16), int(time.time())
+        payload = {"type": "action.request", "agent_id": self.agent_id, "chain_id": chain_id,
+                   "action_type": tool.action_type, "tool_name": tool.name, "input_sha256": content_hash(input),
+                   "tool_version": tool.version, "tool_digest": tool.digest, "nonce": nonce, "issued_at": issued_at}
+        sig, pq = self.identity.keys.sign(payload)
+        body.update({"nonce": nonce, "issued_at": issued_at, "signature": sig})
+        if pq:
+            body["pq_signature"] = pq
         return body
 
     @staticmethod

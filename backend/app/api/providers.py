@@ -19,7 +19,7 @@ from app.services import prompt_firewall
 from app.models.ai_request import AIRequest
 from app.core.crypto import encrypt_secret
 from fastapi import HTTPException, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 from app.models.ai_policy import AIPolicy, AIPolicyVersion
 
@@ -81,9 +81,9 @@ async def update_provider(
 
 
 class ProviderChatRequest(BaseModel):
-    message: str
-    system_prompt: str | None = None
-    model: str | None = None
+    message: str = Field(min_length=1, max_length=100_000)
+    system_prompt: str | None = Field(default=None, max_length=20_000)
+    model: str | None = Field(default=None, max_length=200)
 
 
 class ProviderChatResponse(BaseModel):
@@ -149,8 +149,14 @@ async def governed_chat(
     provider = result.scalar_one_or_none()
     if not provider:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Provider not found")
+    # a switched-off or retired connection takes no traffic, here as in the Usage Registry
+    if provider.status != "active":
+        from app.core.errors import api_error
 
-    # 1. firewall the user's message, enforcing the org's active policy
+        raise api_error(status.HTTP_409_CONFLICT, "provider.not_active", name=provider.name)
+
+    # 1. firewall the user's message - and the system prompt: it is user input
+    #    too and goes to the same provider - enforcing the org's active policy
     active_policy_rules = await _active_policy_rules(db, current_user.org_id)
     from app.services import blocked_terms as bt
 
@@ -163,14 +169,26 @@ async def governed_chat(
     fw = await asyncio.to_thread(prompt_firewall.scan, data.message, blocked_terms, "en", pii_cfg)
     await pii_rules.note_timeouts(db, current_user.org_id, fw.timed_out)
     await bt.record_hits(db, current_user.org_id, fw.term_hits)
+    sys_fw = None
+    if data.system_prompt:
+        sys_fw = await asyncio.to_thread(prompt_firewall.scan, data.system_prompt, blocked_terms, "en", pii_cfg)
+        await pii_rules.note_timeouts(db, current_user.org_id, sys_fw.timed_out)
+        await bt.record_hits(db, current_user.org_id, sys_fw.term_hits)
+        fw.flags = list(dict.fromkeys([*fw.flags, *(f"system_prompt:{f}" for f in sys_fw.flags)]))
+        if sys_fw.blocked and not fw.blocked:
+            fw.blocked = True
+            fw.blocked_reason = f"System prompt: {sys_fw.blocked_reason or 'blocked by policy'}"
     await db.commit()  # before the provider call: the counted rows are not held locked while it runs
+    # what is logged: everything the user sent, encrypted; the masked text for display
+    original = f"[system]\n{data.system_prompt}\n\n[user]\n{data.message}" if data.system_prompt else data.message
+    masked_logged = (f"[system]\n{sys_fw.masked_text}\n\n[user]\n{fw.masked_text}" if sys_fw else fw.masked_text)
 
     # policy may require human approval for every request under it
     if active_policy_rules.get("effect") == "require_approval" and not fw.blocked:
         db.add(AIRequest(
             org_id=current_user.org_id, user_id=current_user.id, provider_id=provider.id,
-            input_text_encrypted=encrypt_secret(data.message, org_id=current_user.org_id),
-            masked_input_text=fw.masked_text, status="pending_approval",
+            input_text_encrypted=encrypt_secret(original, org_id=current_user.org_id),
+            masked_input_text=masked_logged, status="pending_approval",
             purpose="playground_chat", firewall_flags=fw.flags,
         ))
         await db.commit()
@@ -183,7 +201,7 @@ async def governed_chat(
         # log the blocked attempt too
         db.add(AIRequest(
             org_id=current_user.org_id, user_id=current_user.id, provider_id=provider.id,
-            input_text_encrypted=encrypt_secret(data.message, org_id=current_user.org_id), status="blocked",
+            input_text_encrypted=encrypt_secret(original, org_id=current_user.org_id), status="blocked",
             purpose="playground_chat", firewall_flags=fw.flags,
         ))
         await db.commit()
@@ -193,9 +211,10 @@ async def governed_chat(
         )
 
     safe_message = fw.masked_text
-    prompt = f"{data.system_prompt}\n\n{safe_message}" if data.system_prompt else safe_message
+    # 2. only the masked texts leave: the message and the system prompt
+    prompt = f"{sys_fw.masked_text}\n\n{safe_message}" if sys_fw else safe_message
 
-    # 2. call provider with the MASKED prompt
+    # call provider with the MASKED prompt
     api_key = decrypt_secret(provider.api_key_encrypted) if provider.api_key_encrypted else None
     chosen_model = data.model or provider.default_model
     answer, _raw = await provider_adapters.call_provider(
@@ -205,8 +224,8 @@ async def governed_chat(
     # 3. log to Usage Registry
     db.add(AIRequest(
         org_id=current_user.org_id, user_id=current_user.id, provider_id=provider.id,
-        input_text_encrypted=encrypt_secret(data.message, org_id=current_user.org_id),
-        masked_input_text=safe_message, status="completed",
+        input_text_encrypted=encrypt_secret(original, org_id=current_user.org_id),
+        masked_input_text=masked_logged, status="completed",
         purpose="playground_chat", firewall_flags=fw.flags,
     ))
     await db.commit()

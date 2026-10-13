@@ -33,12 +33,14 @@ type fake struct {
 	down           map[string]bool
 	recordFailures int
 	publicKey      string
+	nonces         map[string]bool
 	n              int
 	srv            *httptest.Server
 }
 
 func newFake(t *testing.T) *fake {
-	f := &fake{verdicts: map[string]string{}, checks: map[string]map[string]any{}, down: map[string]bool{}}
+	f := &fake{verdicts: map[string]string{}, checks: map[string]map[string]any{}, down: map[string]bool{},
+		nonces: map[string]bool{}}
 	f.srv = httptest.NewServer(http.HandlerFunc(f.handle))
 	t.Cleanup(f.srv.Close)
 	return f
@@ -89,6 +91,19 @@ func (f *fake) handle(w http.ResponseWriter, r *http.Request) {
 	}
 	switch {
 	case path == "/agents/actions/check":
+		// what the server verifies: the agent's signature over the request, a fresh nonce
+		inHash, _ := ContentHash(body["input"])
+		payload := map[string]any{"type": "action.request", "agent_id": body["agent_id"], "chain_id": body["chain_id"],
+			"action_type": body["action_type"], "tool_name": body["tool_name"], "input_sha256": inHash,
+			"tool_version": body["tool_version"], "tool_digest": body["tool_digest"], "nonce": body["nonce"],
+			"issued_at": body["issued_at"]}
+		sig, _ := body["signature"].(string)
+		nonce, _ := body["nonce"].(string)
+		if !verifySignatures(payload, sig, "", f.publicKey, "") || nonce == "" || f.nonces[nonce] {
+			reply(w, 401, map[string]any{"detail": "action.invalid_signature"})
+			return
+		}
+		f.nonces[nonce] = true
 		f.n++
 		token := fmt.Sprintf("chk_%040d", f.n)
 		decision := f.verdicts[body["tool_name"].(string)]

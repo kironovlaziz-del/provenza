@@ -24,6 +24,7 @@ class FakeProvenza:
         self.verdicts = {}          # tool -> decision
         self.public_key = None
         self.checks, self.records = {}, []
+        self.nonces = set()
         self.down = set()           # paths that fail with 503
         self.record_failures = 0    # record answers 503 this many times first
         self.n = 0
@@ -54,6 +55,15 @@ class FakeProvenza:
             return self._json(200, {"action_type": "egress", "tool_prefix": "egress.", "domains": [
                 {"domain": "openai.com", "status": "allowed"}, {"domain": "blocked-ai.com", "status": "blocked"}]})
         if path == "/agents/actions/check":
+            # what the server verifies: the agent's signature over the request, a fresh nonce
+            payload = {"type": "action.request", "agent_id": body["agent_id"], "chain_id": body["chain_id"],
+                       "action_type": body["action_type"], "tool_name": body["tool_name"],
+                       "input_sha256": content_hash(body["input"]), "tool_version": body.get("tool_version"),
+                       "tool_digest": body.get("tool_digest"), "nonce": body["nonce"], "issued_at": body["issued_at"]}
+            Ed25519PublicKey.from_public_bytes(base64.b64decode(self.public_key)).verify(
+                base64.b64decode(body["signature"]), canonical(payload))   # raises if the SDK signed wrong
+            assert body["nonce"] not in self.nonces, "nonce reused"
+            self.nonces.add(body["nonce"])
             self.n += 1
             token = f"chk_{self.n:040d}"
             decision = self.verdicts.get(body["tool_name"], "allowed")
