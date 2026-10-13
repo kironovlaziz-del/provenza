@@ -230,3 +230,51 @@ describe("egress proxy, SDK mode", () => {
     assert.deepEqual(proxyHeaders(chk), { "X-Provenza-Check-Id": chk.checkId });
   });
 });
+
+describe("HTTP tools through Provenza", () => {
+  test("invoke: one signed request, the server calls and records", async () => {
+    const server = new FakeProvenza();
+    const { agent } = await connected(server);
+    const out = await agent.invoke("crm.set_tier", { id: "42", tier: "gold" });
+    assert.equal(out.status, 200);
+    assert.deepEqual(out.body, { echo: { id: "42", tier: "gold" } });
+    assert.equal(server.invoked[0].action_type, "tool_call");
+    server.verdicts.set("crm.delete", "denied");
+    await assert.rejects(agent.invoke("crm.delete", { id: "42" }), (e) => e instanceof ProvenzaDenied && e.actionId === 10);
+    server.verdicts.set("crm.wipe", "pending_approval");
+    await assert.rejects(agent.invoke("crm.wipe", {}), ProvenzaApprovalRequired);
+  });
+});
+
+describe("egress self-check", () => {
+  test("a closed target is confined, a reachable one is open, the report is signed", async () => {
+    const { createServer } = await import("node:net");
+    const server = new FakeProvenza();
+    const { agent } = await connected(server);
+    const noBeacon = async () => { throw new Error("unreachable"); };
+    const closed = await agent.egressSelfcheck({ timeoutMs: 1000, beaconFetch: noBeacon });
+    assert.equal(closed.verdict, "confined");
+    const listener = createServer().listen(0, "127.0.0.1");
+    await new Promise((r) => listener.once("listening", r));
+    try {
+      server.egressTargets = [`127.0.0.1:${listener.address().port}`, "127.0.0.1:9"];
+      assert.equal((await agent.egressSelfcheck({ timeoutMs: 1000, beaconFetch: noBeacon })).verdict, "open");
+      server.egressTargets = ["127.0.0.1:9"];
+      const beaconSeen = async () => new Response(null, { status: 204 });
+      assert.equal((await agent.egressSelfcheck({ timeoutMs: 1000, beaconFetch: beaconSeen })).verdict, "open");
+    } finally {
+      listener.close();
+    }
+  });
+});
+
+describe("attestation", () => {
+  test("attest signs the token's hash over the server's challenge", async () => {
+    const server = new FakeProvenza();
+    const { agent } = await connected(server);
+    const res = await agent.attest("  eyJ.workload.token\n");
+    assert.equal(res.ok, true);
+    assert.equal(server.attested.evidence, "eyJ.workload.token");
+    assert.equal(server.attested.kind, "oidc");
+  });
+});

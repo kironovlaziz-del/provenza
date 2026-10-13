@@ -6,17 +6,34 @@
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { useTranslation } from "react-i18next";
-import { agentAttestation, attestCommand, type AgentAttestationStatus } from "@/lib/attestation_api";
+import { confirmDialog } from "@/components/Dialog";
+import { useAuth } from "@/lib/auth";
+import { agentAttestation, attestCommand, unbindAgent, type AgentAttestationStatus, type WorkloadIdentity } from "@/lib/attestation_api";
+
+/** Where a workload identity says the agent runs: namespace/sa for Kubernetes, the subject otherwise. */
+export function workloadOf(id: WorkloadIdentity | null | undefined): string {
+  if (!id) return "—";
+  if (id.namespace) return `${id.namespace}/${id.service_account}`;
+  return id.sub ?? id.workload ?? "—";
+}
 
 export function AgentAttestation({ agentId, rev }: { agentId: number; rev?: unknown }) {
   const { t, i18n } = useTranslation();
+  const { user } = useAuth();
   const [st, setSt] = useState<AgentAttestationStatus | null>(null);
+  const [n, setN] = useState(0);
 
   useEffect(() => {
     agentAttestation(agentId).then(setSt).catch(() => setSt(null));
-  }, [agentId, rev]);
+  }, [agentId, rev, n]);
 
-  if (!st || (!st.required && !st.last)) return null;
+  async function unbind() {
+    if (!await confirmDialog(t("attest.confirm_unbind"))) return;
+    await unbindAgent(agentId).catch(() => undefined);
+    setN((x) => x + 1);
+  }
+
+  if (!st || (!st.required && !st.last && !st.binding)) return null;
   const fmt = (iso: string | null | undefined) => (iso ? new Date(iso).toLocaleString(i18n.language) : "—");
   const cur = st.current;
   const last = st.last;
@@ -33,7 +50,7 @@ export function AgentAttestation({ agentId, rev }: { agentId: number; rev?: unkn
       {cur ? (
         <div className="ag-small">
           <span className="pill pill-low">{t("attest.passed")}</span>{" "}
-          <span className="mono">{cur.identity?.namespace}/{cur.identity?.service_account}</span>
+          <span className="mono">{workloadOf(cur.identity)}</span>
           {cur.identity?.pod && <span className="hint-text"> · pod {cur.identity.pod}</span>}
           {cur.identity?.node && <span className="hint-text"> · node {cur.identity.node}</span>}
           <div className="hint-text">{t("attest.valid_until")}: {fmt(cur.valid_until)}</div>
@@ -54,6 +71,15 @@ export function AgentAttestation({ agentId, rev }: { agentId: number; rev?: unkn
           {t("attest.last_attempt", { time: fmt(last.created_at) })}: {last.ok ? t("attest.passed") : t(`errors.${last.reason}`, last.reason ?? "")}
         </div>
       ) : null}
+      {st.binding && (
+        <div className="hint-text ag-small" style={{ marginTop: 6 }}>
+          {t("attest.bound_to")} <code className="mono">{st.binding.subject}</code>
+          <span className="hint-text"> ({st.binding.issuer})</span>
+          {user?.role === "admin" && (
+            <> <button className="btn btn-sm" onClick={unbind}>{t("attest.unbind")}</button></>
+          )}
+        </div>
+      )}
     </div>
   );
 }

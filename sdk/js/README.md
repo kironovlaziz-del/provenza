@@ -152,6 +152,49 @@ await fetch("http://127.0.0.1:8443/stripe/v1/charges", { method: "POST", body, h
 `path`, `query` and `body` must be exactly what goes on the wire; the proxy
 refuses any other request under that check, and records it itself.
 
+## HTTP tools through Provenza
+
+An API registered in Provenza (**Gateways → HTTP tools**) is called through
+Provenza, and the agent never holds its key:
+
+```ts
+const out = await agent.invoke("crm.set_tier", { id: "42", tier: "gold" });   // ProvenzaDenied on a refusal
+const tools = await agent.httpTools();   // names, descriptions and input schemas, for the model
+```
+
+## Egress self-check
+
+Is this host confined to the Provenza egress proxy, its only way out? Run
+the check at start-up and then periodically. With **Require confined egress**
+on, an agent acts only while its latest check is `confined`. See
+`docs/egress-lockdown.md`.
+
+```ts
+await agent.egressSelfcheck();     // { verdict: "confined" | "open", ... }
+```
+
+## Permits for tools
+
+An allowed check carries a permit signed by the organization. The agent
+sends it with the call, and the tool runs nothing without a valid one:
+
+```ts
+import { permitHeaders, permitMiddleware, PermitVerifier, withPermit } from "provenza";
+
+// the agent
+const chk = await agent.check("crm.update", payload);
+await fetch(url, { method: "POST", body: JSON.stringify(payload), headers: permitHeaders(chk) });
+
+// the tool
+const verifier = new PermitVerifier("https://provenza.example.com", "acme");
+app.post("/update", express.json(), permitMiddleware(verifier, { tool: "crm.update" }), handler);
+export const POST = withPermit(verifier, "crm.update", async (request, permit, input) => Response.json({ ok: true }));
+```
+
+The verifier checks the signature against the organization's JWKS, the
+tool, the hash of the JSON body (it must be the checked input) and the
+expiry, then redeems the permit with Provenza: once, across every replica.
+
 ## What this is, and what it is not
 
 The SDK runs inside the agent's process. It is the agent's honest record

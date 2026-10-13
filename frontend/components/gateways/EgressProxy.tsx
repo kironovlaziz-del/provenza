@@ -9,6 +9,7 @@ import React, { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useDialog } from "@/components/Dialog";
 import { Form } from "@/components/Form";
+import { EgressLockdown } from "@/components/gateways/EgressLockdown";
 import { errorMessage } from "@/lib/errors";
 import {
   createEgressProxy,
@@ -355,6 +356,7 @@ export function EgressProxy() {
   return (
     <>
       <p className="hint-text u-mb-16">{t("gw.egress.hint")}</p>
+      <EgressLockdown />
       <Routes />
       <Proxies />
       <OpenRedemptions />

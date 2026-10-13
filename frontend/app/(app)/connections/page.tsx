@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { PageHeader } from "@/components/PageHeader";
+import { ProviderPolicyPanel } from "@/components/ProviderPolicyPanel";
 import { Form } from "@/components/Form";
 import { createProvider, listProviders, updateProvider, listProviderModels } from "@/lib/api";
 import type { Provider } from "@/lib/types";
@@ -273,6 +274,8 @@ export default function ConnectionsPage() {
         <p className="hint-text" style={{ marginBottom: 16 }}>
           {t("connections.hint")}
         </p>
+
+        <ProviderPolicyPanel refreshKey={providers} />
 
         <div className="stat-grid" style={{ marginBottom: 4 }}>
           <div className="stat">

@@ -7,8 +7,13 @@ package provenza
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"net"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"testing"
+	"time"
 )
 
 func jsonOf(t *testing.T, v any) string {
@@ -67,5 +72,69 @@ func TestProxyCheck(t *testing.T) {
 	}
 	if h := chk.ProxyHeaders(); len(h) != 1 || h["X-Provenza-Check-Id"] != chk.CheckID {
 		t.Fatalf("headers %v", h)
+	}
+}
+
+func TestPermitHeaders(t *testing.T) {
+	f := newFake(t)
+	a := connected(t, f)
+	chk, err := a.Check(context.Background(), "db.read", map[string]any{"q": 1})
+	if err != nil || !chk.Allowed() || chk.Permit != "permit-of-"+chk.CheckID {
+		t.Fatal(chk, err)
+	}
+	if h := chk.PermitHeaders(); len(h) != 1 || h["Provenza-Permit"] != chk.Permit {
+		t.Fatalf("headers %v", h)
+	}
+	if h := (&Check{Decision: "denied"}).PermitHeaders(); len(h) != 0 {
+		t.Fatalf("a refused check has no permit: %v", h)
+	}
+}
+
+func TestInvokeHTTPTool(t *testing.T) {
+	f := newFake(t)
+	a := connected(t, f)
+	out, err := a.Invoke(context.Background(), "crm.set_tier", map[string]any{"id": "42", "tier": "gold"})
+	if err != nil || out["decision"] != "allowed" || jsonOf(t, out["body"]) != `{"echo":{"id":"42","tier":"gold"}}` {
+		t.Fatal(out, err)
+	}
+	f.verdicts["crm.delete"] = "pending_approval"
+	_, err = a.Invoke(context.Background(), "crm.delete", map[string]any{"id": "42"})
+	var denied *DeniedError
+	if !errors.As(err, &denied) || !denied.ApprovalRequired() || denied.ActionID == nil || *denied.ActionID != 10 {
+		t.Fatalf("want approval required, got %v", err)
+	}
+}
+
+func TestEgressSelfcheck(t *testing.T) {
+	f := newFake(t)
+	a := connected(t, f)
+	f.beaconURL = "http://127.0.0.1:9/egress-beacon/tok" // nothing there
+	out, err := a.EgressSelfcheck(context.Background(), time.Second)
+	if err != nil || out["verdict"] != "confined" {
+		t.Fatal(out, err)
+	}
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+	f.egressTargets = []any{ln.Addr().String(), "127.0.0.1:9"}
+	if out, err := a.EgressSelfcheck(context.Background(), time.Second); err != nil || out["verdict"] != "open" {
+		t.Fatal(out, err)
+	}
+	beacon := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(204) }))
+	defer beacon.Close()
+	f.egressTargets, f.beaconURL = nil, beacon.URL+"/egress-beacon/tok"
+	if out, err := a.EgressSelfcheck(context.Background(), time.Second); err != nil || out["verdict"] != "open" {
+		t.Fatal(out, err)
+	}
+}
+
+func TestAttest(t *testing.T) {
+	f := newFake(t)
+	a := connected(t, f)
+	out, err := a.Attest(context.Background(), "  eyJ.workload.token\n")
+	if err != nil || out["ok"] != true || out["evidence"] != "eyJ.workload.token" {
+		t.Fatal(out, err)
 	}
 }

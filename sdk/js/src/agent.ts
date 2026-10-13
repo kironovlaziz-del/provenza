@@ -28,6 +28,8 @@ import { AuditLog } from "./auditLog.js";
 import { Json, toJson } from "./canonical.js";
 import { Client, Fetch } from "./client.js";
 import { contentHash, Keys } from "./crypto.js";
+import { createHash } from "node:crypto";
+import { beacon as egressBeacon, connect as egressConnect, egressPayload } from "./egressCheck.js";
 import { ProvenzaApprovalRequired, ProvenzaConfigError, ProvenzaDenied, ProvenzaRequestError, ProvenzaUnavailable } from "./errors.js";
 import * as ids from "./identity.js";
 import { PROXY_ACTION_TYPE, proxyDescriptor, RawBytes } from "./proxy.js";
@@ -50,6 +52,8 @@ export interface Check {
   chainId: number | null;
   incidentType: string | null;
   policyId: number | null;
+  /** Allowed: the signed permit the tool verifies (permitHeaders(check), see permit.ts). */
+  permit: string | null;
 }
 
 export interface AgentOptions {
@@ -220,7 +224,7 @@ export class Agent {
   private static checkOf(res: any, spec: ToolSpec, input: Json, chainId: number | null): Check {
     return { checkId: res.check_id, decision: res.decision, reason: res.reason ?? "", tool: spec.name,
              actionType: spec.actionType ?? "tool_call", input, chainId, incidentType: res.incident_type ?? null,
-             policyId: res.policy_id ?? null };
+             policyId: res.policy_id ?? null, permit: res.permit ?? null };
   }
 
   /** Ask before doing something that is not a governed tool. */
@@ -238,6 +242,68 @@ export class Agent {
                    opts: { query?: RawBytes; body?: RawBytes; chainId?: number | null } = {}): Promise<Check> {
     const input = proxyDescriptor(route, method, path, opts) as unknown as Record<string, unknown>;
     return this.check("proxy." + route, input, { actionType: PROXY_ACTION_TYPE, chainId: opts.chainId });
+  }
+
+  /**
+   * Call an HTTP tool registered in Provenza: the server checks, calls the API
+   * with the credential it holds and records - in one operation. Allowed:
+   * { decision, reason, action_id, status, body } ("error" / "withheld" instead
+   * of "body" when the API failed or the answer was refused). A refusal throws
+   * ProvenzaDenied (ProvenzaApprovalRequired when it waits for a human).
+   */
+  async invoke(tool: string, args: Record<string, unknown>, opts: { chainId?: number | null } = {}): Promise<any> {
+    const spec = { name: tool };
+    const inp = asInput(args);
+    const chainId = opts.chainId !== undefined ? opts.chainId : chainStore.getStore() ?? null;
+    const res = await this.connected().post("/http-tools/call", this.checkBody(spec, inp, chainId));
+    if (res.decision !== "allowed") {
+      const Cls = res.decision === "pending_approval" ? ProvenzaApprovalRequired : ProvenzaDenied;
+      throw new Cls(tool, res.reason ?? "", res.decision ?? "denied", res.incident_type ?? null, null, res.action_id ?? null);
+    }
+    return res;
+  }
+
+  /**
+   * Prove where this agent runs: `evidence` is the workload's token (a
+   * Kubernetes projected ServiceAccount token, or an OIDC token from GitHub
+   * Actions, Google Cloud, Azure, ...). Returns the server's record:
+   * { ok, reason, identity, valid_until, ... }.
+   */
+  async attest(evidence: string): Promise<any> {
+    const c = this.connected();
+    const ch = await c.post(`/agents/${this.agentId}/attestation/challenge`, {});
+    const token = evidence.trim();
+    const [signature, pqSignature] = this.identity.keys.sign({
+      type: "provenza.agent.attestation", v: 1, challenge: ch.challenge, agent_id: this.agentId, kind: ch.kind,
+      evidence_sha256: createHash("sha256").update(token, "utf8").digest("hex"),
+    });
+    return c.post(`/agents/${this.agentId}/attestation`, {
+      challenge: ch.challenge, kind: ch.kind, evidence: token, signature, ...(pqSignature ? { pq_signature: pqSignature } : {}),
+    });
+  }
+
+  /**
+   * Is this host confined to the egress proxy? Tries the server's targets and
+   * beacon directly and reports, signed. Returns the server's verdict:
+   * { verdict: "confined" | "open", ... }. Run at start-up and periodically.
+   */
+  async egressSelfcheck(opts: { timeoutMs?: number; beaconFetch?: typeof fetch } = {}): Promise<any> {
+    const timeout = opts.timeoutMs ?? 3000;
+    const c = this.connected();
+    const started = await c.post("/agents/egress-check", {});
+    const reached = await Promise.all((started.targets as string[]).map((t) => egressConnect(t, timeout)));
+    const results = (started.targets as string[]).map((target, i) => ({ target, reachable: reached[i] ?? false }));
+    const beaconReached = await egressBeacon(started.beacon_url, timeout, opts.beaconFetch);
+    const [signature, pqSignature] = this.identity.keys.sign(egressPayload(this.agentId ?? 0, started.check_id, results,
+                                                                           beaconReached));
+    return c.post(`/agents/egress-check/${started.check_id}/report`, {
+      results, beacon_reached: beaconReached, signature, ...(pqSignature ? { pq_signature: pqSignature } : {}),
+    });
+  }
+
+  /** The HTTP tools this agent may invoke: name, description, method, input_schema. */
+  async httpTools(): Promise<Array<{ name: string; description: string; method: string; input_schema: unknown }>> {
+    return (await this.connected().get("/http-tools/available")).tools;
   }
 
   /** Record what was done under a check (once); retries a server that is down. */

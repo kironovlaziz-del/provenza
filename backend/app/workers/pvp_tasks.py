@@ -37,3 +37,16 @@ async def _prune() -> int:
 @celery_app.task(name="pvp.prune_nonces", ignore_result=True, expires=600)
 def prune_nonces_task() -> int:
     return asyncio.run(_prune())
+
+
+async def _prune_egress_checks() -> int:
+    from app.services.egress_check import prune
+
+    async with CelerySessionLocal() as db:
+        return await prune(db)
+
+
+@celery_app.task(name="pvp.prune_egress_checks", ignore_result=True, expires=3600)
+def prune_egress_checks_task() -> int:
+    """Egress checks older than 30 days, keeping each agent's latest verdict."""
+    return asyncio.run(_prune_egress_checks())

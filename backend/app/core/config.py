@@ -88,6 +88,16 @@ class Settings(BaseSettings):
     # variables are deliberately NOT used - see core/outbound.py.
     OUTBOUND_PROXY: str = ""
 
+    # Egress checks (app/services/egress_check.py): the hosts an agent's host
+    # tries to reach directly - a confined agent reaches none of them - and the
+    # address of the beacon, which must NOT be on the agents' allowlist. Empty
+    # = PUBLIC_BASE_URL: right when agents reach Provenza only through the
+    # egress proxy's relay; when they may reach Provenza directly, give the
+    # beacon a name of its own pointing at this server (e.g.
+    # "https://egress-check.example.com") and keep it off their allowlist.
+    EGRESS_PROBE_TARGETS: str = "api.openai.com:443,1.1.1.1:443"
+    EGRESS_BEACON_BASE_URL: str = ""
+
 
     # Audit key rotation (docs/audit-proofs.md): how many distinct admins of
     # the organization must approve a new audit key, and how long its

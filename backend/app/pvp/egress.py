@@ -19,6 +19,11 @@ make the rule unusable:
   unknown   -> allowed (not classified yet: the attempt is on record for an
                admin to classify)
 
+With the organization's "self-hosted providers only" policy
+(services/provider_policy.py), every host the catalog or its built-in hints
+know as an AI service is refused too, allowed or not: incident
+"ai_provider_not_self_hosted".
+
 Every other rule still applies: policies (deny_tools, deny_tool_patterns,
 approval rules, ...), the behaviour baseline, the breaker. The Tool Registry
 does not: provider hosts are managed in the catalog, not as tools.
@@ -31,6 +36,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.services import provider_policy
 from app.services.agent_policy_engine import DENIED, Decision
 from app.services.domain_catalog_seed import SEED_DOMAINS
 from app.services.domain_catalog_service import DomainCatalogService
@@ -52,6 +58,12 @@ async def classify(db: AsyncSession, org_id: int, tool_name: Optional[str],
         what = f" ({match.tool_name})" if match.tool_name else ""
         return "blocked", Decision(DENIED, f"{host}{what} is blocked in the organization's AI domain catalog",
                                    BLOCKED_INCIDENT)
+    known = match.matched_catalog_id is not None or match.tool_name is not None
+    if known and await provider_policy.self_hosted_required(db, org_id):
+        what = f" ({match.tool_name})" if match.tool_name else ""
+        return match.policy_status, Decision(
+            DENIED, f"{host}{what} is a cloud AI service; the organization allows only self-hosted providers",
+            provider_policy.INCIDENT)
     return match.policy_status, None
 
 

@@ -108,6 +108,38 @@ for k, v := range chk.ProxyHeaders() {
 `path`, `query` and `body` must be exactly what goes on the wire; the proxy
 refuses any other request under that check, and records it itself.
 
+## HTTP tools through Provenza
+
+An API registered in Provenza (**Gateways → HTTP tools**) is called through
+Provenza, and the agent never holds its key:
+
+```go
+out, err := agent.Invoke(ctx, "crm.set_tier", map[string]any{"id": "42", "tier": "gold"})   // *DeniedError on a refusal
+```
+
+## Egress self-check
+
+Is this host confined to the Provenza egress proxy, its only way out? Run
+the check at start-up and then periodically. With **Require confined egress**
+on, an agent acts only while its latest check is `confined`. See
+`docs/egress-lockdown.md`.
+
+```go
+out, err := agent.EgressSelfcheck(ctx, 3*time.Second)   // out["verdict"]: "confined" | "open"
+```
+
+## Permits for tools
+
+An allowed check carries `chk.Permit`, signed by the organization. Send it
+to the tool with the checked input as the JSON body. A tool built with the
+Python or JS SDK verifies it and runs nothing without it:
+
+```go
+for k, v := range chk.PermitHeaders() {
+	req.Header.Set(k, v)
+}
+```
+
 ## What this is, and what it is not
 
 The SDK runs inside your agent's process. It is the agent's honest record

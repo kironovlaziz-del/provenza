@@ -33,6 +33,12 @@ Policy:
     rebinding protection is weaker there - restrict the proxy's own
     egress to the internet if you rely on it.
 
+Internal-only clients (internal_only=True) serve an organization whose AI
+provider policy is "self-hosted providers only" (services/provider_policy.py):
+on top of the rules above, every address must be non-global, so the call
+can only reach the operator's own network (OUTBOUND_PRIVATE_ALLOWLIST). They
+never use OUTBOUND_PROXY: the proxy would resolve the name itself.
+
 Error messages say that a target was refused, never which address a name
 resolved to.
 """
@@ -57,6 +63,12 @@ BLOCKED_MESSAGE = (
     "address. If this is your own service (for example an in-house Vault or a "
     "local model server), the server operator can allow it with "
     "OUTBOUND_PRIVATE_ALLOWLIST."
+)
+
+
+INTERNAL_ONLY_MESSAGE = (
+    "Outbound connection refused: this organization allows only self-hosted AI "
+    "providers, and the target resolves to a public address."
 )
 
 
@@ -131,7 +143,16 @@ def ip_allowed(ip: IP, host: Optional[str] = None) -> bool:
     return all(_one_allowed(c, hosts, nets, host) for c in candidates)
 
 
-def check_addresses(host: str, addresses: Iterable[str]) -> List[str]:
+def ip_internal(ip: IP) -> bool:
+    """Whether `ip`, and every IPv4 address it leads to, is non-global: a
+    target on the operator's own network, not the internet."""
+    candidates = _effective(ip)
+    if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped is not None:
+        candidates = [ip.ipv4_mapped]
+    return not any(c.is_global for c in candidates)
+
+
+def check_addresses(host: str, addresses: Iterable[str], internal_only: bool = False) -> List[str]:
     """Return the addresses if ALL of them are allowed, else raise."""
     out = []
     for a in addresses:
@@ -141,6 +162,8 @@ def check_addresses(host: str, addresses: Iterable[str]) -> List[str]:
             raise OutboundBlocked(BLOCKED_MESSAGE) from exc
         if not ip_allowed(ip, host):
             raise OutboundBlocked(BLOCKED_MESSAGE)
+        if internal_only and not ip_internal(ip):
+            raise OutboundBlocked(INTERNAL_ONLY_MESSAGE)
         out.append(a)
     if not out:
         raise OutboundBlocked(f"Could not resolve host '{host}'.")
@@ -173,8 +196,9 @@ def validate_url(url: str) -> str:
 # ---------------------------------------------------------------------------
 
 class _GuardedAsyncBackend(httpcore.AsyncNetworkBackend):
-    def __init__(self, inner: httpcore.AsyncNetworkBackend):
+    def __init__(self, inner: httpcore.AsyncNetworkBackend, internal_only: bool = False):
         self._inner = inner
+        self._internal_only = internal_only
 
     async def connect_tcp(self, host, port, timeout=None, local_address=None, socket_options=None):
         try:
@@ -186,7 +210,7 @@ class _GuardedAsyncBackend(httpcore.AsyncNetworkBackend):
             except OSError as exc:
                 raise OutboundBlocked(f"Could not resolve host '{host}'.") from exc
             addrs = list(dict.fromkeys(str(i[4][0]) for i in infos))
-        addrs = check_addresses(host, addrs)
+        addrs = check_addresses(host, addrs, self._internal_only)
         last: Optional[Exception] = None
         for addr in addrs:  # every address passed the check; try them in order
             try:
@@ -234,9 +258,9 @@ class _GuardedSyncBackend(httpcore.NetworkBackend):
         self._inner.sleep(seconds)
 
 
-def _guard_async(transport: httpx.AsyncHTTPTransport) -> httpx.AsyncHTTPTransport:
+def _guard_async(transport: httpx.AsyncHTTPTransport, internal_only: bool = False) -> httpx.AsyncHTTPTransport:
     pool = transport._pool  # httpx 0.28: the httpcore connection pool
-    pool._network_backend = _GuardedAsyncBackend(pool._network_backend)
+    pool._network_backend = _GuardedAsyncBackend(pool._network_backend, internal_only)
     return transport
 
 
@@ -274,13 +298,14 @@ async def _aprecheck(request: httpx.Request) -> None:
     await anyio.to_thread.run_sync(_precheck, request)
 
 
-def guarded_async_client(**kwargs) -> httpx.AsyncClient:
-    """httpx.AsyncClient for user-configured targets (see module docstring)."""
+def guarded_async_client(*, internal_only: bool = False, **kwargs) -> httpx.AsyncClient:
+    """httpx.AsyncClient for user-configured targets (see module docstring).
+    internal_only: non-global addresses only, never through OUTBOUND_PROXY."""
     limits = kwargs.pop("limits", httpx.Limits(max_keepalive_connections=20, max_connections=100))
-    if settings.OUTBOUND_PROXY:
+    if settings.OUTBOUND_PROXY and not internal_only:
         return httpx.AsyncClient(proxy=settings.OUTBOUND_PROXY, limits=limits, follow_redirects=False,
                                  trust_env=False, event_hooks={"request": [_aprecheck]}, **kwargs)
-    transport = _guard_async(httpx.AsyncHTTPTransport(limits=limits))
+    transport = _guard_async(httpx.AsyncHTTPTransport(limits=limits), internal_only)
     return httpx.AsyncClient(transport=transport, follow_redirects=False, trust_env=False, **kwargs)
 
 

@@ -43,7 +43,8 @@ from app.models.user import User
 # Strict by default: agents act only with their own key, and only agents that
 # can sign may act. An admin can relax either per organization (the UI warns).
 DEFAULTS = {"require_agent_key": True, "rotation_grace_minutes": 60, "require_pq_signatures": False,
-            "allow_direct_registration": False}
+            "allow_direct_registration": False, "require_confined_egress": False, "egress_check_max_age_hours": 24,
+            "default_attestation_policy_id": None}
 LAST_USED_RESOLUTION = timedelta(minutes=1)
 IMPERSONATION_INCIDENT = "agent_impersonation_attempt"
 
@@ -92,6 +93,12 @@ AGENT_ROUTES = [
     # the A2A gateway (app/api/a2a_gateway.py): a peer's card, and JSON-RPC to it
     ("GET", _P + r"/a2a-gateway/[a-z0-9-]+/\.well-known/agent-card\.json$", None, True),
     ("POST", _P + r"/a2a-gateway/[a-z0-9-]+/?$", None, True),
+    # egress checks (app/services/egress_check.py): the key's agent is implied
+    ("POST", _P + r"/agents/egress-check/?$", None, True),
+    ("POST", _P + r"/agents/egress-check/\d+/report/?$", None, True),
+    # the HTTP tool gateway (app/api/http_tools.py): a signed request, for the key's own agent
+    ("GET", _P + r"/http-tools/available/?$", None, True),
+    ("POST", _P + r"/http-tools/call/?$", _body("agent_id"), True),
 ]
 
 
@@ -153,7 +160,10 @@ async def org_settings(db: AsyncSession, org_id: int) -> dict:
         return {**DEFAULTS, "source": "default"}
     return {"require_agent_key": row.require_agent_key, "rotation_grace_minutes": row.rotation_grace_minutes,
             "require_pq_signatures": bool(row.require_pq_signatures),
-            "allow_direct_registration": bool(row.allow_direct_registration), "source": "org"}
+            "allow_direct_registration": bool(row.allow_direct_registration),
+            "require_confined_egress": bool(row.require_confined_egress),
+            "egress_check_max_age_hours": row.egress_check_max_age_hours or 24,
+            "default_attestation_policy_id": row.default_attestation_policy_id, "source": "org"}
 
 
 async def keyless_refused(db: AsyncSession, agent: Agent) -> bool:
@@ -313,6 +323,13 @@ class AgentIdentityService:
             self.db.add(row)
         current = before or DEFAULTS
         values = {k: (current[k] if values.get(k) is None else values[k]) for k in DEFAULTS}
+        # 0 clears the default attestation policy (None keeps it, as for every field)
+        if values["default_attestation_policy_id"] == 0:
+            values["default_attestation_policy_id"] = None
+        elif values["default_attestation_policy_id"] is not None:
+            from app.services.attestation import get_policy
+
+            await get_policy(self.db, org_id, values["default_attestation_policy_id"], lock="share")
         for k in DEFAULTS:
             setattr(row, k, values[k])
         row.updated_by = user_id

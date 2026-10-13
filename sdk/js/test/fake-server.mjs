@@ -64,6 +64,40 @@ export class FakeProvenza {
       this.checks.set(token, { ...body, decision });
       return ok(200, { decision, reason: `policy says ${decision}`, check_id: token, incident_type: null, policy_id: null });
     }
+    if (path === "/agents/42/attestation/challenge") {
+      return ok(200, { agent_id: 42, challenge: "a".repeat(64), kind: "oidc", audience: "provenza" });
+    }
+    if (path === "/agents/42/attestation") {
+      const { createHash } = await import("node:crypto");
+      verifyEd25519(this.publicKey, body.signature, { type: "provenza.agent.attestation", v: 1, challenge: "a".repeat(64),
+        agent_id: 42, kind: "oidc", evidence_sha256: createHash("sha256").update(body.evidence).digest("hex") });
+      this.attested = body;
+      return ok(200, { ok: true, kind: body.kind, identity: { sub: "repo:acme/agents" } });
+    }
+    if (path === "/agents/egress-check") {
+      this.egress = { id: 5, targets: this.egressTargets ?? ["127.0.0.1:9"] };
+      return ok(200, { check_id: 5, targets: this.egress.targets, beacon_url: `${SERVER}/egress-beacon/tok`, expires_at: "x" });
+    }
+    if (path === "/agents/egress-check/5/report") {
+      const sorted = [...body.results].sort((a, b) => (a.target < b.target ? -1 : 1));
+      verifyEd25519(this.publicKey, body.signature, { type: "egress.report", agent_id: 42, check_id: 5,
+                                                      results: sorted, beacon_reached: body.beacon_reached });
+      const open = body.beacon_reached || body.results.some((r) => r.reachable);
+      return ok(200, { check_id: 5, verdict: open ? "open" : "confined", results: sorted });
+    }
+    if (path === "/http-tools/call") {
+      // the HTTP tool gateway: the same signed request; it checks, calls and records itself
+      verifyEd25519(this.publicKey, body.signature, {
+        type: "action.request", agent_id: body.agent_id, chain_id: body.chain_id, action_type: body.action_type,
+        tool_name: body.tool_name, input_sha256: contentHash(body.input), tool_version: null, tool_digest: null,
+        nonce: body.nonce, issued_at: body.issued_at,
+      });
+      const decision = this.verdicts.get(body.tool_name) ?? "allowed";
+      this.invoked = [...(this.invoked ?? []), body];
+      return ok(200, decision === "allowed"
+        ? { decision, reason: "", action_id: 9, status: 200, body: { echo: body.input } }
+        : { decision, reason: `policy says ${decision}`, action_id: 10, incident_type: null });
+    }
     if (path === "/agents/actions/record") {
       if (this.recordFailures > 0) { this.recordFailures--; return ok(503, { detail: "down" }); }
       const chk = this.checks.get(body.check_id);

@@ -8,9 +8,11 @@ import { useAuth } from "@/lib/auth";
 import {
   getIdentityOverview,
   identityError,
+  listEgressChecks,
   revokeKey,
   rotateKey,
   saveIdentitySettings,
+  type EgressCheckT,
   type IdentityOverview,
   type IdentitySettings,
 } from "@/lib/agent_identity_api";
@@ -83,6 +85,7 @@ export default function AgentIdentityPage() {
   const [busy, setBusy] = useState(false);
   const [issued, setIssued] = useState<{ name: string; key: string; until: string | null } | null>(null);
   const [copied, setCopied] = useState(false);
+  const [egress, setEgress] = useState<Record<number, EgressCheckT>>({});
 
   const load = useCallback(() => {
     getIdentityOverview()
@@ -94,6 +97,9 @@ export default function AgentIdentityPage() {
   }, [t]);
 
   useEffect(load, [load]);
+  useEffect(() => {
+    listEgressChecks().then((list) => setEgress(Object.fromEntries(list.map((c) => [c.agent_id, c])))).catch(() => undefined);
+  }, []);
 
   async function run(action: () => Promise<unknown>, ok?: string) {
     setBusy(true);
@@ -134,6 +140,13 @@ export default function AgentIdentityPage() {
           "Require post-quantum signatures? Agents without a hybrid key (Ed25519-only or no signing key) will have their delegations, actions and messages refused until they get one.",
         ),
       );
+      if (!ok) return;
+    }
+    if (form.require_confined_egress && !data.settings.require_confined_egress) {
+      const unchecked = data.agents.filter((a) => a.status === "active" && egress[a.agent_id]?.verdict !== "confined").length;
+      const ok = await confirmDialog(t("identity.confirm_require_egress",
+        "Require confined egress? {{n}} active agents have no recent \"confined\" egress check: their actions will be refused until they run one from a locked-down host.",
+        { n: unchecked }));
       if (!ok) return;
     }
     run(() => saveIdentitySettings(form), t("identity.saved", "Saved"));
@@ -243,6 +256,7 @@ export default function AgentIdentityPage() {
                   <th>{t("identity.col_owner", "Accountable owner")}</th>
                   <th>{t("identity.col_key", "Key")}</th>
                   <th>{t("identity.col_last_used", "Last used")}</th>
+                  <th>{t("identity.col_egress", "Network")}</th>
                   {isAdmin && <th />}
                 </tr>
               </thead>
@@ -268,6 +282,18 @@ export default function AgentIdentityPage() {
                       )}
                     </td>
                     <td style={{ fontSize: 12 }}>{fmt(a.key_last_used_at)}</td>
+                    <td style={{ fontSize: 12 }}>
+                      {egress[a.agent_id] ? (
+                        <>
+                          <span className={`pill ${egress[a.agent_id].verdict === "confined" ? "pill-low" : "pill-critical"}`}>
+                            {t(`identity.egress_${egress[a.agent_id].verdict}`, egress[a.agent_id].verdict)}
+                          </span>
+                          <div className="hint-text" style={{ fontSize: 11 }}>{fmt(egress[a.agent_id].reported_at)}</div>
+                        </>
+                      ) : (
+                        <span className="hint-text">{t("identity.egress_unchecked", "not checked")}</span>
+                      )}
+                    </td>
                     {isAdmin && (
                       <td style={{ whiteSpace: "nowrap" }}>
                         <button className="btn btn-sm btn-primary" disabled={busy || a.status === "retired"} onClick={() => rotate(a.agent_id, a.name)}>
@@ -326,6 +352,23 @@ export default function AgentIdentityPage() {
                 </span>
               </span>
             </label>
+            <label style={{ display: "flex", gap: 10, alignItems: "flex-start", marginBottom: 14 }}>
+              <input type="checkbox" checked={!!form.require_confined_egress} disabled={!isAdmin}
+                onChange={(e) => setForm({ ...form, require_confined_egress: e.target.checked })} style={{ width: "auto", marginTop: 3 }} />
+              <span>
+                <strong>{t("identity.require_egress", "Require confined egress")}</strong>
+                <span className="hint-text" style={{ display: "block", fontSize: 12 }}>
+                  {t("identity.require_egress_hint", "An agent acts only while its latest egress self-check found its host able to reach the egress proxy and nothing else. Lock hosts down with Gateways -> Egress -> Lock agents down.")}
+                </span>
+              </span>
+            </label>
+            {form.require_confined_egress && (
+              <div className="field" style={{ marginTop: -6, maxWidth: 260 }}>
+                <label htmlFor="id-egress-age">{t("identity.egress_age", "A check counts for, hours")}</label>
+                <input id="id-egress-age" type="number" min={1} max={720} disabled={!isAdmin} value={form.egress_check_max_age_hours ?? 24}
+                  onChange={(e) => setForm({ ...form, egress_check_max_age_hours: Number(e.target.value) })} />
+              </div>
+            )}
             <div className="field" style={{ margin: 0, maxWidth: 260 }}>
               <label htmlFor="id-grace">{t("identity.grace", "Rotation grace period, minutes")}</label>
               <input id="id-grace" type="number" min={0} max={1440} disabled={!isAdmin} value={form.rotation_grace_minutes}

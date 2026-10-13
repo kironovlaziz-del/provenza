@@ -42,6 +42,7 @@ from app.models.agent import Agent
 from app.models.agent_action import ActionCheck, AgentAction
 from app.models.delegation import ActionNonce, DelegationChain, DelegationHop, DelegationNonce
 from app.pvp.model import PVPAction, PVPActionRecord, PVPActionRequest, PVPCheck, PVPDelegation
+from app.pvp import permits
 from app.services.agent_audit import AgentAudit
 from app.services.agent_policy_engine import DENIED, Decision
 from app.services.agent_identity import keyless_refused, pq_signature_required
@@ -63,11 +64,15 @@ def _unix(dt: datetime) -> int:
 
 
 async def require_attestation(db: AsyncSession, agent: Agent) -> None:
-    """Agents of a role that requires attestation act only with a current
-    one - also when a user session acts in their name (relaxed organizations)."""
+    """Where the agent runs: agents of a role that requires attestation act
+    only with a current one, and - where the organization requires it - only
+    from a host whose latest egress check found it confined
+    (app/services/egress_check.py). Also when a user session acts in their
+    name (relaxed organizations)."""
+    from app.services import egress_check
     from app.services.attestation import refusal
 
-    code = await refusal(db, agent)
+    code = await refusal(db, agent) or await egress_check.refusal(db, agent)
     if code:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=code)
 
@@ -130,7 +135,17 @@ class PVPOrchestrator:
             tool_name=req.tool_name, input_data=req.input,
             action_capabilities=decision.required_capabilities, decision=decision,
         )
-        return self.check_out(chk)
+        permit = None
+        if chk.decision == "allowed":
+            permit = await permits.issue(self.db, chk)
+            await self.db.commit()
+        return self.check_out(chk, permit)
+
+    async def verify_signed_request(self, org_id: int, agent: Agent, req: PVPActionRequest) -> None:
+        """The agent's own signed action.request (signature, freshness, nonce) -
+        for an executor that then checks on the agent's behalf (the HTTP tool
+        gateway: it adds the tool digest it computed, which the agent did not sign)."""
+        await self._verify_request(org_id, agent, req)
 
     async def _verify_request(self, org_id: int, agent: Agent, req: PVPActionRequest) -> None:
         """Signature (both halves for a hybrid key), freshness, single-use nonce
@@ -366,13 +381,14 @@ class PVPOrchestrator:
     # ---------------------------------------------------- PVP views of rows
 
     @staticmethod
-    def check_out(chk: ActionCheck) -> PVPCheck:
+    def check_out(chk: ActionCheck, permit: Optional[str] = None) -> PVPCheck:
         return PVPCheck(
             check_id=chk.token, agent_id=chk.agent_id, chain_id=chk.chain_id,
             action_type=chk.action_type, tool_name=chk.tool_name, input_sha256=chk.input_sha256,
             decision=chk.decision, reason=chk.reason or "", incident_type=chk.incident_type,
             policy_id=chk.policy_id, required_capabilities=list(chk.action_capabilities or []),
-            expires_at=_unix(chk.expires_at),
+            expires_at=_unix(chk.expires_at), permit=permit, permit_id=chk.permit_jti,
+            permit_redeemed_at=_unix(chk.permit_redeemed_at) if chk.permit_redeemed_at else None,
         )
 
     @staticmethod

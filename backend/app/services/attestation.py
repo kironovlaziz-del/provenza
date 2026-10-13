@@ -39,7 +39,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import agent_signing as sig
-from app.core import k8s_attest
+from app.core import k8s_attest, oidc_attest
 from app.core.errors import api_error
 from app.core.outbound import guarded_async_client
 from app.core.k8s_attest import AttestationError
@@ -49,7 +49,8 @@ from app.models.team import RoleTemplate
 
 CHALLENGE_TTL = timedelta(minutes=5)
 STATEMENT_TYPE = "provenza.agent.attestation"
-KINDS = ("k8s_sa",)
+KINDS = ("k8s_sa", "oidc")
+BINDING_INCIDENT = "attestation_workload_changed"
 JWKS_TTL_SECONDS = 3600  # discovery documents and keys: not fetched per request
 _jwks_cache: Dict[str, Tuple[float, Dict[str, Any]]] = {}
 
@@ -77,6 +78,7 @@ def policy_out(p: AttestationPolicy, roles: int = 0) -> Dict[str, Any]:
             "audience": p.audience, "jwks_keys": [k.get("kid") for k in keys if isinstance(k, dict)],
             "jwks_url": p.jwks_url, "namespaces": list(p.namespaces or []),
             "service_accounts": list(p.service_accounts or []), "require_pod_bound": p.require_pod_bound,
+            "claim_rules": dict(p.claim_rules or {}),
             "validity_minutes": p.validity_minutes, "roles": roles,
             "updated_at": _aware(p.updated_at).isoformat() if p.updated_at else None}
 
@@ -88,7 +90,12 @@ def _bad(e: AttestationError):
 
 def _validated(values: Dict[str, Any], current: Optional[AttestationPolicy] = None) -> Dict[str, Any]:
     out = dict(values)
+    kind = out.get("kind", current.kind if current else "k8s_sa")
+    if kind not in KINDS:
+        raise api_error(status.HTTP_422_UNPROCESSABLE_ENTITY, "attestation.unsupported_kind")
     try:
+        if "claim_rules" in out or (current is None and kind == "oidc"):
+            out["claim_rules"] = oidc_attest.normalize_rules(out.get("claim_rules")) if kind == "oidc" else {}
         if "namespaces" in out:
             out["namespaces"] = k8s_attest.normalize_patterns(out["namespaces"], with_slash=False)
         if "service_accounts" in out:
@@ -101,16 +108,17 @@ def _validated(values: Dict[str, Any], current: Optional[AttestationPolicy] = No
         out["audience"] = out.get("audience") or "provenza"
         if not out.get("issuer"):
             raise api_error(status.HTTP_422_UNPROCESSABLE_ENTITY, "attestation.issuer_required")
-    ns = out.get("namespaces", current.namespaces if current else [])
-    sas = out.get("service_accounts", current.service_accounts if current else [])
-    if not ns and not sas:
-        # without either rule, any workload of the cluster would pass
-        raise api_error(status.HTTP_422_UNPROCESSABLE_ENTITY, "attestation.no_workload_rule")
-    try:
-        k8s_attest.check_audience(out.get("audience", current.audience if current else "provenza"),
-                                  out.get("issuer", current.issuer if current else ""))
-    except AttestationError as e:
-        raise _bad(e)
+    if kind == "k8s_sa":
+        ns = out.get("namespaces", current.namespaces if current else [])
+        sas = out.get("service_accounts", current.service_accounts if current else [])
+        if not ns and not sas:
+            # without either rule, any workload of the cluster would pass
+            raise api_error(status.HTTP_422_UNPROCESSABLE_ENTITY, "attestation.no_workload_rule")
+        try:
+            k8s_attest.check_audience(out.get("audience", current.audience if current else "provenza"),
+                                      out.get("issuer", current.issuer if current else ""))
+        except AttestationError as e:
+            raise _bad(e)
     for k in ("issuer", "jwks_url"):
         v = out.get(k)
         if v and not str(v).startswith("https://"):
@@ -179,6 +187,8 @@ async def delete_policy(db: AsyncSession, org_id: int, policy_id: int) -> Dict[s
         RoleTemplate.org_id == org_id, RoleTemplate.attestation_policy_id == p.id))).scalar_one()
     if roles:
         raise api_error(status.HTTP_409_CONFLICT, "attestation.policy_in_use", roles=roles)
+    if await _org_default_id(db, org_id) == p.id:
+        raise api_error(status.HTTP_409_CONFLICT, "attestation.policy_is_default")
     snapshot = policy_out(p)
     await db.delete(p)
     return snapshot
@@ -252,11 +262,17 @@ async def _jwks_for(p: AttestationPolicy, refresh: bool = False) -> Dict[str, An
 
 async def check_evidence(p: AttestationPolicy, token: str) -> Dict[str, Any]:
     """The workload identity in `token`, if it passes policy `p`."""
-    if p.kind != "k8s_sa":
+    if p.kind not in KINDS:
         raise AttestationError("attestation.unsupported_kind", p.kind)
-    jwks = await _jwks_for(p)
+
+    def verify(jwks: Dict[str, Any]) -> Dict[str, Any]:
+        if p.kind == "oidc":
+            return oidc_attest.verify_token(token, issuer=p.issuer, audience=p.audience, jwks=jwks,
+                                            rules=dict(p.claim_rules or {}))
+        return k8s_attest.verify_token(token, issuer=p.issuer, audience=p.audience, jwks=jwks)
+
     try:
-        identity = k8s_attest.verify_token(token, issuer=p.issuer, audience=p.audience, jwks=jwks)
+        identity = verify(await _jwks_for(p))
     except AttestationError as e:
         if e.code != "attestation.unknown_key" or p.jwks:
             raise
@@ -266,10 +282,10 @@ async def check_evidence(p: AttestationPolicy, token: str) -> Dict[str, Any]:
         if time.monotonic() - _last_refetch.get(key, -1e9) < MIN_REFETCH_SECONDS:
             raise
         _last_refetch[key] = time.monotonic()
-        identity = k8s_attest.verify_token(token, issuer=p.issuer, audience=p.audience,
-                                           jwks=await _jwks_for(p, refresh=True))
-    k8s_attest.check_identity(identity, namespaces=list(p.namespaces or []),
-                              service_accounts=list(p.service_accounts or []), require_pod=p.require_pod_bound)
+        identity = verify(await _jwks_for(p, refresh=True))
+    if p.kind == "k8s_sa":
+        k8s_attest.check_identity(identity, namespaces=list(p.namespaces or []),
+                                  service_accounts=list(p.service_accounts or []), require_pod=p.require_pod_bound)
     return identity
 
 
@@ -296,11 +312,31 @@ async def _locked(db: AsyncSession, agent: Agent) -> Agent:
     )).scalar_one()
 
 
-async def _policy_for(db: AsyncSession, agent: Agent) -> AttestationPolicy:
+async def _org_default_id(db: AsyncSession, org_id: int) -> Optional[int]:
+    from app.models.agent_identity import AgentIdentitySettings
+
+    return (await db.execute(select(AgentIdentitySettings.default_attestation_policy_id).where(
+        AgentIdentitySettings.org_id == org_id))).scalar_one_or_none()
+
+
+async def _policy_id_for(db: AsyncSession, agent: Agent) -> Tuple[Optional[int], bool]:
+    """(the policy the agent attests under, whether it must): its role's
+    policy, else the organization's default policy - which every agent must
+    satisfy."""
     role = await _role(db, agent)
-    if role is None or role.attestation_policy_id is None:
+    if role is not None and role.attestation_policy_id is not None:
+        return role.attestation_policy_id, bool(role.require_attestation)
+    if role is not None and role.require_attestation:
+        return None, True
+    default = await _org_default_id(db, agent.org_id)
+    return default, default is not None
+
+
+async def _policy_for(db: AsyncSession, agent: Agent) -> AttestationPolicy:
+    policy_id, _ = await _policy_id_for(db, agent)
+    if policy_id is None:
         raise api_error(status.HTTP_409_CONFLICT, "attestation.no_policy")
-    return await get_policy(db, agent.org_id, role.attestation_policy_id)
+    return await get_policy(db, agent.org_id, policy_id)
 
 
 async def challenge(db: AsyncSession, agent: Agent) -> Dict[str, Any]:
@@ -371,6 +407,11 @@ async def attest(db: AsyncSession, agent: Agent, *, challenge_value: str, kind: 
                 # one pod's token attests one agent: a second agent holding a
                 # copy of it is exactly what attestation is meant to catch
                 raise AttestationError("attestation.token_reused", f"already attested agent {other}")
+            # the workload this agent is bound to: the first that passes; any
+            # other workload with this agent's key is what attestation is for
+            bound = await _bind(db, agent.id, identity)
+            if bound is not None:
+                raise AttestationError("attestation.workload_changed", f"bound to {bound}"[:200])
             row.identity = identity
             row.ok = True
             # never longer than the policy allows, and never past the token's
@@ -379,6 +420,12 @@ async def attest(db: AsyncSession, agent: Agent, *, challenge_value: str, kind: 
                                   datetime.fromtimestamp(identity["exp"], timezone.utc))
         except AttestationError as e:
             row.reason, row.detail = e.code, (e.detail or "")[:500]
+            if e.code == "attestation.workload_changed":
+                from app.models.agent_action import AgentIncident
+
+                row.identity = {"iss": identity.get("iss"), "sub": identity.get("sub")}
+                db.add(AgentIncident(org_id=agent.org_id, agent_id=agent.id, incident_type=BINDING_INCIDENT,
+                                     severity="critical", details={"bound": e.detail, "presented": row.identity}))
             if e.code == "attestation.workload_not_allowed":
                 # what the token said, verified: helps the admin fix the policy
                 row.identity = {"workload": e.detail}
@@ -423,14 +470,15 @@ async def current(db: AsyncSession, agent: Agent, p: AttestationPolicy) -> Optio
 
 
 async def refusal(db: AsyncSession, agent: Agent) -> Optional[str]:
-    """None when the agent may act; else the error code. Only agents whose
-    role requires attestation are concerned."""
-    role = await _role(db, agent)
-    if role is None or not role.require_attestation:
+    """None when the agent may act; else the error code. Agents whose role
+    requires attestation are concerned, and every agent when the organization
+    has a default policy."""
+    policy_id, required = await _policy_id_for(db, agent)
+    if not required:
         return None
-    if role.attestation_policy_id is None:
+    if policy_id is None:
         return "agent.attestation_policy_missing"
-    p = await db.get(AttestationPolicy, role.attestation_policy_id)
+    p = await db.get(AttestationPolicy, policy_id)
     if p is None:
         return "agent.attestation_policy_missing"
     return None if await current(db, agent, p) is not None else "agent.attestation_required"
@@ -440,12 +488,15 @@ async def status_of(db: AsyncSession, org_id: int, agent_id: int) -> Dict[str, A
     agent = (await db.execute(select(Agent).where(Agent.id == agent_id, Agent.org_id == org_id))).scalar_one_or_none()
     if agent is None:
         raise api_error(status.HTTP_404_NOT_FOUND, "agent.not_found")
-    role = await _role(db, agent)
-    p = await db.get(AttestationPolicy, role.attestation_policy_id) if role and role.attestation_policy_id else None
+    policy_id, required = await _policy_id_for(db, agent)
+    p = await db.get(AttestationPolicy, policy_id) if policy_id else None
     valid = await current(db, agent, p) if p else None
     last = (await db.execute(select(AgentAttestation).where(AgentAttestation.agent_id == agent.id)
                              .order_by(AgentAttestation.id.desc()).limit(1))).scalar_one_or_none()
-    return {"required": bool(role and role.require_attestation), "policy": policy_out(p) if p else None,
+    return {"required": required, "policy": policy_out(p) if p else None,
+            "binding": {"issuer": agent.attested_issuer, "subject": agent.attested_subject,
+                        "bound_at": _aware(agent.attested_bound_at).isoformat() if agent.attested_bound_at else None}
+            if agent.attested_subject else None,
             "refusal": await refusal(db, agent),
             "current": attestation_out(valid, p) if valid else None,
             "last": attestation_out(last, await db.get(AttestationPolicy, last.policy_id) if last and last.policy_id
@@ -468,3 +519,39 @@ async def list_attestations(db: AsyncSession, org_id: int, agent_id: Optional[in
         d["policy"] = names.get(a.policy_id)
         out.append(d)
     return out
+
+
+# --------------------------------------------------------------------------- workload binding
+def _workload(identity: Dict[str, Any]) -> Tuple[str, str]:
+    return str(identity.get("iss") or "")[:500], str(identity.get("sub") or "")[:500]
+
+
+async def _bind(db: AsyncSession, agent_id: int, identity: Dict[str, Any]) -> Optional[str]:
+    """Bind an unbound agent to this workload (atomically: two first
+    attestations racing bind one). Returns the workload it is bound to when
+    that is another one, else None."""
+    from sqlalchemy import update
+
+    iss, sub = _workload(identity)
+    await db.execute(update(Agent).where(Agent.id == agent_id, Agent.attested_subject.is_(None)).values(
+        attested_issuer=iss, attested_subject=sub, attested_bound_at=_now()))
+    bound = (await db.execute(select(Agent.attested_issuer, Agent.attested_subject).where(
+        Agent.id == agent_id).execution_options(populate_existing=True))).one()
+    return None if (bound[0], bound[1]) == (iss, sub) else f"{bound[0]} {bound[1]}"
+
+
+async def unbind(db: AsyncSession, org_id: int, agent_id: int) -> Dict[str, Any]:
+    """An admin releases the binding (the agent moved): its next passing
+    attestation binds it again. Its current attestations stop counting."""
+    from sqlalchemy import update
+
+    agent = (await db.execute(select(Agent).where(Agent.id == agent_id, Agent.org_id == org_id)
+                              .with_for_update())).scalar_one_or_none()
+    if agent is None:
+        raise api_error(status.HTTP_404_NOT_FOUND, "agent.not_found")
+    before = {"issuer": agent.attested_issuer, "subject": agent.attested_subject}
+    agent.attested_issuer = agent.attested_subject = agent.attested_bound_at = None
+    await db.execute(update(AgentAttestation).where(AgentAttestation.agent_id == agent.id,
+                                                    AgentAttestation.valid_until > _now())
+                     .values(valid_until=_now()))
+    return before

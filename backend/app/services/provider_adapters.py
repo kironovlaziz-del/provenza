@@ -16,6 +16,7 @@ from typing import Any, Dict, Optional, Tuple
 import httpx
 
 from app.core.outbound import error_detail, guarded_async_client
+from app.services import provider_policy
 
 DEFAULT_TIMEOUT = httpx.Timeout(60.0, connect=10.0)
 
@@ -24,8 +25,20 @@ DEFAULT_TIMEOUT = httpx.Timeout(60.0, connect=10.0)
 _http_client: Optional[httpx.AsyncClient] = None
 
 
+_internal_client: Optional[httpx.AsyncClient] = None
+
+
 def _get_client() -> httpx.AsyncClient:
-    global _http_client
+    """The shared client - the internal-only one while the organization's
+    policy allows only self-hosted providers (services/provider_policy.py)."""
+    global _http_client, _internal_client
+    if provider_policy.self_hosted_only():
+        if _internal_client is None:
+            _internal_client = guarded_async_client(
+                internal_only=True, timeout=DEFAULT_TIMEOUT,
+                limits=httpx.Limits(max_keepalive_connections=20, max_connections=100),
+            )
+        return _internal_client
     if _http_client is None:
         # Guarded: base URLs are admin-supplied, so private/internal targets
         # are refused at connect time (core/outbound.py).

@@ -33,7 +33,7 @@ from app.models.discovered_service import DiscoveredService
 from app.models.service_connection import ServiceConnection
 from app.models.agent import Agent, AgentKeyRevocation, AgentPolicy, AgentSigningKey
 from app.models.delegation import ActionNonce, DelegationChain, DelegationHop, DelegationNonce
-from app.models.agent_action import AgentAction, AgentIncident, ActionCheck
+from app.models.agent_action import AgentAction, AgentIncident, ActionCheck, PermitSigningKey
 from app.models.ai_system import AISystem, AISystemDataLink
 from app.models.breaker import AgentBreakerSettings
 from app.models.tool_registry import SupplyChainSettings, ToolRegistryEntry
@@ -59,6 +59,8 @@ from app.models.pii import PiiRule, PiiSettings
 from app.models.blocked_term import BlockedTerm, BlockedTermCategory
 from app.models.pvp_guard import PVPGuardLog
 from app.models.mcp import MCPServer, MCPTool
+from app.models.http_tool import HttpTool
+from app.models.egress_check import AgentEgressCheck
 from app.models.a2a_gateway import A2APeer, A2ATask
 from app.models.pvp_seal import PVPActionSeal
 from app.models.egress_proxy import EgressProxy, EgressRedemption, EgressRoute

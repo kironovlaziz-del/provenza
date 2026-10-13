@@ -100,3 +100,35 @@ def test_a_js_audit_log_verifies_with_the_python_sdk(tmp_path):
     assert verify(Path(out["log"]), out["pub"]) == []
     lines = Path(out["log"]).read_text().splitlines()
     assert len(lines) == 3 and json.loads(lines[1])["seq"] == 2
+
+
+VERIFY_PERMIT = """
+import { PermitVerifier } from "%(dist)s/index.js";
+const { permit, jwks, org, input } = JSON.parse(process.argv[1]);
+const fetch = async () => Response.json(jwks);
+const v = new PermitVerifier("http://test", org, { fetch, redeem: false });
+const p = await v.verify(permit, { tool: "db.read", input });
+let other = null;
+try { await new PermitVerifier("http://test", org, { fetch, redeem: false }).verify(permit, { tool: "db.read", input: { q: 2 } }); }
+catch (e) { other = e.code; }
+console.log(JSON.stringify({ agentId: p.agentId, tool: p.tool, other }));
+"""
+
+
+@pytest.mark.asyncio
+async def test_a_permit_of_this_server_verifies_in_js(client, admin_token, db_session):
+    from app.models.agent import Agent as AgentRow
+    from app.models.organization import Organization
+
+    agent = await enroll(client, admin_token, name="js-permit", capabilities=("read",), allowed_tools=("db.read",))
+    data = {"q": "select 1", "text": "héllo 😀", "n": 1e-7}
+    r = await client.post("/api/v1/agents/actions/check", json={
+        "agent_id": agent["id"], "action_type": "tool_call", "tool_name": "db.read", "input": data,
+    }, headers={"X-Agent-Key": agent["api_key"]})
+    assert r.status_code == 200 and r.json()["permit"], r.text
+    org_id = (await db_session.get(AgentRow, agent["id"])).org_id
+    org = (await db_session.get(Organization, org_id)).slug
+    jwks = (await client.get(f"/api/v1/pvp/permits/{org}/jwks.json")).json()
+    out = json.loads(_node(VERIFY_PERMIT, json.dumps({"permit": r.json()["permit"], "jwks": jwks, "org": org,
+                                                      "input": data})))
+    assert out == {"agentId": agent["id"], "tool": "db.read", "other": "permit.mismatch"}

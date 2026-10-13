@@ -33,6 +33,7 @@ import asyncio
 import contextlib
 import contextvars
 import functools
+import hashlib
 import inspect
 import json
 import os
@@ -43,11 +44,13 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, Optional, TypeVar
 
+from provenza import egress_check
 from provenza import identity as ids
 from provenza import proxy as egress_proxy
 from provenza.audit_log import AuditLog
 from provenza.client import Client
 from provenza.crypto import Keys, canonical, content_hash
+from provenza.permit import HEADER as PERMIT_HEADER
 from provenza.errors import (ProvenzaApprovalRequired, ProvenzaConfigError, ProvenzaDenied, ProvenzaRequestError,
                              ProvenzaUnavailable)
 
@@ -81,10 +84,18 @@ class Check:
     chain_id: Optional[int] = None
     incident_type: Optional[str] = None
     policy_id: Optional[int] = None
+    # allowed: the signed permit the tool verifies (provenza.permit)
+    permit: Optional[str] = field(default=None, repr=False)
 
     @property
     def allowed(self) -> bool:
         return self.decision == "allowed"
+
+    @property
+    def permit_headers(self) -> Dict[str, str]:
+        """For a tool behind provenza.permit: the header it verifies. Send the
+        checked input as the request's JSON body."""
+        return {PERMIT_HEADER: self.permit} if self.permit else {}
 
     @property
     def proxy_headers(self) -> Dict[str, str]:
@@ -267,7 +278,8 @@ class Agent:
     def _check_of(res: Dict[str, Any], tool: ToolSpec, input: Dict[str, Any], chain_id: Optional[int]) -> Check:
         return Check(check_id=res["check_id"], decision=res["decision"], reason=res.get("reason") or "",
                      tool=tool.name, action_type=tool.action_type, input=input, chain_id=chain_id,
-                     incident_type=res.get("incident_type"), policy_id=res.get("policy_id"))
+                     incident_type=res.get("incident_type"), policy_id=res.get("policy_id"),
+                     permit=res.get("permit"))
 
     def _record_body(self, chk: Check, output: Optional[Dict[str, Any]], duration_ms: Optional[int]) -> Dict[str, Any]:
         payload = {"check_id": chk.check_id, "agent_id": self.agent_id, "chain_id": chk.chain_id,
@@ -297,6 +309,84 @@ class Agent:
         cid = chain_id if chain_id is not None else _chain.get()
         res = await self._connected().apost("/agents/actions/check", self._check_body(spec, inp, cid))
         return self._check_of(res, spec, inp, cid)
+
+    def invoke(self, tool: str, arguments: Dict[str, Any], *, chain_id: Optional[int] = None) -> Dict[str, Any]:
+        """Call an HTTP tool registered in Provenza: the server checks, calls the
+        API with the credential it holds, and records - in one operation. The
+        result is {"decision", "reason", "action_id", "status", "body"} for an
+        allowed call ("error" / "withheld" instead of "body" when the API failed
+        or the answer was refused). A refusal raises ProvenzaDenied."""
+        spec, inp = ToolSpec(tool), _json_value(arguments, "arguments")
+        cid = chain_id if chain_id is not None else _chain.get()
+        return self._invoked(tool, self._connected().post("/http-tools/call", self._check_body(spec, inp, cid)))
+
+    async def ainvoke(self, tool: str, arguments: Dict[str, Any], *,
+                      chain_id: Optional[int] = None) -> Dict[str, Any]:
+        spec, inp = ToolSpec(tool), _json_value(arguments, "arguments")
+        cid = chain_id if chain_id is not None else _chain.get()
+        return self._invoked(tool, await self._connected().apost("/http-tools/call",
+                                                                 self._check_body(spec, inp, cid)))
+
+    def attest(self, evidence: str) -> Dict[str, Any]:
+        """Prove where this agent runs (provenza.attest has the token sources).
+        Returns the server's record: {"ok", "reason", "identity", "valid_until", ...}."""
+        c = self._connected()
+        ch = c.post(f"/agents/{self.agent_id}/attestation/challenge", {})
+        return c.post(f"/agents/{self.agent_id}/attestation", self._attestation(ch, evidence))
+
+    async def aattest(self, evidence: str) -> Dict[str, Any]:
+        c = self._connected()
+        ch = await c.apost(f"/agents/{self.agent_id}/attestation/challenge", {})
+        return await c.apost(f"/agents/{self.agent_id}/attestation", self._attestation(ch, evidence))
+
+    def _attestation(self, ch: Dict[str, Any], evidence: str) -> Dict[str, Any]:
+        evidence = evidence.strip()
+        sig, pq = self.identity.keys.sign({
+            "type": "provenza.agent.attestation", "v": 1, "challenge": ch["challenge"], "agent_id": self.agent_id,
+            "kind": ch["kind"], "evidence_sha256": hashlib.sha256(evidence.encode()).hexdigest()})
+        body = {"challenge": ch["challenge"], "kind": ch["kind"], "evidence": evidence, "signature": sig}
+        if pq:
+            body["pq_signature"] = pq
+        return body
+
+    def egress_selfcheck(self, timeout: float = 3.0) -> Dict[str, Any]:
+        """Is this host confined to the egress proxy? Tries the server's targets
+        and beacon directly and reports, signed (provenza.egress_check). Returns
+        the server's verdict: {"verdict": "confined" | "open", ...}."""
+        c = self._connected()
+        started = c.post("/agents/egress-check", {})
+        results = [{"target": t, "reachable": egress_check.connect(t, timeout)} for t in started["targets"]]
+        return c.post(f"/agents/egress-check/{started['check_id']}/report",
+                      self._egress_report(started, results, egress_check.beacon(started["beacon_url"], timeout)))
+
+    async def aegress_selfcheck(self, timeout: float = 3.0) -> Dict[str, Any]:
+        c = self._connected()
+        started = await c.apost("/agents/egress-check", {})
+        reached = await asyncio.gather(*(egress_check.aconnect(t, timeout) for t in started["targets"]))
+        results = [{"target": t, "reachable": r} for t, r in zip(started["targets"], reached)]
+        return await c.apost(f"/agents/egress-check/{started['check_id']}/report",
+                             self._egress_report(started, results,
+                                                 await egress_check.abeacon(started["beacon_url"], timeout)))
+
+    def _egress_report(self, started: Dict[str, Any], results: list, beacon_reached: bool) -> Dict[str, Any]:
+        sig, pq = self.identity.keys.sign(egress_check.payload(self.agent_id, started["check_id"], results,
+                                                               beacon_reached))
+        body = {"results": results, "beacon_reached": beacon_reached, "signature": sig}
+        if pq:
+            body["pq_signature"] = pq
+        return body
+
+    def http_tools(self) -> list:
+        """The HTTP tools this agent may invoke: name, description, method, input_schema."""
+        return self._connected().get("/http-tools/available")["tools"]
+
+    @staticmethod
+    def _invoked(tool: str, res: Dict[str, Any]) -> Dict[str, Any]:
+        if res.get("decision") != "allowed":
+            cls = ProvenzaApprovalRequired if res.get("decision") == "pending_approval" else ProvenzaDenied
+            raise cls(tool, res.get("reason") or "", res.get("decision") or "denied", res.get("incident_type"),
+                      None, res.get("action_id"))
+        return res
 
     def proxy_check(self, route: str, method: str, path: str, *, query=None, body=None,
                     chain_id: Optional[int] = None) -> Check:

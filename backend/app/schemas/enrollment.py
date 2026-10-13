@@ -104,12 +104,13 @@ class RotateIn(BaseModel):
 
 
 class AttestIn(BaseModel):
-    """An agent's attestation: the evidence (a Kubernetes ServiceAccount token)
-    and the agent's signature over {challenge, agent_id, kind, sha256(evidence)}."""
+    """An agent's attestation: the evidence (a Kubernetes ServiceAccount token,
+    or an OIDC workload identity token) and the agent's signature over
+    {challenge, agent_id, kind, sha256(evidence)}."""
     model_config = ConfigDict(extra="forbid")
 
     challenge: str = Field(pattern=r"^[0-9a-f]{64}$")
-    kind: str = Field(default="k8s_sa", pattern="^k8s_sa$")
+    kind: str = Field(default="k8s_sa", pattern="^(k8s_sa|oidc)$")
     evidence: str = Field(min_length=10, max_length=16384)
     signature: str = Field(min_length=10, max_length=200)
     pq_signature: Optional[str] = Field(default=None, max_length=6000)

@@ -77,6 +77,11 @@ celery_app.conf.beat_schedule = {
         "task": "pvp.prune_nonces",
         "schedule": crontab(minute=23),
     },
+    # Old egress checks; each agent's latest verdict stays.
+    "pvp-prune-egress-checks": {
+        "task": "pvp.prune_egress_checks",
+        "schedule": crontab(hour=4, minute=37),
+    },
 }
 
 from app.workers import (  # noqa: E402,F401

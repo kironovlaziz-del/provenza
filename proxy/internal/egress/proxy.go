@@ -91,7 +91,9 @@ type Proxy struct {
 	cfg      *Config
 	srv      *server
 	upstream *http.Client
-	log      *slog.Logger
+	// relayClient carries /_provenza/... to the server (relay.go); nil when relay_provenza is off
+	relayClient *http.Client
+	log         *slog.Logger
 
 	mu     sync.RWMutex
 	routes map[string]Route
@@ -103,10 +105,14 @@ func New(cfg *Config, proxyKey string, logger *slog.Logger) *Proxy {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return &Proxy{cfg: cfg, srv: newServer(cfg.ServerURL, proxyKey, cfg.ServerTimeout.Duration), log: logger,
-		upstream: &http.Client{Timeout: cfg.UpstreamTimeout.Duration,
-			// a redirect goes back to the agent: following it here would carry the credential elsewhere
-			CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}}
+	noRedirect := func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+	p := &Proxy{cfg: cfg, srv: newServer(cfg.ServerURL, proxyKey, cfg.ServerTimeout.Duration), log: logger,
+		// a redirect goes back to the agent: following it here would carry the credential elsewhere
+		upstream: &http.Client{Timeout: cfg.UpstreamTimeout.Duration, CheckRedirect: noRedirect}}
+	if cfg.RelayProvenza {
+		p.relayClient = &http.Client{Timeout: cfg.UpstreamTimeout.Duration, CheckRedirect: noRedirect}
+	}
+	return p
 }
 
 // Refresh loads the route table (and server-held secrets) once.
@@ -168,6 +174,14 @@ func refuse(w http.ResponseWriter, status int, code, message string) {
 func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// /<route>/<path>, on the raw (escaped) path: what is checked is what is sent
 	raw := r.URL.EscapedPath()
+	if raw == RelayPrefix || strings.HasPrefix(raw, RelayPrefix+"/") {
+		if p.relayClient == nil {
+			refuse(w, http.StatusNotFound, "provenza_relay_off", "this proxy does not relay to Provenza (relay_provenza)")
+			return
+		}
+		p.relay(w, r, raw)
+		return
+	}
 	slug, rest, _ := strings.Cut(strings.TrimPrefix(raw, "/"), "/")
 	path := "/" + rest
 	route, ok := p.route(slug)

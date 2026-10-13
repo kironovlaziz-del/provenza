@@ -31,6 +31,9 @@ type Config struct {
 	UpstreamTimeout  Duration               `json:"upstream_timeout,omitempty"`   // default 60s
 	ServerTimeout    Duration               `json:"server_timeout,omitempty"`     // default 10s
 	AllowNonLoopback bool                   `json:"allow_non_loopback,omitempty"` // e.g. a gateway host on a network only agents reach
+	// RelayProvenza passes /_provenza/api/v1/... to server_url, so an agent whose
+	// network reaches only this proxy still reaches Provenza (relay.go)
+	RelayProvenza bool `json:"relay_provenza,omitempty"`
 }
 
 // Duration reads "30s", "2m" from JSON.

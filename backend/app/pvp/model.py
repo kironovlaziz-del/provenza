@@ -253,7 +253,7 @@ class PVPActionRequest(_ActionShape):
 class PVPCheck(_ActionShape):
     """The verdict for one proposed action, bound to it by input_sha256. The
     check_id is single-use and expires: recording presents it once, for
-    exactly this action."""
+    exactly this action. An allowed check carries a permit for the tool."""
     type: Literal["action.check"] = "action.check"
     check_id: CheckToken
     input_sha256: Sha256Hex
@@ -263,6 +263,11 @@ class PVPCheck(_ActionShape):
     policy_id: Optional[Id] = None
     required_capabilities: List[Name] = Field(default_factory=list, max_length=MAX_LIST)
     expires_at: UnixTime
+    # allowed checks: the signed permit for the tool (app/pvp/permits.py) - the
+    # token only in the answer to the check, its id and redemption ever after
+    permit: Optional[Annotated[StrictStr, Field(max_length=4096)]] = None
+    permit_id: Optional[Annotated[StrictStr, Field(max_length=64)]] = None
+    permit_redeemed_at: Optional[UnixTime] = None
 
 
 class PVPActionRecord(_ActionShape):
@@ -312,7 +317,7 @@ class PVPAction(_ActionShape):
     # None = the agent performed the call and reported it; a gateway name =
     # Provenza performed it on the agent's behalf (no agent signature: the
     # gateway is the witness, and the audit log holds its record)
-    executed_by: Optional[Literal["mcp_gateway", "a2a_gateway", "egress_proxy"]] = None
+    executed_by: Optional[Literal["mcp_gateway", "a2a_gateway", "egress_proxy", "http_gateway"]] = None
 
     @model_validator(mode="after")
     def _evidence(self):

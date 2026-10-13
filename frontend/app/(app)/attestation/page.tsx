@@ -2,7 +2,9 @@
 
 // Workload attestation: policies saying where agents must prove they run
 // (Kubernetes ServiceAccount tokens of a cluster, from allowed namespaces /
-// service accounts), a token tester, and every attestation attempt.
+// service accounts; or OIDC workload tokens - GitHub Actions, Google Cloud,
+// Azure, GitLab, SPIFFE - matched by claim rules), the organization's default
+// policy, a token tester, and every attestation attempt.
 
 import React, { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
@@ -12,18 +14,22 @@ import { PageHeader } from "@/components/PageHeader";
 import { useAuth } from "@/lib/auth";
 import { errorMessage as apiError } from "@/lib/errors";
 import {
-  attestCommand, createPolicy, deletePolicy, listAttestations, listPolicies, podSpecSnippet, testPolicy,
-  updatePolicy, type AttestationPolicyT, type AttestationT, type PolicyInput,
+  attestCommand, createPolicy, deletePolicy, listAttestations, listPolicies, oidcPresets, podSpecSnippet, rulesToText,
+  testPolicy, textToRules, updatePolicy, type AttestationKind, type AttestationPolicyT, type AttestationT,
+  type OidcPresets, type PolicyInput,
 } from "@/lib/attestation_api";
+import { getIdentityOverview, saveIdentitySettings, type IdentitySettings } from "@/lib/agent_identity_api";
+import { workloadOf } from "@/components/AgentAttestation";
 import { confirmDialog } from "@/components/Dialog";
 
 type JwksMode = "paste" | "url" | "discovery";
 type PolicyForm = {
-  id: number | null; name: string; description: string; issuer: string; audience: string; jwksMode: JwksMode;
+  id: number | null; kind: AttestationKind; rules: string;
+  name: string; description: string; issuer: string; audience: string; jwksMode: JwksMode;
   jwks: string; jwksUrl: string; namespaces: string; serviceAccounts: string; requirePod: boolean; validity: number;
 };
 const EMPTY: PolicyForm = {
-  id: null, name: "", description: "", issuer: "", audience: "provenza", jwksMode: "paste", jwks: "", jwksUrl: "",
+  id: null, kind: "k8s_sa", rules: "", name: "", description: "", issuer: "", audience: "provenza", jwksMode: "paste", jwks: "", jwksUrl: "",
   namespaces: "", serviceAccounts: "", requirePod: true, validity: 60,
 };
 
@@ -44,6 +50,8 @@ export default function AttestationPage() {
   const [testFor, setTestFor] = useState<number | null>(null);
   const [testToken, setTestToken] = useState("");
   const [testResult, setTestResult] = useState<Awaited<ReturnType<typeof testPolicy>> | null>(null);
+  const [presets, setPresets] = useState<OidcPresets>({});
+  const [identity, setIdentity] = useState<IdentitySettings | null>(null);
 
   const load = useCallback(() => {
     Promise.all([listPolicies(), listAttestations(undefined, 50)])
@@ -51,12 +59,29 @@ export default function AttestationPage() {
       .catch((err) => setError(apiError(err, t, t("attest.load_failed"))));
   }, [t]);
   useEffect(load, [load]);
+  useEffect(() => {
+    oidcPresets().then(setPresets).catch(() => undefined);
+    if (isAdmin) getIdentityOverview().then((o) => setIdentity(o.settings)).catch(() => undefined);
+  }, [isAdmin]);
+
+  async function setDefault(policyId: number | null) {
+    if (!identity) return;
+    if (policyId !== null && !await confirmDialog(t("attest.confirm_default"))) return;
+    setError(null);
+    try {
+      await saveIdentitySettings({ ...identity, default_attestation_policy_id: policyId ?? 0 });
+      setIdentity({ ...identity, default_attestation_policy_id: policyId });
+      setNotice(t("attest.saved"));
+    } catch (err) {
+      setError(apiError(err, t, t("attest.failed")));
+    }
+  }
 
   const fmt = (iso: string | null) => (iso ? new Date(iso).toLocaleString(i18n.language) : "—");
 
   function edit(p: AttestationPolicyT) {
     setForm({
-      id: p.id, name: p.name, description: p.description ?? "", issuer: p.issuer, audience: p.audience,
+      id: p.id, kind: p.kind, rules: rulesToText(p.claim_rules ?? {}), name: p.name, description: p.description ?? "", issuer: p.issuer, audience: p.audience,
       jwksMode: p.jwks_keys.length ? "paste" : p.jwks_url ? "url" : "discovery", jwks: "", jwksUrl: p.jwks_url ?? "",
       namespaces: p.namespaces.join(", "), serviceAccounts: p.service_accounts.join(", "),
       requirePod: p.require_pod_bound, validity: p.validity_minutes,
@@ -81,10 +106,16 @@ export default function AttestationPage() {
     }
     const body: PolicyInput = {
       name: form.name.trim(), description: form.description.trim() || null, issuer: form.issuer.trim(),
-      audience: form.audience.trim(), namespaces: split(form.namespaces), service_accounts: split(form.serviceAccounts),
-      require_pod_bound: form.requirePod, validity_minutes: form.validity,
+      audience: form.audience.trim(), validity_minutes: form.validity,
       jwks_url: form.jwksMode === "url" ? form.jwksUrl.trim() || null : null,
     };
+    if (!form.id) body.kind = form.kind;
+    if (form.kind === "oidc") {
+      body.claim_rules = textToRules(form.rules);
+    } else {
+      Object.assign(body, { namespaces: split(form.namespaces), service_accounts: split(form.serviceAccounts),
+                            require_pod_bound: form.requirePod });
+    }
     // pasted keys: new ones replace; editing without pasting keeps the stored ones
     if (form.jwksMode === "paste") {
       const hasKeys = !!policies.find((p) => p.id === form.id)?.jwks_keys.length;
@@ -158,6 +189,27 @@ export default function AttestationPage() {
           {form && (
             <div className="panel-body">
               <Form onSubmit={save}>
+                <div className="field">
+                  <label>{t("attest.kind")}</label>
+                  {(["k8s_sa", "oidc"] as AttestationKind[]).map((k) => (
+                    <label key={k} style={{ display: "flex", gap: 8, alignItems: "center", fontWeight: 400 }}>
+                      <input type="radio" name="ap-kind" style={{ width: "auto" }} checked={form.kind === k} disabled={!!form.id}
+                        onChange={() => setForm({ ...form, kind: k, jwksMode: k === "oidc" ? "discovery" : "paste" })} />
+                      {t(`attest.kind_${k}`)}
+                    </label>
+                  ))}
+                  {form.kind === "oidc" && !form.id && (
+                    <div className="u-btn-row" style={{ marginTop: 6 }}>
+                      {Object.entries(presets).map(([key, preset]) => (
+                        <button key={key} type="button" className="btn btn-sm"
+                          onClick={() => setForm({ ...form, issuer: preset.issuer, rules: rulesToText(preset.claim_rules),
+                                                   name: form.name || key.replace("_", "-") })}>
+                          {t(`attest.preset_${key}`, key)}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
                 <div className="form-row">
                   <div className="field">
                     <label htmlFor="ap-name">{t("attest.name")}</label>
@@ -214,6 +266,15 @@ export default function AttestationPage() {
                   )}
                   {form.jwksMode === "discovery" && <p className="hint-text">{t("attest.jwks_discovery_hint")}</p>}
                 </div>
+                {form.kind === "oidc" ? (
+                  <div className="field">
+                    <label htmlFor="ap-rules">{t("attest.claim_rules")}</label>
+                    <textarea id="ap-rules" className="mono" rows={4} value={form.rules} style={{ fontSize: 12 }}
+                      placeholder={"repository = acme/agents\nref = refs/heads/main"}
+                      onChange={(e) => setForm({ ...form, rules: e.target.value })} />
+                    <p className="hint-text">{t("attest.claim_rules_hint")}</p>
+                  </div>
+                ) : (<>
                 <div className="form-row">
                   <div className="field">
                     <label htmlFor="ap-ns">{t("attest.namespaces")}</label>
@@ -232,6 +293,7 @@ export default function AttestationPage() {
                     onChange={(e) => setForm({ ...form, requirePod: e.target.checked })} />
                   <span>{t("attest.require_pod")}<span className="hint-text" style={{ display: "block", fontSize: 12 }}>{t("attest.require_pod_hint")}</span></span>
                 </label>
+                </>)}
                 <div className="ag-actions" style={{ marginTop: 12 }}>
                   <button className="btn btn-primary" type="submit" disabled={busy}>{t("attest.save")}</button>
                   <button className="btn" type="button" onClick={() => setForm(null)}>{t("attest.cancel")}</button>
@@ -267,12 +329,21 @@ export default function AttestationPage() {
                         </div>
                       </td>
                       <td data-label={t("attest.workloads")} className="mono" style={{ fontSize: 12 }}>
-                        {p.namespaces.map((n) => <div key={`n${n}`}>ns: {n}</div>)}
-                        {p.service_accounts.map((s) => <div key={`s${s}`}>sa: {s}</div>)}
-                        {!p.require_pod_bound && <div className="hint-text">{t("attest.pod_not_required")}</div>}
+                        {p.kind === "oidc" ? Object.entries(p.claim_rules ?? {}).map(([k, v]) => (
+                          <div key={k}>{k} = {v.join(", ")}</div>
+                        )) : (<>
+                          {p.namespaces.map((n) => <div key={`n${n}`}>ns: {n}</div>)}
+                          {p.service_accounts.map((s) => <div key={`s${s}`}>sa: {s}</div>)}
+                          {!p.require_pod_bound && <div className="hint-text">{t("attest.pod_not_required")}</div>}
+                        </>)}
                       </td>
                       <td data-label={t("attest.validity_short")}>{p.validity_minutes} min</td>
-                      <td data-label={t("attest.roles")}>{p.roles}</td>
+                      <td data-label={t("attest.roles")}>
+                        {p.roles}
+                        {identity?.default_attestation_policy_id === p.id && (
+                          <div><span className="pill pill-accent">{t("attest.default_badge")}</span></div>
+                        )}
+                      </td>
                       <td>
                         <div className="ag-row-actions">
                           <button className="btn btn-sm" onClick={() => setSetupFor(setupFor === p.id ? null : p.id)}>{t("attest.setup")}</button>
@@ -280,6 +351,11 @@ export default function AttestationPage() {
                             <>
                               <button className="btn btn-sm" onClick={() => { setTestFor(testFor === p.id ? null : p.id); setTestResult(null); }}>{t("attest.test")}</button>
                               <button className="btn btn-sm" disabled={busy} onClick={() => edit(p)}>{t("attest.edit")}</button>
+                              {identity && (identity.default_attestation_policy_id === p.id ? (
+                                <button className="btn btn-sm" onClick={() => setDefault(null)}>{t("attest.unset_default")}</button>
+                              ) : (
+                                <button className="btn btn-sm" onClick={() => setDefault(p.id)}>{t("attest.set_default")}</button>
+                              ))}
                               <button className="btn btn-sm btn-danger" disabled={busy} onClick={() => remove(p)}>{t("attest.delete")}</button>
                             </>
                           )}
@@ -290,10 +366,18 @@ export default function AttestationPage() {
                       <tr className="ag-form-row">
                         <td colSpan={5}>
                           <div className="ag-stack">
-                            <div>
-                              <div className="ag-label">{t("attest.setup_pod")}</div>
-                              <pre className="ag-code" style={{ whiteSpace: "pre", overflowX: "auto" }}>{podSpecSnippet(p.audience)}</pre>
-                            </div>
+                            {p.kind === "oidc" ? (
+                              <div>
+                                <div className="ag-label">{t("attest.setup_oidc")}</div>
+                                <pre className="ag-code" style={{ whiteSpace: "pre", overflowX: "auto" }}>{`from provenza import attest
+agent.attest(attest.github_actions("${p.audience}"))   # or gcp_metadata / azure_imds / token_file`}</pre>
+                              </div>
+                            ) : (
+                              <div>
+                                <div className="ag-label">{t("attest.setup_pod")}</div>
+                                <pre className="ag-code" style={{ whiteSpace: "pre", overflowX: "auto" }}>{podSpecSnippet(p.audience)}</pre>
+                              </div>
+                            )}
                             <div>
                               <div className="ag-label">{t("attest.setup_agent")}</div>
                               <code className="ag-code">{attestCommand(p.validity_minutes)}</code>
@@ -317,7 +401,7 @@ export default function AttestationPage() {
                             <div><button className="btn btn-sm btn-primary" disabled={!testToken.trim()} onClick={() => runTest(p.id)}>{t("attest.test_run")}</button></div>
                             {testResult && (testResult.ok ? (
                               <p className="ag-small"><span className="pill pill-low">{t("attest.passes")}</span>{" "}
-                                {testResult.identity?.namespace}/{testResult.identity?.service_account}
+                                {workloadOf(testResult.identity)}
                                 {testResult.identity?.pod ? ` · pod ${testResult.identity.pod}` : ""}
                                 {testResult.identity?.node ? ` · node ${testResult.identity.node}` : ""}</p>
                             ) : (
@@ -367,7 +451,7 @@ export default function AttestationPage() {
                       {!r.ok && <div className="hint-text" style={{ fontSize: 12 }}>{reasonText(r.reason, r.detail)}</div>}
                     </td>
                     <td data-label={t("attest.workload")} className="mono" style={{ fontSize: 12 }}>
-                      {r.identity?.namespace ? `${r.identity.namespace}/${r.identity.service_account}` : r.identity?.workload ?? "—"}
+                      {workloadOf(r.identity)}
                       {r.identity?.pod && <div className="hint-text">pod {r.identity.pod}</div>}
                     </td>
                     <td data-label={t("attest.valid_until")} className="ag-period">{r.ok ? fmt(r.valid_until) : "—"}</td>

@@ -8,6 +8,10 @@ The master key encrypts, directly:
   - org_keys.config_secret_encrypted        BYOK: Vault token / AWS secret
   - org_keys.wrapped_dek  (provider=local)  BYOK: the organizations' data keys
   - audit_signing_keys.private_key_enc / pq_seed_enc   audit keys (checkpoints)
+  - permit_signing_keys.private_key_enc     permit keys (signed action permits)
+  - mcp_servers / a2a_peers / http_tools.auth_secret_encrypted, egress_routes.secret_encrypted
+                                            credentials of the gateways' upstreams
+  - users.totp_secret_encrypted / totp_pending_encrypted   two-factor secrets
 Values in the "pvz2:<key>:..." format belong to an organization key (BYOK)
 and are not touched - rotating the master key re-wraps that key instead.
 
@@ -30,6 +34,7 @@ run can simply be started again (before step 5).
 """
 
 import argparse
+import importlib
 import sys
 from pathlib import Path
 
@@ -67,6 +72,9 @@ def targets():
     from app.models.ai_request import AIRequest
 
     out = [(AIProvider, "api_key_encrypted", None), (AIRequest, "input_text_encrypted", None)]
+    from app.models.user import User
+
+    out += [(User, "totp_secret_encrypted", None), (User, "totp_pending_encrypted", None)]
     tables = set(inspect(sync_engine).get_table_names())
     if "service_connections" in tables:
         from app.models.service_connection import ServiceConnection
@@ -80,6 +88,16 @@ def targets():
         from app.models.audit_log import AuditSigningKey
         out.append((AuditSigningKey, "private_key_enc", None))
         out.append((AuditSigningKey, "pq_seed_enc", None))
+    for table, module, name, col in (("mcp_servers", "app.models.mcp", "MCPServer", "auth_secret_encrypted"),
+                                      ("a2a_peers", "app.models.a2a_gateway", "A2APeer", "auth_secret_encrypted"),
+                                      ("egress_routes", "app.models.egress_proxy", "EgressRoute", "secret_encrypted"),
+                                      ("http_tools", "app.models.http_tool", "HttpTool", "auth_secret_encrypted")):
+        if table in tables:
+            out.append((getattr(importlib.import_module(module), name), col, None))
+    if "permit_signing_keys" in tables:
+        # forgetting these would make every allowed check fail to sign its permit
+        from app.models.agent_action import PermitSigningKey
+        out.append((PermitSigningKey, "private_key_enc", None))
     return out
 
 

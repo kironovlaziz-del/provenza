@@ -96,6 +96,13 @@ func (f *fakeProvenza) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		reply(200, map[string]any{"allowed": true, "redemption_id": 1})
+	case "/api/v1/relay-echo":
+		// what the relay delivered: the agent's own credentials, never the proxy's
+		w.Header().Set("Retry-After", "7")
+		w.Header().Set("Set-Cookie", "server=1")
+		reply(418, map[string]any{"method": r.Method, "query": r.URL.RawQuery, "body": body,
+			"agent_key": r.Header.Get("X-Agent-Key"), "proxy_key": r.Header.Get("X-Proxy-Key"),
+			"cookie": r.Header.Get("Cookie")})
 	case "/api/v1/egress-proxy/complete":
 		f.completed = append(f.completed, body)
 		reply(200, map[string]any{"action_id": 2})
@@ -380,5 +387,44 @@ func TestDescriptorVectors(t *testing.T) {
 		if string(a) != string(b) {
 			t.Errorf("%s %s:\n got  %s\n want %s", v.Method, p, a, b)
 		}
+	}
+}
+
+func TestRelayToProvenza(t *testing.T) {
+	up := newUpstream(t, ok)
+	_, _, front := setup(t, up, func(_ *Route, c *Config) { c.RelayProvenza = true })
+	resp := send(t, front, "POST", "/_provenza/api/v1/relay-echo?x=1", `{"a":1}`,
+		map[string]string{"X-Agent-Key": agentKey, "Content-Type": "application/json", "Cookie": "c=1",
+			"X-Proxy-Key": "pvz_proxy_forged"})
+	var got map[string]any
+	_ = json.NewDecoder(resp.Body).Decode(&got)
+	if resp.StatusCode != 418 || got["method"] != "POST" || got["query"] != "x=1" || got["agent_key"] != agentKey {
+		t.Fatalf("relayed %d %v", resp.StatusCode, got)
+	}
+	if got["proxy_key"] != "" || got["cookie"] != "" {
+		t.Fatalf("the relay must not pass the proxy key or cookies: %v", got)
+	}
+	if resp.Header.Get("Retry-After") != "7" || resp.Header.Get("Set-Cookie") != "" {
+		t.Fatalf("response headers %v", resp.Header)
+	}
+	if b, _ := json.Marshal(got["body"]); string(b) != `{"a":1}` {
+		t.Fatalf("body %s", b)
+	}
+	for _, path := range []string{"/_provenza/egress-beacon/x", "/_provenza/api/v1/../../egress-beacon/x",
+		"/_provenza/api/v1/%2e%2e/x", "/_provenza"} {
+		if resp := send(t, front, "GET", path, "", nil); resp.StatusCode != 403 {
+			t.Fatalf("%s: %d", path, resp.StatusCode)
+		}
+	}
+	if len(up.got) != 0 {
+		t.Fatal("nothing goes to the routes' upstreams")
+	}
+}
+
+func TestRelayIsOffByDefault(t *testing.T) {
+	up := newUpstream(t, ok)
+	_, _, front := setup(t, up, nil)
+	if resp := send(t, front, "GET", "/_provenza/api/v1/relay-echo", "", nil); resp.StatusCode != 404 {
+		t.Fatalf("relay off: %d", resp.StatusCode)
 	}
 }

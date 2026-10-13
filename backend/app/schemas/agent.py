@@ -251,6 +251,7 @@ class ActionCheckResponse(BaseModel):
     policy_id: Optional[int] = None
     check_id: Optional[str] = None        # single-use token for /actions/record
     expires_at: Optional[datetime] = None
+    permit: Optional[str] = None          # allowed: the signed permit to hand to the tool (JWS)
 
 
 class ActionRecordRequest(BaseModel):

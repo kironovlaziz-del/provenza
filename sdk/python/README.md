@@ -172,6 +172,58 @@ if chk.allowed:
 refuses any other request under that check. The proxy records the request,
 so it is not passed to `record()`.
 
+## HTTP tools through Provenza
+
+An API registered in Provenza (**Gateways → HTTP tools**) is called through
+Provenza, and the agent never holds its key. Provenza checks the call,
+makes it with the stored credential and records it, in one step:
+
+```python
+out = agent.invoke("crm.set_tier", {"id": "42", "tier": "gold"})
+out["status"], out["body"]          # a refusal raises ProvenzaDenied
+agent.http_tools()                  # names, descriptions and input schemas, for the model
+```
+
+## Egress self-check
+
+Is this host confined to the Provenza egress proxy, its only way out? Run
+the check at start-up and then periodically. With **Require confined egress**
+on, an agent acts only while its latest check is `confined`. See
+`docs/egress-lockdown.md`.
+
+```python
+agent.egress_selfcheck()     # {"verdict": "confined" | "open", ...}
+```
+
+## Permits for tools
+
+An allowed check carries a permit signed by the organization. The agent
+sends it with the call:
+
+```python
+chk = agent.check("crm.update", payload)
+if chk.allowed:
+    httpx.post("https://crm-tool.internal/update", json=payload, headers=chk.permit_headers)
+    agent.record(chk, output)
+```
+
+The tool runs nothing without a valid permit for exactly this call:
+
+```python
+from provenza.permit import PermitMiddleware, PermitVerifier, require_permit
+
+verifier = PermitVerifier("https://provenza.example.com", org="acme")
+app = PermitMiddleware(app, verifier, tool="crm.update")   # any ASGI app: FastAPI, Starlette, ...
+
+@require_permit(verifier, "db.read")                         # or a plain function
+def read(query: str): ...
+```
+
+The verifier checks the signature against the organization's JWKS, the
+tool, the hash of the JSON body (it must be the checked input) and the
+expiry. It then redeems the permit with Provenza, so it is used once across
+every replica of the tool. If Provenza cannot be reached, it refuses.
+
 ## Integrations
 
 Each framework is an optional extra. The SDK never requires one: `crewai`

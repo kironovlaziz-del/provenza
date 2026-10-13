@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
-from typing import List
+from typing import List, Literal
 from app.core.database import get_db
 from app.core.pagination import PaginationParams
 from app.schemas.provider import ProviderCreate, ProviderOut, ProviderUpdate
@@ -11,10 +11,11 @@ from app.models.user import User
 from app.api.deps import get_current_user, require_role
 from app.models.user import UserRole
 from app.models.ai_provider import AIProvider
+from app.models.organization import Organization
 from app.core.crypto import decrypt_secret
-from app.services import provider_adapters
+from app.services import provider_adapters, provider_policy
 import httpx
-from app.core.outbound import error_detail, guarded_async_client
+from app.core.outbound import INTERNAL_ONLY_MESSAGE, error_detail, guarded_async_client
 from app.services import prompt_firewall
 from app.models.ai_request import AIRequest
 from app.core.crypto import encrypt_secret
@@ -52,6 +53,42 @@ async def list_providers(
         current_user.org_id, skip=pagination.skip, limit=pagination.limit
     )
     return Page(items=items, total=total, skip=pagination.skip, limit=pagination.limit)
+
+
+class ProviderPolicyIn(BaseModel):
+    policy: Literal["any", "self_hosted"]
+
+
+async def _policy_view(db: AsyncSession, org_id: int) -> dict:
+    """The policy, and the active connections it refuses outright (no base URL,
+    a public IP). A host name is judged at connect time, so it is not listed."""
+    rows = (await db.execute(
+        select(AIProvider).where(AIProvider.org_id == org_id, AIProvider.status == "active").order_by(AIProvider.name)
+    )).scalars().all()
+    cloud = [{"id": p.id, "name": p.name, "reason": r}
+             for p in rows if (r := provider_policy.cloud_reason(p.type, p.base_url))]
+    return {"policy": await provider_policy.org_policy(db, org_id), "cloud_connections": cloud}
+
+
+@router.get("/policy")
+async def get_provider_policy(db: AsyncSession = Depends(get_db),
+                              current_user: User = Depends(get_current_user)):
+    return await _policy_view(db, current_user.org_id)
+
+
+@router.put("/policy")
+async def set_provider_policy(data: ProviderPolicyIn, db: AsyncSession = Depends(get_db),
+                              current_user: User = Depends(require_role(UserRole.admin))):
+    """Which AI providers the organization's prompts may reach: any, or only
+    self-hosted ones (app/services/provider_policy.py)."""
+    org_id, user_id = current_user.org_id, current_user.id
+    org = await db.get(Organization, org_id)
+    before = provider_policy.policy_name(org.ai_provider_policy)
+    org.ai_provider_policy = data.policy
+    await db.commit()
+    await AuditService(db).log(org_id, user_id, "organization", org_id, "ai_provider_policy_changed",
+                               {"before": before, "after": provider_policy.policy_name(data.policy)})
+    return await _policy_view(db, org_id)
 
 
 @router.get("/{provider_id}", response_model=ProviderOut)
@@ -154,6 +191,7 @@ async def governed_chat(
         from app.core.errors import api_error
 
         raise api_error(status.HTTP_409_CONFLICT, "provider.not_active", name=provider.name)
+    self_hosted = await provider_policy.enforce(db, current_user.org_id, provider.type, provider.base_url)
 
     # 1. firewall the user's message - and the system prompt: it is user input
     #    too and goes to the same provider - enforcing the org's active policy
@@ -217,9 +255,19 @@ async def governed_chat(
     # call provider with the MASKED prompt
     api_key = decrypt_secret(provider.api_key_encrypted) if provider.api_key_encrypted else None
     chosen_model = data.model or provider.default_model
-    answer, _raw = await provider_adapters.call_provider(
-        provider.type, api_key, provider.base_url, chosen_model, prompt
-    )
+    try:
+        with provider_policy.scope(self_hosted):
+            answer, _raw = await provider_adapters.call_provider(
+                provider.type, api_key, provider.base_url, chosen_model, prompt
+            )
+    except provider_adapters.ProviderCallError as exc:
+        from app.core.errors import api_error
+
+        if INTERNAL_ONLY_MESSAGE in str(exc):
+            # the host resolved to the internet: refused at connect time, nothing was sent
+            raise api_error(status.HTTP_403_FORBIDDEN, "provider.self_hosted_only",
+                            reason="the base URL resolves to a public address")
+        raise api_error(status.HTTP_502_BAD_GATEWAY, "provider.call_failed", message=str(exc)[:300])
 
     # 3. log to Usage Registry
     db.add(AIRequest(
@@ -269,9 +317,10 @@ async def list_provider_models(
     if not base:
         return {"models": [], "note": "Model listing needs a base_url for this provider type."}
 
+    self_hosted = await provider_policy.enforce(db, current_user.org_id, provider.type, provider.base_url)
     url = base.rstrip("/") + "/models"
     try:
-        async with guarded_async_client(timeout=20) as client:
+        async with guarded_async_client(internal_only=self_hosted, timeout=20) as client:
             resp = await client.get(url, headers={"Authorization": f"Bearer {api_key}"})
     except (httpx.HTTPError, httpx.InvalidURL) as e:
         raise HTTPException(status_code=502, detail=f"Could not list models: {e}")

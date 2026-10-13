@@ -2,6 +2,9 @@
 # the NetworkPolicy below leaves the pod no other way out than Provenza and the
 # routes' upstreams. The containers share the pod's network, so the policy
 # applies to both: list only what the proxy needs (Provenza, the upstreams).
+# Weaker than a separate proxy: the agent can reach those upstreams directly.
+# For "the proxy and nothing else", generate the rules in Provenza
+# (Gateways -> Egress -> Lock agents down; docs/egress-lockdown.md).
 apiVersion: v1
 kind: Secret
 metadata:

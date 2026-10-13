@@ -168,6 +168,33 @@ The answer is `action.check`: `decision` ∈ {`allowed`, `denied`,
 
 A denied check is still issued, so the attempt can be recorded.
 
+An allowed check also carries a **permit** for the tool: a compact JWS
+(`alg` EdDSA, `typ` `provenza-permit+jwt`) signed by the organization's
+permit key, which is separate from its audit key:
+
+```json
+{"iss": "provenza:org:<slug>", "sub": "agent:3", "aud": "db.read",
+ "jti": "<permit id>", "iat": 1760000000, "nbf": 1760000000, "exp": 1760000300,
+ "act": "tool_call", "chain": null, "ish": "<input_sha256>"}
+```
+
+- The tool verifies it against `GET /pvp/permits/{org}/jwks.json`, which is
+  public, and refuses without it: another tool (`aud`), another input
+  (`ish`, the hash of the JSON body it received), an expired permit or one
+  signed by an unknown key.
+- `POST /pvp/permits/redeem` (`permit`, `tool`, `input_sha256`) marks it used
+  exactly once, for any replica of the tool. A permit for anything else is
+  refused there too, and stays unused.
+- The permit belongs to the check: `action.check` carries `permit_id` and,
+  once a tool redeemed it, `permit_redeemed_at`. A receipt therefore shows
+  that the tool, not only the agent, saw the permit for the recorded action.
+- After a rotation (`POST /pvp/permits/keys/rotate`), the old key stays in
+  the JWKS for an hour. Permits live five minutes.
+
+The SDKs verify permits for tools: `provenza.permit` in Python (ASGI
+middleware, a decorator, `PermitVerifier`) and `permit.ts` in JS (Express
+middleware, a fetch-style wrapper, `PermitVerifier`).
+
 ### 3.2 `action.record` → `action`
 
 The agent reports what it did: the same action fields, `input`, `output`,
@@ -287,6 +314,14 @@ answers 409 `pvp.no_evidence`.
 | Input Guard | its own limits and detectors | rate-limit counters, guard log |
 | orchestrator | only PVP and its own records | verdicts, checks, audit |
 | executor | only the orchestrator | the credentials |
+
+The orchestrator decides only what reaches it. An agent whose network lets
+it call an API directly never asks. Confinement is the deployment's job:
+the agent should reach only the egress proxy, which also relays its calls to
+Provenza. Provenza generates the rules and checks that they hold: an egress
+self-check, signed by the agent, plus a beacon that the server observes
+itself. `require_confined_egress` makes a recent `confined` verdict a
+condition of acting (`docs/egress-lockdown.md`).
 
 Order of checks on an inbound request (P3 ✓, `backend/app/pvp/guard.py`).
 Cheap and authenticated checks come first, so that an unauthenticated
@@ -531,6 +566,38 @@ fail-closed: without Provenza nothing is sent.
 **Limitation:** the proxy governs only what goes through it. Each
 deployment has to close the direct paths to the upstreams with a network
 policy or firewall (`proxy/deploy/`).
+
+### 5.6 HTTP tool gateway
+
+Code: `backend/app/pvp/http_tools.py`, `app/api/http_tools.py`.
+
+An administrator registers an HTTP API as a tool: `name` (the tool name
+that rights, policies and the Tool Registry use), method, URL with optional
+`{argument}` path placeholders, input schema, and a credential that is
+stored encrypted and never returned. Saving it pins the digest of the
+definition (`name`, `method`, `url`, `input_schema`, `description`) in the
+Tool Registry as approved.
+
+The agent sends `POST /http-tools/call` with its key and a signed
+`action.request` (§3.1, `action_type: "tool_call"`). Provenza then does
+everything in one operation:
+
+1. verifies the agent's signature, freshness and nonce;
+2. checks the action, reporting the pinned digest itself;
+3. checks the arguments against the top level of the input schema
+   (`required`, `type`, `enum`, `additionalProperties: false`);
+4. calls the API with the SSRF-guarded client, injecting the credential.
+   For POST, PUT and PATCH it also sends the check's permit (§3.1), so an
+   API behind the permit middleware accepts only calls made through
+   Provenza;
+5. records the action with `executed_by: "http_gateway"`, and records
+   denied and refused calls too.
+
+The answer is `{decision, reason, action_id, status, body}`. When the API
+failed or the answer was refused, `error` or `withheld` comes instead of
+`body`. A response over the tool's size limit, a redirect, or instructions
+aimed at the agent (ASI01, in enforce mode) never reach the agent. The SDKs
+expose it as `agent.invoke(tool, arguments)`.
 
 ## 6. Versioning
 

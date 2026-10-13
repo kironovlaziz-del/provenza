@@ -10,7 +10,7 @@ from app.models.ai_policy import AIPolicy, AIPolicyVersion
 from app.core.errors import api_error
 from app.schemas.request import RequestCreate
 from app.services import prompt_firewall
-from app.services import provider_adapters
+from app.services import provider_adapters, provider_policy
 from app.services.provider_adapters import ProviderCallError
 from app.core.crypto import decrypt_secret, encrypt_secret
 
@@ -205,11 +205,23 @@ class RequestService:
             except ValueError:
                 api_key = None
 
-        if provider and api_key:
+        self_hosted = bool(provider) and await provider_policy.self_hosted_required(self.db, org_id)
+        cloud = provider_policy.cloud_reason(provider.type, provider.base_url) if self_hosted else None
+        if cloud:
+            # the organization allows only self-hosted providers: nothing is sent
+            response = AIResponse(
+                request_id=request.id,
+                provider_response_json={"error": "provider.self_hosted_only"},
+                response_text=f"[refused] Only self-hosted AI providers are allowed: {cloud}.",
+                confidence_score=None,
+            )
+            request.status = "failed"
+        elif provider and api_key:
             try:
-                response_text, raw = await provider_adapters.call_provider(
-                    provider.type, api_key, provider.base_url, provider.default_model, prompt
-                )
+                with provider_policy.scope(self_hosted):
+                    response_text, raw = await provider_adapters.call_provider(
+                        provider.type, api_key, provider.base_url, provider.default_model, prompt
+                    )
                 response = AIResponse(
                     request_id=request.id,
                     provider_response_json=raw if isinstance(raw, dict) else {"raw": str(raw)},

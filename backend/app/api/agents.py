@@ -556,6 +556,7 @@ async def check_action_endpoint(
     return ActionCheckResponse(
         decision=chk.decision, reason=chk.reason, incident_type=chk.incident_type, policy_id=chk.policy_id,
         check_id=chk.check_id, expires_at=datetime.fromtimestamp(chk.expires_at, tz=timezone.utc),
+        permit=chk.permit,
     )
 
 

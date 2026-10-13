@@ -72,3 +72,97 @@ async def test_sdk_governs_records_and_proves(client, admin_token, tmp_path):
     action, _, _ = tool.check_receipt(receipt, tool.Trust(), agent.fingerprint)
     assert action["tool_name"] == "db.read"
     await agent.aclose()
+
+
+@pytest.mark.asyncio
+async def test_sdk_permit_from_this_server_runs_the_tool_once(client, admin_token, tmp_path, db_session):
+    """The agent's check carries a permit; the tool's verifier (provenza.permit)
+    takes the JWKS from this server, verifies it, and redeems it here - once."""
+    from app.models.agent import Agent as AgentRow
+    from app.models.organization import Organization
+    from provenza.permit import PermitError, PermitVerifier
+
+    agent = await _sdk_agent(client, admin_token, tmp_path)
+    payload = {"query": "select 1"}
+    chk = await agent.acheck("db.read", payload)
+    assert chk.allowed and chk.permit
+    org_id = (await db_session.get(AgentRow, agent.agent_id)).org_id
+    slug = (await db_session.get(Organization, org_id)).slug
+    verifier = PermitVerifier("http://test", slug, async_transport=ASGITransport(app=app))
+    permit = await verifier.averify(chk.permit_headers["Provenza-Permit"], tool="db.read", input=payload)
+    assert permit.redeemed and permit.agent_id == agent.agent_id
+    with pytest.raises(PermitError) as e:
+        await verifier.averify(chk.permit, tool="db.read", input=payload)
+    assert e.value.code == "permit.redeemed"
+    await agent.arecord(chk, {"rows": 1})
+
+
+@pytest.mark.asyncio
+async def test_sdk_invokes_an_http_tool_through_provenza(client, admin_token, tmp_path, monkeypatch):
+    """agent.ainvoke: one signed request; this server checks, calls the API with
+    the key it holds, records. The agent holds no credential of the API."""
+    from app.core.config import settings
+    from tests.test_http_tools import _Api
+
+    monkeypatch.setattr(settings, "OUTBOUND_PRIVATE_ALLOWLIST", "127.0.0.1")
+    api = _Api()
+    try:
+        r = await client.post("/api/v1/http-tools", json={
+            "name": "db.read", "method": "POST", "url": api.base + "/query", "auth_secret": "Bearer db-key",
+            "input_schema": {"type": "object", "required": ["query"], "properties": {"query": {"type": "string"}}},
+        }, headers=auth_headers(admin_token))
+        assert r.status_code == 200, r.text
+        agent = await _sdk_agent(client, admin_token, tmp_path)
+        out = await agent.ainvoke("db.read", {"query": "select 1"})
+        assert out["status"] == 200 and out["body"]["ok"] is True and out["action_id"]
+        assert api.calls[-1]["headers"]["Authorization"] == "Bearer db-key"
+        with pytest.raises(ProvenzaDenied):
+            await agent.ainvoke("db.read", {"query": 1})
+        assert len(api.calls) == 1
+    finally:
+        api.close()
+
+
+@pytest.mark.asyncio
+async def test_sdk_egress_selfcheck(client, admin_token, tmp_path, monkeypatch):
+    """agent.aegress_selfcheck against this server: a closed target -> confined;
+    a target this host can reach -> open (and the server records it)."""
+    import socket
+
+    from app.core.config import settings
+
+    agent = await _sdk_agent(client, admin_token, tmp_path)
+    closed = socket.socket()
+    closed.bind(("127.0.0.1", 0))
+    port = closed.getsockname()[1]
+    closed.close()                                         # nothing listens there
+    monkeypatch.setattr(settings, "EGRESS_PROBE_TARGETS", f"127.0.0.1:{port}")
+    out = await agent.aegress_selfcheck(timeout=1.0)
+    assert out["verdict"] == "confined" and out["results"] == [{"target": f"127.0.0.1:{port}", "reachable": False}]
+
+    listening = socket.socket()
+    listening.bind(("127.0.0.1", 0))
+    listening.listen(1)
+    try:
+        monkeypatch.setattr(settings, "EGRESS_PROBE_TARGETS", f"127.0.0.1:{listening.getsockname()[1]}")
+        assert (await agent.aegress_selfcheck(timeout=1.0))["verdict"] == "open"
+    finally:
+        listening.close()
+
+
+@pytest.mark.asyncio
+async def test_sdk_attests_where_it_runs(client, admin_token, tmp_path):
+    """agent.aattest with an OIDC workload token: the server's policy passes it,
+    and binds the agent to that workload."""
+    from tests.test_attestation_oidc import Issuer, _default, _policy
+
+    issuer = Issuer()
+    pol = await _policy(client, admin_token, issuer, claim_rules={"repository": ["acme/agents"]})
+    agent = await _sdk_agent(client, admin_token, tmp_path)
+    await _default(client, admin_token, pol["id"])
+    try:
+        res = await agent.aattest(issuer.token())
+        assert res["ok"] is True and res["identity"]["sub"] == "repo:acme/agents:ref:refs/heads/main"
+        assert (await agent.aattest(issuer.token(repository="acme/other")))["ok"] is False
+    finally:
+        await _default(client, admin_token, 0)

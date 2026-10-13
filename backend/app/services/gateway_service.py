@@ -46,7 +46,7 @@ from app.models.ai_request import AIRequest
 from app.models.ai_response import AIResponse
 from app.models.gateway import GatewayCall, GatewayRoute, GatewaySettings
 from app.models.user import User
-from app.services import gateway_adapters, prompt_firewall
+from app.services import gateway_adapters, prompt_firewall, provider_policy
 from app.services.provider_adapters import ProviderCallError
 
 DEFAULTS = {"enabled": True, "rpm_per_agent": 60, "max_tokens_cap": 4096, "scan_output": True}
@@ -233,6 +233,13 @@ class GatewayService:
                                provider_id)
             raise GatewayError(403, "provider_not_allowed", f"The '{p_name}' connection is not allowed by the {by} "
                                                             f"policy.", "permission_error")
+        self_hosted = await provider_policy.self_hosted_required(self.db, org_id)
+        cloud = provider_policy.cloud_reason(p_type, p_base) if self_hosted else None
+        if cloud:
+            await self._record(org_id, agent_id, model, "denied", f"self-hosted providers only: {cloud}", [],
+                               provider_id)
+            raise GatewayError(403, "provider_not_self_hosted", f"The organization allows only self-hosted AI "
+                                                                f"providers: {cloud}.", "permission_error")
 
         since = datetime.now(timezone.utc) - timedelta(minutes=1)
         recent = (await self.db.execute(
@@ -306,7 +313,9 @@ class GatewayService:
 
         started = time.monotonic()
         try:
-            text, finish, raw, usage = await gateway_adapters.chat(p_type, p_key, p_base, upstream, outgoing, params)
+            with provider_policy.scope(self_hosted):
+                text, finish, raw, usage = await gateway_adapters.chat(p_type, p_key, p_base, upstream, outgoing,
+                                                                       params)
         except ProviderCallError as exc:
             ai_req.status = "failed"
             ai_req.error_message = str(exc)[:2000]
