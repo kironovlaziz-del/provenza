@@ -148,3 +148,21 @@ async def test_sdk_egress_selfcheck(client, admin_token, tmp_path, monkeypatch):
         assert (await agent.aegress_selfcheck(timeout=1.0))["verdict"] == "open"
     finally:
         listening.close()
+
+
+@pytest.mark.asyncio
+async def test_sdk_attests_where_it_runs(client, admin_token, tmp_path):
+    """agent.aattest with an OIDC workload token: the server's policy passes it,
+    and binds the agent to that workload."""
+    from tests.test_attestation_oidc import Issuer, _default, _policy
+
+    issuer = Issuer()
+    pol = await _policy(client, admin_token, issuer, claim_rules={"repository": ["acme/agents"]})
+    agent = await _sdk_agent(client, admin_token, tmp_path)
+    await _default(client, admin_token, pol["id"])
+    try:
+        res = await agent.aattest(issuer.token())
+        assert res["ok"] is True and res["identity"]["sub"] == "repo:acme/agents:ref:refs/heads/main"
+        assert (await agent.aattest(issuer.token(repository="acme/other")))["ok"] is False
+    finally:
+        await _default(client, admin_token, 0)

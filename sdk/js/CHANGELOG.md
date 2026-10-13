@@ -5,6 +5,7 @@
 First release. It has the same behaviour and the same bytes as the Python
 SDK 0.1.
 
+- `agent.attest(token)`: workload attestation.
 - `agent.egressSelfcheck()`: is this host confined to the egress proxy?
 - `agent.invoke` / `agent.httpTools()`: HTTP tools called through Provenza.
 - Permits for tools: `PermitVerifier`, `permitMiddleware` (Express),

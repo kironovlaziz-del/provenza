@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- `agent.attest(token)` / `aattest`, and `provenza.attest` token sources: a
+  file (Kubernetes), GitHub Actions, the Google Cloud metadata server, Azure
+  managed identity.
 - `agent.egress_selfcheck()` / `aegress_selfcheck()`: is this host confined to
   the egress proxy? Signed report; the server also watches a beacon.
 - `agent.invoke` / `ainvoke` / `http_tools()`: HTTP tools registered in

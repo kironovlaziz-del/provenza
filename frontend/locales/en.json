@@ -889,7 +889,7 @@
     "attestation.workload_not_allowed": "This namespace / service account is not allowed by the policy",
     "attestation.bad_pattern": "Invalid pattern",
     "attestation.jwks_unavailable": "The cluster's keys could not be fetched",
-    "attestation.unsupported_kind": "Unsupported attestation kind",
+    "attestation.unsupported_kind": "This kind of evidence is not supported.",
     "attestation.no_workload_rule": "Name at least one allowed namespace or service account - otherwise any workload of the cluster would pass",
     "attestation.https_required": "Use an https:// URL",
     "attestation.issuer_required": "The cluster issuer is required",
@@ -1011,6 +1011,11 @@
     "agent.egress_unconfined": "This agent's host can reach more than the egress proxy, and the organization requires a confined host.",
     "agent.egress_check_stale": "This agent's last egress self-check is too old; run it again.",
     "egress_lockdown.ip_required": "nftables needs the proxy's IP address, not a name.",
+    "attestation.rules_required": "An OIDC policy needs a claim rule that names the workload (sub, repository, project, ...).",
+    "attestation.bad_rule": "A claim rule is not valid.",
+    "attestation.rule_matches_everything": "A claim rule must not match everything.",
+    "attestation.workload_changed": "This agent is bound to another workload: an admin must release the binding if it moved.",
+    "attestation.policy_is_default": "This is the organization's default attestation policy; make another one default first.",
     "runtime.workload_not_found": "Workload not found.",
     "runtime.agent_not_found": "Agent not found.",
     "runtime.name_taken": "A workload named {{name}} already exists.",
@@ -1426,7 +1431,9 @@
       "rogue_agent_quarantined": "Agent quarantined",
       "memory_integrity_violation": "Memory tampering",
       "cascade_breaker_tripped": "Circuit breaker tripped",
-      "ai_provider_not_self_hosted": "Cloud AI service (self-hosted only)"
+      "ai_provider_not_self_hosted": "Cloud AI service (self-hosted only)",
+      "attestation_workload_changed": "Agent key used by another workload",
+      "egress_unconfined": "Agent host not confined to the egress proxy"
     }
   },
   "inventory": {
@@ -2715,7 +2722,25 @@
     "last_attempt": "Last attempt {{time}}",
     "enroll_title": "Attestation required",
     "enroll_hint": "This agent's role requires attestation (policy \"{{policy}}\"): it can act only after proving where it runs. Its pod needs a projected ServiceAccount token for audience \"{{audience}}\", and the agent must run:",
-    "jwks_url_required": "Enter the URL of the cluster's keys."
+    "jwks_url_required": "Enter the URL of the cluster's keys.",
+    "kind": "Evidence",
+    "kind_k8s_sa": "Kubernetes ServiceAccount token",
+    "kind_oidc": "OIDC workload identity (GitHub Actions, Google Cloud, Azure, GitLab, SPIFFE, ...)",
+    "preset_github_actions": "GitHub Actions",
+    "preset_gcp": "Google Cloud",
+    "preset_azure": "Azure",
+    "preset_gitlab": "GitLab CI",
+    "preset_spiffe": "SPIFFE",
+    "claim_rules": "Claim rules",
+    "claim_rules_hint": "One rule per line: claim = pattern, pattern (* and ? wildcards; nested claims with dots, e.g. google.compute_engine.project_id). Every rule must match. A public issuer such as GitHub needs a rule that names your organization: otherwise any repository in the world would pass.",
+    "default_badge": "default for all agents",
+    "set_default": "Make default",
+    "unset_default": "Not default",
+    "confirm_default": "Make this the organization's default policy? Every agent whose role has no policy of its own must then attest under it before it can act.",
+    "setup_oidc": "On the agent (Python SDK; agent.attest(token) in JS and Go)",
+    "bound_to": "Bound to workload",
+    "unbind": "Release",
+    "confirm_unbind": "Release this agent's workload binding? Its current attestation stops counting; the next passing attestation binds it to wherever it runs then."
   },
   "ph": {
     "title": "Policy hierarchy",

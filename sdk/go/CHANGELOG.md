@@ -5,6 +5,7 @@
 First release. It has the same behaviour and the same bytes as the Python
 and JS SDKs 0.1.
 
+- `Agent.Attest`: workload attestation.
 - `Agent.EgressSelfcheck`: is this host confined to the egress proxy?
 - `Agent.Invoke`: HTTP tools called through Provenza.
 - `Check.Permit` / `PermitHeaders`: the signed permit of an allowed check,

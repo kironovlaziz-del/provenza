@@ -6,6 +6,8 @@ package provenza
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -120,6 +122,18 @@ func (f *fake) handle(w http.ResponseWriter, r *http.Request) {
 			out["permit"] = "permit-of-" + token
 		}
 		reply(w, 200, out)
+	case path == "/agents/42/attestation/challenge":
+		reply(w, 200, map[string]any{"agent_id": 42, "challenge": strings.Repeat("a", 64), "kind": "oidc"})
+	case path == "/agents/42/attestation":
+		ev, _ := body["evidence"].(string)
+		sum := sha256.Sum256([]byte(ev))
+		sig, _ := body["signature"].(string)
+		if !verifySignatures(map[string]any{"type": "provenza.agent.attestation", "v": 1, "challenge": strings.Repeat("a", 64),
+			"agent_id": 42, "kind": "oidc", "evidence_sha256": hex.EncodeToString(sum[:])}, sig, "", f.publicKey, "") {
+			reply(w, 401, map[string]any{"detail": "attestation.bad_agent_signature"})
+			return
+		}
+		reply(w, 200, map[string]any{"ok": true, "evidence": ev})
 	case path == "/agents/egress-check":
 		targets := f.egressTargets
 		if targets == nil {

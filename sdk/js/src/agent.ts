@@ -28,6 +28,7 @@ import { AuditLog } from "./auditLog.js";
 import { Json, toJson } from "./canonical.js";
 import { Client, Fetch } from "./client.js";
 import { contentHash, Keys } from "./crypto.js";
+import { createHash } from "node:crypto";
 import { beacon as egressBeacon, connect as egressConnect, egressPayload } from "./egressCheck.js";
 import { ProvenzaApprovalRequired, ProvenzaConfigError, ProvenzaDenied, ProvenzaRequestError, ProvenzaUnavailable } from "./errors.js";
 import * as ids from "./identity.js";
@@ -260,6 +261,25 @@ export class Agent {
       throw new Cls(tool, res.reason ?? "", res.decision ?? "denied", res.incident_type ?? null, null, res.action_id ?? null);
     }
     return res;
+  }
+
+  /**
+   * Prove where this agent runs: `evidence` is the workload's token (a
+   * Kubernetes projected ServiceAccount token, or an OIDC token from GitHub
+   * Actions, Google Cloud, Azure, ...). Returns the server's record:
+   * { ok, reason, identity, valid_until, ... }.
+   */
+  async attest(evidence: string): Promise<any> {
+    const c = this.connected();
+    const ch = await c.post(`/agents/${this.agentId}/attestation/challenge`, {});
+    const token = evidence.trim();
+    const [signature, pqSignature] = this.identity.keys.sign({
+      type: "provenza.agent.attestation", v: 1, challenge: ch.challenge, agent_id: this.agentId, kind: ch.kind,
+      evidence_sha256: createHash("sha256").update(token, "utf8").digest("hex"),
+    });
+    return c.post(`/agents/${this.agentId}/attestation`, {
+      challenge: ch.challenge, kind: ch.kind, evidence: token, signature, ...(pqSignature ? { pq_signature: pqSignature } : {}),
+    });
   }
 
   /**

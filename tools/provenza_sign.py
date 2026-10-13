@@ -397,8 +397,10 @@ def _attest_once(keys: dict, server: str, token_file: str) -> bool:
         "signature": s, "pq_signature": pq}, auth)
     ident = res.get("identity") or {}
     if res.get("ok"):
-        print(f"ATTESTED  agent {keys['agent_id']} as {ident.get('namespace')}/{ident.get('service_account')}"
-              f" (pod {ident.get('pod')}) under policy {res.get('policy')!r}, valid until {res.get('valid_until')}")
+        where = (f"{ident.get('namespace')}/{ident.get('service_account')} (pod {ident.get('pod')})"
+                 if "namespace" in ident else f"{ident.get('sub')} ({ident.get('iss')})")
+        print(f"ATTESTED  agent {keys['agent_id']} as {where}"
+              f" under policy {res.get('policy')!r}, valid until {res.get('valid_until')}")
         return True
     print(f"NOT ATTESTED  agent {keys['agent_id']}: {res.get('reason')} {res.get('detail') or ''}".rstrip(),
           file=sys.stderr)
@@ -406,7 +408,8 @@ def _attest_once(keys: dict, server: str, token_file: str) -> bool:
 
 
 def cmd_attest(args) -> int:
-    """Prove where the agent runs (Kubernetes ServiceAccount token)."""
+    """Prove where the agent runs: a Kubernetes ServiceAccount token, or any
+    workload OIDC token written to --token-file (the policy decides the kind)."""
     import time
 
     def load() -> dict:

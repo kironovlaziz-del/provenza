@@ -129,3 +129,12 @@ func TestEgressSelfcheck(t *testing.T) {
 		t.Fatal(out, err)
 	}
 }
+
+func TestAttest(t *testing.T) {
+	f := newFake(t)
+	a := connected(t, f)
+	out, err := a.Attest(context.Background(), "  eyJ.workload.token\n")
+	if err != nil || out["ok"] != true || out["evidence"] != "eyJ.workload.token" {
+		t.Fatal(out, err)
+	}
+}

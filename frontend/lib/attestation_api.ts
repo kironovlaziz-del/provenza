@@ -5,7 +5,7 @@ export interface AttestationPolicyT {
   id: number;
   name: string;
   description: string | null;
-  kind: "k8s_sa";
+  kind: AttestationKind;
   issuer: string;
   audience: string;
   jwks_keys: (string | null)[];
@@ -13,12 +13,18 @@ export interface AttestationPolicyT {
   namespaces: string[];
   service_accounts: string[];
   require_pod_bound: boolean;
+  /** kind "oidc": claim path -> patterns, every rule must match */
+  claim_rules: Record<string, string[]>;
   validity_minutes: number;
   roles: number;
   updated_at: string | null;
 }
 
+export type AttestationKind = "k8s_sa" | "oidc";
+
 export interface PolicyInput {
+  kind?: AttestationKind;
+  claim_rules?: Record<string, string[]>;
   name?: string;
   description?: string | null;
   issuer?: string;
@@ -40,6 +46,8 @@ export interface WorkloadIdentity {
   pod_uid?: string | null;
   node?: string | null;
   exp?: number;
+  /** kind "oidc": the values of the claims the rules looked at */
+  claims?: Record<string, string | null>;
   /** only on a refused workload: "namespace/serviceaccount" */
   workload?: string;
 }
@@ -65,6 +73,36 @@ export interface AgentAttestationStatus {
   refusal: string | null;
   current: AttestationT | null;
   last: AttestationT | null;
+  /** the workload this agent is bound to by its first passing attestation */
+  binding: { issuer: string; subject: string; bound_at: string | null } | null;
+}
+
+export type OidcPresets = Record<string, { issuer: string; claim_rules: Record<string, string[]> }>;
+
+export async function oidcPresets() {
+  return (await api.get<OidcPresets>("/attestation/presets")).data;
+}
+
+/** Release an agent's workload binding (admin): its next passing attestation binds it again. */
+export async function unbindAgent(agentId: number) {
+  return (await api.post(`/attestation/agents/${agentId}/unbind`)).data;
+}
+
+/** Claim rules as the form edits them: one "claim = pattern, pattern" per line. */
+export function rulesToText(rules: Record<string, string[]>): string {
+  return Object.entries(rules).map(([k, v]) => `${k} = ${v.join(", ")}`).join("\n");
+}
+
+export function textToRules(text: string): Record<string, string[]> {
+  const out: Record<string, string[]> = {};
+  for (const line of text.split("\n")) {
+    const i = line.indexOf("=");
+    if (i < 0) continue;
+    const key = line.slice(0, i).trim();
+    const values = line.slice(i + 1).split(",").map((s) => s.trim()).filter(Boolean);
+    if (key && values.length) out[key] = values;
+  }
+  return out;
 }
 
 export interface AttestationHint {

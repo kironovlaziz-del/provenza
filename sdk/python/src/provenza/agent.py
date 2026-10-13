@@ -33,6 +33,7 @@ import asyncio
 import contextlib
 import contextvars
 import functools
+import hashlib
 import inspect
 import json
 import os
@@ -325,6 +326,28 @@ class Agent:
         cid = chain_id if chain_id is not None else _chain.get()
         return self._invoked(tool, await self._connected().apost("/http-tools/call",
                                                                  self._check_body(spec, inp, cid)))
+
+    def attest(self, evidence: str) -> Dict[str, Any]:
+        """Prove where this agent runs (provenza.attest has the token sources).
+        Returns the server's record: {"ok", "reason", "identity", "valid_until", ...}."""
+        c = self._connected()
+        ch = c.post(f"/agents/{self.agent_id}/attestation/challenge", {})
+        return c.post(f"/agents/{self.agent_id}/attestation", self._attestation(ch, evidence))
+
+    async def aattest(self, evidence: str) -> Dict[str, Any]:
+        c = self._connected()
+        ch = await c.apost(f"/agents/{self.agent_id}/attestation/challenge", {})
+        return await c.apost(f"/agents/{self.agent_id}/attestation", self._attestation(ch, evidence))
+
+    def _attestation(self, ch: Dict[str, Any], evidence: str) -> Dict[str, Any]:
+        evidence = evidence.strip()
+        sig, pq = self.identity.keys.sign({
+            "type": "provenza.agent.attestation", "v": 1, "challenge": ch["challenge"], "agent_id": self.agent_id,
+            "kind": ch["kind"], "evidence_sha256": hashlib.sha256(evidence.encode()).hexdigest()})
+        body = {"challenge": ch["challenge"], "kind": ch["kind"], "evidence": evidence, "signature": sig}
+        if pq:
+            body["pq_signature"] = pq
+        return body
 
     def egress_selfcheck(self, timeout: float = 3.0) -> Dict[str, Any]:
         """Is this host confined to the egress proxy? Tries the server's targets

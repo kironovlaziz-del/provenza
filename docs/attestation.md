@@ -1,10 +1,29 @@
 # Workload attestation
 
-An agent's signing key proves **who** is acting. Attestation proves **where**:
-that the agent runs in your Kubernetes cluster, in an approved namespace or
-service account, inside a pod — not on a laptop with a copied key.
+An agent's signing key proves **who** is acting. Attestation proves **where**
+it runs, for example:
 
-Agents whose role template requires attestation cannot act — no action checks,
+- in your Kubernetes cluster, in an approved namespace or service account,
+  inside a pod;
+- in your GitHub Actions workflow;
+- on your Google Cloud or Azure instance;
+- as a SPIFFE workload.
+
+In every case, not on a laptop with a copied key.
+
+Two kinds of evidence:
+
+| kind | evidence | what a policy allows |
+|---|---|---|
+| `k8s_sa` | a projected Kubernetes ServiceAccount token | namespaces / service accounts, pod-bound |
+| `oidc` | an OIDC workload identity token: GitHub Actions, Google Cloud metadata server, Azure managed identity, GitLab CI, SPIFFE JWT-SVID, any OIDC issuer | **claim rules**: `claim = pattern, ...`, every rule must match |
+
+**Who must attest.** Agents whose role template requires it. When the
+organization sets a **default policy** (Attestation → Make default), every
+agent must attest: under its role's policy if the role names one, otherwise
+under the default.
+
+Agents that must attest cannot act — no action checks,
 records, delegations, agent messages or gateway calls — until they hold a
 current, passing attestation. The only routes open to them before that are
 the attestation routes, their own key rotation and `GET /agent-identity/me`.
@@ -144,6 +163,50 @@ kubectl create token billing-agent -n payments --audience provenza
 tokens* on they fail with `attestation.not_pod_bound` — expected; the
 namespace and audience checks still show.)
 
+## OIDC workload identity
+
+Pick a preset (GitHub Actions, Google Cloud, Azure, GitLab CI, SPIFFE). It
+fills the issuer and example rules. Then name **your** workload in the rules:
+
+```
+repository = acme/agents          # GitHub: the repository (owner/name)
+ref = refs/heads/main             # only the main branch
+```
+
+A public issuer signs tokens for everyone. Without a rule naming your
+organization, any repository in the world would pass. So a policy without a
+rule on a workload claim is refused, and so is a rule that matches
+everything (`*`). Nested claims use dots, for example
+`google.compute_engine.project_id = acme-prod`.
+
+The agent fetches its token and attests with the SDK:
+
+```python
+from provenza import attest
+agent.attest(attest.github_actions("provenza"))       # needs `permissions: id-token: write`
+agent.attest(attest.gcp_metadata("provenza"))
+agent.attest(attest.azure_imds("api://provenza"))
+agent.attest(attest.token_file("/path/to/token"))     # any token on disk; Kubernetes by default
+```
+
+In JS and Go, call `agent.attest(token)` / `agent.Attest(ctx, token)` with the
+token. The CLI works for both kinds: `provenza_sign.py attest --token-file`.
+
+## Bound to one workload
+
+The agent's first passing attestation binds it to that workload: the token's
+issuer and subject. For Kubernetes the subject is the namespace and service
+account; for GitHub it is the repository and ref; and so on. After that, a
+token of **another** workload is refused with `attestation.workload_changed`,
+even one the policy allows and signed with the agent's key, and a critical
+`attestation_workload_changed` incident is raised. That is a copied agent key
+running somewhere else.
+
+The agent page shows the binding. When the agent really moved, an admin
+releases it (**Release**, or `POST /attestation/agents/{id}/unbind`). The
+agent's current attestation then stops counting, and its next passing
+attestation binds it again. The release is audited.
+
 ## API
 
 | | |
@@ -153,7 +216,10 @@ namespace and audience checks still show.)
 | `GET/POST /attestation/policies`, `PATCH/DELETE /attestation/policies/{id}` | policies (admin to change) |
 | `POST /attestation/policies/{id}/test` | dry run of a token (admin) |
 | `GET /attestation/records?agent_id=` | attempts, newest first |
-| `GET /attestation/agents/{id}` | what the agent needs and has |
+| `GET /attestation/agents/{id}` | what the agent needs and has, and the workload it is bound to |
+| `POST /attestation/agents/{id}/unbind` | release the binding (admin) |
+| `GET /attestation/presets` | issuer and claim-rule templates for `oidc` |
+| `PUT /agent-identity/settings` `default_attestation_policy_id` | the default policy for every agent (`0` clears it) |
 
 Refusals elsewhere: `403 agent.attestation_required` (no current attestation)
 and `403 agent.attestation_policy_missing` (the role requires attestation but
@@ -161,7 +227,11 @@ names no policy).
 
 ## Not covered (yet)
 
-* Other evidence: TPM 2.0 quotes, cloud instance identity, other OIDC
-  issuers (GitHub Actions, GCP, Azure) — the policy has a `kind` for them.
-* Pinning one agent to one pod or node: the identity (pod, node) is recorded
-  with every attestation, not enforced.
+* Hardware evidence: TPM 2.0 quotes and confidential-computing reports
+  (SEV-SNP, TDX). The policy has a `kind` for them.
+* AWS EC2 instance identity documents. They are not OIDC tokens; agents on
+  EKS use the Kubernetes kind.
+* Pinning one agent to one pod or node. The binding is per workload
+  (service account, repository, instance identity). Pods and nodes are
+  recorded with every attestation, not enforced: they change on every
+  deploy.

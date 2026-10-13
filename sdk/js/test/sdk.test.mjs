@@ -267,3 +267,14 @@ describe("egress self-check", () => {
     }
   });
 });
+
+describe("attestation", () => {
+  test("attest signs the token's hash over the server's challenge", async () => {
+    const server = new FakeProvenza();
+    const { agent } = await connected(server);
+    const res = await agent.attest("  eyJ.workload.token\n");
+    assert.equal(res.ok, true);
+    assert.equal(server.attested.evidence, "eyJ.workload.token");
+    assert.equal(server.attested.kind, "oidc");
+  });
+});

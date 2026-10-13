@@ -64,6 +64,12 @@ class Agent(Base):
     # outstanding workload-attestation challenge (services/attestation.py)
     attest_challenge = Column(String(64))
     attest_challenge_expires_at = Column(DateTime(timezone=True))
+    # the workload this agent is bound to: set by its first passing attestation
+    # (iss + sub of the evidence); another workload attesting with this agent's
+    # key is refused until an admin releases the binding (services/attestation.py)
+    attested_issuer = Column(String(500))
+    attested_subject = Column(String(500))
+    attested_bound_at = Column(DateTime(timezone=True))
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())

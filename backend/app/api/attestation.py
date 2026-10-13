@@ -12,10 +12,12 @@ is /agents/{id}/attestation/challenge and /agents/{id}/attestation.
     DELETE /attestation/policies/{id}         delete (admin) - refused while a role uses it
     POST   /attestation/policies/{id}/test    check a token against the policy, nothing recorded (admin)
     GET    /attestation/records               attestation attempts, newest first
-    GET    /attestation/agents/{agent_id}     what an agent needs and has
+    GET    /attestation/agents/{agent_id}     what an agent needs and has, and the workload it is bound to
+    POST   /attestation/agents/{agent_id}/unbind   release that binding (admin): the agent moved
+    GET    /attestation/presets               issuer and claim-rule templates for the oidc kind
 """
 
-from typing import Any, List, Optional
+from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -44,7 +46,7 @@ class PolicyIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
     name: str = Field(min_length=1, max_length=100)
     description: Optional[str] = Field(default=None, max_length=2000)
-    kind: str = Field(default="k8s_sa", pattern="^k8s_sa$")
+    kind: str = Field(default="k8s_sa", pattern="^(k8s_sa|oidc)$")
     issuer: str = Field(min_length=8, max_length=500)
     audience: str = Field(default="provenza", min_length=1, max_length=200)
     jwks: Optional[Any] = None
@@ -52,6 +54,7 @@ class PolicyIn(BaseModel):
     namespaces: List[str] = Field(default_factory=list, max_length=100)
     service_accounts: List[str] = Field(default_factory=list, max_length=100)
     require_pod_bound: bool = True
+    claim_rules: Dict[str, Any] = Field(default_factory=dict)
     validity_minutes: int = Field(default=60, ge=5, le=1440)
 
     @field_validator("name")
@@ -76,6 +79,7 @@ class PolicyUpdate(BaseModel):
     namespaces: Optional[List[str]] = Field(default=None, max_length=100)
     service_accounts: Optional[List[str]] = Field(default=None, max_length=100)
     require_pod_bound: Optional[bool] = None
+    claim_rules: Optional[Dict[str, Any]] = None
     validity_minutes: Optional[int] = Field(default=None, ge=5, le=1440)
 
     @field_validator("name")
@@ -143,3 +147,18 @@ async def list_records(agent_id: Optional[int] = None, limit: int = Query(50, ge
 async def agent_status(agent_id: int, db: AsyncSession = Depends(get_db),
                        current_user: User = Depends(get_current_user)):
     return await attestation.status_of(db, current_user.org_id, agent_id)
+
+
+@router.post("/agents/{agent_id}/unbind")
+async def unbind_agent(agent_id: int, db: AsyncSession = Depends(get_db), current_user: User = Depends(_admin)):
+    """The agent's next passing attestation binds it to its new workload."""
+    before = await attestation.unbind(db, current_user.org_id, agent_id)
+    await AuditService(db).log(current_user.org_id, current_user.id, "agent", agent_id, "attestation_unbound", before)
+    return {"unbound": True, "was": before}
+
+
+@router.get("/presets")
+async def presets(current_user: User = Depends(get_current_user)):
+    from app.core.oidc_attest import PRESETS
+
+    return PRESETS

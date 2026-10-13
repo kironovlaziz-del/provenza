@@ -33,6 +33,8 @@ class AttestationPolicy(Base):
     namespaces = Column(JSONB, nullable=False, server_default=text("'[]'::jsonb"))        # patterns
     service_accounts = Column(JSONB, nullable=False, server_default=text("'[]'::jsonb"))  # "ns/name" patterns
     require_pod_bound = Column(Boolean, nullable=False, server_default=text("true"))
+    # kind "oidc": {claim path: [patterns]}, every rule must match (core/oidc_attest.py)
+    claim_rules = Column(JSONB, nullable=False, server_default=text("'{}'::jsonb"))
     validity_minutes = Column(Integer, nullable=False, server_default="60")
     created_by = Column(Integer, ForeignKey("users.id"))
     created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())

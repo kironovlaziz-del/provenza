@@ -64,6 +64,16 @@ export class FakeProvenza {
       this.checks.set(token, { ...body, decision });
       return ok(200, { decision, reason: `policy says ${decision}`, check_id: token, incident_type: null, policy_id: null });
     }
+    if (path === "/agents/42/attestation/challenge") {
+      return ok(200, { agent_id: 42, challenge: "a".repeat(64), kind: "oidc", audience: "provenza" });
+    }
+    if (path === "/agents/42/attestation") {
+      const { createHash } = await import("node:crypto");
+      verifyEd25519(this.publicKey, body.signature, { type: "provenza.agent.attestation", v: 1, challenge: "a".repeat(64),
+        agent_id: 42, kind: "oidc", evidence_sha256: createHash("sha256").update(body.evidence).digest("hex") });
+      this.attested = body;
+      return ok(200, { ok: true, kind: body.kind, identity: { sub: "repo:acme/agents" } });
+    }
     if (path === "/agents/egress-check") {
       this.egress = { id: 5, targets: this.egressTargets ?? ["127.0.0.1:9"] };
       return ok(200, { check_id: 5, targets: this.egress.targets, beacon_url: `${SERVER}/egress-beacon/tok`, expires_at: "x" });

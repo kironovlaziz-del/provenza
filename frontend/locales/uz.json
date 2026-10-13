@@ -889,7 +889,7 @@
     "attestation.workload_not_allowed": "Bu namespace / service account siyosatda ruxsat etilmagan",
     "attestation.bad_pattern": "Noto'g'ri shablon",
     "attestation.jwks_unavailable": "Klaster kalitlarini olib bo'lmadi",
-    "attestation.unsupported_kind": "Qo'llab-quvvatlanmaydigan attestatsiya turi",
+    "attestation.unsupported_kind": "Bunday dalil turi qo'llab-quvvatlanmaydi.",
     "attestation.no_workload_rule": "Kamida bitta ruxsat etilgan namespace yoki service account kiriting - aks holda klasterning istalgan yuklamasi o'tadi",
     "attestation.https_required": "https:// URL ishlating",
     "attestation.issuer_required": "Klaster emitenti kiritilishi shart",
@@ -1011,6 +1011,11 @@
     "agent.egress_unconfined": "Bu agentning xosti egress proksidan boshqa manzillarga ham ulana oladi, tashkilot esa cheklangan xostni talab qiladi.",
     "agent.egress_check_stale": "Bu agentning oxirgi egress tekshiruvi juda eski; uni qayta ishga tushiring.",
     "egress_lockdown.ip_required": "nftables uchun proksining nomi emas, IP manzili kerak.",
+    "attestation.rules_required": "OIDC siyosati ish yuklamasini nomlaydigan claim qoidasini talab qiladi (sub, repository, project, ...).",
+    "attestation.bad_rule": "Claim qoidasi yaroqsiz.",
+    "attestation.rule_matches_everything": "Claim qoidasi hamma narsaga mos kelmasligi kerak.",
+    "attestation.workload_changed": "Bu agent boshqa ish yuklamasiga bog'langan: agar u ko'chgan bo'lsa, administrator bog'lanishni bo'shatishi kerak.",
+    "attestation.policy_is_default": "Bu tashkilotning standart attestatsiya siyosati; avval boshqasini standart qiling.",
     "runtime.workload_not_found": "Ish yuki topilmadi.",
     "runtime.agent_not_found": "Agent topilmadi.",
     "runtime.name_taken": "{{name}} nomli ish yuki allaqachon mavjud.",
@@ -1426,7 +1431,9 @@
       "rogue_agent_quarantined": "Agent karantinga olindi",
       "memory_integrity_violation": "Xotira buzib kirilgan",
       "cascade_breaker_tripped": "Avtomatik to'xtatgich ishga tushdi",
-      "ai_provider_not_self_hosted": "Bulutli AI xizmati (faqat o'z serverlarimiz)"
+      "ai_provider_not_self_hosted": "Bulutli AI xizmati (faqat o'z serverlarimiz)",
+      "attestation_workload_changed": "Agent kaliti boshqa ish yuklamasi tomonidan ishlatilgan",
+      "egress_unconfined": "Agent xosti egress proksi bilan cheklanmagan"
     }
   },
   "inventory": {
@@ -2715,7 +2722,25 @@
     "last_attempt": "Oxirgi urinish {{time}}",
     "enroll_title": "Attestatsiya talab qilinadi",
     "enroll_hint": "Bu agent roli attestatsiyani talab qiladi (\"{{policy}}\" siyosati): u qayerda ishlayotganini isbotlagandan keyingina harakat qila oladi. Uning podiga \"{{audience}}\" audience uchun projected ServiceAccount token kerak va agent quyidagini ishga tushirishi kerak:",
-    "jwks_url_required": "Klaster kalitlari URL'ini kiriting."
+    "jwks_url_required": "Klaster kalitlari URL'ini kiriting.",
+    "kind": "Dalil",
+    "kind_k8s_sa": "Kubernetes ServiceAccount tokeni",
+    "kind_oidc": "OIDC ish yuklamasi identifikatsiyasi (GitHub Actions, Google Cloud, Azure, GitLab, SPIFFE, ...)",
+    "preset_github_actions": "GitHub Actions",
+    "preset_gcp": "Google Cloud",
+    "preset_azure": "Azure",
+    "preset_gitlab": "GitLab CI",
+    "preset_spiffe": "SPIFFE",
+    "claim_rules": "Claim qoidalari",
+    "claim_rules_hint": "Har bir qatorda bitta qoida: claim = naqsh, naqsh (* va ? belgilari; ichki claimlar nuqta bilan, masalan google.compute_engine.project_id). Barcha qoidalar mos kelishi kerak. GitHub kabi ommaviy emitent uchun tashkilotingizni nomlaydigan qoida kerak: aks holda dunyodagi istalgan repozitoriy o'tib ketadi.",
+    "default_badge": "barcha agentlar uchun standart",
+    "set_default": "Standart qilish",
+    "unset_default": "Standart emas",
+    "confirm_default": "Bu tashkilotning standart siyosati qilinsinmi? Roli o'z siyosatiga ega bo'lmagan har bir agent harakat qilishdan oldin shu siyosat bo'yicha attestatsiyadan o'tishi kerak bo'ladi.",
+    "setup_oidc": "Agentda (Python SDK; JS va Go'da agent.attest(token))",
+    "bound_to": "Ish yuklamasiga bog'langan",
+    "unbind": "Bo'shatish",
+    "confirm_unbind": "Bu agentning ish yuklamasiga bog'lanishi bo'shatilsinmi? Joriy attestatsiyasi hisobga olinmay qoladi; keyingi muvaffaqiyatli attestatsiya uni o'sha paytda ishlayotgan joyiga bog'laydi."
   },
   "ph": {
     "title": "Siyosatlar ierarxiyasi",
