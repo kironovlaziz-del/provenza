@@ -31,6 +31,7 @@ import { createPublicKey, verify as edVerify, type KeyObject } from "node:crypto
 
 import { contentHash } from "./crypto.js";
 import { ProvenzaError } from "./errors.js";
+import { trimEnd } from "./text.js";
 
 export const PERMIT_HEADER = "Provenza-Permit";
 const TYP = "provenza-permit+jwt";
@@ -107,7 +108,7 @@ export class PermitVerifier {
   private readonly fetchFn: typeof fetch;
 
   constructor(serverUrl: string, readonly org: string, opts: PermitVerifierOptions = {}) {
-    let base = serverUrl.replace(/\/+$/, "");
+    let base = trimEnd(serverUrl, "/");
     if (!base.endsWith("/api/v1")) base += "/api/v1";
     this.issuer = `provenza:org:${org}`;
     this.jwksUrl = `${base}/pvp/permits/${encodeURIComponent(org)}/jwks.json`;
