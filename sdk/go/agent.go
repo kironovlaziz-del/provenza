@@ -232,10 +232,25 @@ type Check struct {
 	ChainID      *int64
 	IncidentType string
 	PolicyID     *int64
+	// Permit is the signed permit of an allowed check: the tool verifies it
+	// (provenza.permit in Python, permit.ts in JS) and runs nothing without it.
+	Permit string
 }
 
 // Allowed tells whether the call may run.
 func (c *Check) Allowed() bool { return c.Decision == "allowed" }
+
+// PermitHeader carries the permit to the tool.
+const PermitHeader = "Provenza-Permit"
+
+// PermitHeaders returns the header to send the tool with the call (send the
+// checked input as the JSON body), or an empty map for a refused check.
+func (c *Check) PermitHeaders() map[string]string {
+	if c.Permit == "" {
+		return map[string]string{}
+	}
+	return map[string]string{PermitHeader: c.Permit}
+}
 
 type callOptions struct {
 	actionType string
@@ -352,7 +367,7 @@ func (a *Agent) check(ctx context.Context, tool string, input map[string]any, o 
 	}
 	return &Check{CheckID: str(res, "check_id"), Decision: str(res, "decision"), Reason: str(res, "reason"), Tool: tool,
 		ActionType: o.actionType, Input: input, ChainID: chain, IncidentType: str(res, "incident_type"),
-		PolicyID: optInt(res, "policy_id")}, nil
+		PolicyID: optInt(res, "policy_id"), Permit: str(res, "permit")}, nil
 }
 
 // Check asks before doing something that is not governed through Call.

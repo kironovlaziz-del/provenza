@@ -48,6 +48,7 @@ from provenza import proxy as egress_proxy
 from provenza.audit_log import AuditLog
 from provenza.client import Client
 from provenza.crypto import Keys, canonical, content_hash
+from provenza.permit import HEADER as PERMIT_HEADER
 from provenza.errors import (ProvenzaApprovalRequired, ProvenzaConfigError, ProvenzaDenied, ProvenzaRequestError,
                              ProvenzaUnavailable)
 
@@ -81,10 +82,18 @@ class Check:
     chain_id: Optional[int] = None
     incident_type: Optional[str] = None
     policy_id: Optional[int] = None
+    # allowed: the signed permit the tool verifies (provenza.permit)
+    permit: Optional[str] = field(default=None, repr=False)
 
     @property
     def allowed(self) -> bool:
         return self.decision == "allowed"
+
+    @property
+    def permit_headers(self) -> Dict[str, str]:
+        """For a tool behind provenza.permit: the header it verifies. Send the
+        checked input as the request's JSON body."""
+        return {PERMIT_HEADER: self.permit} if self.permit else {}
 
     @property
     def proxy_headers(self) -> Dict[str, str]:
@@ -267,7 +276,8 @@ class Agent:
     def _check_of(res: Dict[str, Any], tool: ToolSpec, input: Dict[str, Any], chain_id: Optional[int]) -> Check:
         return Check(check_id=res["check_id"], decision=res["decision"], reason=res.get("reason") or "",
                      tool=tool.name, action_type=tool.action_type, input=input, chain_id=chain_id,
-                     incident_type=res.get("incident_type"), policy_id=res.get("policy_id"))
+                     incident_type=res.get("incident_type"), policy_id=res.get("policy_id"),
+                     permit=res.get("permit"))
 
     def _record_body(self, chk: Check, output: Optional[Dict[str, Any]], duration_ms: Optional[int]) -> Dict[str, Any]:
         payload = {"check_id": chk.check_id, "agent_id": self.agent_id, "chain_id": chk.chain_id,

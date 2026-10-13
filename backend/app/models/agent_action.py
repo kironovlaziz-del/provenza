@@ -104,4 +104,26 @@ class ActionCheck(Base):
     policy_id = Column(Integer, ForeignKey("agent_policies.id"))
     expires_at = Column(DateTime(timezone=True), nullable=False)
     used_at = Column(DateTime(timezone=True))
+    # the signed permit issued with an allowed verdict (app/pvp/permits.py):
+    # its id, and when a tool redeemed it - once
+    permit_jti = Column(String(64), unique=True)
+    permit_redeemed_at = Column(DateTime(timezone=True))
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class PermitSigningKey(Base):
+    """An organization's key for permits (app/pvp/permits.py): Ed25519,
+    separate from the audit key - permits are signed online on every allowed
+    check, checkpoints are not. Published in the organization's JWKS while
+    active and for a grace period after it is retired, so permits it signed
+    stay verifiable until they expire."""
+
+    __tablename__ = "permit_signing_keys"
+
+    id = Column(Integer, primary_key=True)
+    org_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
+    kid = Column(String(64), nullable=False, unique=True)
+    public_key = Column(Text, nullable=False)          # raw 32 bytes, base64
+    private_key_enc = Column(Text, nullable=False)     # encrypted with the server ENCRYPTION_KEY
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    retired_at = Column(DateTime(timezone=True))

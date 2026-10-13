@@ -152,6 +152,28 @@ await fetch("http://127.0.0.1:8443/stripe/v1/charges", { method: "POST", body, h
 `path`, `query` and `body` must be exactly what goes on the wire; the proxy
 refuses any other request under that check, and records it itself.
 
+## Permits for tools
+
+An allowed check carries a permit signed by the organization. The agent
+sends it with the call, and the tool runs nothing without a valid one:
+
+```ts
+import { permitHeaders, permitMiddleware, PermitVerifier, withPermit } from "provenza";
+
+// the agent
+const chk = await agent.check("crm.update", payload);
+await fetch(url, { method: "POST", body: JSON.stringify(payload), headers: permitHeaders(chk) });
+
+// the tool
+const verifier = new PermitVerifier("https://provenza.example.com", "acme");
+app.post("/update", express.json(), permitMiddleware(verifier, { tool: "crm.update" }), handler);
+export const POST = withPermit(verifier, "crm.update", async (request, permit, input) => Response.json({ ok: true }));
+```
+
+The verifier checks the signature against the organization's JWKS, the
+tool, the hash of the JSON body (it must be the checked input) and the
+expiry, then redeems the permit with Provenza: once, across every replica.
+
 ## What this is, and what it is not
 
 The SDK runs inside the agent's process. It is the agent's honest record

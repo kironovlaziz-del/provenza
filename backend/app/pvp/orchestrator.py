@@ -42,6 +42,7 @@ from app.models.agent import Agent
 from app.models.agent_action import ActionCheck, AgentAction
 from app.models.delegation import ActionNonce, DelegationChain, DelegationHop, DelegationNonce
 from app.pvp.model import PVPAction, PVPActionRecord, PVPActionRequest, PVPCheck, PVPDelegation
+from app.pvp import permits
 from app.services.agent_audit import AgentAudit
 from app.services.agent_policy_engine import DENIED, Decision
 from app.services.agent_identity import keyless_refused, pq_signature_required
@@ -130,7 +131,11 @@ class PVPOrchestrator:
             tool_name=req.tool_name, input_data=req.input,
             action_capabilities=decision.required_capabilities, decision=decision,
         )
-        return self.check_out(chk)
+        permit = None
+        if chk.decision == "allowed":
+            permit = await permits.issue(self.db, chk)
+            await self.db.commit()
+        return self.check_out(chk, permit)
 
     async def _verify_request(self, org_id: int, agent: Agent, req: PVPActionRequest) -> None:
         """Signature (both halves for a hybrid key), freshness, single-use nonce
@@ -366,13 +371,14 @@ class PVPOrchestrator:
     # ---------------------------------------------------- PVP views of rows
 
     @staticmethod
-    def check_out(chk: ActionCheck) -> PVPCheck:
+    def check_out(chk: ActionCheck, permit: Optional[str] = None) -> PVPCheck:
         return PVPCheck(
             check_id=chk.token, agent_id=chk.agent_id, chain_id=chk.chain_id,
             action_type=chk.action_type, tool_name=chk.tool_name, input_sha256=chk.input_sha256,
             decision=chk.decision, reason=chk.reason or "", incident_type=chk.incident_type,
             policy_id=chk.policy_id, required_capabilities=list(chk.action_capabilities or []),
-            expires_at=_unix(chk.expires_at),
+            expires_at=_unix(chk.expires_at), permit=permit, permit_id=chk.permit_jti,
+            permit_redeemed_at=_unix(chk.permit_redeemed_at) if chk.permit_redeemed_at else None,
         )
 
     @staticmethod

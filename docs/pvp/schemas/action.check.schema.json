@@ -2,7 +2,7 @@
   "$id": "urn:provenza:pvp:1:action.check.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
-  "description": "The verdict for one proposed action, bound to it by input_sha256. The\ncheck_id is single-use and expires: recording presents it once, for\nexactly this action.",
+  "description": "The verdict for one proposed action, bound to it by input_sha256. The\ncheck_id is single-use and expires: recording presents it once, for\nexactly this action. An allowed check carries a permit for the tool.",
   "properties": {
     "action_type": {
       "default": "tool_call",
@@ -72,6 +72,46 @@
       "pattern": "^[0-9a-f]{64}$",
       "title": "Input Sha256",
       "type": "string"
+    },
+    "permit": {
+      "anyOf": [
+        {
+          "maxLength": 4096,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Permit"
+    },
+    "permit_id": {
+      "anyOf": [
+        {
+          "maxLength": 64,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Permit Id"
+    },
+    "permit_redeemed_at": {
+      "anyOf": [
+        {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Permit Redeemed At"
     },
     "policy_id": {
       "anyOf": [

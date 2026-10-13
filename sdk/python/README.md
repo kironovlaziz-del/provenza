@@ -172,6 +172,35 @@ if chk.allowed:
 refuses any other request under that check. The proxy records the request,
 so it is not passed to `record()`.
 
+## Permits for tools
+
+An allowed check carries a permit signed by the organization. The agent
+sends it with the call:
+
+```python
+chk = agent.check("crm.update", payload)
+if chk.allowed:
+    httpx.post("https://crm-tool.internal/update", json=payload, headers=chk.permit_headers)
+    agent.record(chk, output)
+```
+
+The tool runs nothing without a valid permit for exactly this call:
+
+```python
+from provenza.permit import PermitMiddleware, PermitVerifier, require_permit
+
+verifier = PermitVerifier("https://provenza.example.com", org="acme")
+app = PermitMiddleware(app, verifier, tool="crm.update")   # any ASGI app: FastAPI, Starlette, ...
+
+@require_permit(verifier, "db.read")                         # or a plain function
+def read(query: str): ...
+```
+
+The verifier checks the signature against the organization's JWKS, the
+tool, the hash of the JSON body (it must be the checked input) and the
+expiry. It then redeems the permit with Provenza, so it is used once across
+every replica of the tool. If Provenza cannot be reached, it refuses.
+
 ## Integrations
 
 Each framework is an optional extra. The SDK never requires one: `crewai`

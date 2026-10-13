@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- `provenza.permit`: tools verify the signed permit of an allowed check
+  (`PermitVerifier`, ASGI `PermitMiddleware`, `require_permit`); the agent
+  sends `check.permit_headers`.
 - Every `check` is signed by the agent: a nonce, the time and a signature
   over the request (Ed25519, plus ML-DSA-65 for hybrid keys). The server
   now refuses unsigned checks from agents.

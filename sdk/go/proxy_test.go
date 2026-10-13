@@ -69,3 +69,18 @@ func TestProxyCheck(t *testing.T) {
 		t.Fatalf("headers %v", h)
 	}
 }
+
+func TestPermitHeaders(t *testing.T) {
+	f := newFake(t)
+	a := connected(t, f)
+	chk, err := a.Check(context.Background(), "db.read", map[string]any{"q": 1})
+	if err != nil || !chk.Allowed() || chk.Permit != "permit-of-"+chk.CheckID {
+		t.Fatal(chk, err)
+	}
+	if h := chk.PermitHeaders(); len(h) != 1 || h["Provenza-Permit"] != chk.Permit {
+		t.Fatalf("headers %v", h)
+	}
+	if h := (&Check{Decision: "denied"}).PermitHeaders(); len(h) != 0 {
+		t.Fatalf("a refused check has no permit: %v", h)
+	}
+}

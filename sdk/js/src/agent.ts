@@ -50,6 +50,8 @@ export interface Check {
   chainId: number | null;
   incidentType: string | null;
   policyId: number | null;
+  /** Allowed: the signed permit the tool verifies (permitHeaders(check), see permit.ts). */
+  permit: string | null;
 }
 
 export interface AgentOptions {
@@ -220,7 +222,7 @@ export class Agent {
   private static checkOf(res: any, spec: ToolSpec, input: Json, chainId: number | null): Check {
     return { checkId: res.check_id, decision: res.decision, reason: res.reason ?? "", tool: spec.name,
              actionType: spec.actionType ?? "tool_call", input, chainId, incidentType: res.incident_type ?? null,
-             policyId: res.policy_id ?? null };
+             policyId: res.policy_id ?? null, permit: res.permit ?? null };
   }
 
   /** Ask before doing something that is not a governed tool. */

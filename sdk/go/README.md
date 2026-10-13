@@ -108,6 +108,18 @@ for k, v := range chk.ProxyHeaders() {
 `path`, `query` and `body` must be exactly what goes on the wire; the proxy
 refuses any other request under that check, and records it itself.
 
+## Permits for tools
+
+An allowed check carries `chk.Permit`, signed by the organization. Send it
+to the tool with the checked input as the JSON body. A tool built with the
+Python or JS SDK verifies it and runs nothing without it:
+
+```go
+for k, v := range chk.PermitHeaders() {
+	req.Header.Set(k, v)
+}
+```
+
 ## What this is, and what it is not
 
 The SDK runs inside your agent's process. It is the agent's honest record

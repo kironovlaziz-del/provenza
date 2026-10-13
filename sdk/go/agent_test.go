@@ -113,7 +113,11 @@ func (f *fake) handle(w http.ResponseWriter, r *http.Request) {
 		body["decision"] = decision
 		f.checks[token] = body
 		f.order = append(f.order, token)
-		reply(w, 200, map[string]any{"decision": decision, "reason": "policy says " + decision, "check_id": token})
+		out := map[string]any{"decision": decision, "reason": "policy says " + decision, "check_id": token}
+		if decision == "allowed" {
+			out["permit"] = "permit-of-" + token
+		}
+		reply(w, 200, out)
 	case path == "/agents/actions/record":
 		if f.recordFailures > 0 {
 			f.recordFailures--

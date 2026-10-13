@@ -72,3 +72,26 @@ async def test_sdk_governs_records_and_proves(client, admin_token, tmp_path):
     action, _, _ = tool.check_receipt(receipt, tool.Trust(), agent.fingerprint)
     assert action["tool_name"] == "db.read"
     await agent.aclose()
+
+
+@pytest.mark.asyncio
+async def test_sdk_permit_from_this_server_runs_the_tool_once(client, admin_token, tmp_path, db_session):
+    """The agent's check carries a permit; the tool's verifier (provenza.permit)
+    takes the JWKS from this server, verifies it, and redeems it here - once."""
+    from app.models.agent import Agent as AgentRow
+    from app.models.organization import Organization
+    from provenza.permit import PermitError, PermitVerifier
+
+    agent = await _sdk_agent(client, admin_token, tmp_path)
+    payload = {"query": "select 1"}
+    chk = await agent.acheck("db.read", payload)
+    assert chk.allowed and chk.permit
+    org_id = (await db_session.get(AgentRow, agent.agent_id)).org_id
+    slug = (await db_session.get(Organization, org_id)).slug
+    verifier = PermitVerifier("http://test", slug, async_transport=ASGITransport(app=app))
+    permit = await verifier.averify(chk.permit_headers["Provenza-Permit"], tool="db.read", input=payload)
+    assert permit.redeemed and permit.agent_id == agent.agent_id
+    with pytest.raises(PermitError) as e:
+        await verifier.averify(chk.permit, tool="db.read", input=payload)
+    assert e.value.code == "permit.redeemed"
+    await agent.arecord(chk, {"rows": 1})

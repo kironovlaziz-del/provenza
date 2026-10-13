@@ -5,6 +5,8 @@
 First release. It has the same behaviour and the same bytes as the Python
 and JS SDKs 0.1.
 
+- `Check.Permit` / `PermitHeaders`: the signed permit of an allowed check,
+  for the tool.
 - Every `Check` is signed by the agent: a nonce, the time and a signature
   over the request, which the server requires.
 - `New`: enrollment with keys generated on the agent's side, stored in the

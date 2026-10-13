@@ -33,7 +33,7 @@ from app.models.discovered_service import DiscoveredService
 from app.models.service_connection import ServiceConnection
 from app.models.agent import Agent, AgentKeyRevocation, AgentPolicy, AgentSigningKey
 from app.models.delegation import ActionNonce, DelegationChain, DelegationHop, DelegationNonce
-from app.models.agent_action import AgentAction, AgentIncident, ActionCheck
+from app.models.agent_action import AgentAction, AgentIncident, ActionCheck, PermitSigningKey
 from app.models.ai_system import AISystem, AISystemDataLink
 from app.models.breaker import AgentBreakerSettings
 from app.models.tool_registry import SupplyChainSettings, ToolRegistryEntry

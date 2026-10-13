@@ -5,6 +5,8 @@
 First release. It has the same behaviour and the same bytes as the Python
 SDK 0.1.
 
+- Permits for tools: `PermitVerifier`, `permitMiddleware` (Express),
+  `withPermit` (fetch-style handlers); the agent sends `permitHeaders(check)`.
 - Every `check` is signed by the agent: a nonce, the time and a signature
   over the request, which the server requires.
 - `Agent.create`: enrollment with keys generated on the agent's side. The

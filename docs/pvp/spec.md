@@ -168,6 +168,33 @@ The answer is `action.check`: `decision` ∈ {`allowed`, `denied`,
 
 A denied check is still issued, so the attempt can be recorded.
 
+An allowed check also carries a **permit** for the tool: a compact JWS
+(`alg` EdDSA, `typ` `provenza-permit+jwt`) signed by the organization's
+permit key, which is separate from its audit key:
+
+```json
+{"iss": "provenza:org:<slug>", "sub": "agent:3", "aud": "db.read",
+ "jti": "<permit id>", "iat": 1760000000, "nbf": 1760000000, "exp": 1760000300,
+ "act": "tool_call", "chain": null, "ish": "<input_sha256>"}
+```
+
+- The tool verifies it against `GET /pvp/permits/{org}/jwks.json`, which is
+  public, and refuses without it: another tool (`aud`), another input
+  (`ish`, the hash of the JSON body it received), an expired permit or one
+  signed by an unknown key.
+- `POST /pvp/permits/redeem` (`permit`, `tool`, `input_sha256`) marks it used
+  exactly once, for any replica of the tool. A permit for anything else is
+  refused there too, and stays unused.
+- The permit belongs to the check: `action.check` carries `permit_id` and,
+  once a tool redeemed it, `permit_redeemed_at`. A receipt therefore shows
+  that the tool, not only the agent, saw the permit for the recorded action.
+- After a rotation (`POST /pvp/permits/keys/rotate`), the old key stays in
+  the JWKS for an hour. Permits live five minutes.
+
+The SDKs verify permits for tools: `provenza.permit` in Python (ASGI
+middleware, a decorator, `PermitVerifier`) and `permit.ts` in JS (Express
+middleware, a fetch-style wrapper, `PermitVerifier`).
+
 ### 3.2 `action.record` → `action`
 
 The agent reports what it did: the same action fields, `input`, `output`,
