@@ -32,10 +32,13 @@ from fastapi import status
 
 from app.core.errors import api_error
 
+# The listen address written into generated proxy configs (a container or host
+# the operator deploys); Provenza itself binds nothing here.
+ALL_INTERFACES = "0.0.0.0"  # nosec B104
 PROXY_IMAGE = "provenza-proxy:0.1.0"   # built from proxy/: docker build -t provenza-proxy:0.1.0 proxy/
 
 
-def _proxy_config(server_url: str, port: int, listen_host: str = "0.0.0.0") -> str:
+def _proxy_config(server_url: str, port: int, listen_host: str = ALL_INTERFACES) -> str:
     return json.dumps({"server_url": server_url, "proxy_key_file": "/etc/provenza/secret/proxy.key",
                        "listen": f"{listen_host}:{port}", "allow_non_loopback": listen_host != "127.0.0.1",
                        "relay_provenza": True}, indent=2)
@@ -249,7 +252,7 @@ RemainAfterExit=yes
 [Install]
 WantedBy=multi-user.target
 """
-    listen = "127.0.0.1" if loopback else "0.0.0.0"
+    listen = "127.0.0.1" if loopback else ALL_INTERFACES
     base = f"http://{proxy_host if ip.version == 4 else '[' + proxy_host + ']'}:{proxy_port}"
     return {
         "files": [{"name": "egress.nft", "content": rules},
