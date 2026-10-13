@@ -14,4 +14,6 @@ class Organization(Base):
     plan = Column(String(50), default="free")
     # who must sign in with a second factor: none | reviewers (admins and approvers) | all
     mfa_required = Column(String(10), nullable=False, default="none", server_default="none")
+    # which AI providers may be called: any | self_hosted (services/provider_policy.py)
+    ai_provider_policy = Column(String(20), nullable=False, default="any", server_default="any")
     created_at = Column(DateTime(timezone=True), server_default=func.now())

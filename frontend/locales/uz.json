@@ -995,6 +995,8 @@
     "action.replayed_request": "Bu harakat tekshiruvi allaqachon ishlatilgan (takroriy nonce).",
     "egress.agent_key_invalid": "Agent kaliti bu proksi tashkiloti uchun yaroqsiz.",
     "egress.agent_inactive": "Agent faol emas.",
+    "provider.self_hosted_only": "Bu tashkilot faqat o'z serverlaridagi AI provayderlarga ruxsat beradi, bu ulanish esa sizning tarmog'ingizda emas. Hech narsa yuborilmadi.",
+    "provider.call_failed": "Provayderni chaqirib bo'lmadi: {{message}}",
     "runtime.workload_not_found": "Ish yuki topilmadi.",
     "runtime.agent_not_found": "Agent topilmadi.",
     "runtime.name_taken": "{{name}} nomli ish yuki allaqachon mavjud.",
@@ -1409,7 +1411,8 @@
       "indirect_prompt_injection": "Bilvosita prompt in'ektsiyasi",
       "rogue_agent_quarantined": "Agent karantinga olindi",
       "memory_integrity_violation": "Xotira buzib kirilgan",
-      "cascade_breaker_tripped": "Avtomatik to'xtatgich ishga tushdi"
+      "cascade_breaker_tripped": "Avtomatik to'xtatgich ishga tushdi",
+      "ai_provider_not_self_hosted": "Bulutli AI xizmati (faqat o'z serverlarimiz)"
     }
   },
   "inventory": {
@@ -3194,6 +3197,16 @@
     "mfa_hint": "Hech bo'lmaganda adminlar va tasdiqlovchilar uchun. Avval o'zingiz uchun Mening profilimda sozlang.",
     "discovery": "Shadow AI'ni toping",
     "discovery_hint": "Endpoint agent yoki brauzer kengaytmasi uchun ingestion kaliti."
+  },
+  "provider_policy": {
+    "title": "AI provayderlar siyosati",
+    "hint": "Promptlar qayerga yuborilishi mumkin. \"Faqat o'z serverlarimiz\" rejimida Provenza faqat o'z tarmog'ingizdagi model serverlariga ulanadi: bulutli AI xizmatiga ulanish hech narsa yuborilmasdan rad etiladi, agentlar esa bulutli AI xizmatlarini to'g'ridan-to'g'ri chaqira olmaydi.",
+    "any": "Har qanday provayder",
+    "self_hosted": "Faqat o'z serverlarimiz",
+    "self_hosted_note": "Faqat o'z tarmog'ingizdagi manzillarga ulaniladi, har bir ulanishda tekshiriladi. Provenza qaysi ichki manzillarni chaqira olishini server operatori belgilaydi (OUTBOUND_PRIVATE_ALLOWLIST).",
+    "cloud_refused": "Bu siyosatda rad etiladi",
+    "confirm": "Faqat o'z serverlaringizdagi AI provayderlarga ruxsat berilsinmi? Bulutli ulanishlar (OpenAI, Anthropic, Groq, Azure va har qanday ommaviy manzil) playground, shlyuz va so'rovlar navbatida rad etiladi, agentlar esa bulutli AI xizmatlarini to'g'ridan-to'g'ri chaqira olmaydi.",
+    "failed": "AI provayderlar siyosatini o'zgartirib bo'lmadi."
   },
   "rt": {
     "title": "Runtime",

@@ -995,6 +995,8 @@
     "action.replayed_request": "This action check was already used (a repeated nonce).",
     "egress.agent_key_invalid": "The agent key is not valid for this proxy's organization.",
     "egress.agent_inactive": "The agent is not active.",
+    "provider.self_hosted_only": "This organization allows only self-hosted AI providers, and this connection is not on your own network. Nothing was sent.",
+    "provider.call_failed": "The provider call failed: {{message}}",
     "runtime.workload_not_found": "Workload not found.",
     "runtime.agent_not_found": "Agent not found.",
     "runtime.name_taken": "A workload named {{name}} already exists.",
@@ -1409,7 +1411,8 @@
       "indirect_prompt_injection": "Indirect prompt injection",
       "rogue_agent_quarantined": "Agent quarantined",
       "memory_integrity_violation": "Memory tampering",
-      "cascade_breaker_tripped": "Circuit breaker tripped"
+      "cascade_breaker_tripped": "Circuit breaker tripped",
+      "ai_provider_not_self_hosted": "Cloud AI service (self-hosted only)"
     }
   },
   "inventory": {
@@ -3194,6 +3197,16 @@
     "mfa_hint": "At least for admins and approvers. Set it up for yourself first in My profile.",
     "discovery": "Find shadow AI",
     "discovery_hint": "An ingestion key for the endpoint agent or the browser extension."
+  },
+  "provider_policy": {
+    "title": "AI provider policy",
+    "hint": "Where prompts may go. With \"Self-hosted only\", Provenza connects only to model servers on your own network: a connection to a cloud AI service is refused before anything is sent, and agents may not call cloud AI services directly.",
+    "any": "Any provider",
+    "self_hosted": "Self-hosted only",
+    "self_hosted_note": "Only addresses on your own network are reached, checked at every connection. The server operator lists which internal addresses Provenza may call (OUTBOUND_PRIVATE_ALLOWLIST).",
+    "cloud_refused": "Refused under this policy",
+    "confirm": "Allow only self-hosted AI providers? Cloud connections (OpenAI, Anthropic, Groq, Azure and any public address) will be refused in the playground, the gateway and the request queue, and agents will not be able to call cloud AI services directly.",
+    "failed": "Could not change the AI provider policy."
   },
   "rt": {
     "title": "Runtime",

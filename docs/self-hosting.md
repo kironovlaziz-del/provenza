@@ -198,6 +198,25 @@ Every setting is documented in `deploy/.env.example`. The most common:
 
 After editing `deploy/.env`, run `docker compose up -d`.
 
+## Keeping prompts on your own network
+
+To make sure no prompt reaches a cloud AI service, an administrator sets
+**Connections → AI provider policy → Self-hosted only**. Provenza then:
+
+- connects only to non-public addresses for every provider call (the
+  playground, the LLM gateway, the request queue), checked at each
+  connection after the name is resolved, so a base URL or a DNS record
+  cannot lead to the internet;
+- refuses connections without a base URL (the vendor's cloud API) before
+  anything is sent;
+- refuses agents' direct calls to known cloud AI services.
+
+Your model server (for example vLLM or Ollama) must be reachable from the
+server and listed in `OUTBOUND_PRIVATE_ALLOWLIST`, e.g.
+`OUTBOUND_PRIVATE_ALLOWLIST=llm.corp.local,10.20.0.0/16`. Connect it as an
+OpenAI-compatible connection with its base URL, such as
+`http://llm.corp.local:8000/v1`.
+
 ## Troubleshooting
 
 | Symptom | What to do |

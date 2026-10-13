@@ -290,6 +290,16 @@ export async function providerChat(providerId: number, message: string, systemPr
   return data;
 }
 
+export type ProviderPolicy = "any" | "self_hosted";
+export interface ProviderPolicyView {
+  policy: ProviderPolicy;
+  /** Active connections the policy refuses outright (no base URL, a public IP). */
+  cloud_connections: { id: number; name: string; reason: string }[];
+}
+export const getProviderPolicy = async () => (await api.get<ProviderPolicyView>("/providers/policy")).data;
+export const setProviderPolicy = async (policy: ProviderPolicy) =>
+  (await api.put<ProviderPolicyView>("/providers/policy", { policy })).data;
+
 export async function listProviders() {
   const { data } = await api.get<Page<Provider>>("/providers/");
   return unwrap(data);
