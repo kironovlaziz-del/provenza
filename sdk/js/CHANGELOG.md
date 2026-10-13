@@ -5,6 +5,7 @@
 First release. It has the same behaviour and the same bytes as the Python
 SDK 0.1.
 
+- `agent.invoke` / `agent.httpTools()`: HTTP tools called through Provenza.
 - Permits for tools: `PermitVerifier`, `permitMiddleware` (Express),
   `withPermit` (fetch-style handlers); the agent sends `permitHeaders(check)`.
 - Every `check` is signed by the agent: a nonce, the time and a signature

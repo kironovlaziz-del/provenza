@@ -137,6 +137,12 @@ class PVPOrchestrator:
             await self.db.commit()
         return self.check_out(chk, permit)
 
+    async def verify_signed_request(self, org_id: int, agent: Agent, req: PVPActionRequest) -> None:
+        """The agent's own signed action.request (signature, freshness, nonce) -
+        for an executor that then checks on the agent's behalf (the HTTP tool
+        gateway: it adds the tool digest it computed, which the agent did not sign)."""
+        await self._verify_request(org_id, agent, req)
+
     async def _verify_request(self, org_id: int, agent: Agent, req: PVPActionRequest) -> None:
         """Signature (both halves for a hybrid key), freshness, single-use nonce
         - in that order, so a forged request cannot burn a nonce."""

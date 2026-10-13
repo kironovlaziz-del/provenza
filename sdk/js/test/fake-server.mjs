@@ -64,6 +64,19 @@ export class FakeProvenza {
       this.checks.set(token, { ...body, decision });
       return ok(200, { decision, reason: `policy says ${decision}`, check_id: token, incident_type: null, policy_id: null });
     }
+    if (path === "/http-tools/call") {
+      // the HTTP tool gateway: the same signed request; it checks, calls and records itself
+      verifyEd25519(this.publicKey, body.signature, {
+        type: "action.request", agent_id: body.agent_id, chain_id: body.chain_id, action_type: body.action_type,
+        tool_name: body.tool_name, input_sha256: contentHash(body.input), tool_version: null, tool_digest: null,
+        nonce: body.nonce, issued_at: body.issued_at,
+      });
+      const decision = this.verdicts.get(body.tool_name) ?? "allowed";
+      this.invoked = [...(this.invoked ?? []), body];
+      return ok(200, decision === "allowed"
+        ? { decision, reason: "", action_id: 9, status: 200, body: { echo: body.input } }
+        : { decision, reason: `policy says ${decision}`, action_id: 10, incident_type: null });
+    }
     if (path === "/agents/actions/record") {
       if (this.recordFailures > 0) { this.recordFailures--; return ok(503, { detail: "down" }); }
       const chk = this.checks.get(body.check_id);

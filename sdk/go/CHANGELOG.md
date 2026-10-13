@@ -5,6 +5,7 @@
 First release. It has the same behaviour and the same bytes as the Python
 and JS SDKs 0.1.
 
+- `Agent.Invoke`: HTTP tools called through Provenza.
 - `Check.Permit` / `PermitHeaders`: the signed permit of an allowed check,
   for the tool.
 - Every `Check` is signed by the agent: a nonce, the time and a signature

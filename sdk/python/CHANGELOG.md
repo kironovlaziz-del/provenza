@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- `agent.invoke` / `ainvoke` / `http_tools()`: HTTP tools registered in
+  Provenza, called through it with a signed request; the agent holds no
+  credential.
 - `provenza.permit`: tools verify the signed permit of an allowed check
   (`PermitVerifier`, ASGI `PermitMiddleware`, `require_permit`); the agent
   sends `check.permit_headers`.

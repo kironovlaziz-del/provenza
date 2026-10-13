@@ -162,3 +162,17 @@ def test_permits_live_shorter_than_the_key_grace():
     from app.services.agent_audit import CHECK_TTL_SECONDS
 
     assert timedelta(seconds=CHECK_TTL_SECONDS) < permits.KEY_GRACE
+
+
+@pytest.mark.asyncio
+async def test_a_permit_dies_with_its_agent(client, admin_token, db_session):
+    from sqlalchemy import update
+
+    from app.models.agent import Agent
+
+    agent = await _agent(client, admin_token)
+    permit = (await _check(client, agent))["permit"]
+    await db_session.execute(update(Agent).where(Agent.id == agent["id"]).values(status="suspended"))
+    await db_session.commit()
+    r = await _redeem(client, permit)
+    assert r.status_code == 403 and r.json()["detail"] == "permit.agent_inactive"

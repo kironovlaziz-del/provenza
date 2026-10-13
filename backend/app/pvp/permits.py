@@ -20,9 +20,11 @@ to run without a valid one (sdk/python provenza.permit, sdk/js permit.ts):
   - one action: the tool computes the hash of the input it received and
     compares it with "ish"; another input, another tool or another time is
     refused;
-  - one use: POST /pvp/permits/redeem marks the permit redeemed exactly once
-    (any replica of the tool, anywhere); a tool that cannot reach Provenza
-    still refuses repeats it has seen itself;
+  - one use, by a live agent: POST /pvp/permits/redeem marks the permit
+    redeemed exactly once (any replica of the tool, anywhere), and refuses
+    it once the agent is suspended or its key revoked - even within the
+    permit's few minutes; a tool that cannot reach Provenza still refuses
+    repeats it has seen itself;
   - bound to the record: the permit belongs to the check (permit_jti), so the
     action recorded under that check carries the permit id and whether a
     tool redeemed it - the record says the tool, not only the agent, saw
@@ -48,6 +50,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core import agent_signing as sig
 from app.core.crypto import decrypt_secret, encrypt_secret
 from app.core.errors import api_error
+from app.models.agent import Agent
 from app.models.agent_action import ActionCheck, PermitSigningKey
 from app.models.organization import Organization
 from app.pvp import jcs
@@ -191,6 +194,12 @@ async def redeem(db: AsyncSession, token: str, *, tool: Optional[str] = None,
     if (tool is not None and tool != claims.get("aud")) or \
             (input_sha256 is not None and input_sha256 != claims.get("ish")):
         raise _refuse("permit.mismatch", status.HTTP_403_FORBIDDEN)
+    # revocation is not best-effort: an agent suspended, retired or stripped of
+    # its key after the check cannot have its permit honoured any more
+    agent = await db.get(Agent, int(str(claims.get("sub", "agent:0")).split(":", 1)[1] or 0))
+    if agent is None or agent.org_id != claims["_org_id"] or agent.status != "active" \
+            or agent.api_key_revoked_at is not None or not agent.public_key:
+        raise _refuse("permit.agent_inactive", status.HTTP_403_FORBIDDEN)
     now = datetime.now(timezone.utc)
     done = await db.execute(
         update(ActionCheck).where(ActionCheck.org_id == claims["_org_id"], ActionCheck.permit_jti == claims["jti"],

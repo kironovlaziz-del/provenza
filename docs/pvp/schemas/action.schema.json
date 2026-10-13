@@ -149,7 +149,8 @@
           "enum": [
             "mcp_gateway",
             "a2a_gateway",
-            "egress_proxy"
+            "egress_proxy",
+            "http_gateway"
           ],
           "type": "string"
         },

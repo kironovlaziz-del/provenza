@@ -308,6 +308,35 @@ class Agent:
         res = await self._connected().apost("/agents/actions/check", self._check_body(spec, inp, cid))
         return self._check_of(res, spec, inp, cid)
 
+    def invoke(self, tool: str, arguments: Dict[str, Any], *, chain_id: Optional[int] = None) -> Dict[str, Any]:
+        """Call an HTTP tool registered in Provenza: the server checks, calls the
+        API with the credential it holds, and records - in one operation. The
+        result is {"decision", "reason", "action_id", "status", "body"} for an
+        allowed call ("error" / "withheld" instead of "body" when the API failed
+        or the answer was refused). A refusal raises ProvenzaDenied."""
+        spec, inp = ToolSpec(tool), _json_value(arguments, "arguments")
+        cid = chain_id if chain_id is not None else _chain.get()
+        return self._invoked(tool, self._connected().post("/http-tools/call", self._check_body(spec, inp, cid)))
+
+    async def ainvoke(self, tool: str, arguments: Dict[str, Any], *,
+                      chain_id: Optional[int] = None) -> Dict[str, Any]:
+        spec, inp = ToolSpec(tool), _json_value(arguments, "arguments")
+        cid = chain_id if chain_id is not None else _chain.get()
+        return self._invoked(tool, await self._connected().apost("/http-tools/call",
+                                                                 self._check_body(spec, inp, cid)))
+
+    def http_tools(self) -> list:
+        """The HTTP tools this agent may invoke: name, description, method, input_schema."""
+        return self._connected().get("/http-tools/available")["tools"]
+
+    @staticmethod
+    def _invoked(tool: str, res: Dict[str, Any]) -> Dict[str, Any]:
+        if res.get("decision") != "allowed":
+            cls = ProvenzaApprovalRequired if res.get("decision") == "pending_approval" else ProvenzaDenied
+            raise cls(tool, res.get("reason") or "", res.get("decision") or "denied", res.get("incident_type"),
+                      None, res.get("action_id"))
+        return res
+
     def proxy_check(self, route: str, method: str, path: str, *, query=None, body=None,
                     chain_id: Optional[int] = None) -> Check:
         """Check a request to send through the egress proxy (SDK mode). Send it

@@ -41,6 +41,7 @@ from app.api import compliance
 from app.api import observability
 from app.api import system
 from app.api import pvp as pvp_api
+from app.api import http_tools as http_tools_api
 from app.api import mcp as mcp_api
 from app.api import a2a_gateway as a2a_gateway_api
 from app.api import egress_proxy as egress_proxy_api
@@ -124,6 +125,7 @@ app.include_router(system.router, prefix=f"{settings.API_V1_STR}/system", tags=[
 app.include_router(pvp_api.router, prefix=f"{settings.API_V1_STR}/pvp", tags=["agent-governance"])
 app.include_router(mcp_api.agent_router, prefix=f"{settings.API_V1_STR}/mcp", tags=["mcp"])
 app.include_router(mcp_api.admin_router, prefix=f"{settings.API_V1_STR}/mcp-servers", tags=["mcp"])
+app.include_router(http_tools_api.router, prefix=f"{settings.API_V1_STR}/http-tools", tags=["http-tools"])
 app.include_router(a2a_gateway_api.agent_router, prefix=f"{settings.API_V1_STR}/a2a-gateway", tags=["a2a"])
 app.include_router(a2a_gateway_api.admin_router, prefix=f"{settings.API_V1_STR}/a2a-peers", tags=["a2a"])
 app.include_router(egress_proxy_api.admin_router, prefix=f"{settings.API_V1_STR}/egress", tags=["egress"])

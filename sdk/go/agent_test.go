@@ -118,6 +118,24 @@ func (f *fake) handle(w http.ResponseWriter, r *http.Request) {
 			out["permit"] = "permit-of-" + token
 		}
 		reply(w, 200, out)
+	case path == "/http-tools/call":
+		// the HTTP tool gateway: the same signed request; it checks, calls and records itself
+		inHash, _ := ContentHash(body["input"])
+		payload := map[string]any{"type": "action.request", "agent_id": body["agent_id"], "chain_id": body["chain_id"],
+			"action_type": body["action_type"], "tool_name": body["tool_name"], "input_sha256": inHash,
+			"tool_version": nil, "tool_digest": nil, "nonce": body["nonce"], "issued_at": body["issued_at"]}
+		sig, _ := body["signature"].(string)
+		if !verifySignatures(payload, sig, "", f.publicKey, "") {
+			reply(w, 401, map[string]any{"detail": "action.invalid_signature"})
+			return
+		}
+		decision := f.verdicts[body["tool_name"].(string)]
+		if decision == "" {
+			reply(w, 200, map[string]any{"decision": "allowed", "action_id": 9, "status": 200,
+				"body": map[string]any{"echo": body["input"]}})
+			return
+		}
+		reply(w, 200, map[string]any{"decision": decision, "reason": "policy says " + decision, "action_id": 10})
 	case path == "/agents/actions/record":
 		if f.recordFailures > 0 {
 			f.recordFailures--

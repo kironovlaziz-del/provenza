@@ -218,3 +218,45 @@ export function apiUrl(path: string): string {
   const origin = typeof window === "undefined" ? "http://localhost" : window.location.origin;
   return new URL(base + path, origin).toString();
 }
+
+// ---------------------------------------------------------------- HTTP tools
+
+export type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+
+export interface HttpTool {
+  id: number;
+  name: string;
+  description: string | null;
+  method: HttpMethod;
+  url: string;
+  input_schema: Record<string, unknown> | null;
+  auth_header: string;
+  has_secret: boolean;
+  timeout_seconds: number;
+  max_response_bytes: number;
+  send_permit: boolean;
+  enabled: boolean;
+  digest: string;
+  registry_entry_id: number | null;
+  created_at: string;
+  updated_at: string | null;
+}
+
+export interface HttpToolInput {
+  name?: string;
+  description?: string;
+  method?: HttpMethod;
+  url?: string;
+  input_schema?: Record<string, unknown> | null;
+  auth_header?: string;
+  auth_secret?: string;
+  clear_secret?: boolean;
+  timeout_seconds?: number;
+  send_permit?: boolean;
+  enabled?: boolean;
+}
+
+export const listHttpTools = async () => (await api.get<HttpTool[]>("/http-tools")).data;
+export const createHttpTool = async (input: HttpToolInput) => (await api.post<HttpTool>("/http-tools", input)).data;
+export const updateHttpTool = async (id: number, input: HttpToolInput) =>
+  (await api.patch<HttpTool>(`/http-tools/${id}`, input)).data;

@@ -242,6 +242,30 @@ export class Agent {
     return this.check("proxy." + route, input, { actionType: PROXY_ACTION_TYPE, chainId: opts.chainId });
   }
 
+  /**
+   * Call an HTTP tool registered in Provenza: the server checks, calls the API
+   * with the credential it holds and records - in one operation. Allowed:
+   * { decision, reason, action_id, status, body } ("error" / "withheld" instead
+   * of "body" when the API failed or the answer was refused). A refusal throws
+   * ProvenzaDenied (ProvenzaApprovalRequired when it waits for a human).
+   */
+  async invoke(tool: string, args: Record<string, unknown>, opts: { chainId?: number | null } = {}): Promise<any> {
+    const spec = { name: tool };
+    const inp = asInput(args);
+    const chainId = opts.chainId !== undefined ? opts.chainId : chainStore.getStore() ?? null;
+    const res = await this.connected().post("/http-tools/call", this.checkBody(spec, inp, chainId));
+    if (res.decision !== "allowed") {
+      const Cls = res.decision === "pending_approval" ? ProvenzaApprovalRequired : ProvenzaDenied;
+      throw new Cls(tool, res.reason ?? "", res.decision ?? "denied", res.incident_type ?? null, null, res.action_id ?? null);
+    }
+    return res;
+  }
+
+  /** The HTTP tools this agent may invoke: name, description, method, input_schema. */
+  async httpTools(): Promise<Array<{ name: string; description: string; method: string; input_schema: unknown }>> {
+    return (await this.connected().get("/http-tools/available")).tools;
+  }
+
   /** Record what was done under a check (once); retries a server that is down. */
   async record(check: Check, output: unknown = null, durationMs: number | null = null): Promise<any> {
     const out = asOutput(output);

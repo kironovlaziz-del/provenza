@@ -230,3 +230,18 @@ describe("egress proxy, SDK mode", () => {
     assert.deepEqual(proxyHeaders(chk), { "X-Provenza-Check-Id": chk.checkId });
   });
 });
+
+describe("HTTP tools through Provenza", () => {
+  test("invoke: one signed request, the server calls and records", async () => {
+    const server = new FakeProvenza();
+    const { agent } = await connected(server);
+    const out = await agent.invoke("crm.set_tier", { id: "42", tier: "gold" });
+    assert.equal(out.status, 200);
+    assert.deepEqual(out.body, { echo: { id: "42", tier: "gold" } });
+    assert.equal(server.invoked[0].action_type, "tool_call");
+    server.verdicts.set("crm.delete", "denied");
+    await assert.rejects(agent.invoke("crm.delete", { id: "42" }), (e) => e instanceof ProvenzaDenied && e.actionId === 10);
+    server.verdicts.set("crm.wipe", "pending_approval");
+    await assert.rejects(agent.invoke("crm.wipe", {}), ProvenzaApprovalRequired);
+  });
+});

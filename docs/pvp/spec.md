@@ -559,6 +559,38 @@ fail-closed: without Provenza nothing is sent.
 deployment has to close the direct paths to the upstreams with a network
 policy or firewall (`proxy/deploy/`).
 
+### 5.6 HTTP tool gateway
+
+Code: `backend/app/pvp/http_tools.py`, `app/api/http_tools.py`.
+
+An administrator registers an HTTP API as a tool: `name` (the tool name
+that rights, policies and the Tool Registry use), method, URL with optional
+`{argument}` path placeholders, input schema, and a credential that is
+stored encrypted and never returned. Saving it pins the digest of the
+definition (`name`, `method`, `url`, `input_schema`, `description`) in the
+Tool Registry as approved.
+
+The agent sends `POST /http-tools/call` with its key and a signed
+`action.request` (§3.1, `action_type: "tool_call"`). Provenza then does
+everything in one operation:
+
+1. verifies the agent's signature, freshness and nonce;
+2. checks the action, reporting the pinned digest itself;
+3. checks the arguments against the top level of the input schema
+   (`required`, `type`, `enum`, `additionalProperties: false`);
+4. calls the API with the SSRF-guarded client, injecting the credential.
+   For POST, PUT and PATCH it also sends the check's permit (§3.1), so an
+   API behind the permit middleware accepts only calls made through
+   Provenza;
+5. records the action with `executed_by: "http_gateway"`, and records
+   denied and refused calls too.
+
+The answer is `{decision, reason, action_id, status, body}`. When the API
+failed or the answer was refused, `error` or `withheld` comes instead of
+`body`. A response over the tool's size limit, a redirect, or instructions
+aimed at the agent (ASI01, in enforce mode) never reach the agent. The SDKs
+expose it as `agent.invoke(tool, arguments)`.
+
 ## 6. Versioning
 
 `pvp/1` changes only compatibly: new message types, or new optional

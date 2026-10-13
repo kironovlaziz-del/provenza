@@ -92,6 +92,9 @@ AGENT_ROUTES = [
     # the A2A gateway (app/api/a2a_gateway.py): a peer's card, and JSON-RPC to it
     ("GET", _P + r"/a2a-gateway/[a-z0-9-]+/\.well-known/agent-card\.json$", None, True),
     ("POST", _P + r"/a2a-gateway/[a-z0-9-]+/?$", None, True),
+    # the HTTP tool gateway (app/api/http_tools.py): a signed request, for the key's own agent
+    ("GET", _P + r"/http-tools/available/?$", None, True),
+    ("POST", _P + r"/http-tools/call/?$", _body("agent_id"), True),
 ]
 
 

@@ -152,6 +152,16 @@ await fetch("http://127.0.0.1:8443/stripe/v1/charges", { method: "POST", body, h
 `path`, `query` and `body` must be exactly what goes on the wire; the proxy
 refuses any other request under that check, and records it itself.
 
+## HTTP tools through Provenza
+
+An API registered in Provenza (**Gateways → HTTP tools**) is called through
+Provenza, and the agent never holds its key:
+
+```ts
+const out = await agent.invoke("crm.set_tier", { id: "42", tier: "gold" });   // ProvenzaDenied on a refusal
+const tools = await agent.httpTools();   // names, descriptions and input schemas, for the model
+```
+
 ## Permits for tools
 
 An allowed check carries a permit signed by the organization. The agent

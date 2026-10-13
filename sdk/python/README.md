@@ -172,6 +172,18 @@ if chk.allowed:
 refuses any other request under that check. The proxy records the request,
 so it is not passed to `record()`.
 
+## HTTP tools through Provenza
+
+An API registered in Provenza (**Gateways → HTTP tools**) is called through
+Provenza, and the agent never holds its key. Provenza checks the call,
+makes it with the stored credential and records it, in one step:
+
+```python
+out = agent.invoke("crm.set_tier", {"id": "42", "tier": "gold"})
+out["status"], out["body"]          # a refusal raises ProvenzaDenied
+agent.http_tools()                  # names, descriptions and input schemas, for the model
+```
+
 ## Permits for tools
 
 An allowed check carries a permit signed by the organization. The agent

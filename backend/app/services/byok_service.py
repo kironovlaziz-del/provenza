@@ -33,7 +33,19 @@ SHRED_WORD = "SHRED"
 
 
 def _targets() -> List[Tuple[type, str]]:
-    out = [(AIProvider, "api_key_encrypted"), (AIRequest, "input_text_encrypted")]
+    """Every column encrypted with encrypt_secret(..., org_id): what a key
+    change must carry over. A column left out here is lost when an older key
+    is shredded."""
+    from app.models.a2a_gateway import A2APeer
+    from app.models.egress_proxy import EgressRoute
+    from app.models.http_tool import HttpTool
+    from app.models.mcp import MCPServer
+    from app.models.user import User
+
+    out = [(AIProvider, "api_key_encrypted"), (AIRequest, "input_text_encrypted"),
+           (MCPServer, "auth_secret_encrypted"), (A2APeer, "auth_secret_encrypted"),
+           (EgressRoute, "secret_encrypted"), (HttpTool, "auth_secret_encrypted"),
+           (User, "totp_secret_encrypted"), (User, "totp_pending_encrypted")]
     try:
         from app.models.service_connection import ServiceConnection
         out.append((ServiceConnection, "bind_password_encrypted"))

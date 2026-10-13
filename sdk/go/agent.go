@@ -331,6 +331,22 @@ func (a *Agent) check(ctx context.Context, tool string, input map[string]any, o 
 		return nil, err
 	}
 	chain := chainOf(ctx)
+	body, err := a.signedRequest(tool, input, o, chain)
+	if err != nil {
+		return nil, err
+	}
+	res, err := c.post(ctx, "/agents/actions/check", body, true)
+	if err != nil {
+		return nil, err
+	}
+	return &Check{CheckID: str(res, "check_id"), Decision: str(res, "decision"), Reason: str(res, "reason"), Tool: tool,
+		ActionType: o.actionType, Input: input, ChainID: chain, IncidentType: str(res, "incident_type"),
+		PolicyID: optInt(res, "policy_id"), Permit: str(res, "permit")}, nil
+}
+
+// signedRequest is the agent's signed action.request: what /agents/actions/check
+// and the HTTP tool gateway verify.
+func (a *Agent) signedRequest(tool string, input map[string]any, o callOptions, chain *int64) (map[string]any, error) {
 	body := map[string]any{"agent_id": a.AgentID(), "chain_id": chain, "action_type": o.actionType,
 		"tool_name": tool, "input": input}
 	if o.version != "" {
@@ -361,13 +377,39 @@ func (a *Agent) check(ctx context.Context, tool string, input map[string]any, o 
 	if pq != "" {
 		body["pq_signature"] = pq
 	}
-	res, err := c.post(ctx, "/agents/actions/check", body, true)
+	return body, nil
+}
+
+// Invoke calls an HTTP tool registered in Provenza: the server checks, calls
+// the API with the credential it holds and records, in one operation. The
+// agent never holds the API's credential. The result is the server's answer
+// (decision, reason, action_id, status, body - or error / withheld); a
+// refusal is a *DeniedError.
+func (a *Agent) Invoke(ctx context.Context, tool string, args any) (map[string]any, error) {
+	c, err := a.connected()
 	if err != nil {
 		return nil, err
 	}
-	return &Check{CheckID: str(res, "check_id"), Decision: str(res, "decision"), Reason: str(res, "reason"), Tool: tool,
-		ActionType: o.actionType, Input: input, ChainID: chain, IncidentType: str(res, "incident_type"),
-		PolicyID: optInt(res, "policy_id"), Permit: str(res, "permit")}, nil
+	input, err := argsObject(args)
+	if err != nil {
+		return nil, err
+	}
+	body, err := a.signedRequest(tool, input, options(nil), chainOf(ctx))
+	if err != nil {
+		return nil, err
+	}
+	res, err := c.post(ctx, "/http-tools/call", body, true)
+	if err != nil {
+		return nil, err
+	}
+	if d := str(res, "decision"); d != "allowed" {
+		if d == "" {
+			d = "denied"
+		}
+		return nil, &DeniedError{Tool: tool, Reason: str(res, "reason"), Decision: d,
+			IncidentType: str(res, "incident_type"), ActionID: optInt(res, "action_id")}
+	}
+	return res, nil
 }
 
 // Check asks before doing something that is not governed through Call.

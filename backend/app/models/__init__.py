@@ -59,6 +59,7 @@ from app.models.pii import PiiRule, PiiSettings
 from app.models.blocked_term import BlockedTerm, BlockedTermCategory
 from app.models.pvp_guard import PVPGuardLog
 from app.models.mcp import MCPServer, MCPTool
+from app.models.http_tool import HttpTool
 from app.models.a2a_gateway import A2APeer, A2ATask
 from app.models.pvp_seal import PVPActionSeal
 from app.models.egress_proxy import EgressProxy, EgressRedemption, EgressRoute

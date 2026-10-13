@@ -7,6 +7,7 @@ package provenza
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"testing"
 )
@@ -82,5 +83,20 @@ func TestPermitHeaders(t *testing.T) {
 	}
 	if h := (&Check{Decision: "denied"}).PermitHeaders(); len(h) != 0 {
 		t.Fatalf("a refused check has no permit: %v", h)
+	}
+}
+
+func TestInvokeHTTPTool(t *testing.T) {
+	f := newFake(t)
+	a := connected(t, f)
+	out, err := a.Invoke(context.Background(), "crm.set_tier", map[string]any{"id": "42", "tier": "gold"})
+	if err != nil || out["decision"] != "allowed" || jsonOf(t, out["body"]) != `{"echo":{"id":"42","tier":"gold"}}` {
+		t.Fatal(out, err)
+	}
+	f.verdicts["crm.delete"] = "pending_approval"
+	_, err = a.Invoke(context.Background(), "crm.delete", map[string]any{"id": "42"})
+	var denied *DeniedError
+	if !errors.As(err, &denied) || !denied.ApprovalRequired() || denied.ActionID == nil || *denied.ActionID != 10 {
+		t.Fatalf("want approval required, got %v", err)
 	}
 }

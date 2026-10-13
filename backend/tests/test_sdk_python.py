@@ -95,3 +95,29 @@ async def test_sdk_permit_from_this_server_runs_the_tool_once(client, admin_toke
         await verifier.averify(chk.permit, tool="db.read", input=payload)
     assert e.value.code == "permit.redeemed"
     await agent.arecord(chk, {"rows": 1})
+
+
+@pytest.mark.asyncio
+async def test_sdk_invokes_an_http_tool_through_provenza(client, admin_token, tmp_path, monkeypatch):
+    """agent.ainvoke: one signed request; this server checks, calls the API with
+    the key it holds, records. The agent holds no credential of the API."""
+    from app.core.config import settings
+    from tests.test_http_tools import _Api
+
+    monkeypatch.setattr(settings, "OUTBOUND_PRIVATE_ALLOWLIST", "127.0.0.1")
+    api = _Api()
+    try:
+        r = await client.post("/api/v1/http-tools", json={
+            "name": "db.read", "method": "POST", "url": api.base + "/query", "auth_secret": "Bearer db-key",
+            "input_schema": {"type": "object", "required": ["query"], "properties": {"query": {"type": "string"}}},
+        }, headers=auth_headers(admin_token))
+        assert r.status_code == 200, r.text
+        agent = await _sdk_agent(client, admin_token, tmp_path)
+        out = await agent.ainvoke("db.read", {"query": "select 1"})
+        assert out["status"] == 200 and out["body"]["ok"] is True and out["action_id"]
+        assert api.calls[-1]["headers"]["Authorization"] == "Bearer db-key"
+        with pytest.raises(ProvenzaDenied):
+            await agent.ainvoke("db.read", {"query": 1})
+        assert len(api.calls) == 1
+    finally:
+        api.close()

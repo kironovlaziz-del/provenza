@@ -108,6 +108,15 @@ for k, v := range chk.ProxyHeaders() {
 `path`, `query` and `body` must be exactly what goes on the wire; the proxy
 refuses any other request under that check, and records it itself.
 
+## HTTP tools through Provenza
+
+An API registered in Provenza (**Gateways → HTTP tools**) is called through
+Provenza, and the agent never holds its key:
+
+```go
+out, err := agent.Invoke(ctx, "crm.set_tier", map[string]any{"id": "42", "tier": "gold"})   // *DeniedError on a refusal
+```
+
 ## Permits for tools
 
 An allowed check carries `chk.Permit`, signed by the organization. Send it
