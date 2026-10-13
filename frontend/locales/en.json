@@ -113,7 +113,8 @@
       "kill_switch": "Kill switch",
       "pii_rules": "PII rules",
       "blocked_terms": "Blocked terms",
-      "profile": "My profile"
+      "profile": "My profile",
+      "runtime": "Runtime"
     },
     "logout": "Sign out",
     "role_admin": "admin",
@@ -744,7 +745,8 @@
       "request_blocked": "Request blocked by Prompt Firewall",
       "agent_discovered": "AI agent found on a device",
       "audit_key_rotation": "Audit key change proposed, approved or completed",
-      "kill_switch": "Kill switch: a stop engaged or lifted"
+      "kill_switch": "Kill switch: a stop engaged or lifted",
+      "runtime_violation": "Runtime: a governed workload connected outside its policy"
     }
   },
   "users": {
@@ -992,7 +994,11 @@
     "action.stale_request": "The action check is too old or dated in the future. Check the agent host's clock.",
     "action.replayed_request": "This action check was already used (a repeated nonce).",
     "egress.agent_key_invalid": "The agent key is not valid for this proxy's organization.",
-    "egress.agent_inactive": "The agent is not active."
+    "egress.agent_inactive": "The agent is not active.",
+    "runtime.workload_not_found": "Workload not found.",
+    "runtime.agent_not_found": "Agent not found.",
+    "runtime.name_taken": "A workload named {{name}} already exists.",
+    "runtime.endpoint_key_required": "The runtime daemon needs an endpoint ingestion key."
   },
   "discovery": {
     "title": "Network Discovery",
@@ -3188,5 +3194,84 @@
     "mfa_hint": "At least for admins and approvers. Set it up for yourself first in My profile.",
     "discovery": "Find shadow AI",
     "discovery_hint": "An ingestion key for the endpoint agent or the browser extension."
+  },
+  "rt": {
+    "title": "Runtime",
+    "intro": "Workloads are processes on your hosts, named by their cgroup v2 paths (a systemd service, a container). The Provenza runtime daemon on each Linux host holds their outbound connections to the policy below: observe records, alert records and notifies, enforce makes the kernel refuse anything not allowed.",
+    "daemon_key": "Daemons authenticate with an endpoint key from",
+    "load_failed": "Could not load runtime data.",
+    "save_failed": "Could not save the workload.",
+    "workloads": "Workloads",
+    "new": "New workload",
+    "edit": "Edit {{name}}",
+    "edit_btn": "Edit",
+    "name": "Name",
+    "agent": "Agent",
+    "no_agent": "Not linked to an agent",
+    "agent_hint": "Linked to an agent, a refused or reported connection becomes an incident of that agent.",
+    "patterns": "cgroup patterns",
+    "patterns_hint": "One per line, relative to the cgroup root; shell wildcards per segment. Example: system.slice/billing-agent.service. A pattern of wildcards only is refused - it would govern every process on the host.",
+    "allow": "Allowed destinations",
+    "allow_hint": "Networks the workload may connect to, with ports (empty = any port). Usually just the egress proxy and Provenza, so the workload cannot go around them. Everything else is outside the policy.",
+    "cidr": "Network",
+    "ports": "Ports",
+    "ports_ph": "443, 8443 (empty = any)",
+    "add_row": "Add destination",
+    "remove_row": "Remove destination",
+    "allow_dns": "Allow DNS",
+    "allow_dns_hint": "Name lookups through the host's resolvers.",
+    "mode": "Mode",
+    "modes": {
+      "observe": "Observe",
+      "alert": "Alert",
+      "enforce": "Enforce"
+    },
+    "mode_hint": {
+      "observe": "Connections outside the policy are recorded below. Nothing is blocked, nobody is notified.",
+      "alert": "Recorded, and the first time each one is seen a notification goes out (and an incident, if the workload is linked to an agent). Nothing is blocked.",
+      "enforce": "The kernel refuses every connection outside the policy. Try observe first: what you see there is what enforce would block."
+    },
+    "enabled": "Enabled",
+    "disabled": "Disabled",
+    "enable": "Enable",
+    "disable": "Disable",
+    "delete": "Delete",
+    "save": "Save",
+    "cancel": "Cancel",
+    "created": "Workload {{name}} created. Daemons pick it up at their next refresh.",
+    "saved": "Workload {{name}} saved.",
+    "deleted": "Workload {{name}} deleted. Its recorded violations stay.",
+    "confirm_delete": "Delete the workload {{name}}? Daemons stop governing its processes at their next refresh. To pause it instead, disable it.",
+    "confirm_enforce_empty": "Enforce with no allowed destinations: this workload will not be able to connect anywhere. Continue?",
+    "err_name": "Give the workload a name.",
+    "err_patterns": "Add at least one cgroup pattern.",
+    "err_cidr": "Each allowed destination needs a network (e.g. 10.0.0.5/32).",
+    "err_ports": "Ports are numbers from 1 to 65535, separated by commas.",
+    "no_workloads": "No workloads yet.",
+    "nothing_allowed": "nothing",
+    "any_port": "any port",
+    "dns_yes": "DNS allowed",
+    "dns_no": "no DNS",
+    "violations": "Violations",
+    "filter_workload": "Workload",
+    "filter_action": "Action",
+    "all_workloads": "All workloads",
+    "all_actions": "All actions",
+    "refresh": "Refresh",
+    "last_seen": "Last seen",
+    "first_seen": "first {{when}}",
+    "workload": "Workload",
+    "deleted_workload": "deleted workload",
+    "host": "Host",
+    "action": "Action",
+    "actions": {
+      "observed": "Observed",
+      "alerted": "Alerted",
+      "blocked": "Blocked"
+    },
+    "destination": "Destination",
+    "process": "Process",
+    "count": "Count",
+    "no_violations": "No connections outside a workload's policy."
   }
 }
