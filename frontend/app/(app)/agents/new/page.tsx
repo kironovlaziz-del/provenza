@@ -56,12 +56,11 @@ export default function NewAgentPage() {
   const [error, setError] = useState<string | null>(null);
   const [created, setCreated] = useState<AgentCreated | null>(null);
   const [copiedKey, setCopiedKey] = useState(false);
-  const [copiedPriv, setCopiedPriv] = useState(false);
   // "enroll": a one-time token; the agent generates its key and proves it
   //           holds it (the default, and the only way in strict organizations);
-  // "agent":  direct registration of a public key, nothing proven;
-  // "server": quick start, the server generates the pair and shows it once.
-  const [keyMode, setKeyMode] = useState<"enroll" | "agent" | "server">("enroll");
+  // "agent":  direct registration of a public key, nothing proven.
+  // The server never generates an agent's key.
+  const [keyMode, setKeyMode] = useState<"enroll" | "agent">("enroll");
   const [directAllowed, setDirectAllowed] = useState(false);
   const [ttl, setTtl] = useState(24);
   const [issued, setIssued] = useState<EnrollmentT | null>(null);
@@ -102,7 +101,6 @@ export default function NewAgentPage() {
   // needs to break both (ML-DSA resists quantum attacks on elliptic curves).
   const [hybrid, setHybrid] = useState(true);
   const [pqPublicKey, setPqPublicKey] = useState("");
-  const [copiedPq, setCopiedPq] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -130,9 +128,8 @@ export default function NewAgentPage() {
         agent_type: agentType,
         owner_team: ownerTeam || undefined,
         ...rights,
-        public_key: keyMode === "agent" ? publicKey.trim() : undefined,
-        pq_public_key: keyMode === "agent" && hybrid ? pqPublicKey.replace(/\s+/g, "") : undefined,
-        key_scheme: keyMode === "server" ? (hybrid ? "hybrid" : "ed25519") : undefined,
+        public_key: publicKey.trim(),
+        pq_public_key: hybrid ? pqPublicKey.replace(/\s+/g, "") : undefined,
       });
       if (teamId || role) {
         // registered directly: put it in the team / give it the role afterwards
@@ -155,12 +152,10 @@ export default function NewAgentPage() {
     }
   }
 
-  async function copy(text: string, which: "key" | "priv" | "pq") {
+  async function copy(text: string) {
     try {
       await navigator.clipboard.writeText(text);
-      if (which === "key") setCopiedKey(true);
-      else if (which === "pq") setCopiedPq(true);
-      else setCopiedPriv(true);
+      setCopiedKey(true);
     } catch {
       /* clipboard may be unavailable; value is still visible */
     }
@@ -221,39 +216,13 @@ export default function NewAgentPage() {
                 <label>{t("agents.api_key")}</label>
                 <div className="form-row" style={{ alignItems: "center" }}>
                   <code className="mono" style={{ wordBreak: "break-all", flex: 1 }}>{created.api_key}</code>
-                  <button type="button" className="btn btn-sm" onClick={() => copy(created.api_key, "key")}>
+                  <button type="button" className="btn btn-sm" onClick={() => copy(created.api_key)}>
                     {copiedKey ? t("agents.copied") : t("agents.copy")}
                   </button>
                 </div>
               </div>
 
-              {created.private_key ? (
-                <div className="field" style={{ marginTop: 12 }}>
-                  <label>{t("agents.private_key")}</label>
-                  <div className="form-row" style={{ alignItems: "center" }}>
-                    <code className="mono" style={{ wordBreak: "break-all", flex: 1 }}>{created.private_key}</code>
-                    <button type="button" className="btn btn-sm" onClick={() => copy(created.private_key ?? "", "priv")}>
-                      {copiedPriv ? t("agents.copied") : t("agents.copy")}
-                    </button>
-                  </div>
-                  <p className="hint-text" style={{ marginTop: 6 }}>{t("agents.private_key_note")}</p>
-                  {created.pq_private_key && (
-                    <>
-                      <label style={{ marginTop: 12 }}>{t("agents.pq_private_key")}</label>
-                      <div className="form-row" style={{ alignItems: "center" }}>
-                        <code className="mono" style={{ wordBreak: "break-all", flex: 1 }}>{created.pq_private_key}</code>
-                        <button type="button" className="btn btn-sm" onClick={() => copy(created.pq_private_key ?? "", "pq")}>
-                          {copiedPq ? t("agents.copied") : t("agents.copy")}
-                        </button>
-                      </div>
-                      <p className="hint-text" style={{ marginTop: 6 }}>{t("agents.pq_private_key_note")}</p>
-                    </>
-                  )}
-                  <p className="hint-text" style={{ marginTop: 6 }}>{t("agents.key_server_note")}</p>
-                </div>
-              ) : (
-                <p className="hint-text" style={{ marginTop: 12 }}>{t("agents.key_agent_note")}</p>
-              )}
+              <p className="hint-text" style={{ marginTop: 12 }}>{t("agents.key_agent_note")}</p>
               {created.key_fingerprint && (
                 <div className="field" style={{ marginTop: 12 }}>
                   <label>{t("agents.key_fingerprint")}</label>
@@ -375,10 +344,6 @@ export default function NewAgentPage() {
                     <label style={{ display: "flex", gap: 8, alignItems: "center", fontWeight: 400 }}>
                       <input type="radio" name="keymode" checked={keyMode === "agent"} onChange={() => setKeyMode("agent")} style={{ width: "auto" }} />
                       {t("agents.key_mode_agent")} — {t("enroll.unproven")}
-                    </label>
-                    <label style={{ display: "flex", gap: 8, alignItems: "center", fontWeight: 400 }}>
-                      <input type="radio" name="keymode" checked={keyMode === "server"} onChange={() => setKeyMode("server")} style={{ width: "auto" }} />
-                      {t("agents.key_mode_server")}
                     </label>
                   </>
                 )}

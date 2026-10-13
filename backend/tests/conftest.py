@@ -13,6 +13,7 @@ import asyncio
 import os
 from typing import AsyncGenerator
 
+import httpx
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
@@ -106,6 +107,71 @@ async def db_session() -> AsyncGenerator[AsyncSession, None]:
         await engine.dispose()
 
 
+class _AgentKeyClient(AsyncClient):
+    """The test client, playing the agent's side of direct registration: the
+    server never makes an agent's keys, so a registration that names no
+    public_key gets one made here (as an agent or the SDK would), and the
+    private halves come back in the response as `private_key` /
+    `pq_private_key` for the test to sign with. `"key_scheme": "hybrid"`
+    adds an ML-DSA-65 key. To test the server's refusal, send
+    `"public_key": None` explicitly."""
+
+    agent_keys: dict  # agent id -> (Ed25519 private key, ML-DSA seed or None)
+
+    def remember_agent(self, agent: dict) -> None:
+        """Sign /actions/check for an agent made elsewhere (enrollment helpers)."""
+        if not hasattr(self, "agent_keys"):
+            self.agent_keys = {}
+        self.agent_keys[agent["id"]] = (agent["private_key"], agent.get("pq_private_key"))
+
+    async def post(self, url, *args, **kwargs):
+        if not hasattr(self, "agent_keys"):
+            self.agent_keys = {}
+        body = kwargs.get("json")
+        if str(url).endswith("/api/v1/agents/actions/check") and isinstance(body, dict) and "signature" not in body:
+            kwargs["json"] = self._signed(body, kwargs.get("headers") or {})
+            return await super().post(url, *args, **kwargs)
+        if not (str(url).endswith("/api/v1/agents/register") and isinstance(body, dict) and "public_key" not in body):
+            return await super().post(url, *args, **kwargs)
+        from app.core.agent_signing import generate_keypair, generate_pq_keypair
+
+        body = dict(body)
+        scheme = body.pop("key_scheme", "ed25519")
+        private_key, body["public_key"] = generate_keypair()
+        pq_private_key = None
+        if scheme == "hybrid":
+            pq_private_key, body["pq_public_key"] = generate_pq_keypair()
+        kwargs["json"] = body
+        resp = await super().post(url, *args, **kwargs)
+        if resp.status_code != 200:
+            return resp
+        data = {**resp.json(), "private_key": private_key, "pq_private_key": pq_private_key}
+        self.remember_agent(data)
+        return httpx.Response(resp.status_code, json=data, request=resp.request)
+
+    def _signed(self, body: dict, headers: dict) -> dict:
+        """A check request as the SDK sends it: signed by the agent whose key
+        is in X-Agent-Key (unsigned when that agent is unknown here)."""
+        import secrets as _secrets
+        import time as _time
+
+        from app.core.agent_signing import sign_payload, sign_payload_pq
+        from app.pvp.model import PVPActionRequest
+
+        acting = {k.lower(): v for k, v in headers.items()}.get("x-agent-key")
+        known = self.agent_keys.get(body.get("agent_id")) if acting else None
+        if not known:
+            return body
+        private_key, pq_private_key = known
+        body = {**body, "nonce": _secrets.token_hex(16), "issued_at": int(_time.time())}
+        req = PVPActionRequest(**{k: v for k, v in body.items() if k in PVPActionRequest.model_fields})
+        payload = req.signed_payload()
+        body["signature"] = sign_payload(payload, private_key)
+        if pq_private_key:
+            body["pq_signature"] = sign_payload_pq(payload, pq_private_key)
+        return body
+
+
 @pytest_asyncio.fixture
 async def client(db_session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
     """
@@ -119,7 +185,7 @@ async def client(db_session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
     app.dependency_overrides[get_db] = _override_get_db
 
     transport = ASGITransport(app=app)
-    async with AsyncClient(
+    async with _AgentKeyClient(
         transport=transport, base_url="http://test", follow_redirects=True
     ) as ac:
         yield ac
@@ -198,11 +264,14 @@ async def _create_org_with_admin_and_approver(
         # covers the strict defaults with relaxed_identity=False.
         from app.models.a2a import A2ASettings
         from app.models.agent_identity import AgentIdentitySettings
+        from app.models.tool_registry import SupplyChainSettings
 
-        db.add(AgentIdentitySettings(org_id=org.id, require_agent_key=False, allow_keyless_agents=True,
+        db.add(AgentIdentitySettings(org_id=org.id, require_agent_key=False,
                                      allow_direct_registration=True, rotation_grace_minutes=60,
                                      require_pq_signatures=False))
         db.add(A2ASettings(org_id=org.id, mode="monitor"))
+        # the Tool Registry enforces by default; most tests call tools they never registered
+        db.add(SupplyChainSettings(org_id=org.id, mode="monitor"))
     await db.flush()
     return {
         "org": org,

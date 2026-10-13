@@ -25,10 +25,10 @@ from sqlalchemy import select
 
 from app.models.agent_action import AgentIncident
 from app.models.tool_registry import ToolRegistryEntry
-from app.schemas.agent import AgentCreate
 from app.services.agent_registry import AgentRegistry
 from app.services.delegation_service import DelegationService
 from tests.conftest import auth_headers
+from tests.agent_keys import agent_create, register
 
 CHECK = "/api/v1/agents/actions/check"
 
@@ -39,7 +39,7 @@ async def ag(db_session, org_and_users):
     reg = AgentRegistry(db_session)
 
     async def make(name, caps, tools, depth=3):
-        a, _, _ = await reg.register(org.id, None, AgentCreate(
+        a, _, _ = await register(reg, org.id, None, agent_create(
             name=name, capabilities=caps, allowed_tools=tools, max_delegation_depth=depth))
         return a
 
@@ -114,9 +114,9 @@ async def test_an_outsider_cannot_act_in_a_chain(client, db_session, admin_token
 async def test_depth_counts_from_the_delegating_agents_own_hop(db_session, org_and_users):
     org = org_and_users["org"]
     reg = AgentRegistry(db_session)
-    a, _, _ = await reg.register(org.id, None, AgentCreate(name="a", capabilities=["read"], max_delegation_depth=1))
-    b, _, _ = await reg.register(org.id, None, AgentCreate(name="b", capabilities=["read"], max_delegation_depth=1))
-    c, _, _ = await reg.register(org.id, None, AgentCreate(name="c", capabilities=["read"], max_delegation_depth=1))
+    a, _, _ = await register(reg, org.id, None, agent_create(name="a", capabilities=["read"], max_delegation_depth=1))
+    b, _, _ = await register(reg, org.id, None, agent_create(name="b", capabilities=["read"], max_delegation_depth=1))
+    c, _, _ = await register(reg, org.id, None, agent_create(name="c", capabilities=["read"], max_delegation_depth=1))
     chain, _ = await _delegate(db_session, org, a, b, ["read"])
     # the root delegating again in the same chain is still depth 1 (used to count as 2)
     _, hop = await _delegate(db_session, org, a, c, ["read"], chain.id)
@@ -126,9 +126,9 @@ async def test_depth_counts_from_the_delegating_agents_own_hop(db_session, org_a
 async def test_the_roots_depth_limit_binds_the_whole_chain(db_session, org_and_users):
     org = org_and_users["org"]
     reg = AgentRegistry(db_session)
-    a, _, _ = await reg.register(org.id, None, AgentCreate(name="a", capabilities=["read"], max_delegation_depth=1))
-    b, _, _ = await reg.register(org.id, None, AgentCreate(name="b", capabilities=["read"], max_delegation_depth=5))
-    c, _, _ = await reg.register(org.id, None, AgentCreate(name="c", capabilities=["read"], max_delegation_depth=5))
+    a, _, _ = await register(reg, org.id, None, agent_create(name="a", capabilities=["read"], max_delegation_depth=1))
+    b, _, _ = await register(reg, org.id, None, agent_create(name="b", capabilities=["read"], max_delegation_depth=5))
+    c, _, _ = await register(reg, org.id, None, agent_create(name="c", capabilities=["read"], max_delegation_depth=5))
     chain, _ = await _delegate(db_session, org, a, b, ["read"])
     with pytest.raises(HTTPException) as e:
         await _delegate(db_session, org, b, c, ["read"], chain.id)
@@ -201,9 +201,9 @@ async def test_signed_delegation_of_tools_over_the_api(client, db_session, org_a
 
     org = org_and_users["org"]
     reg = AgentRegistry(db_session)
-    root, _, priv = await reg.register(org.id, None, AgentCreate(
+    root, _, priv = await register(reg, org.id, None, agent_create(
         name="r", capabilities=["read", "write"], allowed_tools=["files.read", "files.write"]))
-    leaf, _, _ = await reg.register(org.id, None, AgentCreate(
+    leaf, _, _ = await register(reg, org.id, None, agent_create(
         name="l", capabilities=["read"], allowed_tools=["files.read", "files.write"]))
     body = delegation_body({"id": root.id, "private_key": priv}, leaf.id, "t", ["read", "write"],
                            tools=["files.read"])
@@ -236,8 +236,8 @@ async def test_an_orchestrator_without_tools_still_delegates_to_workers(client, 
     """Nobody named tools: each agent keeps its own; capabilities stay the boundary."""
     org = org_and_users["org"]
     reg = AgentRegistry(db_session)
-    boss, _, _ = await reg.register(org.id, None, AgentCreate(name="boss", capabilities=["read"]))
-    worker, _, _ = await reg.register(org.id, None, AgentCreate(name="w", capabilities=["read"],
+    boss, _, _ = await register(reg, org.id, None, agent_create(name="boss", capabilities=["read"]))
+    worker, _, _ = await register(reg, org.id, None, agent_create(name="w", capabilities=["read"],
                                                                 allowed_tools=["files.read"]))
     chain, hop = await _delegate(db_session, org, boss, worker, ["read"])
     assert hop.delegated_tools is None
@@ -247,11 +247,11 @@ async def test_an_orchestrator_without_tools_still_delegates_to_workers(client, 
 async def test_a_deep_agent_may_act_where_it_was_legitimately_placed(client, db_session, admin_token, org_and_users):
     org = org_and_users["org"]
     reg = AgentRegistry(db_session)
-    a, _, _ = await reg.register(org.id, None, AgentCreate(name="a", capabilities=["read"], max_delegation_depth=3,
+    a, _, _ = await register(reg, org.id, None, agent_create(name="a", capabilities=["read"], max_delegation_depth=3,
                                                            allowed_tools=["files.read"]))
-    b, _, _ = await reg.register(org.id, None, AgentCreate(name="b", capabilities=["read"], max_delegation_depth=3,
+    b, _, _ = await register(reg, org.id, None, agent_create(name="b", capabilities=["read"], max_delegation_depth=3,
                                                            allowed_tools=["files.read"]))
-    c, _, _ = await reg.register(org.id, None, AgentCreate(name="c", capabilities=["read"], max_delegation_depth=1,
+    c, _, _ = await register(reg, org.id, None, agent_create(name="c", capabilities=["read"], max_delegation_depth=1,
                                                            allowed_tools=["files.read"]))
     chain, _ = await _delegate(db_session, org, a, b, ["read"])
     await _delegate(db_session, org, b, c, ["read"], chain.id)

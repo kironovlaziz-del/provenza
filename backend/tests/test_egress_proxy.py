@@ -199,3 +199,38 @@ async def test_route_admin(client, admin_token):
     r = await client.patch(f"{E}/routes/{route['id']}", json={"credential_source": "local"},
                            headers=auth_headers(admin_token))
     assert r.status_code == 200 and r.json()["has_secret"] is False
+
+
+@pytest.mark.asyncio
+async def test_mediated_check_needs_the_proxy_and_an_agent_of_its_organization(client, admin_token, db_session):
+    _, proxy, agent = await _setup(client, admin_token)
+    body = charge()
+    # the proxy alone, or a key nobody has, gets nothing
+    r = await client.post(f"{P}/check", json=body, headers=_px(proxy))
+    assert r.status_code == 401 and r.json()["detail"] == "egress.agent_key_invalid"
+    r = await client.post(f"{P}/check", json=body, headers={**_px(proxy), "X-Agent-Key": "pvz_agent_nope"})
+    assert r.status_code == 401
+    # the agent's key without the proxy's: not this endpoint
+    assert (await client.post(f"{P}/check", json=body, headers={"X-Agent-Key": agent["api_key"]})).status_code == 401
+    # an agent of another organization, through this organization's proxy
+    await _create_org_with_admin_and_approver(db_session, org_slug="egress-med", admin_email="a@med.example.com",
+                                              approver_email="b@med.example.com")
+    await db_session.commit()
+    other = await _login(client, "egress-med", "a@med.example.com", "TestPass123!")
+    foreign = (await client.post("/api/v1/agents/register", json={
+        "name": "foreign", "agent_type": "custom", "capabilities": [], "allowed_tools": ["proxy.stripe"],
+        "allowed_models": [], "max_delegation_depth": 1}, headers=auth_headers(other))).json()
+    r = await client.post(f"{P}/check", json=body, headers={**_px(proxy), "X-Agent-Key": foreign["api_key"]})
+    assert r.status_code == 401
+    # its own agent: a check the proxy then redeems for exactly this request
+    r = await client.post(f"{P}/check", json=body, headers={**_px(proxy), "X-Agent-Key": agent["api_key"]})
+    assert r.status_code == 200 and r.json()["decision"] == "allowed", r.text
+    red = await _redeem(client, proxy, r.json()["check_id"], body)
+    assert red.status_code == 200 and red.json()["allowed"] is True
+    # a suspended agent: its key still matches, and is refused
+    from sqlalchemy import update
+    from app.models.agent import Agent
+    await db_session.execute(update(Agent).where(Agent.id == agent["id"]).values(status="suspended"))
+    await db_session.commit()
+    r = await client.post(f"{P}/check", json=body, headers={**_px(proxy), "X-Agent-Key": agent["api_key"]})
+    assert r.status_code == 403 and r.json()["detail"] == "egress.agent_inactive"

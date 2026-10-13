@@ -135,14 +135,13 @@ class TestRegistration:
         keys = (await client.get(f"{A}/{a['id']}/signing-keys", headers=auth_headers(admin_token))).json()
         assert keys[0]["scheme"] == SCHEME_HYBRID and keys[0]["pq_public_key"] == a["pq_public_key"]
 
-    async def test_server_generated_hybrid_returns_both_private_keys_once(self, client, admin_token):
-        resp = await _register(client, admin_token, key_scheme="hybrid")
+    async def test_a_hybrid_key_is_the_agents_own(self, client, admin_token):
+        keys = _hybrid_keys()
+        resp = await _register(client, admin_token, public_key=keys["public_key"], pq_public_key=keys["pq_public_key"])
         assert resp.status_code == 200, resp.text
         body = resp.json()
-        assert body["private_key"] and body["pq_private_key"] and body["pq_public_key"]
-        assert body["signature_scheme"] == SCHEME_HYBRID and body["key_origin"] == "server"
-        got = await client.get(f"{A}/{body['id']}", headers=auth_headers(admin_token))
-        assert "pq_private_key" not in got.json()
+        assert "private_key" not in body and "pq_private_key" not in body   # the server never has them
+        assert body["signature_scheme"] == SCHEME_HYBRID and body["key_origin"] == "agent"
 
     async def test_classical_registration_stays_classical(self, client, admin_token):
         a = await _classic_agent(client, admin_token)
@@ -150,12 +149,7 @@ class TestRegistration:
 
     async def test_pq_key_alone_is_refused(self, client, admin_token):
         _, pq_pub = generate_pq_keypair()
-        resp = await _register(client, admin_token, pq_public_key=pq_pub)
-        assert resp.status_code == 422
-
-    async def test_hybrid_scheme_with_own_key_needs_the_pq_key(self, client, admin_token):
-        _, pub = generate_keypair()
-        resp = await _register(client, admin_token, public_key=pub, key_scheme="hybrid")
+        resp = await _register(client, admin_token, public_key=None, pq_public_key=pq_pub)
         assert resp.status_code == 422
 
     async def test_pq_key_cannot_be_reused_by_another_agent(self, client, admin_token):
@@ -279,7 +273,7 @@ class TestOrgPolicy:
                                headers=auth_headers(admin_token))
         assert ok.status_code == 200, ok.text
 
-    async def test_keyless_agent_can_no_longer_delegate_unsigned(self, client, admin_token, db_session):
+    async def test_an_agent_without_a_key_cannot_delegate(self, client, admin_token, db_session):
         from app.models.agent import Agent
         a = await _hybrid_agent(client, admin_token)
         b = await _hybrid_agent(client, admin_token)
@@ -290,7 +284,7 @@ class TestOrgPolicy:
         r = await client.post(f"{A}/{a['id']}/delegate",
                               json={"to_agent_id": b["id"], "task": "x", "delegated_capabilities": ["read"]},
                               headers=auth_headers(admin_token))
-        assert r.status_code == 403 and r.json()["detail"] == "agent.pq_required"
+        assert r.status_code == 403 and r.json()["detail"] == "agent.key_required"
 
     async def test_saving_settings_without_the_field_keeps_the_policy(self, client, admin_token):
         await _require_pq(client, admin_token)

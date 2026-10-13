@@ -42,7 +42,10 @@ async def enroll_with(client, token, keys, *, name=None, tamper=None):
             "pq_public_key": keys["pq_public_key"], "name": name, "signature": s, "pq_signature": pq}
     if tamper:
         tamper(body)
-    return await client.post(f"{E}/enroll", json=body)
+    r = await client.post(f"{E}/enroll", json=body)
+    if r.status_code == 200 and hasattr(client, "remember_agent"):
+        client.remember_agent({"id": r.json()["agent_id"], **keys})   # the test client signs its checks
+    return r
 
 
 async def enroll(client, admin_token, name="agent", *, capabilities=("read",), allowed_tools=("kb.search",),
@@ -55,7 +58,10 @@ async def enroll(client, admin_token, name="agent", *, capabilities=("read",), a
     r = await enroll_with(client, tok["token"], keys)
     assert r.status_code == 200, r.text
     d = r.json()
-    return {"id": d["agent_id"], "api_key": d["api_key"], **keys}
+    agent = {"id": d["agent_id"], "api_key": d["api_key"], **keys}
+    if hasattr(client, "remember_agent"):
+        client.remember_agent(agent)   # the test client signs /actions/check for it
+    return agent
 
 
 async def rotate(client, agent, *, hybrid=False, sign_old=None, sign_new=None):
@@ -72,4 +78,6 @@ async def rotate(client, agent, *, hybrid=False, sign_old=None, sign_new=None):
     r = await client.post(f"/api/v1/agents/{agent['id']}/signing-key/rotate", headers=hdr, json={
         "challenge": ch["challenge"], "new_public_key": new["public_key"], "new_pq_public_key": new["pq_public_key"],
         "old_signature": os_, "old_pq_signature": opq, "new_signature": ns, "new_pq_signature": npq})
+    if r.status_code == 200 and hasattr(client, "remember_agent"):
+        client.remember_agent({"id": agent["id"], **new})   # it signs with the new key from now on
     return r, new

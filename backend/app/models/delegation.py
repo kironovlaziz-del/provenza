@@ -93,3 +93,19 @@ class DelegationNonce(Base):
     from_agent_id = Column(Integer, ForeignKey("agents.id", ondelete="CASCADE"), nullable=False)
     nonce = Column(String(128), nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False, index=True)
+
+
+class ActionNonce(Base):
+    # Single-use nonces of signed action requests (/agents/actions/check): a
+    # captured request cannot be sent again. Unique per agent; rows older
+    # than the freshness window are pruned (pvp.prune_nonces).
+    __tablename__ = "action_nonces"
+    __table_args__ = (
+        UniqueConstraint("agent_id", "nonce", name="uq_action_nonce"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    org_id = Column(Integer, ForeignKey("organizations.id"), nullable=False)
+    agent_id = Column(Integer, ForeignKey("agents.id", ondelete="CASCADE"), nullable=False)
+    nonce = Column(String(128), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False, index=True)

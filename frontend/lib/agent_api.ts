@@ -38,12 +38,10 @@ export async function registerAgent(payload: {
   allowed_tools?: string[];
   allowed_models?: string[];
   max_delegation_depth?: number;
-  /** The agent's own Ed25519 public key; omit to have the server generate a pair. */
-  public_key?: string;
-  /** With public_key: the agent's own ML-DSA-65 public key (hybrid scheme). */
+  /** The agent's own Ed25519 public key; the server never generates one. */
+  public_key: string;
+  /** The agent's own ML-DSA-65 public key (hybrid scheme). */
   pq_public_key?: string;
-  /** Server-generated keys only: "hybrid" also generates an ML-DSA-65 pair. */
-  key_scheme?: "ed25519" | "hybrid";
 }) {
   const { data } = await api.post<AgentCreated>("/agents/register", payload);
   return data;

@@ -72,6 +72,11 @@ celery_app.conf.beat_schedule = {
         "task": "pvp.seal_actions",
         "schedule": 60.0,
     },
+    # Drop nonces of signed action requests past their freshness window.
+    "pvp-prune-nonces": {
+        "task": "pvp.prune_nonces",
+        "schedule": crontab(minute=23),
+    },
 }
 
 from app.workers import (  # noqa: E402,F401

@@ -324,6 +324,28 @@ func (a *Agent) check(ctx context.Context, tool string, input map[string]any, o 
 	if o.digest != "" {
 		body["tool_digest"] = o.digest
 	}
+	// signed, with a single-use nonce and the time: the server refuses a check
+	// the agent did not sign, so a stolen API key alone gets nothing
+	inputHash, err := ContentHash(input)
+	if err != nil {
+		return nil, err
+	}
+	nonce := make([]byte, 16)
+	if _, err := rand.Read(nonce); err != nil {
+		return nil, err
+	}
+	body["nonce"], body["issued_at"] = hex.EncodeToString(nonce), time.Now().Unix()
+	sig, pq, err := a.identity.Keys.Sign(map[string]any{
+		"type": "action.request", "agent_id": a.AgentID(), "chain_id": chain, "action_type": o.actionType,
+		"tool_name": tool, "input_sha256": inputHash, "tool_version": nilIfEmpty(o.version),
+		"tool_digest": nilIfEmpty(o.digest), "nonce": body["nonce"], "issued_at": body["issued_at"]})
+	if err != nil {
+		return nil, err
+	}
+	body["signature"] = sig
+	if pq != "" {
+		body["pq_signature"] = pq
+	}
 	res, err := c.post(ctx, "/agents/actions/check", body, true)
 	if err != nil {
 		return nil, err

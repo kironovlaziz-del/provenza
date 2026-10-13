@@ -57,6 +57,6 @@ class SupplyChainSettings(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     org_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, unique=True)
-    mode = Column(String(20), nullable=False, default="monitor")
+    mode = Column(String(20), nullable=False, default="enforce")
     updated_by = Column(Integer, ForeignKey("users.id"))
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

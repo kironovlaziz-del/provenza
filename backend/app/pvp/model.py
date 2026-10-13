@@ -215,6 +215,29 @@ class PVPActionRequest(_ActionShape):
     # ASI04: what the agent's runtime reports, compared with the registry pins
     tool_version: Optional[Annotated[StrictStr, StringConstraints(max_length=100)]] = None
     tool_digest: Optional[Annotated[StrictStr, StringConstraints(max_length=100)]] = None
+    # The agent's signature over signed_payload() (with a single-use nonce and
+    # its time): a stolen API key alone cannot obtain checks in its name.
+    # Required of an agent that calls with its own key.
+    nonce: Optional[Nonce] = None
+    issued_at: Optional[UnixTime] = None
+    signature: Optional[Base64] = None
+    pq_signature: Optional[Base64] = None
+
+    def signed_payload(self) -> Dict[str, Any]:
+        """Exactly what POST /agents/actions/check verifies. "type" keeps a
+        request signature from ever passing for another kind of statement."""
+        return {
+            "type": "action.request",
+            "agent_id": self.agent_id,
+            "chain_id": self.chain_id,
+            "action_type": self.action_type,
+            "tool_name": self.tool_name,
+            "input_sha256": self.input_sha256,
+            "tool_version": self.tool_version,
+            "tool_digest": self.tool_digest,
+            "nonce": self.nonce,
+            "issued_at": self.issued_at,
+        }
 
     @field_validator("input")
     @classmethod

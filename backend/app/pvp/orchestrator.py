@@ -40,7 +40,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.agent_signing import verify_agent_signature
 from app.models.agent import Agent
 from app.models.agent_action import ActionCheck, AgentAction
-from app.models.delegation import DelegationChain, DelegationHop, DelegationNonce
+from app.models.delegation import ActionNonce, DelegationChain, DelegationHop, DelegationNonce
 from app.pvp.model import PVPAction, PVPActionRecord, PVPActionRequest, PVPCheck, PVPDelegation
 from app.services.agent_audit import AgentAudit
 from app.services.agent_policy_engine import DENIED, Decision
@@ -51,6 +51,9 @@ from app.services.delegation_service import DelegationService
 # Replay protection for signed delegations
 DELEGATION_MAX_AGE_SECONDS = 300     # reject requests older than 5 minutes
 DELEGATION_CLOCK_SKEW_SECONDS = 30   # tolerate small clock drift
+# the same window for signed action requests (/agents/actions/check)
+SIGNED_REQUEST_MAX_AGE_SECONDS = DELEGATION_MAX_AGE_SECONDS
+SIGNED_REQUEST_CLOCK_SKEW_SECONDS = DELEGATION_CLOCK_SKEW_SECONDS
 
 
 def _unix(dt: datetime) -> int:
@@ -87,14 +90,26 @@ class PVPOrchestrator:
 
     # ------------------------------------------------------------ actions
 
-    async def check(self, org_id: int, req: PVPActionRequest) -> PVPCheck:
+    async def check(self, org_id: int, req: PVPActionRequest, *, require_signature: bool = False) -> PVPCheck:
         """Run the policy engine for a proposed action and issue a single-use
         check bound to exactly this action (agent, chain, tool, input hash,
-        capabilities, verdict)."""
+        capabilities, verdict).
+
+        require_signature: the caller is the agent itself (its own key), so
+        the request must carry the agent's signature over
+        req.signed_payload(), fresh and with a nonce never used before. A
+        signature sent where it is not required is verified all the same.
+        Gateways and the egress proxy call without it: they are the witness."""
         checked = (await self.db.execute(select(Agent).where(
             Agent.id == req.agent_id, Agent.org_id == org_id))).scalar_one_or_none()
         if checked is not None:
+            if await keyless_refused(self.db, checked):
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="agent.key_required")
+            if require_signature or req.signature:
+                await self._verify_request(org_id, checked, req)
             await require_attestation(self.db, checked)
+        elif require_signature:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="agent.not_found")
         if req.chain_id is not None:
             # ASI08: trip the chain first if prior events crossed a threshold,
             # so this very request is already refused
@@ -116,6 +131,26 @@ class PVPOrchestrator:
             action_capabilities=decision.required_capabilities, decision=decision,
         )
         return self.check_out(chk)
+
+    async def _verify_request(self, org_id: int, agent: Agent, req: PVPActionRequest) -> None:
+        """Signature (both halves for a hybrid key), freshness, single-use nonce
+        - in that order, so a forged request cannot burn a nonce."""
+        if not req.signature or not req.nonce or req.issued_at is None:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="action.signature_required")
+        if await pq_signature_required(self.db, agent):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="agent.pq_required")
+        if not verify_agent_signature(req.signed_payload(), req.signature, req.pq_signature,
+                                      agent.public_key, agent.pq_public_key):
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="action.invalid_signature")
+        age = datetime.now(timezone.utc).timestamp() - req.issued_at
+        if age > SIGNED_REQUEST_MAX_AGE_SECONDS or age < -SIGNED_REQUEST_CLOCK_SKEW_SECONDS:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="action.stale_request")
+        try:
+            async with self.db.begin_nested():   # a replay undoes only this insert
+                self.db.add(ActionNonce(org_id=org_id, agent_id=agent.id, nonce=req.nonce))
+                await self.db.flush()
+        except IntegrityError:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="action.replayed_request")
 
     async def record(self, org_id: int, rec: PVPActionRecord) -> AgentAction:
         """Persist an action with its policy verdict. Agents with a key must

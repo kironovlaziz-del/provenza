@@ -48,6 +48,19 @@ async def _agent_held(client, token, **kw):
     return {**resp.json(), "private_key": priv}
 
 
+async def _server_made(client, token, db):
+    """An agent whose key the server generated - possible before keys became
+    the agent's own; such rows can still exist."""
+    from sqlalchemy import update
+
+    from app.models.agent import Agent, AgentSigningKey
+    a = await _agent_held(client, token)
+    await db.execute(update(Agent).where(Agent.id == a["id"]).values(key_origin="server"))
+    await db.execute(update(AgentSigningKey).where(AgentSigningKey.agent_id == a["id"]).values(origin="server"))
+    await db.flush()
+    return a
+
+
 def _verify_evidence(ev: dict) -> bool:
     """What an independent verifier does: canonical check, then the signature
     over the exact signed text."""
@@ -104,20 +117,23 @@ class TestAgentHeldKeys:
         resp = await _register(client, admin_token, public_key=pub)
         assert resp.status_code == 200, resp.text
         body = resp.json()
-        assert body["private_key"] is None
+        assert "private_key" not in body          # the server never has one
         assert body["public_key"] == pub and body["key_origin"] == "agent"
         assert body["key_fingerprint"] == key_fingerprint(pub)
 
         keys = (await client.get(f"{A}/{body['id']}/signing-keys", headers=auth_headers(admin_token))).json()
         assert [(k["origin"], k["fingerprint"], k["retired_at"]) for k in keys] == [("agent", key_fingerprint(pub), None)]
 
-    async def test_server_generated_key_is_labelled(self, client, admin_token):
-        body = (await _register(client, admin_token)).json()
-        assert body["private_key"] and body["key_origin"] == "server"
+    async def test_registration_needs_the_agents_own_key(self, client, admin_token):
+        body = {"name": "nokey", "agent_type": "custom", "capabilities": [], "allowed_tools": [],
+                "allowed_models": [], "max_delegation_depth": 1, "public_key": None}
+        resp = await client.post(f"{A}/register", json=body, headers=auth_headers(admin_token))
+        assert resp.status_code == 422          # the server no longer makes keys for agents
 
-    async def test_a_server_generated_key_cannot_be_relabelled_agent_held(self, client, admin_token):
-        server_made = (await _register(client, admin_token)).json()
-        resp = await _register(client, admin_token, public_key=server_made["public_key"])
+    async def test_a_legacy_server_generated_key_cannot_be_relabelled_agent_held(self, client, admin_token,
+                                                                                db_session):
+        legacy = await _server_made(client, admin_token, db_session)
+        resp = await _register(client, admin_token, public_key=legacy["public_key"])
         assert resp.status_code == 422
         assert resp.json()["detail"] == "agent.key_server_generated"
 
@@ -168,21 +184,17 @@ class TestEvidence:
         assert ev["server_verified"] is True
         assert _verify_evidence(ev)
 
-    async def test_unsigned_hop_has_no_evidence_to_verify(self, client, admin_token, db_session):
+    async def test_an_agent_without_a_key_cannot_delegate(self, client, admin_token, db_session):
         from app.models.agent import Agent
         a = await _agent_held(client, admin_token)
         b = await _agent_held(client, admin_token)
-        # a keyless agent delegates unsigned (cooperative path)
-        agent = await db_session.get(Agent, a["id"])
+        agent = await db_session.get(Agent, a["id"])     # e.g. its key was revoked
         agent.public_key = None
         await db_session.flush()
         r = await client.post(f"{A}/{a['id']}/delegate",
                               json={"to_agent_id": b["id"], "task": "x", "delegated_capabilities": ["read"]},
                               headers=auth_headers(admin_token))
-        assert r.status_code == 200, r.text
-        ev = (await client.get(f"{A}/delegation-hops/{r.json()['hop_id']}/verification",
-                               headers=auth_headers(admin_token))).json()
-        assert ev["has_signature"] is False and ev["public_key"] is None
+        assert r.status_code == 403 and r.json()["detail"] == "agent.key_required"
 
 
 class TestKeyChange:
@@ -217,8 +229,8 @@ class TestKeyChange:
         assert [k["fingerprint"] for k in keys] == [key_fingerprint(new_pub), key_fingerprint(a["public_key"])]
         assert keys[0]["retired_at"] is None and keys[1]["retired_at"] is not None
 
-    async def test_moving_off_a_server_generated_key(self, client, admin_token):
-        a = (await _register(client, admin_token)).json()
+    async def test_moving_off_a_legacy_server_generated_key(self, client, admin_token, db_session):
+        a = await _server_made(client, admin_token, db_session)
         _, pub = generate_keypair()
         r = await client.post(f"{A}/{a['id']}/signing-key", json={"public_key": pub},
                               headers=auth_headers(admin_token))

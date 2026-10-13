@@ -20,12 +20,14 @@ class GovernanceGraphService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    async def build(self, org_id: int, activity_window_minutes: int = 60) -> dict:
-        # --- agents (nodes) ---
-        agents_res = await self.db.execute(
-            select(Agent).where(Agent.org_id == org_id)
-        )
-        agents = list(agents_res.scalars().all())
+    async def build(self, org_id: int, activity_window_minutes: int = 60, include_retired: bool = False) -> dict:
+        # --- agents (nodes) --- a retired agent is gone from the map (its
+        # history stays in the audit log, chains and receipts)
+        q = select(Agent).where(Agent.org_id == org_id)
+        if not include_retired:
+            q = q.where(Agent.status != "retired")
+        agents = list((await self.db.execute(q)).scalars().all())
+        shown = {a.id for a in agents}
 
         # unresolved incidents per agent -> violation flag
         inc_res = await self.db.execute(
@@ -69,6 +71,8 @@ class GovernanceGraphService:
         )
         edges = []
         for h in hops_res.scalars().all():
+            if h.from_agent_id not in shown or h.to_agent_id not in shown:
+                continue    # no edge to an agent that is not on the map
             cstatus = chain_status.get(h.chain_id, "active")
             edges.append(
                 {

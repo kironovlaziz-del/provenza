@@ -43,7 +43,7 @@ from app.models.user import User
 # Strict by default: agents act only with their own key, and only agents that
 # can sign may act. An admin can relax either per organization (the UI warns).
 DEFAULTS = {"require_agent_key": True, "rotation_grace_minutes": 60, "require_pq_signatures": False,
-            "allow_keyless_agents": False, "allow_direct_registration": False}
+            "allow_direct_registration": False}
 LAST_USED_RESOLUTION = timedelta(minutes=1)
 IMPERSONATION_INCIDENT = "agent_impersonation_attempt"
 
@@ -153,20 +153,14 @@ async def org_settings(db: AsyncSession, org_id: int) -> dict:
         return {**DEFAULTS, "source": "default"}
     return {"require_agent_key": row.require_agent_key, "rotation_grace_minutes": row.rotation_grace_minutes,
             "require_pq_signatures": bool(row.require_pq_signatures),
-            "allow_keyless_agents": bool(row.allow_keyless_agents),
             "allow_direct_registration": bool(row.allow_direct_registration), "source": "org"}
 
 
 async def keyless_refused(db: AsyncSession, agent: Agent) -> bool:
-    """True when the agent has no signing key and the organization does not
-    allow keyless agents: whatever it did could never be verified."""
-    from app.services.teams import role_requires_hybrid
-
-    if agent.public_key:
-        return False
-    if await role_requires_hybrid(db, agent):  # the role's key requirement beats the org's leniency
-        return True
-    return not (await org_settings(db, agent.org_id)).get("allow_keyless_agents")
+    """True when the agent has no signing key: it cannot act at all. There is
+    no setting for this - what a keyless agent did could never be verified,
+    and the server never makes a key for an agent."""
+    return not agent.public_key
 
 
 async def pq_signature_required(db: AsyncSession, agent: Agent) -> bool:
@@ -198,6 +192,22 @@ def _unauthorized(detail: str = "agent_identity.invalid_key") -> HTTPException:
     return HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=detail)
 
 
+async def agent_by_key(db: AsyncSession, raw_key: str) -> Optional[Agent]:
+    """The agent an API key belongs to (the previous key too, during its
+    rotation grace period); None for an unknown, revoked or retired one."""
+    now = datetime.now(timezone.utc)
+    h = hash_api_key(raw_key.strip())
+    agent = (await db.execute(
+        select(Agent).where(or_(
+            Agent.api_key_hash == h,
+            (Agent.previous_api_key_hash == h) & (Agent.previous_key_expires_at > now),
+        ))
+    )).scalars().first()
+    if agent is None or agent.api_key_revoked_at is not None or agent.status == "retired":
+        return None
+    return agent
+
+
 async def authenticate_agent_request(request: Request, db: AsyncSession, raw_key: str,
                                      allow_inactive: bool = False) -> User:
     """X-Agent-Key path of get_current_user. `allow_inactive`: the caller
@@ -208,14 +218,8 @@ async def authenticate_agent_request(request: Request, db: AsyncSession, raw_key
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
                             detail="agent_identity.endpoint_not_for_agents")
     now = datetime.now(timezone.utc)
-    h = hash_api_key(raw_key.strip())
-    agent = (await db.execute(
-        select(Agent).where(or_(
-            Agent.api_key_hash == h,
-            (Agent.previous_api_key_hash == h) & (Agent.previous_key_expires_at > now),
-        ))
-    )).scalars().first()
-    if agent is None or agent.api_key_revoked_at is not None or agent.status == "retired":
+    agent = await agent_by_key(db, raw_key)
+    if agent is None:
         raise _unauthorized()
     if agent.status != "active" and not allow_inactive:
         # suspended (kill switch) or any other non-active state: the key is valid, the agent may not act

@@ -55,9 +55,11 @@ async def _check(client, headers, agent_id):
 async def test_defaults_are_strict(client, strict):
     ov = (await client.get(f"{ID}/", headers=auth_headers(strict["token"]))).json()
     assert ov["settings"]["require_agent_key"] is True
-    assert ov["settings"]["allow_keyless_agents"] is False
+    assert "allow_keyless_agents" not in ov["settings"]      # there is no keyless mode at all
     a2a = (await client.get("/api/v1/a2a/", headers=auth_headers(strict["token"]))).json()
     assert a2a["settings"]["mode"] == "enforce"
+    registry = (await client.get("/api/v1/tool-registry/settings", headers=auth_headers(strict["token"]))).json()
+    assert registry["mode"] == "enforce"                       # an unregistered tool is refused
 
 
 async def test_a_user_session_cannot_act_as_an_agent(client, strict):
@@ -150,4 +152,75 @@ async def test_compromise_time_cannot_be_in_the_future(client, strict):
     a = await _agent(client, strict["token"], "s6")
     key = (await _keys(client, strict["token"], a["id"]))[0]
     r = await _revoke(client, strict["token"], a["id"], key["id"], compromised_since="2999-01-01T00:00:00Z")
+    assert r.status_code == 422
+
+
+
+# --- signed action requests ---------------------------------------------------------------
+
+def _signed_check(agent, *, tool="kb.search", input=None, nonce=None, issued_at=None, sign_input=None,
+                  key=None):
+    """A check request signed as the SDK signs it; sign_input/key let a test sign something else."""
+    import secrets as _s
+    import time as _t
+
+    from app.core.agent_signing import sign_payload
+    from app.pvp.model import PVPActionRequest
+
+    body = {"agent_id": agent["id"], "tool_name": tool, "input": input or {},
+            "nonce": nonce or _s.token_hex(16), "issued_at": int(_t.time()) if issued_at is None else issued_at}
+    signed = PVPActionRequest(**{**body, "input": sign_input if sign_input is not None else body["input"]})
+    body["signature"] = sign_payload(signed.signed_payload(), key or agent["private_key"])
+    return body
+
+
+async def test_an_agent_must_sign_its_checks(client, strict):
+    a = await _agent(client, strict["token"], "sig1")
+    r = await client.post(f"{A}/actions/check", headers=K(a),
+                          json={"agent_id": a["id"], "tool_name": "kb.search", "input": {}, "signature": None})
+    assert r.status_code == 401 and r.json()["detail"] == "action.signature_required"
+    r = await client.post(f"{A}/actions/check", headers=K(a), json=_signed_check(a))
+    assert r.status_code == 200, r.text
+
+
+async def test_a_stolen_api_key_alone_gets_nothing(client, strict):
+    a = await _agent(client, strict["token"], "sig2")
+    other = await _agent(client, strict["token"], "sig3")
+    # signed with another agent's key: refused
+    r = await client.post(f"{A}/actions/check", headers=K(a), json=_signed_check(a, key=other["private_key"]))
+    assert r.status_code == 401 and r.json()["detail"] == "action.invalid_signature"
+    # the signature covers the arguments: changed arguments, refused
+    r = await client.post(f"{A}/actions/check", headers=K(a),
+                          json=_signed_check(a, input={"q": "drop table"}, sign_input={"q": "hello"}))
+    assert r.status_code == 401 and r.json()["detail"] == "action.invalid_signature"
+
+
+async def test_a_signed_check_cannot_be_replayed_or_kept_for_later(client, strict):
+    import time as _t
+
+    a = await _agent(client, strict["token"], "sig4")
+    body = _signed_check(a)
+    assert (await client.post(f"{A}/actions/check", headers=K(a), json=body)).status_code == 200
+    r = await client.post(f"{A}/actions/check", headers=K(a), json=body)
+    assert r.status_code == 409 and r.json()["detail"] == "action.replayed_request"
+    r = await client.post(f"{A}/actions/check", headers=K(a), json=_signed_check(a, issued_at=int(_t.time()) - 600))
+    assert r.status_code == 401 and r.json()["detail"] == "action.stale_request"
+    r = await client.post(f"{A}/actions/check", headers=K(a), json=_signed_check(a, issued_at=int(_t.time()) + 600))
+    assert r.status_code == 401 and r.json()["detail"] == "action.stale_request"
+
+
+async def test_registration_without_the_agents_key_is_refused(client, db_session, strict):
+    from app.models.agent_identity import AgentIdentitySettings
+
+    row = (await db_session.execute(select(AgentIdentitySettings).where(
+        AgentIdentitySettings.org_id == strict["org"].id))).scalar_one_or_none()
+    if row is None:
+        db_session.add(AgentIdentitySettings(org_id=strict["org"].id, require_agent_key=True,
+                                             allow_direct_registration=True, rotation_grace_minutes=60))
+    else:
+        row.allow_direct_registration = True
+    await db_session.flush()
+    r = await client.post(f"{A}/register", headers=auth_headers(strict["token"]), json={
+        "name": "nokey", "agent_type": "custom", "capabilities": [], "allowed_tools": [], "allowed_models": [],
+        "max_delegation_depth": 1, "public_key": None})
     assert r.status_code == 422

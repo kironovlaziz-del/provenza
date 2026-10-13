@@ -14,8 +14,8 @@ from sqlalchemy import select
 
 from app.services.agent_registry import AgentRegistry
 from app.services.delegation_service import DelegationService
-from app.schemas.agent import AgentCreate
 from app.models.agent_action import AgentIncident
+from tests.agent_keys import agent_create, register
 
 
 @pytest_asyncio.fixture
@@ -23,11 +23,11 @@ async def agents(db_session, org_and_users):
     """Three agents in one org with a capability ladder."""
     org = org_and_users["org"]
     reg = AgentRegistry(db_session)
-    a, _, _ = await reg.register(org.id, None, AgentCreate(
+    a, _, _ = await register(reg, org.id, None, agent_create(
         name="root", capabilities=["read", "write", "delegate"], max_delegation_depth=3))
-    b, _, _ = await reg.register(org.id, None, AgentCreate(
+    b, _, _ = await register(reg, org.id, None, agent_create(
         name="mid", capabilities=["read", "write"], max_delegation_depth=3))
-    c, _, _ = await reg.register(org.id, None, AgentCreate(
+    c, _, _ = await register(reg, org.id, None, agent_create(
         name="leaf", capabilities=["read"], max_delegation_depth=1))
     return {"org": org, "a": a, "b": b, "c": c}
 
@@ -106,9 +106,9 @@ class TestDepth:
         org = org_and_users["org"]
         reg = AgentRegistry(db_session)
         # shallow agent: max depth 1
-        a, _, _ = await reg.register(org.id, None, AgentCreate(name="d0", capabilities=["read"], max_delegation_depth=1))
-        b, _, _ = await reg.register(org.id, None, AgentCreate(name="d1", capabilities=["read"], max_delegation_depth=1))
-        c, _, _ = await reg.register(org.id, None, AgentCreate(name="d2", capabilities=["read"], max_delegation_depth=1))
+        a, _, _ = await register(reg, org.id, None, agent_create(name="d0", capabilities=["read"], max_delegation_depth=1))
+        b, _, _ = await register(reg, org.id, None, agent_create(name="d1", capabilities=["read"], max_delegation_depth=1))
+        c, _, _ = await register(reg, org.id, None, agent_create(name="d2", capabilities=["read"], max_delegation_depth=1))
         svc = DelegationService(db_session)
         chain, _ = await svc.delegate(
             org_id=org.id, from_agent_id=a.id, to_agent_id=b.id,

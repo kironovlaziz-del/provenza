@@ -8,7 +8,7 @@ Go standard library only; one static binary.
 ```
 agent ──► http://127.0.0.1:8443/<route>/<path>
             │ the route table (from Provenza): upstream, methods, path prefixes, body limit
-            │ check  - mediated: with the agent's key (X-Agent-Key)
+            │ check  - mediated: POST /egress-proxy/check with its own key and the agent's (X-Agent-Key)
             │        - SDK:      the agent's own check (X-Provenza-Check-Id)
             │ redeem - the exact request, hashes only; a different one burns the check
             ▼

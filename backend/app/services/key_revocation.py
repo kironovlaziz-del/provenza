@@ -16,8 +16,8 @@ the admin states the key was compromised since an earlier moment. Signatures
 made before that keep verifying: retiring a key does not void its past, and
 a compromise voids exactly what came after it.
 
-Revoking the agent's current key leaves it without a signing key: under the
-default (allow_keyless_agents off) it cannot act until it gets a new one.
+Revoking the agent's current key leaves it without a signing key: it cannot
+act until it gets a new one.
 A revoked key can never be registered again.
 """
 

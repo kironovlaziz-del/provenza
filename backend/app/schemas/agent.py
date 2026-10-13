@@ -19,34 +19,23 @@ class AgentCreate(BaseModel):
     allowed_tools: Optional[List[str]] = None
     allowed_models: Optional[List[str]] = None
     max_delegation_depth: int = 3
-    # The agent's own Ed25519 public key (base64 of the 32 raw bytes). Given,
-    # the server never holds the private key and cannot sign as the agent.
-    # Omitted, a keypair is generated here and the private key returned once.
-    public_key: Optional[str] = None
+    # The agent's own Ed25519 public key (base64 of the 32 raw bytes): the
+    # agent makes its keys, the server never holds a private key and cannot
+    # sign as the agent.
+    public_key: str
     # Hybrid post-quantum key: the agent's ML-DSA-65 public key (base64 of the
     # 1952 raw bytes), registered together with public_key.
     pq_public_key: Optional[str] = None
-    # Only when the server generates the keys: "hybrid" adds an ML-DSA-65 pair.
-    key_scheme: Literal["ed25519", "hybrid"] = "ed25519"
 
     @field_validator("public_key")
     @classmethod
-    def _public_key(cls, v: Optional[str]) -> Optional[str]:
-        # None = generate one here; an empty string is a mistake, not a choice.
-        return None if v is None else normalize_public_key(v)
+    def _public_key(cls, v: str) -> str:
+        return normalize_public_key(v)
 
     @field_validator("pq_public_key")
     @classmethod
     def _pq_public_key(cls, v: Optional[str]) -> Optional[str]:
         return None if v is None else normalize_pq_public_key(v)
-
-    @model_validator(mode="after")
-    def _pair(self):
-        if self.pq_public_key and not self.public_key:
-            raise ValueError("pq_public_key comes with public_key: a hybrid key is Ed25519 + ML-DSA-65")
-        if self.public_key and self.key_scheme == "hybrid" and not self.pq_public_key:
-            raise ValueError("key_scheme 'hybrid' with your own key needs pq_public_key (ML-DSA-65) as well")
-        return self
 
 
 class SigningKeyIn(BaseModel):
@@ -133,12 +122,8 @@ class AgentOut(BaseModel):
 
 
 class AgentCreated(AgentOut):
-    # Secrets shown ONCE at registration; never returned again.
+    # Shown ONCE at registration; never returned again.
     api_key: str
-    # Only when the server generated the keypair; None for an agent-held key.
-    private_key: Optional[str] = None
-    # ML-DSA-65 seed (the private key), server-generated hybrid keys only.
-    pq_private_key: Optional[str] = None
 
 
 # ---- Kill switch ----
@@ -246,6 +231,12 @@ class ActionCheckRequest(BaseModel):
     # ASI04: reported by the agent's runtime, compared with the Tool Registry pins
     tool_version: Optional[str] = Field(default=None, max_length=100)
     tool_digest: Optional[str] = Field(default=None, max_length=100)
+    # The agent's signature over PVPActionRequest.signed_payload(): required
+    # when the agent calls with its own key (X-Agent-Key).
+    nonce: Optional[str] = Field(default=None, min_length=16, max_length=128)
+    issued_at: Optional[int] = Field(default=None, ge=0)
+    signature: Optional[str] = Field(default=None, max_length=6000)
+    pq_signature: Optional[str] = Field(default=None, max_length=6000)
 
     @field_validator("action_capabilities")
     @classmethod

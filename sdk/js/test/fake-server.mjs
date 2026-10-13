@@ -27,6 +27,7 @@ export class FakeProvenza {
   down = new Set();       // paths answering 503
   recordFailures = 0;
   publicKey = null;
+  nonces = new Set();
   n = 0;
 
   fetch = async (url, init = {}) => {
@@ -50,6 +51,14 @@ export class FakeProvenza {
         { domain: "openai.com", status: "allowed" }, { domain: "blocked-ai.com", status: "blocked" }] });
     }
     if (path === "/agents/actions/check") {
+      // what the server verifies: the agent's signature over the request, a fresh nonce
+      verifyEd25519(this.publicKey, body.signature, {
+        type: "action.request", agent_id: body.agent_id, chain_id: body.chain_id, action_type: body.action_type,
+        tool_name: body.tool_name, input_sha256: contentHash(body.input), tool_version: body.tool_version ?? null,
+        tool_digest: body.tool_digest ?? null, nonce: body.nonce, issued_at: body.issued_at,
+      });
+      if (this.nonces.has(body.nonce)) throw new Error("nonce reused");
+      this.nonces.add(body.nonce);
       const token = `chk_${String(++this.n).padStart(40, "0")}`;
       const decision = this.verdicts.get(body.tool_name) ?? "allowed";
       this.checks.set(token, { ...body, decision });
