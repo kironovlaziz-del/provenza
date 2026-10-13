@@ -96,6 +96,7 @@ export const NAV: NavGroup[] = [
       ] },
       { key: "gateways", labelKey: "sidebar.sec.gateways", icon: "gateway", pages: [
         P("/gateway", "gateway", { adminOnly: true }),
+        P("/runtime", "runtime", { adminOnly: true }),
         P("/provider-chat", "provider_chat"),
       ] },
     ],

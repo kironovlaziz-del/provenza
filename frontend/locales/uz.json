@@ -113,7 +113,8 @@
       "kill_switch": "Favqulodda to'xtatish",
       "pii_rules": "Shaxsiy ma'lumot qoidalari",
       "blocked_terms": "Bloklangan atamalar",
-      "profile": "Mening profilim"
+      "profile": "Mening profilim",
+      "runtime": "Runtime"
     },
     "logout": "Chiqish",
     "role_admin": "administrator",
@@ -744,7 +745,8 @@
       "request_blocked": "So'rov Prompt Firewall tomonidan bloklandi",
       "agent_discovered": "Qurilmada AI agent topildi",
       "audit_key_rotation": "Audit kalitini almashtirish taklif qilindi, tasdiqlandi yoki yakunlandi",
-      "kill_switch": "Favqulodda to'xtatish: yoqildi yoki bekor qilindi"
+      "kill_switch": "Favqulodda to'xtatish: yoqildi yoki bekor qilindi",
+      "runtime_violation": "Runtime: boshqariladigan ish yuki o'z siyosatidan tashqariga ulandi"
     }
   },
   "users": {
@@ -992,7 +994,11 @@
     "action.stale_request": "Harakat tekshiruvi juda eski yoki kelajak sanasi bilan. Agent xostidagi soatni tekshiring.",
     "action.replayed_request": "Bu harakat tekshiruvi allaqachon ishlatilgan (takroriy nonce).",
     "egress.agent_key_invalid": "Agent kaliti bu proksi tashkiloti uchun yaroqsiz.",
-    "egress.agent_inactive": "Agent faol emas."
+    "egress.agent_inactive": "Agent faol emas.",
+    "runtime.workload_not_found": "Ish yuki topilmadi.",
+    "runtime.agent_not_found": "Agent topilmadi.",
+    "runtime.name_taken": "{{name}} nomli ish yuki allaqachon mavjud.",
+    "runtime.endpoint_key_required": "Runtime daemoniga endpoint kaliti kerak."
   },
   "discovery": {
     "title": "Tarmoq kashfiyoti",
@@ -3188,5 +3194,84 @@
     "mfa_hint": "Hech bo'lmaganda adminlar va tasdiqlovchilar uchun. Avval o'zingiz uchun Mening profilimda sozlang.",
     "discovery": "Shadow AI'ni toping",
     "discovery_hint": "Endpoint agent yoki brauzer kengaytmasi uchun ingestion kaliti."
+  },
+  "rt": {
+    "title": "Runtime",
+    "intro": "Ish yuklari - xostlaringizdagi jarayonlar, ular cgroup v2 yo'llari bilan nomlanadi (systemd xizmati, konteyner). Har bir Linux xostdagi Provenza runtime daemoni ularning tashqi ulanishlarini quyidagi siyosatga bo'ysundiradi: kuzatish - yozib boradi, ogohlantirish - yozadi va xabar beradi, majburlash - ruxsat etilmagan har qanday ulanishni yadro rad etadi.",
+    "daemon_key": "Daemonlar endpoint kaliti bilan autentifikatsiyadan o'tadi, kalitni bu yerda yarating:",
+    "load_failed": "Runtime ma'lumotlarini yuklab bo'lmadi.",
+    "save_failed": "Ish yukini saqlab bo'lmadi.",
+    "workloads": "Ish yuklari",
+    "new": "Yangi ish yuki",
+    "edit": "{{name}} ni tahrirlash",
+    "edit_btn": "Tahrirlash",
+    "name": "Nomi",
+    "agent": "Agent",
+    "no_agent": "Agentga bog'lanmagan",
+    "agent_hint": "Agentga bog'langan bo'lsa, rad etilgan yoki qayd etilgan ulanish shu agentning hodisasiga aylanadi.",
+    "patterns": "cgroup shablonlari",
+    "patterns_hint": "Har qatorda bittadan, cgroup ildiziga nisbatan; har bir segmentda shell belgilaridan foydalanish mumkin. Masalan: system.slice/billing-agent.service. Faqat belgilardan iborat shablon rad etiladi - u xostdagi barcha jarayonlarni boshqarardi.",
+    "allow": "Ruxsat etilgan manzillar",
+    "allow_hint": "Ish yuki ulanishi mumkin bo'lgan tarmoqlar va portlar (bo'sh = istalgan port). Odatda faqat egress proksi va Provenza - shunda ish yuki ularni chetlab o'ta olmaydi. Qolgan hammasi siyosatdan tashqarida.",
+    "cidr": "Tarmoq",
+    "ports": "Portlar",
+    "ports_ph": "443, 8443 (bo'sh = istalgan)",
+    "add_row": "Manzil qo'shish",
+    "remove_row": "Manzilni olib tashlash",
+    "allow_dns": "DNS ga ruxsat berish",
+    "allow_dns_hint": "Xostning resolverlari orqali nomlarni aniqlash.",
+    "mode": "Rejim",
+    "modes": {
+      "observe": "Kuzatish",
+      "alert": "Ogohlantirish",
+      "enforce": "Majburlash"
+    },
+    "mode_hint": {
+      "observe": "Siyosatdan tashqari ulanishlar quyida qayd etiladi. Hech narsa bloklanmaydi, hech kimga xabar berilmaydi.",
+      "alert": "Qayd etiladi va har biri birinchi marta ko'rilganda xabarnoma yuboriladi (ish yuki agentga bog'langan bo'lsa, hodisa ham yaratiladi). Hech narsa bloklanmaydi.",
+      "enforce": "Siyosatdan tashqari har qanday ulanishni yadro rad etadi. Avval kuzatish rejimini sinab ko'ring: u yerda ko'rganingiz - majburlash bloklaydigan narsa."
+    },
+    "enabled": "Yoqilgan",
+    "disabled": "O'chirilgan",
+    "enable": "Yoqish",
+    "disable": "O'chirish",
+    "delete": "Yo'q qilish",
+    "save": "Saqlash",
+    "cancel": "Bekor qilish",
+    "created": "{{name}} ish yuki yaratildi. Daemonlar uni keyingi yangilanishda oladi.",
+    "saved": "{{name}} ish yuki saqlandi.",
+    "deleted": "{{name}} ish yuki yo'q qilindi. Uning qayd etilgan buzilishlari saqlanib qoladi.",
+    "confirm_delete": "{{name}} ish yukini yo'q qilasizmi? Daemonlar keyingi yangilanishda uning jarayonlarini boshqarishni to'xtatadi. Vaqtincha to'xtatish uchun uni o'chirib qo'ying.",
+    "confirm_enforce_empty": "Ruxsat etilgan manzillarsiz majburlash: bu ish yuki hech qayerga ulana olmaydi. Davom etasizmi?",
+    "err_name": "Ish yukiga nom bering.",
+    "err_patterns": "Kamida bitta cgroup shablonini qo'shing.",
+    "err_cidr": "Har bir ruxsat etilgan manzil uchun tarmoq kerak (masalan, 10.0.0.5/32).",
+    "err_ports": "Portlar 1 dan 65535 gacha bo'lgan sonlar, vergul bilan ajratiladi.",
+    "no_workloads": "Hozircha ish yuklari yo'q.",
+    "nothing_allowed": "hech narsa",
+    "any_port": "istalgan port",
+    "dns_yes": "DNS ruxsat etilgan",
+    "dns_no": "DNS yo'q",
+    "violations": "Buzilishlar",
+    "filter_workload": "Ish yuki",
+    "filter_action": "Harakat",
+    "all_workloads": "Barcha ish yuklari",
+    "all_actions": "Barcha harakatlar",
+    "refresh": "Yangilash",
+    "last_seen": "Oxirgi marta",
+    "first_seen": "birinchi marta {{when}}",
+    "workload": "Ish yuki",
+    "deleted_workload": "yo'q qilingan ish yuki",
+    "host": "Xost",
+    "action": "Harakat",
+    "actions": {
+      "observed": "Kuzatildi",
+      "alerted": "Ogohlantirildi",
+      "blocked": "Bloklandi"
+    },
+    "destination": "Manzil",
+    "process": "Jarayon",
+    "count": "Soni",
+    "no_violations": "Ish yuki siyosatidan tashqari ulanishlar yo'q."
   }
 }
