@@ -48,6 +48,7 @@ from app.schemas.egress_sensor import (
     WorkloadUpdate,
 )
 from app.services import egress_sensor as svc
+from app.services.audit_service import AuditService
 
 # ---------------------------------------------------------------- admin
 
@@ -113,8 +114,12 @@ async def register_sensor(
         created_by=current_user.id,
     )
     db.add(sensor)
-    await db.commit()
-    await db.refresh(sensor)
+    await db.flush()
+
+    await AuditService(db).log(
+        current_user.org_id, current_user.id, "egress_sensor", sensor.id, "created",
+        {"name": data.name, "key_prefix": sensor.key_prefix},
+    )
 
     out = SensorOut.model_validate(sensor, from_attributes=True)
     return SensorCreated(**out.model_dump(), api_key=raw)
@@ -163,9 +168,17 @@ async def update_sensor(
         )
         if clash.scalar_one_or_none() is not None:
             raise api_error(status.HTTP_409_CONFLICT, "egress_sensor.name_taken", name=fields["name"])
+    changes: dict = {}
+    for k, v in fields.items():
+        changes[k] = {"from": getattr(sensor, k), "to": v}
     for k, v in fields.items():
         setattr(sensor, k, v)
-    await db.commit()
+    await db.flush()
+
+    await AuditService(db).log(
+        current_user.org_id, current_user.id, "egress_sensor", sensor.id, "updated",
+        {"changes": changes},
+    )
     await db.refresh(sensor)
     return sensor
 
@@ -179,7 +192,12 @@ async def revoke_sensor(
     sensor = await _get_org_sensor(db, sensor_id, current_user.org_id)
     sensor.enabled = False
     sensor.revoked_at = svc.now_utc()
-    await db.commit()
+    await db.flush()
+
+    await AuditService(db).log(
+        current_user.org_id, current_user.id, "egress_sensor", sensor.id, "revoked",
+        {"name": sensor.name, "key_prefix": sensor.key_prefix},
+    )
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
@@ -232,7 +250,13 @@ async def create_workload(
     db.add(w)
     await db.flush()
     await svc.bump_revision(db, current_user.org_id)
-    await db.commit()
+
+    await AuditService(db).log(
+        current_user.org_id, current_user.id, "egress_workload", w.id, "created",
+        {"name": w.name, "mode": w.mode, "dns": w.dns,
+         "cgroup_patterns": w.cgroup_patterns, "run_as_users": w.run_as_users,
+         "egress_allow": w.egress_allow, "ingress_allow": w.ingress_allow},
+    )
     await db.refresh(w)
     return w
 
@@ -289,11 +313,19 @@ async def update_workload(
                 for r in fields[allow_field]
             ]
 
+    changes: dict = {}
+    for k, v in fields.items():
+        changes[k] = {"from": getattr(w, k), "to": v}
     for k, v in fields.items():
         setattr(w, k, v)
 
     await svc.bump_revision(db, current_user.org_id)
-    await db.commit()
+    await db.flush()
+
+    await AuditService(db).log(
+        current_user.org_id, current_user.id, "egress_workload", w.id, "updated",
+        {"changes": changes},
+    )
     await db.refresh(w)
     return w
 
@@ -308,7 +340,12 @@ async def delete_workload(
     w.deleted_at = svc.now_utc()
     w.enabled = False
     await svc.bump_revision(db, current_user.org_id)
-    await db.commit()
+    await db.flush()
+
+    await AuditService(db).log(
+        current_user.org_id, current_user.id, "egress_workload", w.id, "deleted",
+        {"name": w.name},
+    )
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
