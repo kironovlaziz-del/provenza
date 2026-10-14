@@ -4,10 +4,10 @@
 
 # ---- AI Control Tower — full stack, one command ----
 # Usage:  docker compose -f docker-compose.dev.yml up --build
-# Then open http://localhost:3000  ·  login: admin@demo.local / demo12345
+# Then open http://localhost:3000  ·  org: demo  ·  login: admin@demo.com / demo12345
 #
 # This brings up EVERYTHING: Postgres, Redis, backend (with auto-migrations
-# and a seeded demo admin), Celery worker, and the frontend. For local
+# and a seeded demo admin), Celery worker and beat (scheduled jobs), and the frontend. For local
 # development against host-run backend/frontend, use the plain
 # docker-compose.yml (db + redis only) instead.
 
@@ -98,6 +98,32 @@ services:
     # celery doesn't need to re-migrate/seed; skip entrypoint extras by
     # overriding the command (entrypoint still waits for db, which is fine)
     command: ["celery", "-A", "app.core.celery_app", "worker", "--loglevel=info", "--concurrency=1"]
+
+  # scheduled jobs: audit checkpoints and time-stamps, queue expiry, retention, ...
+  beat:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: ai_ct_beat
+    depends_on:
+      backend:
+        condition: service_healthy   # the backend has run the migrations
+      redis:
+        condition: service_healthy
+    environment:
+      ENVIRONMENT: development
+      SECRET_KEY: ${SECRET_KEY:-dev-secret-change-me-0123456789abcdef0123456789abcdef}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-}
+      POSTGRES_USER: ${POSTGRES_USER:-ai_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ai_password}
+      POSTGRES_DB: ${POSTGRES_DB:-ai_control_tower}
+      POSTGRES_HOST: db
+      POSTGRES_PORT: 5432
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-ai_password}
+    command: ["celery", "-A", "app.core.celery_app", "beat", "--loglevel=info",
+              "--schedule", "/tmp/celerybeat-schedule"]
 
   frontend:
     build:

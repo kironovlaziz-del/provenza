@@ -36,7 +36,7 @@ beyond the kernel.
 - Linux 5.15+ with cgroup v2, BPF, and BTF enabled.
 - Root (or `CAP_BPF`, `CAP_SYS_ADMIN`, `CAP_NET_ADMIN`).
 - `clang >= 14` for rebuilding the BPF object (not needed to run).
-- Go 1.25+ for rebuilding the sensor (not needed to run).
+- Go 1.26+ for rebuilding the sensor (not needed to run).
 
 ## Build
 
