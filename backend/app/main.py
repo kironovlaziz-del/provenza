@@ -43,6 +43,7 @@ from app.api import system
 from app.api import pvp as pvp_api
 from app.api import http_tools as http_tools_api
 from app.api import scim as scim_api
+from app.api import sso as sso_api
 from app.api import egress_check as egress_check_api
 from app.api import mcp as mcp_api
 from app.api import a2a_gateway as a2a_gateway_api
@@ -128,6 +129,8 @@ app.include_router(mcp_api.admin_router, prefix=f"{settings.API_V1_STR}/mcp-serv
 app.include_router(http_tools_api.router, prefix=f"{settings.API_V1_STR}/http-tools", tags=["http-tools"])
 app.include_router(scim_api.scim_router, prefix=f"{settings.API_V1_STR}/scim/v2", tags=["scim"])
 app.include_router(scim_api.admin_router, prefix=f"{settings.API_V1_STR}/scim", tags=["scim"])
+app.include_router(sso_api.public_router, prefix=f"{settings.API_V1_STR}/auth/sso", tags=["sso"])
+app.include_router(sso_api.admin_router, prefix=f"{settings.API_V1_STR}/sso", tags=["sso"])
 app.add_exception_handler(scim_api.ScimError, lambda request, exc: scim_api.error_response(exc))
 app.include_router(egress_check_api.agent_router, prefix=f"{settings.API_V1_STR}/agents", tags=["egress"])
 app.include_router(egress_check_api.admin_router, prefix=f"{settings.API_V1_STR}/agent-identity", tags=["egress"])

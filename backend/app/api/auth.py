@@ -101,6 +101,13 @@ async def login(
             "auth.account_disabled",
             status=user.status,
         )
+    if user.role != "admin":
+        # SSO only: passwords are left to admins, the break-glass way in (app/services/sso.py)
+        from app.services import sso
+
+        cfg = await sso.get_settings(db, org.id)
+        if cfg is not None and cfg.enabled and cfg.enforce:
+            raise api_error(status.HTTP_403_FORBIDDEN, "auth.sso_required")
 
     # Successful login: this account's counter is cleared (a user who
     # mistyped a few times is not locked out), and this request's own IP

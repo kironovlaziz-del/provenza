@@ -8,7 +8,7 @@ import React, {
   useState,
 } from "react";
 import { useRouter } from "next/navigation";
-import { clearToken, getMe, getToken, login as loginRequest, loginMfa, logoutRequest, setToken } from "./api";
+import { clearToken, getMe, getToken, login as loginRequest, loginMfa, logoutRequest, setToken, ssoExchange } from "./api";
 import type { User } from "./types";
 
 interface AuthContextValue {
@@ -17,6 +17,8 @@ interface AuthContextValue {
   /** Resolves with an mfaToken when a second factor is due (then call completeMfa). */
   login: (orgSlug: string, email: string, password: string) => Promise<{ mfaToken?: string }>;
   completeMfa: (mfaToken: string, code: string) => Promise<void>;
+  /** The one-time code single sign-on hands back (/login/sso). */
+  completeSso: (code: string) => Promise<void>;
   logout: () => void;
 }
 
@@ -77,6 +79,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [enter]
   );
 
+  const completeSso = useCallback(
+    async (code: string) => {
+      const { access_token } = await ssoExchange(code);
+      await enter(access_token);
+    },
+    [enter]
+  );
+
   const logout = useCallback(() => {
     const token = getToken();
     clearToken(); // forgotten here at once; the server revokes it in the background
@@ -86,7 +96,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [router]);
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, completeMfa, logout }}>
+    <AuthContext.Provider value={{ user, loading, login, completeMfa, completeSso, logout }}>
       {children}
     </AuthContext.Provider>
   );

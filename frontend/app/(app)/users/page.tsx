@@ -8,6 +8,7 @@ import { StatusPill } from "@/components/Pill";
 import { confirmDialog } from "@/components/Dialog";
 import { MfaPolicyPanel } from "@/components/profile/MfaPolicyPanel";
 import { ScimPanel } from "@/components/profile/ScimPanel";
+import { SsoPanel } from "@/components/profile/SsoPanel";
 import { useAuth } from "@/lib/auth";
 import {
   inviteUser,
@@ -114,6 +115,7 @@ export default function UsersPage() {
       />
       <div className="content">
         <MfaPolicyPanel />
+        <SsoPanel />
         <ScimPanel />
         {showForm && (
           <div className="panel" style={{ marginBottom: 20 }}>

@@ -44,7 +44,8 @@ async def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
     user = await _user_from_token(token, db)
-    if not user.totp_enabled and not request.url.path.endswith(MFA_SETUP_PATHS):
+    # a sign-in where the identity provider vouched for a second factor needs no TOTP of ours
+    if not user.totp_enabled and not getattr(user, "_idp_mfa", False) and not request.url.path.endswith(MFA_SETUP_PATHS):
         from app.services import mfa
         if await mfa.required_for(db, user):
             raise api_error(status.HTTP_403_FORBIDDEN, "auth.mfa_setup_required")
@@ -83,6 +84,7 @@ async def _user_from_token(token: str, db: AsyncSession) -> User:
     user = result.scalar_one_or_none()
     if user is None:
         raise credentials_exception
+    user._idp_mfa = payload.get("idp_mfa") is True   # transient, this request only (app/api/sso.py)
     # every session from before a password change has ended
     if user.sessions_valid_after is not None:
         issued = payload.get("iat")

@@ -52,7 +52,12 @@
     "mfa_code": "Kod",
     "mfa_recovery_hint": "Telefoningizni yo'qotdingizmi? Uning o'rniga tiklash kodlaridan birini kiriting.",
     "mfa_verify": "Tasdiqlash",
-    "mfa_back": "Orqaga"
+    "mfa_back": "Orqaga",
+    "sso_button": "Yagona kirish orqali kirish",
+    "sso_or_password": "yoki quyida parol bilan",
+    "sso_only": "Bu tashkilotda parollar faqat administratorlar uchun",
+    "sso_failed": "Yagona kirish yakunlanmadi.",
+    "sso_signing_in": "Kirilmoqda…"
   },
   "sidebar": {
     "sections": {
@@ -1059,7 +1064,24 @@
     "tsa.response_too_large": "TSA javobi juda katta.",
     "tsa.no_signer_certificate": "TSA javobida uning sertifikati yo'q.",
     "tsa.unsupported_algorithm": "TSA qo'llab-quvvatlanmaydigan algoritmdan foydalanadi.",
-    "scim.bad_default_role": "Identifikatsiya provayderidan kelgan yangi foydalanuvchilar faqat foydalanuvchi yoki tasdiqlovchi bo'lishi mumkin."
+    "scim.bad_default_role": "Identifikatsiya provayderidan kelgan yangi foydalanuvchilar faqat foydalanuvchi yoki tasdiqlovchi bo'lishi mumkin.",
+    "auth.sso_required": "Bu tashkilot yagona kirish orqali kiradi.",
+    "sso.bad_issuer": "Emitent https manzili bo'lishi kerak.",
+    "sso.provider_unreachable": "Identifikatsiya provayderiga ulanib bo'lmadi.",
+    "sso.provider_error": "Identifikatsiya provayderining javobidan foydalanib bo'lmadi.",
+    "sso.bad_state": "Kirish muddati tugadi yoki boshqa brauzerda boshlangan. Qaytadan boshlang.",
+    "sso.not_configured": "Bu tashkilot uchun yagona kirish sozlanmagan.",
+    "sso.provider_refused": "Identifikatsiya provayderi sizni kiritmadi.",
+    "sso.code_refused": "Identifikatsiya provayderi kirishni rad etdi.",
+    "sso.bad_token": "Identifikatsiya provayderining javobi tasdiqlanmadi.",
+    "sso.no_email": "Identifikatsiya provayderi e-pochta manzilini yubormadi.",
+    "sso.email_unverified": "E-pochta manzilingiz identifikatsiya provayderida tasdiqlanmagan.",
+    "sso.domain_not_allowed": "E-pochta domeningizga bu yerda ruxsat yo'q.",
+    "sso.no_account": "Sizda hali bu yerda akkaunt yo'q - administratorga murojaat qiling.",
+    "sso.account_disabled": "Akkauntingiz o'chirilgan.",
+    "sso.subject_mismatch": "Bu e-pochta identifikatsiya provayderidagi boshqa akkauntga tegishli. Administratorga murojaat qiling.",
+    "sso.mfa_required": "Identifikatsiya provayderida ikkinchi omil bilan qaytadan kiring.",
+    "sso.bad_code": "Kirish havolasi muddati tugadi. Qaytadan boshlang."
   },
   "discovery": {
     "title": "Tarmoq kashfiyoti",
@@ -3487,5 +3509,31 @@
     "confirm_revoke": "SCIM o'chirilsinmi? Identifikatsiya provayderi endi foydalanuvchilarni yarata yoki o'chira olmaydi.",
     "failed": "Provizioningni o'zgartirib bo'lmadi.",
     "managed_hint": "Identifikatsiya provayderi tomonidan boshqariladi (SCIM)"
+  },
+  "sso": {
+    "title": "Yagona kirish (OpenID Connect)",
+    "hint": "Xodimlar identifikatsiya provayderingiz orqali kiradi (Okta, Microsoft Entra ID, Google Workspace, Keycloak, ...). Provenza'ni u yerda quyidagi qaytish manzili bilan veb-ilova sifatida ro'yxatdan o'tkazing, so'ng emitent, client ID va maxfiy kalitni kiriting. Birinchi kirish har bir xodimni provayderdagi akkauntiga bog'laydi.",
+    "redirect_uri": "Qaytish manzili (provayderda ro'yxatdan o'tkazing)",
+    "on": "yoqilgan",
+    "off": "o'chirilgan",
+    "enforced": "faqat SSO",
+    "change": "O'zgartirish",
+    "setup": "Yagona kirishni sozlash",
+    "disable": "O'chirish",
+    "save": "Tekshirish va saqlash",
+    "issuer": "Emitent (issuer)",
+    "client_id": "Client ID",
+    "client_secret": "Client secret",
+    "secret_keep": "(saqlangan - o'zgartirmaslik uchun bo'sh qoldiring)",
+    "domains": "Ruxsat etilgan e-pochta domenlari (bo'sh = istalgan)",
+    "email_claim": "E-pochta claim'i",
+    "jit": "Birinchi kirishda akkaunt yaratish",
+    "jit_hint": "O'chirilgan: faqat administrator qo'shgan yoki provayder (SCIM) yaratgan xodimlar kira oladi.",
+    "enforce": "Faqat SSO",
+    "enforce_hint": "Parollar administratorlardan boshqa hamma uchun ishlamay qoladi - provayder ishlamaganda kirish yo'li.",
+    "require_idp_mfa": "Provayderning ikkinchi omilini talab qilish",
+    "require_idp_mfa_hint": "Provayder ikkinchi omil haqida xabar bermagan (amr) kirishlarni rad etish. Tashkilot ikki bosqichli kirishni talab qilgan joyda bu baribir talab qilinadi.",
+    "confirm_enforce": "Faqat SSO? Administratorlardan boshqa hamma identifikatsiya provayderi orqali kiradi; ularning parollari ishlamay qoladi.",
+    "failed": "Yagona kirishni saqlab bo'lmadi."
   }
 }

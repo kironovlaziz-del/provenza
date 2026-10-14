@@ -52,7 +52,12 @@
     "mfa_code": "Code",
     "mfa_recovery_hint": "Lost your phone? Enter one of your recovery codes instead.",
     "mfa_verify": "Verify",
-    "mfa_back": "Back"
+    "mfa_back": "Back",
+    "sso_button": "Sign in with single sign-on",
+    "sso_or_password": "or with a password below",
+    "sso_only": "Passwords are for admins only in this organization",
+    "sso_failed": "Single sign-on did not complete.",
+    "sso_signing_in": "Signing you in…"
   },
   "sidebar": {
     "sections": {
@@ -1059,7 +1064,24 @@
     "tsa.response_too_large": "The TSA's answer is too large.",
     "tsa.no_signer_certificate": "The TSA's answer does not carry its certificate.",
     "tsa.unsupported_algorithm": "The TSA uses an unsupported algorithm.",
-    "scim.bad_default_role": "New users from the identity provider can be users or approvers only."
+    "scim.bad_default_role": "New users from the identity provider can be users or approvers only.",
+    "auth.sso_required": "This organization signs in with single sign-on.",
+    "sso.bad_issuer": "The issuer must be an https URL.",
+    "sso.provider_unreachable": "The identity provider could not be reached.",
+    "sso.provider_error": "The identity provider's answer was not usable.",
+    "sso.bad_state": "The sign-in expired or was started in another browser. Start again.",
+    "sso.not_configured": "Single sign-on is not set up for this organization.",
+    "sso.provider_refused": "The identity provider did not sign you in.",
+    "sso.code_refused": "The identity provider refused the sign-in.",
+    "sso.bad_token": "The identity provider's answer did not verify.",
+    "sso.no_email": "The identity provider sent no e-mail address.",
+    "sso.email_unverified": "Your e-mail address is not verified at the identity provider.",
+    "sso.domain_not_allowed": "Your e-mail domain is not allowed here.",
+    "sso.no_account": "You have no account here yet - ask an admin.",
+    "sso.account_disabled": "Your account is disabled.",
+    "sso.subject_mismatch": "This e-mail belongs to another account at the identity provider. Ask an admin.",
+    "sso.mfa_required": "Sign in again with a second factor at your identity provider.",
+    "sso.bad_code": "The sign-in link expired. Start again."
   },
   "discovery": {
     "title": "Network Discovery",
@@ -3487,5 +3509,31 @@
     "confirm_revoke": "Turn SCIM off? The identity provider can no longer create or switch off users.",
     "failed": "Could not change provisioning.",
     "managed_hint": "Managed by the identity provider (SCIM)"
+  },
+  "sso": {
+    "title": "Single sign-on (OpenID Connect)",
+    "hint": "People sign in with your identity provider (Okta, Microsoft Entra ID, Google Workspace, Keycloak, ...). Register Provenza there as a web application with the redirect URI below, then enter its issuer, client ID and secret. The first sign-in binds each person to their account at the provider.",
+    "redirect_uri": "Redirect URI (register it at the provider)",
+    "on": "on",
+    "off": "off",
+    "enforced": "SSO only",
+    "change": "Change",
+    "setup": "Set up single sign-on",
+    "disable": "Switch off",
+    "save": "Check and save",
+    "issuer": "Issuer",
+    "client_id": "Client ID",
+    "client_secret": "Client secret",
+    "secret_keep": "(stored - leave empty to keep)",
+    "domains": "Allowed e-mail domains (empty = any)",
+    "email_claim": "E-mail claim",
+    "jit": "Create accounts on first sign-in",
+    "jit_hint": "Off: only people an admin added, or the identity provider provisioned (SCIM), can sign in.",
+    "enforce": "SSO only",
+    "enforce_hint": "Passwords stop working for everyone but admins - the way in when the provider is down.",
+    "require_idp_mfa": "Require the provider's second factor",
+    "require_idp_mfa_hint": "Refuse sign-ins the provider does not report a second factor for (amr). Where the organization requires two-factor sign-in, it is required anyway.",
+    "confirm_enforce": "SSO only? Everyone but admins will sign in through the identity provider; their passwords stop working.",
+    "failed": "Could not save single sign-on."
   }
 }
