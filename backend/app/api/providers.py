@@ -221,6 +221,16 @@ async def governed_chat(
     original = f"[system]\n{data.system_prompt}\n\n[user]\n{data.message}" if data.system_prompt else data.message
     masked_logged = (f"[system]\n{sys_fw.masked_text}\n\n[user]\n{fw.masked_text}" if sys_fw else fw.masked_text)
 
+    # what the prompt asks for (services/guardrail.py) - it reads the masked text
+    if not fw.blocked:
+        from app.services import guardrail
+        verdict = await guardrail.classify(db, current_user.org_id, masked_logged, "playground")
+        if verdict:
+            fw.flags = list(dict.fromkeys([*fw.flags, *verdict.flags]))
+            if verdict.block:
+                fw.blocked = True
+                fw.blocked_reason = f"Intent guardrail: {verdict.reason}"
+
     # policy may require human approval for every request under it
     if active_policy_rules.get("effect") == "require_approval" and not fw.blocked:
         db.add(AIRequest(

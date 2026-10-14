@@ -84,6 +84,7 @@ export const NAV: NavGroup[] = [
         P("/agent-policies", "agent_policies", { adminOnly: true }),
         P("/pii-rules", "pii_rules", { reviewOnly: true }),
         P("/blocked-terms", "blocked_terms", { reviewOnly: true }),
+        P("/intent-guardrail", "intent_guardrail", { adminOnly: true }),
         P("/compliance", "compliance"),
       ] },
       { key: "protection", labelKey: "sidebar.sec.protection", icon: "security", pages: [

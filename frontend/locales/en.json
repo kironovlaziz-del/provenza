@@ -119,7 +119,8 @@
       "pii_rules": "PII rules",
       "blocked_terms": "Blocked terms",
       "profile": "My profile",
-      "runtime": "Runtime"
+      "runtime": "Runtime",
+      "intent_guardrail": "Intent guardrail"
     },
     "logout": "Sign out",
     "role_admin": "admin",
@@ -1081,7 +1082,15 @@
     "sso.account_disabled": "Your account is disabled.",
     "sso.subject_mismatch": "This e-mail belongs to another account at the identity provider. Ask an admin.",
     "sso.mfa_required": "Sign in again with a second factor at your identity provider.",
-    "sso.bad_code": "The sign-in link expired. Start again."
+    "sso.bad_code": "The sign-in link expired. Start again.",
+    "guardrail.bad_surface": "Unknown place to apply the guardrail.",
+    "guardrail.duplicate_category": "Two categories have the same code.",
+    "guardrail.categories_required": "An instruction model needs at least one category.",
+    "guardrail.unknown_category": "A blocking category is not in the list.",
+    "guardrail.provider_required": "Choose the connection the classifier runs on.",
+    "guardrail.provider_not_found": "That connection does not exist.",
+    "guardrail.provider_not_self_hosted": "The organization allows only self-hosted providers: choose a self-hosted connection for the classifier.",
+    "guardrail.not_configured": "Save the guardrail settings first."
   },
   "discovery": {
     "title": "Network Discovery",
@@ -3535,5 +3544,44 @@
     "require_idp_mfa_hint": "Refuse sign-ins the provider does not report a second factor for (amr). Where the organization requires two-factor sign-in, it is required anyway.",
     "confirm_enforce": "SSO only? Everyone but admins will sign in through the identity provider; their passwords stop working.",
     "failed": "Could not save single sign-on."
+  },
+  "guardrail": {
+    "title": "Intent guardrail",
+    "hint": "Pattern rules find secrets and listed words; they cannot tell \"write a sort function\" from \"write code that gets around the login of our billing app\". A classifier model reads what each prompt asks for. It runs on one of your own connections - a self-hosted model keeps prompts in the house - and sees only the text the Prompt Firewall has already masked.",
+    "enabled": "Classify prompts by intent",
+    "provider": "Connection",
+    "provider_hint": "Llama Guard 3 on Ollama is \"llama-guard3\"; with vLLM, its model name there. An instruction model (Qwen, Llama, Mistral...) is given your categories below.",
+    "kind": "Classifier",
+    "kind_instruct": "Instruction model, our categories",
+    "model": "Model",
+    "mode": "Mode",
+    "mode_monitor": "Monitor - flag only",
+    "mode_enforce": "Enforce - refuse",
+    "on_error": "When the classifier fails or is slow",
+    "on_error_allow": "Let the prompt through (flagged)",
+    "on_error_block": "Refuse the prompt",
+    "timeout": "Timeout, ms",
+    "surfaces": "Applies to",
+    "surface": {
+      "playground": "Playground",
+      "gateway": "LLM gateway (agents)",
+      "requests": "Requests"
+    },
+    "categories": "Categories",
+    "categories_hint": "What the organization forbids, in plain words. Codes: capital letters, digits and _.",
+    "description": "What it means",
+    "add_category": "Add a category",
+    "blocking": "Categories that refuse a prompt (enforce)",
+    "blocking_hint": "None ticked: every category refuses. The others are only flagged.",
+    "save": "Save",
+    "saved": "Saved.",
+    "failed": "Could not save the guardrail.",
+    "try": "Try it",
+    "try_hint": "The saved settings on a sample prompt - also while switched off. The sample is masked by the Prompt Firewall first, like a real prompt.",
+    "try_run": "Classify",
+    "safe": "safe",
+    "unsafe": "unsafe",
+    "unavailable": "classifier unavailable",
+    "would_block": "would be refused"
   }
 }

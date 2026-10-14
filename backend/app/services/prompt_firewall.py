@@ -26,6 +26,12 @@ Four layers of protection:
      prompt like "Aziz Karimov Toshkentga jonadi" may fall outside the
      training distribution, but the gazetteer always catches "Toshkent".
 
+Disguises are undone too (core/text_normalize.py): the regex detectors run
+again on a copy without invisible characters, look-alike letters, spacing
+and spelled-out "at" / "dot", and on base64 / hex runs decoded; what they
+find there is masked (or blocks) in the original, flagged "deobfuscated:"
+or "decoded:". Blocked terms are looked for in the decoded runs as well.
+
 Regex, gazetteer, and NER run on the ORIGINAL text. Their matches are
 merged by character offset with priority custom rules > built-in regex >
 gazetteer > NER: any lower-priority match that overlaps a higher-priority
@@ -44,6 +50,7 @@ from functools import lru_cache
 from typing import Any, Dict, Iterable, List, Optional, Pattern, Tuple
 
 from app.core.config import settings
+from app.core.text_normalize import encoded_runs, normalize, original_span
 
 logger = logging.getLogger("prompt_firewall")
 
@@ -373,7 +380,8 @@ def scan(
     masked: block rules mask, and text a rule could not check in time is
     withheld.
 
-    Priority order for overlapping spans: custom rules > regex > gazetteer > NER.
+    Priority order for overlapping spans: custom rules > regex > disguised
+    regex (core/text_normalize.py) > gazetteer > NER.
     """
     term_hits, complete = _find_blocked_terms(text, list(blocked_terms or [])) if not mask_only else ([], True)
     if not complete:  # a crafted text that takes too long to check is not let through unchecked
@@ -383,6 +391,17 @@ def scan(
     # the people being watched for them see the flags
     term_flags = [f"blocked_term:{h.term.term}" for h in term_hits if h.term.action == "block"]
     blocking_terms = [h for h in term_hits if h.term.action == "block"]
+    runs = [] if mask_only else list(encoded_runs(text))
+    if not blocking_terms and blocked_terms:
+        # a blocked term written in base64 or hex
+        for _, _, kind, decoded in runs:
+            hidden, _ = _find_blocked_terms(decoded, list(blocked_terms))
+            hidden = [h for h in hidden if h.term.action == "block"]
+            if hidden:
+                return FirewallResult(masked_text="", flags=[f"blocked_term:{hidden[0].term.term}", f"decoded:{kind}"],
+                                      blocked=True, term_hits=term_hits + hidden,
+                                      blocked_reason=f"Prompt contains a blocked term ({kind}-encoded): "
+                                                     f"{hidden[0].term.term}")
     if blocking_terms:
         return FirewallResult(
             masked_text="",
@@ -423,6 +442,28 @@ def scan(
     _accept_by_priority(custom, accepted)
     regex_found = [m for m in builtin if m[2] in _DETECTOR_LABELS]
     _accept_by_priority(regex_found, accepted)
+
+    # disguised: found only once invisible characters, look-alikes and spacing are undone,
+    # or inside a base64 / hex run - masked (or blocking) in the original, where it is
+    disguised: List[Tuple[int, int, str]] = []
+    disguise_flags: List[str] = []
+    norm, spans = normalize(text)
+    if norm != text:
+        plain = {(s, e) for s, e, _ in accepted}
+        for s, e, label in _regex_matches(norm, actions):
+            os_, oe = original_span(spans, s, e)
+            if (os_, oe) not in plain:
+                disguised.append((os_, oe, label))
+                disguise_flags.append(f"deobfuscated:{label.lower()}")
+    for s, e, kind, decoded in runs:
+        found = _regex_matches(decoded, actions)
+        if found:
+            label = found[0][2]
+            disguised.append((s, e, label))
+            disguise_flags.append(f"decoded:{kind}:{label.lower()}")
+    before = len(accepted)
+    _accept_by_priority(disguised, accepted)          # before names and places: these are exact patterns
+    disguise_flags = list(dict.fromkeys(disguise_flags)) if len(accepted) > before else []
     _accept_by_priority([m for m in builtin if m[2] not in _DETECTOR_LABELS], accepted)
 
     # a type set to block blocks wherever it is found - unless one of the
@@ -430,7 +471,7 @@ def scan(
     # that is: a 14-digit tax id is not a card number)
     custom_cover = sorted((s, e) for s, e, _ in custom)
     blocking: List[str] = []
-    for s, e, label in sorted(custom + builtin):
+    for s, e, label in sorted(custom + builtin + disguised):
         if actions.get(label) != "block" or label in blocking:
             continue
         if label not in custom_labels and _covered((s, e), custom_cover):
@@ -439,14 +480,14 @@ def scan(
     if blocking and not mask_only:
         return FirewallResult(
             masked_text="",
-            flags=[f"blocked_pii:{label.lower()}" for label in blocking],
+            flags=[f"blocked_pii:{label.lower()}" for label in blocking] + disguise_flags,
             blocked=True,
             blocked_reason=f"Prompt contains {', '.join(blocking)}, which this organization blocks",
             timed_out=timed_out,
             term_hits=term_hits,
         )
 
-    flags: List[str] = list(term_flags)
+    flags: List[str] = list(term_flags) + disguise_flags
     for _, _, label in accepted:
         f = f"masked:{label.lower()}"
         if f not in flags:

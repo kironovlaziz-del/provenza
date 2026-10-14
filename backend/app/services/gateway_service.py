@@ -295,7 +295,19 @@ class GatewayService:
                 raise GatewayError(403, "prompt_injection", "Prompt-injection pattern in "
                                    + "; ".join(injection_hits) + " (ASI01)", "permission_error")
 
-        params = {k: body.get(k) for k in ("temperature", "top_p", "stop")}
+        # ---- intent (services/guardrail.py): the last user message, masked
+        from app.services import guardrail
+        last_user = next((_text(m.get("content")) for m in reversed(outgoing) if m.get("role") == "user"), "")
+        verdict = await guardrail.classify(self.db, org_id, last_user, "gateway")
+        if verdict:
+            flags += [f for f in verdict.flags if f not in flags]
+            if verdict.block:
+                await self._record(org_id, agent_id, model, "blocked", f"intent guardrail: {verdict.reason}",
+                                   flags, provider_id)
+                raise GatewayError(403, "blocked_by_guardrail", f"Intent guardrail: {verdict.reason}",
+                                   "permission_error")
+
+        params ={k: body.get(k) for k in ("temperature", "top_p", "stop")}
         requested = body.get("max_tokens") or body.get("max_completion_tokens")
         params["max_tokens"] = min(requested or max_tokens_cap, max_tokens_cap)
 
