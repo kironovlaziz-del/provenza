@@ -88,8 +88,12 @@ def test_encoded_runs_are_bounded():
     assert len(list(encoded_runs(blob))) == 32
 
 
-def test_it_stays_fast_on_a_long_prompt():
+def test_undoing_disguises_stays_fast_on_a_long_prompt():
+    # the normalization pass alone: the whole scan's time is mostly the NER model's,
+    # and on a CI runner under coverage that is no measure of this code
     text = ("j o h n @ e x a m p l e . c o m " + "lorem ipsum dolor sit amet " * 20) * 200   # ~120 KB
     t = time.monotonic()
-    pf.scan(text, pii=pf.PiiConfig(actions={"EMAIL": "mask"}))
-    assert time.monotonic() - t < 5
+    norm, spans = normalize(text)
+    list(encoded_runs(text))
+    assert time.monotonic() - t < 3
+    assert len(spans) == len(norm) and "john@example.com" in norm
