@@ -10,6 +10,10 @@ import { useTranslation } from "react-i18next";
 import { PageHeader } from "@/components/PageHeader";
 import { confirmDialog } from "@/components/Dialog";
 import { errorMessage as apiError } from "@/lib/errors";
+import {
+  listSensorViolations, listSensors, registerSensor, revokeSensor, updateSensor,
+  type SensorCreatedT, type SensorT, type SensorViolationT,
+} from "@/lib/egress_sensor_api";
 import { listAgents } from "@/lib/agent_api";
 import type { Agent } from "@/lib/agent_types";
 import {
@@ -79,6 +83,14 @@ export default function RuntimePage() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
+  // Egress sensors: hosts whose daemon enforces the policy above.
+  const [sensors, setSensors] = useState<SensorT[]>([]);
+  const [showRegister, setShowRegister] = useState(false);
+  const [sensorName, setSensorName] = useState("");
+  const [newKey, setNewKey] = useState<SensorCreatedT | null>(null);
+  const [expandedSensor, setExpandedSensor] = useState<SensorT | null>(null);
+  const [expandedViolations, setExpandedViolations] = useState<SensorViolationT[] | null>(null);
+
   const loadWorkloads = useCallback(() => {
     listWorkloads().then(setWorkloads).catch((err) => setError(apiError(err, t, t("rt.load_failed"))));
   }, [t]);
@@ -91,6 +103,11 @@ export default function RuntimePage() {
   useEffect(loadWorkloads, [loadWorkloads]);
   useEffect(loadViolations, [loadViolations]);
   useEffect(() => { listAgents(500).then(setAgents).catch(() => setAgents([])); }, []);
+
+  const loadSensors = useCallback(() => {
+    listSensors().then(setSensors).catch((err) => setError(apiError(err, t, t("rt.load_failed"))));
+  }, [t]);
+  useEffect(loadSensors, [loadSensors]);
 
   const agentName = useMemo(() => new Map(agents.map((a) => [a.id, a.name])), [agents]);
   const wlName = useMemo(() => new Map(workloads.map((w) => [w.id, w.name])), [workloads]);
@@ -173,6 +190,66 @@ export default function RuntimePage() {
     }
   }
 
+  async function registerSensorSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    const name = sensorName.trim();
+    if (!name) { setError(t("rt.sensors.err_name")); return; }
+    setBusy(true); setError(null);
+    try {
+      const created = await registerSensor(name);
+      setNewKey(created);
+      setShowRegister(false);
+      setSensorName("");
+    } catch (err) {
+      setError(apiError(err, t, t("rt.save_failed")));
+    } finally { setBusy(false); }
+  }
+
+  async function toggleSensor(s: SensorT) {
+    setBusy(true); setError(null);
+    try {
+      await updateSensor(s.id, { enabled: !s.enabled });
+      loadSensors();
+    } catch (err) {
+      setError(apiError(err, t, t("rt.save_failed")));
+    } finally { setBusy(false); }
+  }
+
+  async function revoke(s: SensorT) {
+    if (!await confirmDialog(t("rt.sensors.confirm_revoke", { name: s.name }), { danger: true })) return;
+    setBusy(true); setError(null);
+    try {
+      await revokeSensor(s.id);
+      setNotice(t("rt.sensors.revoked_ok", { name: s.name }));
+      if (expandedSensor?.id === s.id) { setExpandedSensor(null); setExpandedViolations(null); }
+      loadSensors();
+    } catch (err) {
+      setError(apiError(err, t, t("rt.save_failed")));
+    } finally { setBusy(false); }
+  }
+
+  async function openSensorViolations(s: SensorT) {
+    setExpandedSensor(s);
+    setExpandedViolations(null);
+    try {
+      setExpandedViolations(await listSensorViolations(s.id, 50));
+    } catch (err) {
+      setError(apiError(err, t, t("rt.load_failed")));
+      setExpandedViolations([]);
+    }
+  }
+
+  function copyKey(key: string) {
+    if (typeof navigator !== "undefined" && navigator.clipboard) {
+      navigator.clipboard.writeText(key).then(
+        () => setNotice(t("rt.sensors.copied")),
+        () => setNotice(t("rt.sensors.copy_manual")),
+      );
+    } else {
+      setNotice(t("rt.sensors.copy_manual"));
+    }
+  }
+
   return (
     <>
       <PageHeader title={t("rt.title")} />
@@ -183,6 +260,177 @@ export default function RuntimePage() {
         </p>
         {error && <p className="error-text u-mb-16">{error}</p>}
         {notice && <p className="hint-text u-mb-16">{notice}</p>}
+
+        {/* ---------------- sensors ---------------- */}
+        <section className="panel ag-section">
+          <div className="panel-header">
+            <h2>{t("rt.sensors.title")}</h2>
+            {!showRegister && !newKey && (
+              <button className="btn btn-sm btn-primary" onClick={() => { setShowRegister(true); setError(null); setNotice(null); }}>
+                {t("rt.sensors.register")}
+              </button>
+            )}
+          </div>
+
+          {newKey && (
+            <div className="panel-body" style={{ borderLeft: "3px solid var(--accent, #c8792a)" }}>
+              <h3 style={{ margin: 0 }}>{t("rt.sensors.key_title", { name: newKey.name })}</h3>
+              <p className="hint-text">{t("rt.sensors.key_hint")}</p>
+              <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 8, flexWrap: "wrap" }}>
+                <input
+                  readOnly
+                  value={newKey.api_key}
+                  onFocus={(e) => e.currentTarget.select()}
+                  className="mono"
+                  style={{ flex: "1 1 260px", padding: "8px 12px" }}
+                  aria-label={t("rt.sensors.key_title", { name: newKey.name })}
+                />
+                <button type="button" className="btn btn-sm" onClick={() => copyKey(newKey.api_key)}>{t("rt.sensors.copy")}</button>
+              </div>
+              <div className="ag-actions" style={{ marginTop: 12 }}>
+                <button className="btn btn-primary" onClick={() => { setNewKey(null); loadSensors(); }}>{t("rt.sensors.key_saved")}</button>
+              </div>
+            </div>
+          )}
+
+          {showRegister && !newKey && (
+            <div className="panel-body">
+              <form onSubmit={registerSensorSubmit} className="ag-stack">
+                <h3 style={{ margin: 0 }}>{t("rt.sensors.register")}</h3>
+                <div className="field" style={{ margin: 0 }}>
+                  <label htmlFor="rt-sensor-name">{t("rt.sensors.name")}</label>
+                  <input id="rt-sensor-name" maxLength={255} required value={sensorName}
+                    onChange={(e) => setSensorName(e.target.value)} />
+                  <p className="hint-text">{t("rt.sensors.name_hint")}</p>
+                </div>
+                <div className="ag-actions">
+                  <button className="btn btn-primary" type="submit" disabled={busy}>{t("rt.sensors.register")}</button>
+                  <button className="btn" type="button" onClick={() => { setShowRegister(false); setSensorName(""); setError(null); }}>{t("rt.cancel")}</button>
+                </div>
+              </form>
+            </div>
+          )}
+
+          <div className="ag-table-wrap">
+            <table className="table-cards">
+              <thead>
+                <tr>
+                  <th>{t("rt.sensors.name")}</th>
+                  <th>{t("rt.sensors.host")}</th>
+                  <th>{t("rt.sensors.version")}</th>
+                  <th>{t("rt.sensors.enforcing")}</th>
+                  <th>{t("rt.sensors.hooks")}</th>
+                  <th>{t("rt.sensors.last_seen")}</th>
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                {sensors.length === 0 && (
+                  <tr className="empty-row"><td colSpan={7} className="hint-text" style={{ padding: 20 }}>{t("rt.sensors.none")}</td></tr>
+                )}
+                {sensors.map((s) => {
+                  const revoked = s.revoked_at !== null;
+                  const inactive = revoked || !s.enabled;
+                  return (
+                    <tr key={s.id} style={inactive ? { opacity: 0.6 } : undefined}>
+                      <td data-label={t("rt.sensors.name")}>
+                        <strong>{s.name}</strong>
+                        {revoked && <div><span className="pill pill-critical">{t("rt.sensors.revoked")}</span></div>}
+                        {!revoked && !s.enabled && <div><span className="pill pill-neutral">{t("rt.disabled")}</span></div>}
+                        <div className="hint-text mono" style={{ fontSize: 11 }}>{s.key_prefix}…</div>
+                      </td>
+                      <td data-label={t("rt.sensors.host")} className="mono ag-small">{s.hostname ?? "—"}</td>
+                      <td data-label={t("rt.sensors.version")} className="ag-small">
+                        {s.version ?? "—"}
+                        {s.kernel && <div className="hint-text" style={{ fontSize: 11 }}>{s.kernel}</div>}
+                      </td>
+                      <td data-label={t("rt.sensors.enforcing")}>
+                        {s.enforcing === null ? <span className="hint-text">—</span> : (
+                          <span className={`pill ${s.enforcing ? "pill-low" : "pill-neutral"}`}>
+                            {s.enforcing ? t("rt.sensors.yes") : t("rt.sensors.no")}
+                          </span>
+                        )}
+                      </td>
+                      <td data-label={t("rt.sensors.hooks")} className="ag-small">
+                        {s.hooks && s.hooks.length > 0 ? s.hooks.length : "—"}
+                        {s.warnings && s.warnings.length > 0 && (
+                          <div className="hint-text" style={{ fontSize: 11 }} title={s.warnings.join("\n")}>⚠ {s.warnings.length}</div>
+                        )}
+                        {s.errors && s.errors.length > 0 && (
+                          <div className="hint-text" style={{ fontSize: 11, color: "var(--danger, #c0392b)" }} title={s.errors.join("\n")}>✕ {s.errors.length}</div>
+                        )}
+                      </td>
+                      <td data-label={t("rt.sensors.last_seen")} className="ag-period">
+                        {s.last_seen_at ? fmt(s.last_seen_at) : <span className="hint-text">{t("rt.sensors.never")}</span>}
+                      </td>
+                      <td>
+                        <div className="ag-row-actions">
+                          <button className="btn btn-sm" disabled={busy} onClick={() => openSensorViolations(s)}>{t("rt.sensors.violations")}</button>
+                          {!revoked && (
+                            <button className="btn btn-sm" disabled={busy} onClick={() => toggleSensor(s)}>
+                              {s.enabled ? t("rt.disable") : t("rt.enable")}
+                            </button>
+                          )}
+                          {!revoked && (
+                            <button className="btn btn-sm btn-danger" disabled={busy} onClick={() => revoke(s)}>{t("rt.sensors.revoke")}</button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          {expandedSensor && (
+            <div className="panel-body" style={{ borderTop: "1px solid var(--border, #e5e5e5)" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                <h3 style={{ margin: 0 }}>{t("rt.sensors.violations_for", { name: expandedSensor.name })}</h3>
+                <button className="btn btn-sm" onClick={() => { setExpandedSensor(null); setExpandedViolations(null); }}>{t("rt.cancel")}</button>
+              </div>
+              {expandedViolations === null ? (
+                <p className="hint-text">{t("rt.sensors.loading")}</p>
+              ) : expandedViolations.length === 0 ? (
+                <p className="hint-text">{t("rt.sensors.no_violations")}</p>
+              ) : (
+                <table className="table-cards">
+                  <thead>
+                    <tr>
+                      <th>{t("rt.last_seen")}</th>
+                      <th>{t("rt.action")}</th>
+                      <th>{t("rt.destination")}</th>
+                      <th>{t("rt.process")}</th>
+                      <th>{t("rt.count")}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {expandedViolations.map((v) => (
+                      <tr key={v.id}>
+                        <td data-label={t("rt.last_seen")} className="ag-period">{fmt(v.created_at)}</td>
+                        <td data-label={t("rt.action")}>
+                          <span className={`pill ${ACTION_PILL[v.action]}`}>{t(`rt.actions.${v.action}`)}</span>
+                        </td>
+                        <td data-label={t("rt.destination")} className="mono ag-small">
+                          {v.dst_name && <div>{v.dst_name} <span className="hint-text">({v.kind})</span></div>}
+                          {v.dst_ip && v.dst_port ? (
+                            <div>{v.protocol ? v.protocol.toUpperCase() + " " : ""}{v.dst_ip}:{v.dst_port}</div>
+                          ) : null}
+                          {!v.dst_name && !v.dst_ip && "—"}
+                        </td>
+                        <td data-label={t("rt.process")} className="ag-small">
+                          <span className="mono">{v.comm ?? "?"}</span>
+                          {v.cgroup && <div className="hint-text mono" style={{ fontSize: 11, wordBreak: "break-all" }}>{v.cgroup}</div>}
+                        </td>
+                        <td data-label={t("rt.count")}>{v.count}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          )}
+        </section>
 
         {/* ---------------- workloads ---------------- */}
         <section className="panel ag-section">
