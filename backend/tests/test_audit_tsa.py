@@ -80,7 +80,8 @@ def test_a_real_tsa_token_verifies_offline():
     tok = rfc3161.verify_token(base64.b64decode(VECTOR["token_b64"]), digest, rfc3161.load_anchors(VECTOR["ca_pem"]),
                                nonce=VECTOR["nonce"])
     assert tok.gen_time.isoformat() == VECTOR["gen_time"] and tok.serial == VECTOR["serial"]
-    assert "freetsa.org" in tok.tsa_subject
+    common_names = [part for part in tok.tsa_subject.split(",") if part.startswith("CN=")]
+    assert common_names == ["CN=www.freetsa.org"]                    # the signer, by its exact common name
     with pytest.raises(rfc3161.TimestampError):
         rfc3161.verify_token(base64.b64decode(VECTOR["token_b64"]), hashlib.sha256(b"other").digest(),
                              rfc3161.load_anchors(VECTOR["ca_pem"]))
