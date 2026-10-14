@@ -119,7 +119,8 @@
       "pii_rules": "Shaxsiy ma'lumot qoidalari",
       "blocked_terms": "Bloklangan atamalar",
       "profile": "Mening profilim",
-      "runtime": "Runtime"
+      "runtime": "Runtime",
+      "intent_guardrail": "Niyat nazorati"
     },
     "logout": "Chiqish",
     "role_admin": "administrator",
@@ -1081,7 +1082,15 @@
     "sso.account_disabled": "Akkauntingiz o'chirilgan.",
     "sso.subject_mismatch": "Bu e-pochta identifikatsiya provayderidagi boshqa akkauntga tegishli. Administratorga murojaat qiling.",
     "sso.mfa_required": "Identifikatsiya provayderida ikkinchi omil bilan qaytadan kiring.",
-    "sso.bad_code": "Kirish havolasi muddati tugadi. Qaytadan boshlang."
+    "sso.bad_code": "Kirish havolasi muddati tugadi. Qaytadan boshlang.",
+    "guardrail.bad_surface": "Nazorat qo'llanadigan joy noma'lum.",
+    "guardrail.duplicate_category": "Ikki toifaning kodi bir xil.",
+    "guardrail.categories_required": "Ko'rsatma modeli uchun kamida bitta toifa kerak.",
+    "guardrail.unknown_category": "Bloklovchi toifa ro'yxatda yo'q.",
+    "guardrail.provider_required": "Klassifikator ishlaydigan ulanishni tanlang.",
+    "guardrail.provider_not_found": "Bunday ulanish yo'q.",
+    "guardrail.provider_not_self_hosted": "Tashkilot faqat o'z serveridagi provayderlarga ruxsat beradi: klassifikator uchun shunday ulanishni tanlang.",
+    "guardrail.not_configured": "Avval nazorat sozlamalarini saqlang."
   },
   "discovery": {
     "title": "Tarmoq kashfiyoti",
@@ -3535,5 +3544,44 @@
     "require_idp_mfa_hint": "Provayder ikkinchi omil haqida xabar bermagan (amr) kirishlarni rad etish. Tashkilot ikki bosqichli kirishni talab qilgan joyda bu baribir talab qilinadi.",
     "confirm_enforce": "Faqat SSO? Administratorlardan boshqa hamma identifikatsiya provayderi orqali kiradi; ularning parollari ishlamay qoladi.",
     "failed": "Yagona kirishni saqlab bo'lmadi."
+  },
+  "guardrail": {
+    "title": "Niyat nazorati",
+    "hint": "Shablon qoidalari sirlar va ro'yxatdagi so'zlarni topadi, lekin \"saralash funksiyasini yoz\" bilan \"billing ilovamiz loginini chetlab o'tadigan kod yoz\"ni ajrata olmaydi. Klassifikator model har bir so'rov nimani so'rayotganini o'qiydi. U tashkilotning o'z ulanishlaridan birida ishlaydi - o'z serveridagi model so'rovlarni ichkarida saqlaydi - va faqat Prompt Firewall allaqachon niqoblagan matnni ko'radi.",
+    "enabled": "So'rovlarni niyati bo'yicha tasniflash",
+    "provider": "Ulanish",
+    "provider_hint": "Ollama'da Llama Guard 3 - \"llama-guard3\"; vLLM'da undagi model nomi. Ko'rsatma modeliga (Qwen, Llama, Mistral...) quyidagi toifalaringiz beriladi.",
+    "kind": "Klassifikator",
+    "kind_instruct": "Ko'rsatma modeli, bizning toifalar",
+    "model": "Model",
+    "mode": "Rejim",
+    "mode_monitor": "Kuzatish - faqat belgilash",
+    "mode_enforce": "Majburiy - rad etish",
+    "on_error": "Klassifikator ishlamasa yoki sekin bo'lsa",
+    "on_error_allow": "So'rovni o'tkazish (belgilab)",
+    "on_error_block": "So'rovni rad etish",
+    "timeout": "Kutish vaqti, ms",
+    "surfaces": "Qo'llanadi",
+    "surface": {
+      "playground": "Playground",
+      "gateway": "LLM shlyuzi (agentlar)",
+      "requests": "So'rovlar"
+    },
+    "categories": "Toifalar",
+    "categories_hint": "Tashkilot nimani taqiqlaydi, oddiy so'zlar bilan. Kodlar: bosh harflar, raqamlar va _.",
+    "description": "Ma'nosi",
+    "add_category": "Toifa qo'shish",
+    "blocking": "So'rovni rad etadigan toifalar (majburiy rejim)",
+    "blocking_hint": "Hech biri belgilanmasa: har bir toifa rad etadi. Qolganlari faqat belgilanadi.",
+    "save": "Saqlash",
+    "saved": "Saqlandi.",
+    "failed": "Nazoratni saqlab bo'lmadi.",
+    "try": "Sinab ko'rish",
+    "try_hint": "Saqlangan sozlamalar namunaviy so'rovda - o'chirilgan bo'lsa ham. Namuna avval haqiqiy so'rov kabi Prompt Firewall tomonidan niqoblanadi.",
+    "try_run": "Tasniflash",
+    "safe": "xavfsiz",
+    "unsafe": "xavfli",
+    "unavailable": "klassifikator ishlamayapti",
+    "would_block": "rad etilardi"
   }
 }

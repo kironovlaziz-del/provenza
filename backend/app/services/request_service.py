@@ -110,6 +110,14 @@ class RequestService:
         await pii_rules.note_timeouts(self.db, org_id, firewall_result.timed_out)
         await bt.record_hits(self.db, org_id, firewall_result.term_hits)
 
+        # what the prompt asks for (services/guardrail.py) - it reads the masked text
+        if not firewall_result.blocked:
+            from app.services import guardrail
+            verdict = await guardrail.classify(self.db, org_id, firewall_result.masked_text, "requests")
+            if verdict:
+                firewall_result.flags = list(dict.fromkeys([*firewall_result.flags, *verdict.flags]))
+                firewall_result.blocked = verdict.block
+
         # The raw prompt is only ever stored Fernet-encrypted, and never
         # returned by the API. Anything downstream (UI, provider call,
         # audit log metadata) uses masked_input_text instead.

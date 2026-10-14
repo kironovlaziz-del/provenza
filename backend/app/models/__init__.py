@@ -62,6 +62,7 @@ from app.models.pvp_guard import PVPGuardLog
 from app.models.mcp import MCPServer, MCPTool
 from app.models.http_tool import HttpTool
 from app.models.scim import OidcSettings, ScimSettings
+from app.models.guardrail import GuardrailSettings
 from app.models.egress_check import AgentEgressCheck
 from app.models.a2a_gateway import A2APeer, A2ATask
 from app.models.pvp_seal import PVPActionSeal
