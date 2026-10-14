@@ -387,3 +387,52 @@ jobs:
       - name: Validate docker-compose.yml
         run: |
           docker compose config -q && echo "docker-compose.yml is valid"
+
+  sensor:
+    name: Egress sensor (vet, race tests, BPF build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    defaults:
+      run:
+        working-directory: sensor
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: sensor/go.mod
+          cache-dependency-path: sensor/go.sum
+
+      - name: Install clang and llvm
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang llvm libbpf-dev
+
+      - name: Formatted
+        run: test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test (race detector)
+        run: go test -race -count=1 ./...
+
+      - name: Rebuild the kernel program
+        run: make bpf
+
+      - name: The committed object is up to date
+        run: |
+          if ! git diff --quiet -- internal/bpfobj/sensor.bpf.o; then
+            echo "::error::internal/bpfobj/sensor.bpf.o is stale; run 'make bpf' and commit"
+            git diff --stat -- internal/bpfobj/sensor.bpf.o
+            exit 1
+          fi
+
+      - name: Static build
+        run: CGO_ENABLED=0 go build -trimpath -o provenza-sensor ./cmd/provenza-sensor
+
+      - name: Smoke test
+        run: ./provenza-sensor --version

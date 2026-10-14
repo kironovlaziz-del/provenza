@@ -1,0 +1,37 @@
+[Unit]
+Description=Provenza egress sensor
+Documentation=https://github.com/kironovlaziz-del/provenza
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/provenza-sensor --config /etc/provenza-sensor/sensor.json
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=on-failure
+RestartSec=5s
+
+# The sensor needs BPF, net admin, and read/write to its own state.
+AmbientCapabilities=CAP_BPF CAP_SYS_ADMIN CAP_NET_ADMIN
+CapabilityBoundingSet=CAP_BPF CAP_SYS_ADMIN CAP_NET_ADMIN
+LimitMEMLOCK=infinity
+LimitNOFILE=1048576
+
+# Hardening.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/sys/fs/bpf /var/lib/provenza-sensor /run/provenza-sensor
+ReadOnlyPaths=/sys/fs/cgroup /etc/provenza-sensor
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=false
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+LockPersonality=true
+MemoryDenyWriteExecute=false
+SystemCallFilter=@system-service @bpf @network-io
+SystemCallArchitectures=native
+
+[Install]
+WantedBy=multi-user.target

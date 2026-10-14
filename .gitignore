@@ -53,3 +53,4 @@ backend/celerybeat-schedule.db
 # editor backup files
 *.save
 *~
+sensor/provenza-sensor
