@@ -312,3 +312,41 @@ async def test_sensor_cannot_see_other_org(client, admin_token, db_session):
     r = await client.get(f"{BASE}/workloads", headers=auth_headers(other_token))
     assert r.status_code == 200
     assert r.json() == []
+
+
+@pytest.mark.asyncio
+async def test_list_all_violations_filters(client, admin_token):
+    w1 = await _make_workload(client, admin_token, name="wl-a")
+    w2 = await _make_workload(client, admin_token, name="wl-b")
+    created = await _register_sensor(client, admin_token, name="host-all-v")
+    key = created["api_key"]
+
+    r = await client.post(
+        f"{BASE}/violations",
+        json={"events": [
+            {"workload_id": w1["id"], "action": "blocked", "kind": "connect",
+             "protocol": "tcp", "dst_ip": "1.1.1.1", "dst_port": 443, "count": 1},
+            {"workload_id": w1["id"], "action": "alerted", "kind": "dns",
+             "protocol": "udp", "dst_name": "evil.example", "count": 1},
+            {"workload_id": w2["id"], "action": "blocked", "kind": "connect",
+             "protocol": "tcp", "dst_ip": "2.2.2.2", "dst_port": 80, "count": 1},
+        ]},
+        headers={"X-Sensor-Key": key},
+    )
+    assert r.status_code == 204, r.text
+
+    r = await client.get(f"{BASE}/violations", headers=auth_headers(admin_token))
+    assert r.status_code == 200, r.text
+    assert len(r.json()) == 3
+
+    r = await client.get(f"{BASE}/violations?workload_id={w1['id']}", headers=auth_headers(admin_token))
+    assert r.status_code == 200
+    assert len(r.json()) == 2
+
+    r = await client.get(f"{BASE}/violations?action=blocked", headers=auth_headers(admin_token))
+    assert r.status_code == 200
+    assert len(r.json()) == 2
+
+    r = await client.get(f"{BASE}/violations?sensor_id={created['id']}", headers=auth_headers(admin_token))
+    assert r.status_code == 200
+    assert len(r.json()) == 3

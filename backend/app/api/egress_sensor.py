@@ -358,6 +358,29 @@ async def preview_policy(
     return pol.model_dump(by_alias=True, exclude_none=True)
 
 
+@admin_router.get("/violations", response_model=list[ViolationOut])
+async def list_all_violations(
+    workload_id: Optional[int] = Query(None),
+    action: Optional[str] = Query(None),
+    sensor_id: Optional[int] = Query(None),
+    limit: int = Query(200, ge=1, le=1000),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role(UserRole.admin)),
+):
+    """All violations of this organization, newest first. Filters match the
+    old /runtime/violations endpoint so the UI can move over without changing
+    its shape."""
+    q = select(EgressViolation).where(EgressViolation.org_id == current_user.org_id)
+    if workload_id is not None:
+        q = q.where(EgressViolation.workload_id == workload_id)
+    if sensor_id is not None:
+        q = q.where(EgressViolation.sensor_id == sensor_id)
+    if action:
+        q = q.where(EgressViolation.action == action)
+    q = q.order_by(EgressViolation.created_at.desc()).limit(limit)
+    return list((await db.execute(q)).scalars().all())
+
+
 # ---------------------------------------------------------------- sensor
 
 sensor_router = APIRouter()

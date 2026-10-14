@@ -3325,7 +3325,8 @@
       "copy": "Copy",
       "copied": "Key copied to the clipboard.",
       "copy_manual": "Select the field and copy it manually.",
-      "key_saved": "I have saved the key"
+      "key_saved": "I have saved the key",
+      "show_revoked": "Show revoked"
     },
     "load_failed": "Could not load runtime data.",
     "save_failed": "Could not save the workload.",
@@ -3341,13 +3342,9 @@
     "patterns_hint": "One per line, relative to the cgroup root; shell wildcards per segment. Example: system.slice/billing-agent.service. A pattern of wildcards only is refused - it would govern every process on the host.",
     "allow": "Allowed destinations",
     "allow_hint": "Networks the workload may connect to, with ports (empty = any port). Usually just the egress proxy and Provenza, so the workload cannot go around them. Everything else is outside the policy.",
-    "cidr": "Network",
     "ports": "Ports",
     "ports_ph": "443, 8443 (empty = any)",
-    "add_row": "Add destination",
     "remove_row": "Remove destination",
-    "allow_dns": "Allow DNS",
-    "allow_dns_hint": "Name lookups through the host's resolvers.",
     "mode": "Mode",
     "modes": {
       "observe": "Observe",
@@ -3378,8 +3375,6 @@
     "no_workloads": "No workloads yet.",
     "nothing_allowed": "nothing",
     "any_port": "any port",
-    "dns_yes": "DNS allowed",
-    "dns_no": "no DNS",
     "violations": "Violations",
     "filter_workload": "Workload",
     "filter_action": "Action",
@@ -3400,6 +3395,39 @@
     "destination": "Destination",
     "process": "Process",
     "count": "Count",
-    "no_violations": "No connections outside a workload's policy."
+    "no_violations": "No connections outside a workload's policy.",
+    "show_deleted": "Show deleted",
+    "deleted_pill": "deleted",
+    "isolated_pill": "isolated",
+    "run_as_users": "Run-as users",
+    "run_as_users_hint": "One per line. The sensor resolves them to uids and adds them to the kernel map.",
+    "as_users": "users: {{list}}",
+    "egress_allow": "Allowed destinations (egress)",
+    "egress_allow_hint": "Networks, IPs or host names (*.corp.internal) the workload may connect to.",
+    "ingress_allow": "Allowed sources (ingress)",
+    "ingress_allow_hint": "Networks or IPs the workload may receive from. Empty = not filtered.",
+    "ingress_summary": "+ {{count}} ingress rule(s)",
+    "dest": "Destination",
+    "source": "Source",
+    "protocols": "Protocols",
+    "dns_mode": "DNS",
+    "dns": {
+      "off": "Off",
+      "listed": "Listed",
+      "any": "Any"
+    },
+    "dns_hint": {
+      "off": "Name lookups are refused. Only literal IPs in the allow list work.",
+      "listed": "Only names in the allow list resolve; the answers are added to the kernel map.",
+      "any": "Any name resolves; the answers are added to the kernel map."
+    },
+    "isolated": "Isolate this workload",
+    "isolated_hint": "No new sockets; existing connections keep working. Use as a manual kill switch for the workload.",
+    "isolated_reason": "Reason",
+    "err_dest": "Each row needs a network, IP or host name.",
+    "confirm_isolated": "Isolate this workload? It will not open new sockets; existing ones keep working.",
+    "kind": "Kind",
+    "add_dest": "Add destination",
+    "add_source": "Add source"
   }
 }

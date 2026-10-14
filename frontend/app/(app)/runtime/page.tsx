@@ -1,54 +1,70 @@
 "use client";
 
-// Runtime: workloads - processes on hosts, named by their cgroup v2 paths -
-// whose outbound connections the Provenza runtime daemon governs, and the
-// connections they made or tried outside their policy.
-
+// Runtime: egress workloads on hosts (cgroup v2 paths) whose connections the
+// Provenza egress sensor governs, the sensors themselves, and the
+// connections they made or tried outside policy.
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useTranslation } from "react-i18next";
 import { PageHeader } from "@/components/PageHeader";
 import { confirmDialog } from "@/components/Dialog";
 import { errorMessage as apiError } from "@/lib/errors";
-import {
-  listSensorViolations, listSensors, registerSensor, revokeSensor, updateSensor,
-  type SensorCreatedT, type SensorT, type SensorViolationT,
-} from "@/lib/egress_sensor_api";
 import { listAgents } from "@/lib/agent_api";
 import type { Agent } from "@/lib/agent_types";
 import {
-  RUNTIME_MODES, VIOLATION_ACTIONS, createWorkload, deleteWorkload, listViolations, listWorkloads, updateWorkload,
-  type RuntimeMode, type ViolationAction, type ViolationT, type WorkloadInput, type WorkloadT,
-} from "@/lib/runtime_api";
+  DNS_MODES, PROTOCOLS, RUNTIME_MODES, VIOLATION_ACTIONS,
+  createWorkload, deleteWorkload, listSensors, listViolations, listWorkloads,
+  registerSensor, revokeSensor, updateSensor, updateWorkload,
+  type AllowT, type DNSMode, type Protocol, type RuntimeMode, type SensorCreatedT, type SensorT,
+  type ViolationAction, type ViolationT, type WorkloadInput, type WorkloadT,
+} from "@/lib/egress_sensor_api";
 
-interface AllowRow { cidr: string; ports: string }
+interface AllowRow { dest: string; ports: string; protocols: Protocol[] }
 
 interface Draft {
   id: number | null;
   name: string;
   agentId: string;
   patterns: string;
-  allow: AllowRow[];
-  allowDns: boolean;
+  runAs: string;
+  egress: AllowRow[];
+  ingress: AllowRow[];
+  dns: DNSMode;
   mode: RuntimeMode;
+  isolated: boolean;
+  isolatedReason: string;
   enabled: boolean;
 }
 
+const EMPTY_ALLOW: AllowRow = { dest: "", ports: "", protocols: [] };
+
 const EMPTY: Draft = {
-  id: null, name: "", agentId: "", patterns: "", allow: [{ cidr: "", ports: "" }],
-  allowDns: true, mode: "observe", enabled: true,
+  id: null, name: "", agentId: "", patterns: "", runAs: "",
+  egress: [{ ...EMPTY_ALLOW }], ingress: [],
+  dns: "off", mode: "observe", isolated: false, isolatedReason: "", enabled: true,
 };
 
 const MODE_PILL: Record<RuntimeMode, string> = { observe: "pill-neutral", alert: "pill-medium", enforce: "pill-low" };
 const ACTION_PILL: Record<ViolationAction, string> = { observed: "pill-neutral", alerted: "pill-medium", blocked: "pill-critical" };
 
+function rowFromAllow(a: AllowT, side: "egress" | "ingress"): AllowRow {
+  return {
+    dest: (side === "egress" ? a.dest : a.source) ?? "",
+    ports: a.ports.join(", "),
+    protocols: (a.protocols ?? []) as Protocol[],
+  };
+}
+
 function toDraft(w: WorkloadT): Draft {
   return {
     id: w.id, name: w.name, agentId: w.agent_id ? String(w.agent_id) : "",
     patterns: w.cgroup_patterns.join("\n"),
-    allow: w.egress_allow.length ? w.egress_allow.map((a) => ({ cidr: a.cidr, ports: a.ports.join(", ") }))
-      : [{ cidr: "", ports: "" }],
-    allowDns: w.allow_dns, mode: w.mode, enabled: w.enabled,
+    runAs: w.run_as_users.join("\n"),
+    egress: w.egress_allow.length ? w.egress_allow.map((a) => rowFromAllow(a, "egress")) : [{ ...EMPTY_ALLOW }],
+    ingress: w.ingress_allow.map((a) => rowFromAllow(a, "ingress")),
+    dns: w.dns, mode: w.mode,
+    isolated: w.isolated, isolatedReason: w.isolated_reason ?? "",
+    enabled: w.enabled,
   };
 }
 
@@ -57,23 +73,48 @@ function toInput(d: Draft): WorkloadInput | string {
   const patterns = d.patterns.split("\n").map((s) => s.trim()).filter(Boolean);
   if (!d.name.trim()) return "rt.err_name";
   if (patterns.length === 0) return "rt.err_patterns";
-  const allow = [];
-  for (const row of d.allow) {
-    if (!row.cidr.trim() && !row.ports.trim()) continue;
-    if (!row.cidr.trim()) return "rt.err_cidr";
-    const ports = row.ports.split(/[\s,]+/).filter(Boolean).map(Number);
-    if (ports.some((p) => !Number.isInteger(p) || p < 1 || p > 65535)) return "rt.err_ports";
-    allow.push({ cidr: row.cidr.trim(), ports });
-  }
+
+  const build = (rows: AllowRow[], side: "egress" | "ingress"): AllowT[] | string => {
+    const out: AllowT[] = [];
+    for (const row of rows) {
+      if (!row.dest.trim() && !row.ports.trim()) continue;
+      if (!row.dest.trim()) return "rt.err_dest";
+      const ports = row.ports.split(/[\s,]+/).filter(Boolean).map(Number);
+      if (ports.some((p) => !Number.isInteger(p) || p < 1 || p > 65535)) return "rt.err_ports";
+      const entry: AllowT = { ports, protocols: row.protocols };
+      if (side === "egress") entry.dest = row.dest.trim();
+      else entry.source = row.dest.trim();
+      out.push(entry);
+    }
+    return out;
+  };
+
+  const egress = build(d.egress, "egress");
+  if (typeof egress === "string") return egress;
+  const ingress = build(d.ingress, "ingress");
+  if (typeof ingress === "string") return ingress;
+
+  const runAs = d.runAs.split("\n").map((s) => s.trim()).filter(Boolean);
+
   return {
-    name: d.name.trim(), agent_id: d.agentId ? Number(d.agentId) : null, cgroup_patterns: patterns,
-    egress_allow: allow, allow_dns: d.allowDns, mode: d.mode, enabled: d.enabled,
+    name: d.name.trim(),
+    agent_id: d.agentId ? Number(d.agentId) : null,
+    cgroup_patterns: patterns,
+    run_as_users: runAs,
+    egress_allow: egress,
+    ingress_allow: ingress,
+    dns: d.dns,
+    mode: d.mode,
+    isolated: d.isolated,
+    isolated_reason: d.isolated ? (d.isolatedReason.trim() || null) : null,
+    enabled: d.enabled,
   };
 }
 
 export default function RuntimePage() {
   const { t, i18n } = useTranslation();
   const [workloads, setWorkloads] = useState<WorkloadT[]>([]);
+  const [showDeleted, setShowDeleted] = useState(false);
   const [violations, setViolations] = useState<ViolationT[]>([]);
   const [agents, setAgents] = useState<Agent[]>([]);
   const [draft, setDraft] = useState<Draft | null>(null);
@@ -85,35 +126,39 @@ export default function RuntimePage() {
 
   // Egress sensors: hosts whose daemon enforces the policy above.
   const [sensors, setSensors] = useState<SensorT[]>([]);
+  const [showRevokedSensors, setShowRevokedSensors] = useState(false);
   const [showRegister, setShowRegister] = useState(false);
   const [sensorName, setSensorName] = useState("");
   const [newKey, setNewKey] = useState<SensorCreatedT | null>(null);
-  const [expandedSensor, setExpandedSensor] = useState<SensorT | null>(null);
-  const [expandedViolations, setExpandedViolations] = useState<SensorViolationT[] | null>(null);
 
   const loadWorkloads = useCallback(() => {
-    listWorkloads().then(setWorkloads).catch((err) => setError(apiError(err, t, t("rt.load_failed"))));
-  }, [t]);
+    listWorkloads(showDeleted).then(setWorkloads).catch((err) => setError(apiError(err, t, t("rt.load_failed"))));
+  }, [t, showDeleted]);
   const loadViolations = useCallback(() => {
     listViolations({
       workload_id: filterWl ? Number(filterWl) : undefined,
       action: (filterAction || undefined) as ViolationAction | undefined,
     }).then(setViolations).catch((err) => setError(apiError(err, t, t("rt.load_failed"))));
   }, [t, filterWl, filterAction]);
+  const loadSensors = useCallback(() => {
+    listSensors(showRevokedSensors).then(setSensors).catch((err) => setError(apiError(err, t, t("rt.load_failed"))));
+  }, [t, showRevokedSensors]);
+
   useEffect(loadWorkloads, [loadWorkloads]);
   useEffect(loadViolations, [loadViolations]);
-  useEffect(() => { listAgents(500).then(setAgents).catch(() => setAgents([])); }, []);
-
-  const loadSensors = useCallback(() => {
-    listSensors().then(setSensors).catch((err) => setError(apiError(err, t, t("rt.load_failed"))));
-  }, [t]);
   useEffect(loadSensors, [loadSensors]);
+  useEffect(() => { listAgents(500).then(setAgents).catch(() => setAgents([])); }, []);
 
   const agentName = useMemo(() => new Map(agents.map((a) => [a.id, a.name])), [agents]);
   const wlName = useMemo(() => new Map(workloads.map((w) => [w.id, w.name])), [workloads]);
   const fmt = (iso: string) => new Date(iso).toLocaleString(i18n.language);
-  const dest = (v: ViolationT) =>
-    `${v.protocol.toUpperCase()} ${v.dst_ip.includes(":") ? `[${v.dst_ip}]` : v.dst_ip}:${v.dst_port}`;
+  const dest = (v: ViolationT) => {
+    if (v.dst_name) return `${v.kind.toUpperCase()} ${v.dst_name}`;
+    if (!v.dst_ip) return "—";
+    const ip = v.dst_ip.includes(":") ? `[${v.dst_ip}]` : v.dst_ip;
+    const proto = v.protocol ? v.protocol.toUpperCase() + " " : "";
+    return `${proto}${ip}${v.dst_port ? ":" + v.dst_port : ""}`;
+  };
 
   function edit(d: Draft) {
     setDraft(d);
@@ -121,9 +166,20 @@ export default function RuntimePage() {
     setNotice(null);
   }
 
-  function setAllow(i: number, patch: Partial<AllowRow>) {
+  function setAllow(side: "egress" | "ingress", i: number, patch: Partial<AllowRow>) {
     if (!draft) return;
-    setDraft({ ...draft, allow: draft.allow.map((r, j) => (j === i ? { ...r, ...patch } : r)) });
+    const list = draft[side].map((r, j) => (j === i ? { ...r, ...patch } : r));
+    setDraft({ ...draft, [side]: list });
+  }
+
+  function addAllow(side: "egress" | "ingress") {
+    if (!draft) return;
+    setDraft({ ...draft, [side]: [...draft[side], { ...EMPTY_ALLOW }] });
+  }
+
+  function removeAllow(side: "egress" | "ingress", i: number) {
+    if (!draft) return;
+    setDraft({ ...draft, [side]: draft[side].filter((_, j) => j !== i) });
   }
 
   async function save(e: React.FormEvent) {
@@ -134,8 +190,9 @@ export default function RuntimePage() {
       setError(t(input));
       return;
     }
-    if (input.mode === "enforce" && input.egress_allow.length === 0
+    if (input.mode === "enforce" && input.egress_allow.length === 0 && !input.isolated
         && !await confirmDialog(t("rt.confirm_enforce_empty"), { danger: true })) return;
+    if (input.isolated && !await confirmDialog(t("rt.confirm_isolated"), { danger: true })) return;
     setBusy(true);
     setError(null);
     try {
@@ -143,12 +200,7 @@ export default function RuntimePage() {
         await createWorkload(input);
         setNotice(t("rt.created", { name: input.name }));
       } else {
-        const before = workloads.find((w) => w.id === draft.id);
-        await updateWorkload(draft.id, {
-          ...input,
-          agent_id: input.agent_id ?? undefined,
-          unlink_agent: input.agent_id === null && before?.agent_id != null,
-        });
+        await updateWorkload(draft.id, input);
         setNotice(t("rt.saved", { name: input.name }));
       }
       setDraft(null);
@@ -221,22 +273,10 @@ export default function RuntimePage() {
     try {
       await revokeSensor(s.id);
       setNotice(t("rt.sensors.revoked_ok", { name: s.name }));
-      if (expandedSensor?.id === s.id) { setExpandedSensor(null); setExpandedViolations(null); }
       loadSensors();
     } catch (err) {
       setError(apiError(err, t, t("rt.save_failed")));
     } finally { setBusy(false); }
-  }
-
-  async function openSensorViolations(s: SensorT) {
-    setExpandedSensor(s);
-    setExpandedViolations(null);
-    try {
-      setExpandedViolations(await listSensorViolations(s.id, 50));
-    } catch (err) {
-      setError(apiError(err, t, t("rt.load_failed")));
-      setExpandedViolations([]);
-    }
   }
 
   function copyKey(key: string) {
@@ -250,14 +290,56 @@ export default function RuntimePage() {
     }
   }
 
+  function renderAllowTable(side: "egress" | "ingress") {
+    if (!draft) return null;
+    const label = side === "egress" ? t("rt.egress_allow") : t("rt.ingress_allow");
+    const hint = side === "egress" ? t("rt.egress_allow_hint") : t("rt.ingress_allow_hint");
+    const destLabel = side === "egress" ? t("rt.dest") : t("rt.source");
+    return (
+      <div className="field" style={{ margin: 0 }}>
+        <label>{label}</label>
+        <p className="hint-text" style={{ marginTop: 0 }}>{hint}</p>
+        {draft[side].map((row, i) => (
+          <div key={i} style={{ display: "flex", gap: 8, marginBottom: 6, flexWrap: "wrap" }}>
+            <input className="mono" style={{ flex: "2 1 180px" }} placeholder={side === "egress" ? "10.0.0.5/32 or *.corp.internal" : "10.0.0.0/8"}
+              aria-label={destLabel} value={row.dest} onChange={(e) => setAllow(side, i, { dest: e.target.value })} />
+            <input className="mono" style={{ flex: "1 1 120px" }} placeholder={t("rt.ports_ph")}
+              aria-label={t("rt.ports")} value={row.ports} onChange={(e) => setAllow(side, i, { ports: e.target.value })} />
+            <div style={{ flex: "1 1 180px", display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", fontSize: 13 }}>
+              {PROTOCOLS.map((p) => (
+                <label key={p} style={{ display: "flex", gap: 4, alignItems: "center", fontWeight: 400 }}>
+                  <input
+                    type="checkbox"
+                    style={{ width: "auto" }}
+                    checked={row.protocols.includes(p)}
+                    onChange={(e) => {
+                      const next = e.target.checked
+                        ? [...row.protocols, p]
+                        : row.protocols.filter((x) => x !== p);
+                      setAllow(side, i, { protocols: next });
+                    }}
+                  />
+                  <span>{p.toUpperCase()}</span>
+                </label>
+              ))}
+            </div>
+            <button type="button" className="btn btn-sm" aria-label={t("rt.remove_row")} onClick={() => removeAllow(side, i)}>×</button>
+          </div>
+        ))}
+        {draft[side].length < 100 && (
+          <button type="button" className="btn btn-sm" onClick={() => addAllow(side)}>
+            {side === "egress" ? t("rt.add_dest") : t("rt.add_source")}
+          </button>
+        )}
+      </div>
+    );
+  }
+
   return (
     <>
       <PageHeader title={t("rt.title")} />
       <div className="content agent-page">
         <p className="hint-text u-mb-16">{t("rt.intro")}</p>
-        <p className="hint-text u-mb-16">
-          {t("rt.daemon_key")} <Link href="/ingestion-sources">{t("sidebar.nav.ingestion_sources")}</Link>
-        </p>
         {error && <p className="error-text u-mb-16">{error}</p>}
         {notice && <p className="hint-text u-mb-16">{notice}</p>}
 
@@ -265,11 +347,18 @@ export default function RuntimePage() {
         <section className="panel ag-section">
           <div className="panel-header">
             <h2>{t("rt.sensors.title")}</h2>
-            {!showRegister && !newKey && (
-              <button className="btn btn-sm btn-primary" onClick={() => { setShowRegister(true); setError(null); setNotice(null); }}>
-                {t("rt.sensors.register")}
-              </button>
-            )}
+            <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+              <label style={{ display: "flex", gap: 6, alignItems: "center", fontWeight: 400, fontSize: 13 }}>
+                <input type="checkbox" style={{ width: "auto" }} checked={showRevokedSensors}
+                  onChange={(e) => setShowRevokedSensors(e.target.checked)} />
+                <span>{t("rt.sensors.show_revoked")}</span>
+              </label>
+              {!showRegister && !newKey && (
+                <button className="btn btn-sm btn-primary" onClick={() => { setShowRegister(true); setError(null); setNotice(null); }}>
+                  {t("rt.sensors.register")}
+                </button>
+              )}
+            </div>
           </div>
 
           {newKey && (
@@ -277,14 +366,9 @@ export default function RuntimePage() {
               <h3 style={{ margin: 0 }}>{t("rt.sensors.key_title", { name: newKey.name })}</h3>
               <p className="hint-text">{t("rt.sensors.key_hint")}</p>
               <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 8, flexWrap: "wrap" }}>
-                <input
-                  readOnly
-                  value={newKey.api_key}
-                  onFocus={(e) => e.currentTarget.select()}
-                  className="mono"
-                  style={{ flex: "1 1 260px", padding: "8px 12px" }}
-                  aria-label={t("rt.sensors.key_title", { name: newKey.name })}
-                />
+                <input readOnly value={newKey.api_key} onFocus={(e) => e.currentTarget.select()}
+                  className="mono" style={{ flex: "1 1 260px", padding: "8px 12px" }}
+                  aria-label={t("rt.sensors.key_title", { name: newKey.name })} />
                 <button type="button" className="btn btn-sm" onClick={() => copyKey(newKey.api_key)}>{t("rt.sensors.copy")}</button>
               </div>
               <div className="ag-actions" style={{ marginTop: 12 }}>
@@ -365,7 +449,6 @@ export default function RuntimePage() {
                       </td>
                       <td>
                         <div className="ag-row-actions">
-                          <button className="btn btn-sm" disabled={busy} onClick={() => openSensorViolations(s)}>{t("rt.sensors.violations")}</button>
                           {!revoked && (
                             <button className="btn btn-sm" disabled={busy} onClick={() => toggleSensor(s)}>
                               {s.enabled ? t("rt.disable") : t("rt.enable")}
@@ -382,61 +465,20 @@ export default function RuntimePage() {
               </tbody>
             </table>
           </div>
-
-          {expandedSensor && (
-            <div className="panel-body" style={{ borderTop: "1px solid var(--border, #e5e5e5)" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                <h3 style={{ margin: 0 }}>{t("rt.sensors.violations_for", { name: expandedSensor.name })}</h3>
-                <button className="btn btn-sm" onClick={() => { setExpandedSensor(null); setExpandedViolations(null); }}>{t("rt.cancel")}</button>
-              </div>
-              {expandedViolations === null ? (
-                <p className="hint-text">{t("rt.sensors.loading")}</p>
-              ) : expandedViolations.length === 0 ? (
-                <p className="hint-text">{t("rt.sensors.no_violations")}</p>
-              ) : (
-                <table className="table-cards">
-                  <thead>
-                    <tr>
-                      <th>{t("rt.last_seen")}</th>
-                      <th>{t("rt.action")}</th>
-                      <th>{t("rt.destination")}</th>
-                      <th>{t("rt.process")}</th>
-                      <th>{t("rt.count")}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {expandedViolations.map((v) => (
-                      <tr key={v.id}>
-                        <td data-label={t("rt.last_seen")} className="ag-period">{fmt(v.created_at)}</td>
-                        <td data-label={t("rt.action")}>
-                          <span className={`pill ${ACTION_PILL[v.action]}`}>{t(`rt.actions.${v.action}`)}</span>
-                        </td>
-                        <td data-label={t("rt.destination")} className="mono ag-small">
-                          {v.dst_name && <div>{v.dst_name} <span className="hint-text">({v.kind})</span></div>}
-                          {v.dst_ip && v.dst_port ? (
-                            <div>{v.protocol ? v.protocol.toUpperCase() + " " : ""}{v.dst_ip}:{v.dst_port}</div>
-                          ) : null}
-                          {!v.dst_name && !v.dst_ip && "—"}
-                        </td>
-                        <td data-label={t("rt.process")} className="ag-small">
-                          <span className="mono">{v.comm ?? "?"}</span>
-                          {v.cgroup && <div className="hint-text mono" style={{ fontSize: 11, wordBreak: "break-all" }}>{v.cgroup}</div>}
-                        </td>
-                        <td data-label={t("rt.count")}>{v.count}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </div>
-          )}
         </section>
 
         {/* ---------------- workloads ---------------- */}
         <section className="panel ag-section">
           <div className="panel-header">
             <h2>{t("rt.workloads")}</h2>
-            {!draft && <button className="btn btn-sm btn-primary" onClick={() => edit({ ...EMPTY, allow: [{ cidr: "", ports: "" }] })}>{t("rt.new")}</button>}
+            <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+              <label style={{ display: "flex", gap: 6, alignItems: "center", fontWeight: 400, fontSize: 13 }}>
+                <input type="checkbox" style={{ width: "auto" }} checked={showDeleted}
+                  onChange={(e) => setShowDeleted(e.target.checked)} />
+                <span>{t("rt.show_deleted")}</span>
+              </label>
+              {!draft && <button className="btn btn-sm btn-primary" onClick={() => edit({ ...EMPTY, egress: [{ ...EMPTY_ALLOW }], ingress: [] })}>{t("rt.new")}</button>}
+            </div>
           </div>
 
           {draft && (
@@ -465,29 +507,23 @@ export default function RuntimePage() {
                 </div>
 
                 <div className="field" style={{ margin: 0 }}>
-                  <label>{t("rt.allow")}</label>
-                  <p className="hint-text" style={{ marginTop: 0 }}>{t("rt.allow_hint")}</p>
-                  {draft.allow.map((row, i) => (
-                    <div key={i} style={{ display: "flex", gap: 8, marginBottom: 6, flexWrap: "wrap" }}>
-                      <input className="mono" style={{ flex: "2 1 180px" }} placeholder="10.0.0.5/32" aria-label={t("rt.cidr")}
-                        value={row.cidr} onChange={(e) => setAllow(i, { cidr: e.target.value })} />
-                      <input className="mono" style={{ flex: "1 1 120px" }} placeholder={t("rt.ports_ph")} aria-label={t("rt.ports")}
-                        value={row.ports} onChange={(e) => setAllow(i, { ports: e.target.value })} />
-                      <button type="button" className="btn btn-sm" aria-label={t("rt.remove_row")}
-                        onClick={() => setDraft({ ...draft, allow: draft.allow.filter((_, j) => j !== i) })}>×</button>
-                    </div>
-                  ))}
-                  {draft.allow.length < 100 && (
-                    <button type="button" className="btn btn-sm"
-                      onClick={() => setDraft({ ...draft, allow: [...draft.allow, { cidr: "", ports: "" }] })}>{t("rt.add_row")}</button>
-                  )}
+                  <label htmlFor="rt-runas">{t("rt.run_as_users")}</label>
+                  <textarea id="rt-runas" className="mono" rows={2} value={draft.runAs}
+                    placeholder="svc-billing&#10;ci-runner"
+                    onChange={(e) => setDraft({ ...draft, runAs: e.target.value })} />
+                  <p className="hint-text">{t("rt.run_as_users_hint")}</p>
                 </div>
 
-                <label style={{ display: "flex", gap: 8, alignItems: "flex-start", fontWeight: 400 }}>
-                  <input type="checkbox" style={{ width: "auto", marginTop: 3 }} checked={draft.allowDns}
-                    onChange={(e) => setDraft({ ...draft, allowDns: e.target.checked })} />
-                  <span>{t("rt.allow_dns")}<span className="hint-text" style={{ display: "block", fontSize: 12 }}>{t("rt.allow_dns_hint")}</span></span>
-                </label>
+                {renderAllowTable("egress")}
+                {renderAllowTable("ingress")}
+
+                <div className="field" style={{ margin: 0 }}>
+                  <label htmlFor="rt-dns">{t("rt.dns_mode")}</label>
+                  <select id="rt-dns" value={draft.dns} onChange={(e) => setDraft({ ...draft, dns: e.target.value as DNSMode })}>
+                    {DNS_MODES.map((m) => <option key={m} value={m}>{t(`rt.dns.${m}`)}</option>)}
+                  </select>
+                  <p className="hint-text">{t(`rt.dns_hint.${draft.dns}`)}</p>
+                </div>
 
                 <div className="field" style={{ margin: 0 }}>
                   <label htmlFor="rt-mode">{t("rt.mode")}</label>
@@ -496,6 +532,20 @@ export default function RuntimePage() {
                   </select>
                   <p className="hint-text">{t(`rt.mode_hint.${draft.mode}`)}</p>
                 </div>
+
+                <label style={{ display: "flex", gap: 8, alignItems: "flex-start", fontWeight: 400 }}>
+                  <input type="checkbox" style={{ width: "auto", marginTop: 3 }} checked={draft.isolated}
+                    onChange={(e) => setDraft({ ...draft, isolated: e.target.checked })} />
+                  <span>{t("rt.isolated")}<span className="hint-text" style={{ display: "block", fontSize: 12 }}>{t("rt.isolated_hint")}</span></span>
+                </label>
+
+                {draft.isolated && (
+                  <div className="field" style={{ margin: 0 }}>
+                    <label htmlFor="rt-isolated-reason">{t("rt.isolated_reason")}</label>
+                    <input id="rt-isolated-reason" maxLength={500} value={draft.isolatedReason}
+                      onChange={(e) => setDraft({ ...draft, isolatedReason: e.target.value })} />
+                  </div>
+                )}
 
                 <label style={{ display: "flex", gap: 8, alignItems: "center", fontWeight: 400 }}>
                   <input type="checkbox" style={{ width: "auto" }} checked={draft.enabled}
@@ -519,43 +569,61 @@ export default function RuntimePage() {
                   <th>{t("rt.agent")}</th>
                   <th>{t("rt.patterns")}</th>
                   <th>{t("rt.allow")}</th>
+                  <th>{t("rt.dns_mode")}</th>
                   <th>{t("rt.mode")}</th>
                   <th />
                 </tr>
               </thead>
               <tbody>
                 {workloads.length === 0 && (
-                  <tr className="empty-row"><td colSpan={6} className="hint-text" style={{ padding: 20 }}>{t("rt.no_workloads")}</td></tr>
+                  <tr className="empty-row"><td colSpan={7} className="hint-text" style={{ padding: 20 }}>{t("rt.no_workloads")}</td></tr>
                 )}
-                {workloads.map((w) => (
-                  <tr key={w.id} style={w.enabled ? undefined : { opacity: 0.6 }}>
-                    <td data-label={t("rt.name")}>
-                      <strong>{w.name}</strong>
-                      {!w.enabled && <div><span className="pill pill-neutral">{t("rt.disabled")}</span></div>}
-                    </td>
-                    <td data-label={t("rt.agent")}>
-                      {w.agent_id ? <Link href={`/agents/${w.agent_id}`}>{agentName.get(w.agent_id) ?? `#${w.agent_id}`}</Link> : "—"}
-                    </td>
-                    <td data-label={t("rt.patterns")} className="mono ag-small">
-                      {w.cgroup_patterns.map((p) => <div key={p}>{p}</div>)}
-                    </td>
-                    <td data-label={t("rt.allow")} className="mono ag-small">
-                      {w.egress_allow.length === 0 && <span className="hint-text">{t("rt.nothing_allowed")}</span>}
-                      {w.egress_allow.map((a) => (
-                        <div key={a.cidr + a.ports.join()}>{a.cidr} {a.ports.length ? `: ${a.ports.join(", ")}` : `: ${t("rt.any_port")}`}</div>
-                      ))}
-                      <div className="hint-text">{w.allow_dns ? t("rt.dns_yes") : t("rt.dns_no")}</div>
-                    </td>
-                    <td data-label={t("rt.mode")}><span className={`pill ${MODE_PILL[w.mode]}`}>{t(`rt.modes.${w.mode}`)}</span></td>
-                    <td>
-                      <div className="ag-row-actions">
-                        <button className="btn btn-sm" disabled={busy} onClick={() => edit(toDraft(w))}>{t("rt.edit_btn")}</button>
-                        <button className="btn btn-sm" disabled={busy} onClick={() => toggle(w)}>{w.enabled ? t("rt.disable") : t("rt.enable")}</button>
-                        <button className="btn btn-sm btn-danger" disabled={busy} onClick={() => remove(w)}>{t("rt.delete")}</button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                {workloads.map((w) => {
+                  const deleted = w.deleted_at !== null;
+                  const inactive = deleted || !w.enabled;
+                  return (
+                    <tr key={w.id} style={inactive ? { opacity: 0.6 } : undefined}>
+                      <td data-label={t("rt.name")}>
+                        <strong>{w.name}</strong>
+                        {deleted && <div><span className="pill pill-critical">{t("rt.deleted_pill")}</span></div>}
+                        {!deleted && !w.enabled && <div><span className="pill pill-neutral">{t("rt.disabled")}</span></div>}
+                        {w.isolated && <div><span className="pill pill-medium">{t("rt.isolated_pill")}</span></div>}
+                      </td>
+                      <td data-label={t("rt.agent")}>
+                        {w.agent_id ? <Link href={`/agents/${w.agent_id}`}>{agentName.get(w.agent_id) ?? `#${w.agent_id}`}</Link> : "—"}
+                      </td>
+                      <td data-label={t("rt.patterns")} className="mono ag-small">
+                        {w.cgroup_patterns.map((p) => <div key={p}>{p}</div>)}
+                        {w.run_as_users.length > 0 && (
+                          <div className="hint-text" style={{ fontSize: 11 }}>{t("rt.as_users", { list: w.run_as_users.join(", ") })}</div>
+                        )}
+                      </td>
+                      <td data-label={t("rt.allow")} className="mono ag-small">
+                        {w.egress_allow.length === 0 && <span className="hint-text">{t("rt.nothing_allowed")}</span>}
+                        {w.egress_allow.map((a, i) => (
+                          <div key={i}>
+                            {a.dest} {a.ports.length ? `: ${a.ports.join(", ")}` : `: ${t("rt.any_port")}`}
+                            {a.protocols.length > 0 && <span className="hint-text"> [{a.protocols.join(",")}]</span>}
+                          </div>
+                        ))}
+                        {w.ingress_allow.length > 0 && (
+                          <div className="hint-text" style={{ fontSize: 11 }}>
+                            {t("rt.ingress_summary", { count: w.ingress_allow.length })}
+                          </div>
+                        )}
+                      </td>
+                      <td data-label={t("rt.dns_mode")} className="ag-small">{t(`rt.dns.${w.dns}`)}</td>
+                      <td data-label={t("rt.mode")}><span className={`pill ${MODE_PILL[w.mode]}`}>{t(`rt.modes.${w.mode}`)}</span></td>
+                      <td>
+                        <div className="ag-row-actions">
+                          {!deleted && <button className="btn btn-sm" disabled={busy} onClick={() => edit(toDraft(w))}>{t("rt.edit_btn")}</button>}
+                          {!deleted && <button className="btn btn-sm" disabled={busy} onClick={() => toggle(w)}>{w.enabled ? t("rt.disable") : t("rt.enable")}</button>}
+                          {!deleted && <button className="btn btn-sm btn-danger" disabled={busy} onClick={() => remove(w)}>{t("rt.delete")}</button>}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -583,7 +651,7 @@ export default function RuntimePage() {
                 <tr>
                   <th>{t("rt.last_seen")}</th>
                   <th>{t("rt.workload")}</th>
-                  <th>{t("rt.host")}</th>
+                  <th>{t("rt.kind")}</th>
                   <th>{t("rt.action")}</th>
                   <th>{t("rt.destination")}</th>
                   <th>{t("rt.process")}</th>
@@ -596,15 +664,11 @@ export default function RuntimePage() {
                 )}
                 {violations.map((v) => (
                   <tr key={v.id}>
-                    <td data-label={t("rt.last_seen")} className="ag-period">
-                      {fmt(v.last_seen_at)}
-                      <div className="hint-text" style={{ fontSize: 11 }}>{t("rt.first_seen", { when: fmt(v.first_seen_at) })}</div>
-                    </td>
+                    <td data-label={t("rt.last_seen")} className="ag-period">{fmt(v.created_at)}</td>
                     <td data-label={t("rt.workload")}>
                       {v.workload_id ? (wlName.get(v.workload_id) ?? `#${v.workload_id}`) : <span className="hint-text">{t("rt.deleted_workload")}</span>}
-                      {v.agent_id && <div className="ag-small"><Link href={`/agents/${v.agent_id}`}>{agentName.get(v.agent_id) ?? `#${v.agent_id}`}</Link></div>}
                     </td>
-                    <td data-label={t("rt.host")}>{v.host}</td>
+                    <td data-label={t("rt.kind")} className="ag-small">{v.kind}</td>
                     <td data-label={t("rt.action")}><span className={`pill ${ACTION_PILL[v.action]}`}>{t(`rt.actions.${v.action}`)}</span></td>
                     <td data-label={t("rt.destination")} className="mono ag-small">{dest(v)}</td>
                     <td data-label={t("rt.process")} className="ag-small">

@@ -3325,7 +3325,8 @@
       "copy": "Nusxalash",
       "copied": "Kalit vaqtinchalik xotiraga nusxalandi.",
       "copy_manual": "Maydonni belgilab, qo'lda nusxalang.",
-      "key_saved": "Kalitni saqladim"
+      "key_saved": "Kalitni saqladim",
+      "show_revoked": "Bekor qilinganlarni ko'rsatish"
     },
     "load_failed": "Runtime ma'lumotlarini yuklab bo'lmadi.",
     "save_failed": "Ish yukini saqlab bo'lmadi.",
@@ -3341,13 +3342,9 @@
     "patterns_hint": "Har qatorda bittadan, cgroup ildiziga nisbatan; har bir segmentda shell belgilaridan foydalanish mumkin. Masalan: system.slice/billing-agent.service. Faqat belgilardan iborat shablon rad etiladi - u xostdagi barcha jarayonlarni boshqarardi.",
     "allow": "Ruxsat etilgan manzillar",
     "allow_hint": "Ish yuki ulanishi mumkin bo'lgan tarmoqlar va portlar (bo'sh = istalgan port). Odatda faqat egress proksi va Provenza - shunda ish yuki ularni chetlab o'ta olmaydi. Qolgan hammasi siyosatdan tashqarida.",
-    "cidr": "Tarmoq",
     "ports": "Portlar",
     "ports_ph": "443, 8443 (bo'sh = istalgan)",
-    "add_row": "Manzil qo'shish",
     "remove_row": "Manzilni olib tashlash",
-    "allow_dns": "DNS ga ruxsat berish",
-    "allow_dns_hint": "Xostning resolverlari orqali nomlarni aniqlash.",
     "mode": "Rejim",
     "modes": {
       "observe": "Kuzatish",
@@ -3378,8 +3375,6 @@
     "no_workloads": "Hozircha ish yuklari yo'q.",
     "nothing_allowed": "hech narsa",
     "any_port": "istalgan port",
-    "dns_yes": "DNS ruxsat etilgan",
-    "dns_no": "DNS yo'q",
     "violations": "Buzilishlar",
     "filter_workload": "Ish yuki",
     "filter_action": "Harakat",
@@ -3400,6 +3395,39 @@
     "destination": "Manzil",
     "process": "Jarayon",
     "count": "Soni",
-    "no_violations": "Ish yuki siyosatidan tashqari ulanishlar yo'q."
+    "no_violations": "Ish yuki siyosatidan tashqari ulanishlar yo'q.",
+    "show_deleted": "O'chirilganlarni ko'rsatish",
+    "deleted_pill": "o'chirilgan",
+    "isolated_pill": "izolyatsiya",
+    "run_as_users": "Ishlaydigan foydalanuvchilar",
+    "run_as_users_hint": "Har bir qatorda bitta. Sensor ularni uid'larga aylantirib, yadro xaritasiga qo'shadi.",
+    "as_users": "foydalanuvchilar: {{list}}",
+    "egress_allow": "Ruxsat etilgan manzillar (chiquvchi)",
+    "egress_allow_hint": "Ish yuki ulanishi mumkin bo'lgan tarmoqlar, IP'lar yoki xost nomlari (*.corp.internal).",
+    "ingress_allow": "Ruxsat etilgan manbalar (kiruvchi)",
+    "ingress_allow_hint": "Ish yuki qabul qilishi mumkin bo'lgan tarmoqlar yoki IP'lar. Bo'sh = filtrlanmaydi.",
+    "ingress_summary": "+ {{count}} kiruvchi qoida",
+    "dest": "Manzil",
+    "source": "Manba",
+    "protocols": "Protokollar",
+    "dns_mode": "DNS",
+    "dns": {
+      "off": "O'chirilgan",
+      "listed": "Ro'yxatda",
+      "any": "Hammasi"
+    },
+    "dns_hint": {
+      "off": "Nom so'rovlari rad etiladi. Faqat ruxsat ro'yxatidagi IP'lar ishlaydi.",
+      "listed": "Faqat ruxsat ro'yxatidagi nomlar hal qilinadi; javoblar yadro xaritasiga qo'shiladi.",
+      "any": "Istalgan nom hal qilinadi; javoblar yadro xaritasiga qo'shiladi."
+    },
+    "isolated": "Bu ish yukini izolyatsiya qilish",
+    "isolated_hint": "Yangi soketlar ochilmaydi; mavjud ulanishlar ishlashda davom etadi. Qo'lda to'xtatish tugmasi sifatida ishlatiladi.",
+    "isolated_reason": "Sabab",
+    "err_dest": "Har bir qatorda tarmoq, IP yoki xost nomi bo'lishi kerak.",
+    "confirm_isolated": "Bu ish yukini izolyatsiya qilish? Yangi soketlar ochilmaydi; mavjudlari ishlashda davom etadi.",
+    "kind": "Turi",
+    "add_dest": "Manzil qo'shish",
+    "add_source": "Manba qo'shish"
   }
 }
