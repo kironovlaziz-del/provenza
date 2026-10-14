@@ -42,6 +42,7 @@ from app.api import observability
 from app.api import system
 from app.api import pvp as pvp_api
 from app.api import http_tools as http_tools_api
+from app.api import scim as scim_api
 from app.api import egress_check as egress_check_api
 from app.api import mcp as mcp_api
 from app.api import a2a_gateway as a2a_gateway_api
@@ -125,6 +126,9 @@ app.include_router(pvp_api.router, prefix=f"{settings.API_V1_STR}/pvp", tags=["a
 app.include_router(mcp_api.agent_router, prefix=f"{settings.API_V1_STR}/mcp", tags=["mcp"])
 app.include_router(mcp_api.admin_router, prefix=f"{settings.API_V1_STR}/mcp-servers", tags=["mcp"])
 app.include_router(http_tools_api.router, prefix=f"{settings.API_V1_STR}/http-tools", tags=["http-tools"])
+app.include_router(scim_api.scim_router, prefix=f"{settings.API_V1_STR}/scim/v2", tags=["scim"])
+app.include_router(scim_api.admin_router, prefix=f"{settings.API_V1_STR}/scim", tags=["scim"])
+app.add_exception_handler(scim_api.ScimError, lambda request, exc: scim_api.error_response(exc))
 app.include_router(egress_check_api.agent_router, prefix=f"{settings.API_V1_STR}/agents", tags=["egress"])
 app.include_router(egress_check_api.admin_router, prefix=f"{settings.API_V1_STR}/agent-identity", tags=["egress"])
 app.include_router(egress_check_api.lockdown_router, prefix=f"{settings.API_V1_STR}/egress-lockdown", tags=["egress"])

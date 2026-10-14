@@ -807,7 +807,8 @@
     },
     "admin_only": "Only administrators can access this page.",
     "col_actions": "Actions",
-    "col_mfa": "2FA"
+    "col_mfa": "2FA",
+    "confirm_offboard": "Deactivate {{name}}? Their sessions end, and every agent they own loses its key and is suspended. Reactivating them does not bring the agents back."
   },
   "register": {
     "title": "New organization",
@@ -1057,7 +1058,8 @@
     "tsa.certificate_expired": "The TSA's certificate was not valid at the stamped time.",
     "tsa.response_too_large": "The TSA's answer is too large.",
     "tsa.no_signer_certificate": "The TSA's answer does not carry its certificate.",
-    "tsa.unsupported_algorithm": "The TSA uses an unsupported algorithm."
+    "tsa.unsupported_algorithm": "The TSA uses an unsupported algorithm.",
+    "scim.bad_default_role": "New users from the identity provider can be users or approvers only."
   },
   "discovery": {
     "title": "Network Discovery",
@@ -3467,5 +3469,23 @@
     "kind": "Kind",
     "add_dest": "Add destination",
     "add_source": "Add source"
+  },
+  "scim": {
+    "title": "Provisioning (SCIM)",
+    "hint": "Connect your identity provider (Okta, Microsoft Entra ID, JumpCloud, ...): it creates users here and switches them off. Someone switched off there is offboarded here at once - their sessions end, their agents' keys are revoked and the agents suspended. The identity provider never sets roles: new users get the role below; the last active admin cannot be switched off from it.",
+    "base_url": "SCIM base URL (tenant URL)",
+    "token": "Bearer token",
+    "token_once": "Shown once: paste it into the identity provider now.",
+    "on": "on",
+    "off": "off",
+    "last_used": "last call",
+    "default_role": "Role for new users",
+    "new_token": "New token",
+    "enable": "Turn on and create a token",
+    "revoke": "Turn off",
+    "confirm_new": "Create a new token? The current one stops working at once: update it in the identity provider.",
+    "confirm_revoke": "Turn SCIM off? The identity provider can no longer create or switch off users.",
+    "failed": "Could not change provisioning.",
+    "managed_hint": "Managed by the identity provider (SCIM)"
   }
 }

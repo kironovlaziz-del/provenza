@@ -264,6 +264,13 @@ async def update_user_status(
         )
 
     previous_status = user.status
+    if data.status == "disabled" and previous_status != "disabled":
+        # a person leaves: their sessions end, their agents lose their keys (services/offboarding.py)
+        from app.services.offboarding import offboard
+
+        await offboard(db, user, actor_id=current_user.id, via="admin")
+        await db.refresh(user)
+        return user
     user.status = data.status
     await db.commit()
     await db.refresh(user)

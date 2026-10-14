@@ -63,6 +63,7 @@ class UserOut(UserBase):
     status: str
     created_at: datetime
     totp_enabled: bool = False      # two-factor sign-in is on
+    scim_managed: bool = False      # provisioned by the identity provider (SCIM)
 
     class Config:
         from_attributes = True

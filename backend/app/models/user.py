@@ -62,6 +62,9 @@ class User(Base):
     totp_last_counter = Column(BigInteger)
     mfa_recovery_hashes = Column(JSONB)
     mfa_enabled_at = Column(DateTime(timezone=True))
+    # provisioned by the identity provider (SCIM, app/api/scim.py): its id for this user
+    scim_external_id = Column(String(255))
+    scim_managed = Column(Boolean, nullable=False, default=False, server_default="false")
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     organization = relationship("Organization", backref="users")

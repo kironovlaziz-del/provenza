@@ -807,7 +807,8 @@
     },
     "admin_only": "Bu sahifa faqat administratorlar uchun.",
     "col_actions": "Amallar",
-    "col_mfa": "2FA"
+    "col_mfa": "2FA",
+    "confirm_offboard": "{{name}} o'chirilsinmi? Uning seanslari tugaydi, unga tegishli har bir agent kalitini yo'qotadi va to'xtatiladi. Qayta faollashtirish agentlarni qaytarmaydi."
   },
   "register": {
     "title": "Yangi tashkilot",
@@ -1057,7 +1058,8 @@
     "tsa.certificate_expired": "TSA sertifikati tamg'a vaqtida amal qilmagan.",
     "tsa.response_too_large": "TSA javobi juda katta.",
     "tsa.no_signer_certificate": "TSA javobida uning sertifikati yo'q.",
-    "tsa.unsupported_algorithm": "TSA qo'llab-quvvatlanmaydigan algoritmdan foydalanadi."
+    "tsa.unsupported_algorithm": "TSA qo'llab-quvvatlanmaydigan algoritmdan foydalanadi.",
+    "scim.bad_default_role": "Identifikatsiya provayderidan kelgan yangi foydalanuvchilar faqat foydalanuvchi yoki tasdiqlovchi bo'lishi mumkin."
   },
   "discovery": {
     "title": "Tarmoq kashfiyoti",
@@ -3467,5 +3469,23 @@
     "kind": "Turi",
     "add_dest": "Manzil qo'shish",
     "add_source": "Manba qo'shish"
+  },
+  "scim": {
+    "title": "Provizioning (SCIM)",
+    "hint": "Identifikatsiya provayderingizni ulang (Okta, Microsoft Entra ID, JumpCloud, ...): u bu yerda foydalanuvchilarni yaratadi va o'chiradi. U yerda o'chirilgan xodim bu yerda darhol ishdan bo'shatiladi - seanslari tugaydi, agentlarining kalitlari bekor qilinadi va agentlar to'xtatiladi. Identifikatsiya provayderi hech qachon rollarni belgilamaydi: yangi foydalanuvchilar quyidagi rolni oladi; oxirgi faol administratorni u orqali o'chirib bo'lmaydi.",
+    "base_url": "SCIM asosiy manzili (tenant URL)",
+    "token": "Bearer token",
+    "token_once": "Bir marta ko'rsatiladi: uni hozir identifikatsiya provayderiga joylashtiring.",
+    "on": "yoqilgan",
+    "off": "o'chirilgan",
+    "last_used": "oxirgi chaqiruv",
+    "default_role": "Yangi foydalanuvchilar uchun rol",
+    "new_token": "Yangi token",
+    "enable": "Yoqish va token yaratish",
+    "revoke": "O'chirish",
+    "confirm_new": "Yangi token yaratilsinmi? Joriy token darhol ishlamay qoladi: uni identifikatsiya provayderida yangilang.",
+    "confirm_revoke": "SCIM o'chirilsinmi? Identifikatsiya provayderi endi foydalanuvchilarni yarata yoki o'chira olmaydi.",
+    "failed": "Provizioningni o'zgartirib bo'lmadi.",
+    "managed_hint": "Identifikatsiya provayderi tomonidan boshqariladi (SCIM)"
   }
 }
