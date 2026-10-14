@@ -7,7 +7,7 @@ import { useTranslation } from "react-i18next";
 import { useAuth } from "@/lib/auth";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { translateApiError } from "@/lib/errors";
-import { getAuthConfig } from "@/lib/api";
+import { getAuthConfig, ssoInfo, ssoStartUrl } from "@/lib/api";
 import { Logo } from "@/components/Logo";
 
 const LAST_ORG_KEY = "ai_ct_last_org";
@@ -24,6 +24,19 @@ export default function LoginPage() {
   // second step of a two-factor sign-in
   const [mfaToken, setMfaToken] = useState<string | null>(null);
   const [code, setCode] = useState("");
+  // single sign-on: offered for the organization typed; "password" false = admins only
+  const [sso, setSso] = useState<{ sso: boolean; password: boolean } | null>(null);
+
+  useEffect(() => {
+    const ssoError = new URLSearchParams(window.location.search).get("sso_error");
+    if (ssoError) setError(translateApiError(ssoError, t, t("auth.sso_failed")));
+  }, [t]);
+
+  useEffect(() => {
+    if (!/^[a-z0-9-]{2,}$/.test(orgSlug)) { setSso(null); return; }
+    const timer = window.setTimeout(() => { ssoInfo(orgSlug).then(setSso).catch(() => setSso(null)); }, 300);
+    return () => window.clearTimeout(timer);
+  }, [orgSlug]);
 
   useEffect(() => {
     getAuthConfig()
@@ -111,6 +124,17 @@ export default function LoginPage() {
             />
             <span className="hint-text">{t("auth.org_slug_hint")}</span>
           </div>
+          {sso?.sso && (
+            <div className="u-mb-12">
+              <button type="button" className="btn btn-primary" style={{ width: "100%", justifyContent: "center" }}
+                onClick={() => { window.localStorage.setItem(LAST_ORG_KEY, orgSlug); window.location.href = ssoStartUrl(orgSlug); }}>
+                {t("auth.sso_button")}
+              </button>
+              <p className="hint-text" style={{ textAlign: "center", marginTop: 6 }}>
+                {sso.password ? t("auth.sso_or_password") : t("auth.sso_only")}
+              </p>
+            </div>
+          )}
           <div className="field">
             <label htmlFor="email">{t("auth.email")}</label>
             <input

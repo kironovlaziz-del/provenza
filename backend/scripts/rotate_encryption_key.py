@@ -91,7 +91,8 @@ def targets():
     for table, module, name, col in (("mcp_servers", "app.models.mcp", "MCPServer", "auth_secret_encrypted"),
                                       ("a2a_peers", "app.models.a2a_gateway", "A2APeer", "auth_secret_encrypted"),
                                       ("egress_routes", "app.models.egress_proxy", "EgressRoute", "secret_encrypted"),
-                                      ("http_tools", "app.models.http_tool", "HttpTool", "auth_secret_encrypted")):
+                                      ("http_tools", "app.models.http_tool", "HttpTool", "auth_secret_encrypted"),
+                                      ("oidc_settings", "app.models.scim", "OidcSettings", "client_secret_encrypted")):
         if table in tables:
             out.append((getattr(importlib.import_module(module), name), col, None))
     if "permit_signing_keys" in tables:

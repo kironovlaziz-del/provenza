@@ -201,6 +201,46 @@ old key handed over to the current one.
 The Audit Log page runs the same checks in the browser (record hash,
 inclusion path, both signatures, fingerprint) when you press **Check**.
 
+## Time-stamps (RFC 3161)
+
+A checkpoint signed by the server's own key shows what the log was, but not
+independently *when*. Set a Time-Stamp Authority under **Audit log → Time-stamps**
+(for example FreeTSA, DigiCert, or your own TSA). Every checkpoint is then
+time-stamped there: the TSA signs the SHA-256 of the checkpoint's statement
+together with the time. Only that hash leaves the server, never the log.
+
+- Before the settings are saved, the TSA is asked once and its answer verified
+  against the certificate or CA you gave. A configuration that cannot
+  time-stamp is refused.
+- A background job stamps new checkpoints a couple of minutes after they are
+  signed, oldest first. A TSA that fails is shown with its error and retried.
+- Every token is verified before it is kept: the status is granted, the
+  imprint is our hash, the nonce is ours, and the CMS signature verifies.
+  The signer must be a time-stamping certificate (EKU timeStamping,
+  critical), valid at the stamped time, and chain to your trust anchor.
+  Tokens are append-only, like the checkpoints.
+- Checkpoints carry their tokens (`timestamps`) in `GET /audit-logs/checkpoints`
+  and in both ends of `GET /audit-logs/consistency`.
+
+What this adds: a checkpoint with its token is a third party's signed
+statement that this exact state of the log existed then. Nobody can backdate
+a checkpoint, not even with the audit key.
+
+What it does not add: the TSA keeps no history for you. If someone restores
+the database to an older state, the tokens issued after it disappear with
+the rows. The rewrite is caught by whoever kept a copy. **Download
+checkpoints regularly** (Audit log → Time-stamps → Download) and keep them
+outside the server; later, check that the log still extends them:
+
+```sh
+python tools/provenza_audit.py checkpoint checkpoint-1-420.json --tsa-ca tsa.pem
+python tools/provenza_audit.py consistency consistency.json --pinned checkpoint-1-420.json --tsa-ca tsa.pem
+```
+
+`--tsa-ca` makes the time-stamps a requirement and verifies them with
+`tools/rfc3161.py`, a standalone copy of the server's verifier kept identical
+by a test.
+
 ## Verifying on the server
 
 **Verify whole log** (admin, `POST /audit-logs/verify`) recomputes every

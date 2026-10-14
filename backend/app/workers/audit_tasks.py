@@ -32,3 +32,16 @@ async def _run() -> dict:
 @celery_app.task(name="audit.checkpoint", ignore_result=True, expires=240)
 def checkpoint_task() -> dict:
     return asyncio.run(_run())
+
+
+async def _stamp() -> dict:
+    from app.services import audit_witness
+
+    async with CelerySessionLocal() as db:
+        return await audit_witness.stamp_all(db)
+
+
+@celery_app.task(name="audit.timestamp", ignore_result=True, expires=240)
+def timestamp_task() -> dict:
+    """RFC 3161 time-stamps for new checkpoints (app/services/audit_witness.py)."""
+    return asyncio.run(_stamp())

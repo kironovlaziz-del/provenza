@@ -7,6 +7,8 @@ import { Form } from "@/components/Form";
 import { StatusPill } from "@/components/Pill";
 import { confirmDialog } from "@/components/Dialog";
 import { MfaPolicyPanel } from "@/components/profile/MfaPolicyPanel";
+import { ScimPanel } from "@/components/profile/ScimPanel";
+import { SsoPanel } from "@/components/profile/SsoPanel";
 import { useAuth } from "@/lib/auth";
 import {
   inviteUser,
@@ -77,6 +79,7 @@ export default function UsersPage() {
   }
 
   async function handleStatusToggle(u: User) {
+    if (u.status === "active" && !(await confirmDialog(t("users.confirm_offboard", { name: u.name }), { danger: true }))) return;
     setBusyId(u.id);
     try {
       await updateUserStatus(u.id, u.status === "active" ? "disabled" : "active");
@@ -112,6 +115,8 @@ export default function UsersPage() {
       />
       <div className="content">
         <MfaPolicyPanel />
+        <SsoPanel />
+        <ScimPanel />
         {showForm && (
           <div className="panel" style={{ marginBottom: 20 }}>
             <div className="panel-header">
@@ -257,6 +262,7 @@ export default function UsersPage() {
                       </td>
                       <td>
                         <StatusPill status={u.status} />
+                        {u.scim_managed && <span className="pill pill-neutral" style={{ marginLeft: 4 }} title={t("scim.managed_hint")}>IdP</span>}
                       </td>
                       <td>
                         <span className={`pill ${u.totp_enabled ? "pill-low" : "pill-neutral"}`}>

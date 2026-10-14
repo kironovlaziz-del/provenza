@@ -40,12 +40,14 @@ def _targets() -> List[Tuple[type, str]]:
     from app.models.egress_proxy import EgressRoute
     from app.models.http_tool import HttpTool
     from app.models.mcp import MCPServer
+    from app.models.scim import OidcSettings
     from app.models.user import User
 
     out = [(AIProvider, "api_key_encrypted"), (AIRequest, "input_text_encrypted"),
            (MCPServer, "auth_secret_encrypted"), (A2APeer, "auth_secret_encrypted"),
            (EgressRoute, "secret_encrypted"), (HttpTool, "auth_secret_encrypted"),
-           (User, "totp_secret_encrypted"), (User, "totp_pending_encrypted")]
+           (User, "totp_secret_encrypted"), (User, "totp_pending_encrypted"),
+           (OidcSettings, "client_secret_encrypted")]
     try:
         from app.models.service_connection import ServiceConnection
         out.append((ServiceConnection, "bind_password_encrypted"))

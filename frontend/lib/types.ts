@@ -11,6 +11,8 @@ export interface User {
   status: string;
   created_at: string;
   totp_enabled?: boolean;
+  /** provisioned by the identity provider (SCIM) */
+  scim_managed?: boolean;
 }
 
 export interface Policy {

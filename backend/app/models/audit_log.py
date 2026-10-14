@@ -139,6 +139,43 @@ class AuditCheckpoint(Base):
     key_fingerprint = Column(String(80), nullable=False)
 
 
+class AuditTsaSettings(Base):
+    """An organization's Time-Stamp Authority (RFC 3161, app/services/audit_witness.py):
+    every checkpoint's statement is time-stamped there. trust_pem is what the
+    TSA's answers must chain to (its certificate or its CA)."""
+
+    __tablename__ = "audit_tsa_settings"
+
+    id = Column(Integer, primary_key=True)
+    org_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, unique=True)
+    enabled = Column(Boolean, nullable=False, server_default="false")
+    url = Column(String(500), nullable=False)
+    trust_pem = Column(Text, nullable=False)
+    last_error = Column(String(500))
+    last_error_at = Column(DateTime(timezone=True))
+    updated_by = Column(Integer, ForeignKey("users.id"))
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class AuditCheckpointTimestamp(Base):
+    """An RFC 3161 time-stamp token over a checkpoint's statement (SHA-256 of
+    its canonical text): proof, signed by a third party, that the checkpoint
+    existed at gen_time. Append-only, like the checkpoints."""
+
+    __tablename__ = "audit_checkpoint_timestamps"
+    __table_args__ = (UniqueConstraint("checkpoint_id", "tsa_url", name="uq_audit_checkpoint_tsa"),)
+
+    id = Column(Integer, primary_key=True)
+    org_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
+    checkpoint_id = Column(Integer, ForeignKey("audit_checkpoints.id"), nullable=False, index=True)
+    tsa_url = Column(String(500), nullable=False)
+    token = Column(Text, nullable=False)              # the TimeStampToken, DER, base64
+    gen_time = Column(DateTime(timezone=True), nullable=False)
+    serial = Column(String(64), nullable=False)
+    tsa_subject = Column(String(500), nullable=False)
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+
 # --- append-only enforcement ------------------------------------------------
 # No percent signs in this SQL: DDL() and DBAPI drivers treat them as
 # format markers. Same SQL as migration d5e8a1c3f7b2; attached here too so test databases
@@ -162,7 +199,7 @@ END
 $$ LANGUAGE plpgsql
 """
 
-APPEND_ONLY_TABLES = ("ai_audit_logs", "audit_checkpoints", "audit_key_handovers")
+APPEND_ONLY_TABLES = ("ai_audit_logs", "audit_checkpoints", "audit_key_handovers", "audit_checkpoint_timestamps")
 
 
 def append_only_triggers(table: str):
@@ -174,7 +211,8 @@ def append_only_triggers(table: str):
     )
 
 
-for _table in (AIAuditLog.__table__, AuditCheckpoint.__table__, AuditKeyHandover.__table__):
+for _table in (AIAuditLog.__table__, AuditCheckpoint.__table__, AuditKeyHandover.__table__,
+               AuditCheckpointTimestamp.__table__):
     event.listen(_table, "after_create", DDL(APPEND_ONLY_FUNCTION).execute_if(dialect="postgresql"))
     for _stmt in append_only_triggers(_table.name):
         event.listen(_table, "after_create", DDL(_stmt).execute_if(dialect="postgresql"))

@@ -133,6 +133,21 @@ export async function register(payload: {
 }
 
 /** Second step: a code from the authenticator app, or a recovery code. */
+/** Single sign-on (backend app/api/sso.py). */
+export async function ssoInfo(orgSlug: string) {
+  return (await api.get<{ sso: boolean; password: boolean }>(`/auth/sso/${encodeURIComponent(orgSlug)}/info`)).data;
+}
+
+export function ssoStartUrl(orgSlug: string): string {
+  let base = String(api.defaults.baseURL ?? "/api/v1");
+  while (base.endsWith("/")) base = base.slice(0, -1); // linear, no regex backtracking
+  return `${base}/auth/sso/${encodeURIComponent(orgSlug)}/start`;
+}
+
+export async function ssoExchange(code: string) {
+  return (await api.post<{ access_token: string }>("/auth/sso/exchange", { code })).data;
+}
+
 export async function loginMfa(mfaToken: string, code: string) {
   const { data } = await api.post<{ access_token: string }>("/auth/login/mfa", { mfa_token: mfaToken, code });
   return data;

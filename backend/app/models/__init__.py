@@ -15,7 +15,8 @@ from app.models.ai_action import AIAction
 from app.models.ai_approval import AIApproval
 from app.models.ai_incident import AIIncident
 from app.models.audit_log import (AIAuditLog, AuditCheckpoint, AuditKeyHandover, AuditKeyRotation,
-                                  AuditKeyRotationApproval, AuditSigningKey)
+                                  AuditKeyRotationApproval, AuditSigningKey, AuditCheckpointTimestamp,
+                                  AuditTsaSettings)
 from app.models.ai_override import AIOverride
 from app.models.shadow_ai_sighting import ShadowAISighting
 from app.models.dataset import Dataset
@@ -60,6 +61,7 @@ from app.models.blocked_term import BlockedTerm, BlockedTermCategory
 from app.models.pvp_guard import PVPGuardLog
 from app.models.mcp import MCPServer, MCPTool
 from app.models.http_tool import HttpTool
+from app.models.scim import OidcSettings, ScimSettings
 from app.models.egress_check import AgentEgressCheck
 from app.models.a2a_gateway import A2APeer, A2ATask
 from app.models.pvp_seal import PVPActionSeal

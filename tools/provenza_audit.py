@@ -12,14 +12,18 @@ not share code with one, so what it says does not depend on trusting either.
         a record's proof (Audit Log -> Proof, or GET /audit-logs/{id}/proof):
         the record hashes to record_hash, the inclusion path leads from it
         to the checkpoint's Merkle root, and the checkpoint is signed
-  checkpoint CHECKPOINT.json [--fingerprint SHA256:...]...
+  checkpoint CHECKPOINT.json [--fingerprint SHA256:...]... [--tsa-ca TSA.pem]
         one signed checkpoint (GET /audit-logs/checkpoints, or the
         "checkpoint" part of a proof)
-  consistency CONSISTENCY.json [--pinned CHECKPOINT.json] [--fingerprint SHA256:...]...
+  consistency CONSISTENCY.json [--pinned CHECKPOINT.json] [--fingerprint SHA256:...]... [--tsa-ca TSA.pem]
         GET /audit-logs/consistency?from_size=N: the newer checkpoint
         extends the older one - nothing in the first N records was changed
         or removed. With --pinned, the older checkpoint must also be the one
         you saved earlier
+
+  --tsa-ca: the checkpoints' RFC 3161 time-stamps ("timestamps") must
+        verify against this TSA certificate or CA (rfc3161.py, next to this
+        file): a third party saw exactly that state of the log at that time
 
   receipt RECEIPT.json [--fingerprint SHA256:...]... [--agent-fingerprint SHA256:...]
         a PVP receipt (GET /pvp/receipts/{action_id}): the action is signed
@@ -656,14 +660,59 @@ def cmd_verify(args) -> int:
     return 0
 
 
+def _tsa():
+    """rfc3161.py beside this file: standalone, like this tool."""
+    import importlib.util
+    import os
+
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "rfc3161.py")
+    spec = importlib.util.spec_from_file_location("provenza_rfc3161", path)
+    if spec is None or not os.path.exists(path):
+        raise Fail("--tsa-ca needs rfc3161.py next to this tool")
+    if spec.name in sys.modules:
+        return sys.modules[spec.name]
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = mod   # its dataclasses look themselves up there
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def check_timestamps(cp, tsa_ca_path):
+    """Every time-stamp the checkpoint carries is for its statement and
+    chains to the given TSA. At least one is required."""
+    tsa = _tsa()
+    with open(tsa_ca_path, encoding="utf-8") as f:
+        anchors = tsa.load_anchors(f.read())
+    stamps = cp.get("timestamps") or []
+    if not stamps:
+        raise Fail(f"checkpoint {cp['tree_size']} carries no time-stamp")
+    digest = hashlib.sha256(cp["statement"].encode("utf-8")).digest()
+    out = []
+    for st in stamps:
+        try:
+            tok = tsa.verify_token(base64.b64decode(st["token"]), digest, anchors)
+        except tsa.TimestampError as e:
+            raise Fail(f"time-stamp of checkpoint {cp['tree_size']} from {st.get('tsa_url')}: {e.code} {e.detail}")
+        out.append(tok)
+    return out
+
+
+def _print_stamps(cp, toks):
+    for tok in toks:
+        print(f"          time-stamped {tok.gen_time.isoformat()} by {tok.tsa_subject} (serial {tok.serial}): "
+              f"the log had these {cp['tree_size']} records then")
+
+
 def cmd_checkpoint(args) -> int:
     cp = _load(args.file)
     trust = Trust(args.fingerprint)
     if trust:
         _require_trust(signer_of(cp), {}, trust, "the checkpoint")
     fp = check_checkpoint(cp)
+    toks = check_timestamps(cp, args.tsa_ca) if args.tsa_ca else []
     print(f"VERIFIED  checkpoint of organization {cp['org_id']}: {cp['tree_size']} records, root {cp['root_hash']}")
     print(f"          signed by {fp} ({cp['algorithm']})")
+    _print_stamps(cp, toks)
     _note(trust)
     return 0
 
@@ -673,9 +722,13 @@ def cmd_consistency(args) -> int:
     doc = _load(args.file)
     trust = Trust(args.fingerprint)
     old, new, fp_old, fp = check_consistency(doc, pinned, trust)
+    # the auditor's own copy, when it has its tokens: the server's need not be trusted for them
+    stamped = pinned if pinned is not None and pinned.get("timestamps") else old
+    toks_old = check_timestamps(stamped, args.tsa_ca) if args.tsa_ca else []
     print(f"VERIFIED  the log of organization {new['org_id']} at {new['tree_size']} records extends "
           f"the one at {old['tree_size']}: nothing in the first {old['tree_size']} was changed or removed")
     print(f"          signed by {fp}" + (f" (key changed from {fp_old})" if fp != fp_old else ""))
+    _print_stamps(old, toks_old)
     _print_chain(fp, doc, trust, new["org_id"])
     _note(trust)
     return 0
@@ -690,10 +743,12 @@ def main(argv=None) -> int:
     c = sub.add_parser("checkpoint")
     c.add_argument("file")
     c.add_argument("--fingerprint", action="append", default=[])
+    c.add_argument("--tsa-ca")
     s = sub.add_parser("consistency")
     s.add_argument("file")
     s.add_argument("--pinned")
     s.add_argument("--fingerprint", action="append", default=[])
+    s.add_argument("--tsa-ca")
     r = sub.add_parser("receipt")
     r.add_argument("file")
     r.add_argument("--fingerprint", action="append", default=[])
