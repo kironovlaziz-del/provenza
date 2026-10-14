@@ -65,6 +65,12 @@ celery_app.conf.beat_schedule = {
         "task": "audit.checkpoint",
         "schedule": crontab(minute="2-59/5"),
     },
+    # Time-stamp new checkpoints with each organization's TSA (RFC 3161),
+    # two minutes after they are signed (app/services/audit_witness.py).
+    "audit-timestamps": {
+        "task": "audit.timestamp",
+        "schedule": crontab(minute="4-59/5"),
+    },
     # Commit recorded agent actions to the audit log in batches (one record
     # per organization and run), so the next checkpoint covers them and
     # PVP receipts are provable offline (app/pvp/seal.py).

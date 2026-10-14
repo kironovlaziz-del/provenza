@@ -14,6 +14,11 @@ Audit log: list, plus the tamper-evidence endpoints (docs/audit-proofs.md).
     POST /audit-logs/keys/rotations/{id}/approve          approve, typing the published fingerprint (admin)
     POST /audit-logs/keys/rotations/{id}/cancel           cancel (any admin)
     POST /audit-logs/keys/rotations/{id}/complete         hand over once quorum + notice are met (admin)
+
+    GET  /audit-logs/tsa                    the organization's Time-Stamp Authority (RFC 3161)
+    PUT  /audit-logs/tsa                    set it - tested first (admin)
+    POST /audit-logs/tsa/stamp              time-stamp pending checkpoints now (admin)
+  Checkpoints carry their time-stamp tokens ("timestamps") in /checkpoints and /consistency.
 """
 
 from typing import Any, Dict, List, Optional
@@ -32,7 +37,7 @@ from app.models.audit_log import AuditCheckpoint
 from app.models.user import User, UserRole
 from app.schemas.audit_log import AuditLogOut
 from app.schemas.pagination import Page
-from app.services import audit_keys, audit_proofs
+from app.services import audit_keys, audit_proofs, audit_witness
 from app.services.audit_keys import RotationError
 from app.services.audit_proofs import ProofError
 from app.services.audit_service import AuditService
@@ -99,11 +104,12 @@ async def list_checkpoints(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> List[Dict[str, Any]]:
-    rows = (await db.execute(
+    rows = list((await db.execute(
         select(AuditCheckpoint).where(AuditCheckpoint.org_id == current_user.org_id)
         .order_by(AuditCheckpoint.tree_size.desc()).limit(limit)
-    )).scalars()
-    return [audit_proofs.checkpoint_out(cp) for cp in rows]
+    )).scalars())
+    stamps = await audit_witness.timestamps_for(db, [cp.id for cp in rows])
+    return [{**audit_proofs.checkpoint_out(cp), "timestamps": stamps.get(cp.id, [])} for cp in rows]
 
 
 @router.post("/checkpoints")
@@ -123,9 +129,18 @@ async def consistency(
     current_user: User = Depends(get_current_user),
 ):
     try:
-        return await audit_proofs.consistency(db, current_user.org_id, from_size, to_size)
+        doc = await audit_proofs.consistency(db, current_user.org_id, from_size, to_size)
     except ProofError as e:
         raise _err(e)
+    # the time-stamp tokens of both ends: when the TSA saw each state of the log
+    rows = (await db.execute(select(AuditCheckpoint.id, AuditCheckpoint.tree_size).where(
+        AuditCheckpoint.org_id == current_user.org_id,
+        AuditCheckpoint.tree_size.in_([doc["old"]["tree_size"], doc["new"]["tree_size"]])))).all()
+    stamps = await audit_witness.timestamps_for(db, [r.id for r in rows])
+    by_size = {r.tree_size: stamps.get(r.id, []) for r in rows}
+    doc["old"]["timestamps"] = by_size.get(doc["old"]["tree_size"], [])
+    doc["new"]["timestamps"] = by_size.get(doc["new"]["tree_size"], [])
+    return doc
 
 
 @router.post("/verify")
@@ -202,3 +217,36 @@ async def proof(log_id: int, db: AsyncSession = Depends(get_db), current_user: U
         return await audit_proofs.inclusion_proof(db, current_user.org_id, log_id)
     except ProofError as e:
         raise _err(e)
+
+
+# ----------------------------------------------------------------------------- time-stamps
+
+class TsaIn(BaseModel):
+    enabled: bool = True
+    url: str = Field(min_length=8, max_length=500)
+    # None keeps the stored one (e.g. switching the TSA off)
+    trust_pem: Optional[str] = Field(default=None, min_length=50, max_length=40_000)
+
+
+@router.get("/tsa")
+async def get_tsa(db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+    return audit_witness.settings_out(await audit_witness.get_settings(db, current_user.org_id))
+
+
+@router.put("/tsa")
+async def set_tsa(data: TsaIn, db: AsyncSession = Depends(get_db), current_user: User = Depends(_admin)):
+    """Checkpoints are time-stamped by this TSA from now on (and the ones
+    before, oldest first). The TSA is asked once first: a configuration it
+    cannot answer is refused."""
+    org_id, user_id = current_user.org_id, current_user.id
+    row = await audit_witness.save_settings(db, org_id, user_id, enabled=data.enabled, url=data.url,
+                                            trust_pem=data.trust_pem)
+    out = audit_witness.settings_out(row)
+    await AuditService(db).log(org_id, user_id, "audit_tsa", org_id, "configured",
+                               {"enabled": data.enabled, "url": out["url"], "trust": out["trust_subjects"]})
+    return out
+
+
+@router.post("/tsa/stamp")
+async def stamp_now(db: AsyncSession = Depends(get_db), current_user: User = Depends(_admin)):
+    return await audit_witness.stamp_pending(db, current_user.org_id)

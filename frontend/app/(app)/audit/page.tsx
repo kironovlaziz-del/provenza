@@ -18,6 +18,7 @@ import {
 } from "@/lib/audit_api";
 import { AuditConsole } from "./AuditConsole";
 import { KeyPanel } from "./KeyPanel";
+import { TsaPanel } from "./TsaPanel";
 import { PvpEvidence } from "./PvpEvidence";
 
 const short = (s: string | null | undefined, n = 12) => (s ? (s.length > n ? s.slice(0, n) + "…" : s) : "—");
@@ -143,6 +144,7 @@ function IntegrityPanel({ isAdmin }: { isAdmin: boolean }) {
           </div>
         )}
         <KeyPanel isAdmin={isAdmin} onChange={load} rev={rev} />
+        <TsaPanel isAdmin={isAdmin} rev={rev} />
         <div className="hint-text">{t("audit.offline_hint")}</div>
       </div>
     </div>

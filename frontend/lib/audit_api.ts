@@ -17,6 +17,42 @@ export interface CheckpointT {
   public_key: string;
   pq_public_key: string | null;
   key_fingerprint: string;
+  /** RFC 3161 time-stamps of the statement (app/services/audit_witness.py) */
+  timestamps?: TimestampT[];
+}
+
+export interface TimestampT {
+  format: "rfc3161";
+  tsa_url: string;
+  gen_time: string;
+  serial: string;
+  tsa_subject: string;
+  token: string;
+  imprint: string;
+}
+
+export interface TsaSettingsT {
+  enabled: boolean;
+  url: string | null;
+  trust_subjects: string[];
+  last_error: string | null;
+  last_error_at: string | null;
+}
+
+export async function getTsa() {
+  return (await api.get<TsaSettingsT>("/audit-logs/tsa")).data;
+}
+
+export async function setTsa(input: { enabled: boolean; url: string; trust_pem?: string }) {
+  return (await api.put<TsaSettingsT>("/audit-logs/tsa", input)).data;
+}
+
+export async function stampNow() {
+  return (await api.post<{ stamped: number; failed: number }>("/audit-logs/tsa/stamp")).data;
+}
+
+export async function listCheckpoints(limit = 5) {
+  return (await api.get<CheckpointT[]>("/audit-logs/checkpoints", { params: { limit } })).data;
 }
 
 export interface IntegrityT {
