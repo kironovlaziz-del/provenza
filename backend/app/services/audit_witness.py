@@ -106,17 +106,22 @@ async def save_settings(db: AsyncSession, org_id: int, user_id: int, *, enabled:
         if row is None:
             raise api_error(status.HTTP_422_UNPROCESSABLE_ENTITY, "tsa.no_trust_anchor")
         trust_pem = row.trust_pem
-    url, anchors = _checked(url, trust_pem)
-    if enabled:
-        try:
-            await stamp(url, anchors, digest_of("provenza.tsa.test " + datetime.now(timezone.utc).isoformat()))
-        except rfc3161.TimestampError as exc:
-            raise api_error(status.HTTP_422_UNPROCESSABLE_ENTITY, exc.code, detail=(exc.detail or "")[:200])
-    if row is None:
-        row = AuditTsaSettings(org_id=org_id)
-        db.add(row)
-    row.enabled, row.url, row.trust_pem, row.updated_by = enabled, url, trust_pem.strip(), user_id
-    row.last_error = row.last_error_at = None
+    url, _ = _checked(url, trust_pem)
+    try:
+        async with db.begin_nested():   # a TSA that cannot answer undoes only this change
+            if row is None:
+                row = AuditTsaSettings(org_id=org_id)
+                db.add(row)
+            row.enabled, row.url, row.trust_pem, row.updated_by = enabled, url, trust_pem.strip(), user_id
+            row.last_error = row.last_error_at = None
+            await db.flush()
+            if enabled:
+                # asked as stored - the address every later stamp uses, through the SSRF-guarded client
+                stored = await get_settings(db, org_id)
+                await stamp(stored.url, rfc3161.load_anchors(stored.trust_pem),
+                            digest_of("provenza.tsa.test " + datetime.now(timezone.utc).isoformat()))
+    except rfc3161.TimestampError as exc:
+        raise api_error(status.HTTP_422_UNPROCESSABLE_ENTITY, exc.code, detail=(exc.detail or "")[:200])
     await db.commit()
     return row
 
