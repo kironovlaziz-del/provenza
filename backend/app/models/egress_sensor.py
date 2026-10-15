@@ -34,6 +34,10 @@ class EgressSensor(Base):
     dropped_events = Column(Integer, nullable=False, default=0)
     config_version = Column(String(64))
     last_seen_at = Column(DateTime(timezone=True))
+    # Set by the offline checker the first time we warned about this sensor;
+    # cleared (set back) when it starts sending heartbeats again, so the
+    # next silence produces a new warning.
+    offline_notified_at = Column(DateTime(timezone=True))
 
     created_by = Column(Integer, ForeignKey("users.id"))
     created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())

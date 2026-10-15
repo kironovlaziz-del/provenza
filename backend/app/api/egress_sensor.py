@@ -448,7 +448,7 @@ async def post_heartbeat(
 
 @sensor_router.post(
     "/violations",
-    status_code=status.HTTP_204_NO_CONTENT,
+    status_code=status.HTTP_200_OK,
     summary="A batch of violation events (up to 500 per call)",
 )
 async def post_violations(
@@ -456,27 +456,11 @@ async def post_violations(
     db: AsyncSession = Depends(get_db),
     sensor: EgressSensor = Depends(get_current_sensor),
 ):
-    if not data.events:
-        return Response(status_code=status.HTTP_204_NO_CONTENT)
-
-    rows = [
-        EgressViolation(
-            org_id=sensor.org_id,
-            sensor_id=sensor.id,
-            workload_id=e.workload_id,
-            action=e.action,
-            kind=e.kind,
-            protocol=e.protocol,
-            dst_ip=e.dst_ip,
-            dst_port=e.dst_port,
-            dst_name=e.dst_name,
-            comm=e.comm,
-            cgroup=e.cgroup,
-            isolated=e.isolated,
-            count=e.count,
-        )
-        for e in data.events
-    ]
-    db.add_all(rows)
+    """Ingest a batch. Events whose workload_id is not this organization's
+    are dropped (the workload was likely deleted since the sensor's last
+    config fetch); they are counted in the response so the sensor can log
+    them. Incidents and notifications are created for alerted/blocked events
+    on agent-linked workloads only."""
+    dropped = await svc.ingest_violations(db, sensor, data.events)
     await db.commit()
-    return Response(status_code=status.HTTP_204_NO_CONTENT)
+    return {"accepted": len(data.events) - dropped, "dropped": dropped}

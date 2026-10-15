@@ -88,6 +88,13 @@ celery_app.conf.beat_schedule = {
         "task": "pvp.prune_egress_checks",
         "schedule": crontab(hour=4, minute=37),
     },
+    # Warn once per silent egress sensor: it has sent at least one heartbeat
+    # and the last one is older than OFFLINE_AFTER. Runs every 5 minutes,
+    # staggered after the audit checkpoint (minute 2) and timestamp (minute 4).
+    "egress-sensor-offline": {
+        "task": "egress_sensor.warn_offline",
+        "schedule": crontab(minute="3-59/5"),
+    },
 }
 
 from app.workers import (  # noqa: E402,F401
@@ -99,6 +106,7 @@ from app.workers import (  # noqa: E402,F401
     system_tasks,
     audit_tasks,
     pvp_tasks,
+    egress_sensor_tasks,
 )
 
 
