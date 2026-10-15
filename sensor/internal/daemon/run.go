@@ -17,8 +17,10 @@ import (
 	"os/user"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"syscall"
 
+	"github.com/kironovlaziz-del/provenza/sensor/internal/bpfobj"
 	"github.com/kironovlaziz-del/provenza/sensor/internal/cgroups"
 	"github.com/kironovlaziz-del/provenza/sensor/internal/config"
 	"golang.org/x/sys/unix"
@@ -34,8 +36,12 @@ type runResponse struct {
 	Error  string `json:"error,omitempty"`
 }
 
-// RunCommand talks to the running daemon over the unix socket, gets a
-// dedicated cgroup, and execs the command inside it.
+// RunCommand asks the running daemon for a cgroup and runs the command in it.
+//
+// The daemon governs the cgroup in the kernel and moves THIS process into it
+// before it answers; the command is then exec'd in place. exec keeps the
+// cgroup, so there is no moment at which the command or anything it starts
+// runs ungoverned, and the caller needs no write access to cgroup.procs.
 func RunCommand(ctx context.Context, cfgPath string, agentID int64, argv []string) error {
 	cfg, err := config.Load(cfgPath)
 	if err != nil {
@@ -62,27 +68,26 @@ func RunCommand(ctx context.Context, cfgPath string, agentID int64, argv []strin
 		return errors.New("daemon returned no cgroup")
 	}
 
-	// Enter a fresh cgroup namespace so the child's /sys/fs/cgroup shows
-	// its own cgroup at the root, then move ourselves into the run cgroup.
-	cmd := exec.CommandContext(ctx, argv[0], argv[1:]...)
-	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
-	cmd.SysProcAttr = &syscall.SysProcAttr{
-		Cloneflags: syscall.CLONE_NEWCGROUP,
-	}
-	cmd.Dir = "/"
-	if err := cmd.Start(); err != nil {
+	// This process is already in the governed cgroup (the daemon moved it
+	// before answering); exec keeps it there.
+	path, err := exec.LookPath(argv[0])
+	if err != nil {
 		return err
 	}
-	if err := cgroups.Move(cfg.CgroupRoot, resp.Cgroup, cmd.Process.Pid); err != nil {
-		_ = cmd.Process.Kill()
-		_ = cmd.Wait()
-		return fmt.Errorf("move into %s: %w", resp.Cgroup, err)
+	_ = conn.Close()
+	// A fresh cgroup namespace, so the command sees its own cgroup as the
+	// root. Needs CAP_SYS_ADMIN; without it the command simply sees the
+	// full path - containment does not depend on it.
+	_ = unix.Unshare(unix.CLONE_NEWCGROUP)
+	if err := os.Chdir("/"); err != nil {
+		return err
 	}
-	return cmd.Wait()
+	_ = ctx
+	return syscall.Exec(path, argv, os.Environ())
 }
 
-// runServer listens on cfg.RunSocket and answers run requests. Enabled by
-// the daemon at startup when cfg.RunSocket is set.
+// startRunServer listens on cfg.RunSocket and answers run requests. Started
+// by the daemon at startup when cfg.RunSocket is set.
 func (d *Daemon) startRunServer() error {
 	if d.cfg.RunSocket == "" {
 		return nil
@@ -106,8 +111,8 @@ func (d *Daemon) startRunServer() error {
 	return nil
 }
 
-// dialRun connects to the run socket. If a group is configured, the caller
-// must be a member of it (the file mode 0660 enforces that).
+// dialRun connects to the run socket. The socket mode (0660 + group) is the
+// first line of defence; SO_PEERCRED on the server side is the second.
 func dialRun(path, group string) (net.Conn, error) {
 	return net.Dial("unix", path)
 }
@@ -181,7 +186,8 @@ func (s *runServer) handle(conn net.Conn) {
 		_ = json.NewEncoder(conn).Encode(runResponse{Error: "invalid agent id"})
 		return
 	}
-	if _, ok := s.d.workloadForAgent(req.AgentID); !ok {
+	wid, ok := s.d.workloadForAgent(req.AgentID)
+	if !ok {
 		_ = json.NewEncoder(conn).Encode(runResponse{Error: fmt.Sprintf("agent %d is not in the current policy", req.AgentID)})
 		return
 	}
@@ -191,5 +197,66 @@ func (s *runServer) handle(conn net.Conn) {
 		_ = json.NewEncoder(conn).Encode(runResponse{Error: err.Error()})
 		return
 	}
+	fail := func(what string, err error) {
+		_ = cgroups.Remove(s.d.cfg.CgroupRoot, rel)
+		_ = json.NewEncoder(conn).Encode(runResponse{Error: fmt.Sprintf("%s: %v", what, err)})
+	}
+	id, err := cgroups.ID(filepath.Join(s.d.cfg.CgroupRoot, rel))
+	if err != nil {
+		fail("cgroup id", err)
+		return
+	}
+	// Governed in the kernel before anything runs in it - not left to the
+	// asynchronous cgroup_mkdir event.
+	if err := s.d.kernel.SetCgroup(id, bpfobj.CgEntry{Wid: wid, Kind: bpfobj.CgGoverned}); err != nil {
+		fail("govern cgroup", err)
+		return
+	}
+	if err := s.d.kernel.BumpEpoch(); err != nil {
+		slog.Warn("bump epoch", "err", err)
+	}
+	// Move the asking process itself; it execs the command afterwards. Check
+	// first that the pid is still our client of the same user (a client that
+	// exited could have its pid taken by someone else's process).
+	if err := peerIsClient(int(cred.Pid), cred.Uid); err != nil {
+		_ = s.d.kernel.DeleteCgroup(id)
+		fail("peer check", err)
+		return
+	}
+	if err := cgroups.Move(s.d.cfg.CgroupRoot, rel, int(cred.Pid)); err != nil {
+		_ = s.d.kernel.DeleteCgroup(id)
+		fail("move into cgroup", err)
+		return
+	}
+	slog.Info("run", "agent", req.AgentID, "uid", cred.Uid, "pid", cred.Pid, "cgroup", rel)
 	_ = json.NewEncoder(conn).Encode(runResponse{Cgroup: rel})
+}
+
+// peerIsClient checks that pid is still a provenza-sensor process of user uid.
+func peerIsClient(pid int, uid uint32) error {
+	self, err := os.Executable()
+	if err != nil {
+		return err
+	}
+	self, _ = filepath.EvalSymlinks(self)
+	exe, err := os.Readlink(fmt.Sprintf("/proc/%d/exe", pid))
+	if err != nil {
+		return fmt.Errorf("process %d is gone", pid)
+	}
+	if strings.TrimSuffix(exe, " (deleted)") != self {
+		return fmt.Errorf("process %d is not provenza-sensor", pid)
+	}
+	status, err := os.ReadFile(fmt.Sprintf("/proc/%d/status", pid))
+	if err != nil {
+		return err
+	}
+	for _, line := range strings.Split(string(status), "\n") {
+		if f := strings.Fields(line); len(f) >= 2 && f[0] == "Uid:" {
+			if f[1] != strconv.FormatUint(uint64(uid), 10) {
+				return fmt.Errorf("process %d belongs to another user", pid)
+			}
+			return nil
+		}
+	}
+	return fmt.Errorf("process %d: no Uid line", pid)
 }
