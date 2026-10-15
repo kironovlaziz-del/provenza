@@ -14,7 +14,8 @@
 #
 # Unattended:
 #   PROVENZA_ADMIN_PASSWORD=... ./install.sh --yes --domain app.example.com \
-#     --org "Example Inc" --admin-email admin@example.com [--admin-name "Jane Admin"] [--no-cron] [--force]
+#     --org "Example Inc" --admin-email admin@example.com [--admin-name "Jane Admin"] \
+#     [--no-cron] [--force] [--sensor|--no-sensor]
 #   (--force: go on despite host warnings - low memory or disk, ports 80/443 taken)
 #
 # Run it again at any time: an existing configuration (deploy/.env) is kept,
@@ -29,6 +30,7 @@ MIN_DISK_GB=10
 READY_TIMEOUT=${PROVENZA_READY_TIMEOUT:-900}   # seconds; the first build alone can take several minutes
 
 DOMAIN="" ORG="" ADMIN_EMAIL="" ADMIN_NAME="" ASSUME_YES=0 FORCE=0 CRON=1
+SENSOR_MODE=ask   # ask | yes | no
 
 # ---------------------------------------------------------------- output
 
@@ -71,6 +73,8 @@ while [ $# -gt 0 ]; do
     --dir) INSTALL_DIR=${2:?}; shift 2 ;;
     --yes|-y) ASSUME_YES=1; shift ;;
     --no-cron) CRON=0; shift ;;
+    --sensor) SENSOR_MODE=yes; shift ;;
+    --no-sensor) SENSOR_MODE=no; shift ;;
     --force) FORCE=1; shift ;;
     -h|--help) usage ;;
     *) die "unknown option: $1 (see --help)" ;;
@@ -226,12 +230,52 @@ fi
 # ---------------------------------------------------------------- done
 
 url="https://$DOMAIN"
+
+# ---------------------------------------------------------------- 5. sensor
+
+SENSOR_INSTALLED=0
+if [ "$SENSOR_MODE" = yes ] || { [ "$SENSOR_MODE" = ask ] && [ "$ASSUME_YES" = 0 ] && confirm "Install the egress sensor on this host as well?" n; }; then
+  step "Installing the egress sensor on this host"
+  if [ -x "$INSTALL_DIR/sensor/install.sh" ]; then
+    "$INSTALL_DIR/sensor/install.sh" --url "$url" --yes || warn "sensor install returned non-zero - see the output above"
+    SENSOR_INSTALLED=1
+  else
+    warn "sensor/install.sh not found in $INSTALL_DIR - skipping"
+  fi
+fi
+
+# ---------------------------------------------------------------- done
+
 cat <<EOF
 
 ${G}${B}✓ Provenza is running at $url${N}
 
   Organization: $SLUG
   Administrator: $ADMIN_EMAIL
+EOF
+
+if [ "$SENSOR_INSTALLED" = 1 ]; then
+  cat <<EOF
+
+The egress sensor is installed on this host and enabled, waiting for a key.
+  1. Open $url/runtime, click ${B}Register sensor${N}, copy the key (${B}pvz_sensor_...${N}).
+  2. On this host, run:
+       ${B}sudo provenza-sensor enroll --url $url --key pvz_sensor_...${N}
+       ${B}sudo systemctl start provenzasensor${N}
+EOF
+else
+  cat <<EOF
+
+To govern egress on any Linux host (this one or another), install the sensor:
+  ${B}git clone https://github.com/kironovlaziz-del/provenza.git /tmp/provenza${N}
+  ${B}cd /tmp/provenza/sensor && sudo ./install.sh --url $url${N}
+then open $url/runtime, click Register sensor, and run:
+  ${B}sudo provenza-sensor enroll --url $url --key pvz_sensor_...${N}
+  ${B}sudo systemctl start provenzasensor${N}
+EOF
+fi
+
+cat <<EOF
 
 Next steps
   1. Sign in at $url and follow the setup checklist on the dashboard.
