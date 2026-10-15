@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	"github.com/cilium/ebpf"
@@ -162,6 +163,16 @@ func (k *Kernel) Attach(opt Options) error {
 		}
 		k.links = append(k.links, l)
 		k.Hooks = append(k.Hooks, h.name)
+	}
+	// A BPF LSM program loads and attaches even when the kernel was booted
+	// without "bpf" in its active LSMs - and then never runs. Report it as
+	// missing rather than claim a protection that is not there.
+	if k.LSM {
+		if active, err := bpfLSMActive(); err == nil && !active {
+			k.LSM = false
+			k.Notes = append(k.Notes, "BPF LSM: loaded, but not active in this kernel "+
+				"(add bpf to the lsm= boot parameter)")
+		}
 	}
 	if k.LSM {
 		l, err := k.pinnedOr(opt, "socket_family", func() (link.Link, error) {
@@ -326,4 +337,18 @@ func contains(list []string, s string) bool {
 		}
 	}
 	return false
+}
+
+// bpfLSMActive reports whether "bpf" is among the kernel's active LSMs.
+func bpfLSMActive() (bool, error) {
+	b, err := os.ReadFile("/sys/kernel/security/lsm")
+	if err != nil {
+		return false, err
+	}
+	for _, name := range strings.Split(strings.TrimSpace(string(b)), ",") {
+		if name == "bpf" {
+			return true, nil
+		}
+	}
+	return false, nil
 }

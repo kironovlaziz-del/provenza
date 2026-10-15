@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "test": "vitest run"
   },
   "dependencies": {
     "@noble/post-quantum": "0.7.1",
@@ -20,10 +21,15 @@
     "recharts": "^3.10.1"
   },
   "devDependencies": {
+    "@testing-library/dom": "10.4.2",
+    "@testing-library/react": "16.3.3",
+    "@testing-library/user-event": "14.6.7",
     "@types/d3": "^7.4.3",
     "@types/node": "^26",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "typescript": "^5"
+    "jsdom": "27.4.0",
+    "typescript": "^5",
+    "vitest": "4.1.11"
   }
 }

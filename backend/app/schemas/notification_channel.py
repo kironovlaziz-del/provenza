@@ -12,7 +12,10 @@ EVENT_TYPES = [
     "agent_discovered",
     "audit_key_rotation",
     "kill_switch",
-    "runtime_violation",
+    "runtime_violation",       # kept for channels configured before the
+                               # egress sensor replaced the runtime daemon
+    "egress_violation",        # a sensor reported alerted/blocked connections
+    "egress_sensor_offline",   # a sensor has not sent a heartbeat in a while
 ]
 
 

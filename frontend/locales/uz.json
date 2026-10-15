@@ -773,7 +773,9 @@
       "agent_discovered": "Qurilmada AI agent topildi",
       "audit_key_rotation": "Audit kalitini almashtirish taklif qilindi, tasdiqlandi yoki yakunlandi",
       "kill_switch": "Favqulodda to'xtatish: yoqildi yoki bekor qilindi",
-      "runtime_violation": "Runtime: boshqariladigan ish yuki o'z siyosatidan tashqariga ulandi"
+      "runtime_violation": "Runtime: boshqariladigan ish yuki o'z siyosatidan tashqariga ulandi",
+      "egress_violation": "Chiquvchi qoidabuzarlik (sensor)",
+      "egress_sensor_offline": "Chiquvchi sensor oflayn"
     }
   },
   "users": {

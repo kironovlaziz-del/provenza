@@ -255,7 +255,9 @@ async def test_violations_batch_inserted(client, admin_token):
         },
         headers={"X-Sensor-Key": key},
     )
-    assert r.status_code == 204, r.text
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["accepted"] == 2 and body["dropped"] == 0
 
     r = await client.get(f"{BASE}/sensors/{created['id']}/violations", headers=auth_headers(admin_token))
     assert r.status_code == 200, r.text
@@ -333,7 +335,9 @@ async def test_list_all_violations_filters(client, admin_token):
         ]},
         headers={"X-Sensor-Key": key},
     )
-    assert r.status_code == 204, r.text
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["accepted"] == 3 and body["dropped"] == 0
 
     r = await client.get(f"{BASE}/violations", headers=auth_headers(admin_token))
     assert r.status_code == 200, r.text
@@ -350,3 +354,97 @@ async def test_list_all_violations_filters(client, admin_token):
     r = await client.get(f"{BASE}/violations?sensor_id={created['id']}", headers=auth_headers(admin_token))
     assert r.status_code == 200
     assert len(r.json()) == 3
+
+
+
+@pytest.mark.asyncio
+async def test_violations_drop_foreign_workload(client, admin_token, db_session):
+    """A sensor must not be able to write a violation that points at another
+    organization's workload."""
+    from app.models.organization import Organization
+    from app.models.egress_sensor import EgressWorkload
+
+    w_own = await _make_workload(client, admin_token, name="own-wl")
+    created = await _register_sensor(client, admin_token, name="sensor-org-a")
+    key = created["api_key"]
+
+    other = Organization(name="Other", slug="other-org-viol")
+    db_session.add(other)
+    await db_session.flush()
+    foreign_w = EgressWorkload(
+        org_id=other.id, name="foreign-wl", cgroup_patterns=["x.service"],
+        run_as_users=[], egress_allow=[], ingress_allow=[],
+        dns="off", mode="enforce", isolated=False, enabled=True,
+    )
+    db_session.add(foreign_w)
+    await db_session.flush()
+
+    r = await client.post(
+        f"{BASE}/violations",
+        json={"events": [
+            {"workload_id": w_own["id"], "action": "blocked", "kind": "connect",
+             "protocol": "tcp", "dst_ip": "1.1.1.1", "dst_port": 443, "count": 1},
+            {"workload_id": foreign_w.id, "action": "blocked", "kind": "connect",
+             "protocol": "tcp", "dst_ip": "2.2.2.2", "dst_port": 80, "count": 1},
+        ]},
+        headers={"X-Sensor-Key": key},
+    )
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["accepted"] == 1
+    assert body["dropped"] == 1
+
+    r = await client.get(f"{BASE}/sensors/{created['id']}/violations", headers=auth_headers(admin_token))
+    events = r.json()
+    assert len(events) == 1
+    assert events[0]["workload_id"] == w_own["id"]
+
+
+@pytest.mark.asyncio
+async def test_offline_sensor_warns_once(client, admin_token, db_session, monkeypatch):
+    """A silent sensor produces exactly one warning; the warning is not
+    repeated until the sensor comes back and goes silent again."""
+    from datetime import datetime, timedelta, timezone
+    from sqlalchemy import select
+    from app.models.egress_sensor import EgressSensor
+    from app.services import egress_sensor as svc
+
+    calls = []
+
+    async def fake_notify(db, org_id, event_type, subject, message, metadata=None):
+        calls.append((org_id, event_type))
+
+    from app.services import notification_service
+    monkeypatch.setattr(notification_service, "notify", fake_notify)
+
+    created = await _register_sensor(client, admin_token, name="silent")
+    sensor = (await db_session.execute(
+        select(EgressSensor).where(EgressSensor.id == created["id"])
+    )).scalar_one()
+    sensor.last_seen_at = datetime.now(timezone.utc) - timedelta(minutes=10)
+    await db_session.flush()
+    await db_session.refresh(sensor)  # flush alone does not sync the row we later select
+
+    from sqlalchemy import func
+    print('DEBUG row', sensor.id, sensor.enabled, sensor.revoked_at, sensor.last_seen_at, sensor.offline_notified_at)
+    print('DEBUG threshold', svc.now_utc() - svc.OFFLINE_AFTER, svc.now_utc().tzinfo)
+    print('DEBUG db', (await db_session.execute(select(EgressSensor.id, EgressSensor.last_seen_at, EgressSensor.offline_notified_at, func.now()).where(EgressSensor.id == sensor.id))).one())
+    warned = await svc.warn_offline_sensors(db_session)
+    assert warned == 1
+    assert len(calls) == 1
+    assert calls[0][1] == "egress_sensor_offline"
+
+    warned = await svc.warn_offline_sensors(db_session)
+    assert warned == 0
+    assert len(calls) == 1
+
+    # It came back after the warning (a heartbeat later than the warning),
+    # then went silent again: warned 20 min ago, last heartbeat 10 min ago.
+    now = datetime.now(timezone.utc)
+    sensor.offline_notified_at = now - timedelta(minutes=20)
+    sensor.last_seen_at = now - timedelta(minutes=10)
+    await db_session.flush()
+    await db_session.refresh(sensor)
+    warned = await svc.warn_offline_sensors(db_session)
+    assert warned == 1
+    assert len(calls) == 2

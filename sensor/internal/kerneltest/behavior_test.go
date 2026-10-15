@@ -299,6 +299,18 @@ func TestRawSocketLSM(t *testing.T) {
 
 func TestIngressDeny(t *testing.T) {
 	e := setup(t)
+	lo, _ := netip.ParsePrefix("127.0.0.1/32")
+	allowPort := uint16(12345)
+
+	// A socket belongs to the cgroup it was created in, so the process is
+	// governed first and the sockets are made afterwards. The policy must be
+	// in place before that: a governed process with no policy is refused
+	// even a socket.
+	e.applyPolicy(40, bpfobj.ModeEnforce, bpfobj.DNSOff, []kern.Rule{{
+		Dir: bpfobj.DirIngress, Proto: 17, Port: allowPort, Net: lo,
+	}})
+	cg := e.newWorkloadCgroup("ingress")
+	e.govern(cg, 40)
 
 	ln, err := net.ListenPacket("udp", "127.0.0.1:0")
 	if err != nil {
@@ -313,16 +325,15 @@ func TestIngressDeny(t *testing.T) {
 	}
 	defer sender.Close()
 
-	allowPort := uint16(12345)
-	prefix, _ := netip.ParsePrefix("127.0.0.1/32")
-	e.applyPolicy(40, bpfobj.ModeEnforce, bpfobj.DNSOff, []kern.Rule{{
-		Dir: bpfobj.DirIngress, Proto: 17, Port: allowPort, Net: prefix,
-	}})
-	cg := e.newWorkloadCgroup("ingress")
-	e.govern(cg, 40)
+	// The sender may send to the listener (egress); inbound packets are
+	// allowed only to local port 12345 - not to the listener's port.
+	e.applyPolicy(40, bpfobj.ModeEnforce, bpfobj.DNSOff, []kern.Rule{
+		{Dir: bpfobj.DirEgress, Proto: 17, Port: uint16(local.Port), Net: lo},
+		{Dir: bpfobj.DirIngress, Proto: 17, Port: allowPort, Net: lo},
+	})
 
 	if _, err := sender.WriteTo([]byte("hi"), local); err != nil {
-		t.Fatalf("send: %v", err)
+		t.Fatalf("send (egress to the listener is allowed): %v", err)
 	}
 	_ = ln.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
 	buf := make([]byte, 16)

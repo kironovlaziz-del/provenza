@@ -35,7 +35,7 @@ func RunAgent(rel string, owner uint32) (int64, bool) {
 }
 
 // NewRun creates a run cgroup next to the process's own cgroup (so systemd
-// still sees the unit as running), or under <root>/provenza.slice when that
+// still sees the unit as running), or under <root>/provenza-run when that
 // is not possible. Returns its path relative to root.
 func NewRun(root, parentRel string, agentID int64) (string, error) {
 	b := make([]byte, 8)
@@ -47,11 +47,11 @@ func NewRun(root, parentRel string, agentID int64) (string, error) {
 	if p := strings.Trim(parentRel, "/"); p != "" {
 		try = append(try, p)
 	}
-	try = append(try, "provenza.slice")
+	try = append(try, "provenza-run")
 	var lastErr error
 	for _, parent := range try {
 		dir := filepath.Join(root, parent)
-		if parent == "provenza.slice" {
+		if parent == "provenza-run" {
 			if err := os.MkdirAll(dir, 0o755); err != nil {
 				lastErr = err
 				continue
