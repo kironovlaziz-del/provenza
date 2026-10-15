@@ -448,3 +448,28 @@ async def test_offline_sensor_warns_once(client, admin_token, db_session, monkey
     warned = await svc.warn_offline_sensors(db_session)
     assert warned == 1
     assert len(calls) == 2
+
+
+@pytest.mark.asyncio
+async def test_kill_switch_isolates_every_workload(client, admin_token):
+    """A stop of the organization's AI traffic reaches the sensors at their next
+    poll: a new version (no 304) with every workload isolated."""
+    created = await _register_sensor(client, admin_token, name="ks")
+    await _make_workload(client, admin_token, name="wl-ks", mode="observe")
+    key = {"X-Sensor-Key": created["api_key"]}
+
+    before = await client.get(f"{BASE}/config", headers=key)
+    assert before.status_code == 200, before.text
+    assert before.json()["workloads"] and not any(w.get("isolated") for w in before.json()["workloads"])
+    etag = before.headers["ETag"]
+
+    r = await client.post("/api/v1/kill-switch/events",
+                          json={"scope": "org_traffic", "reason": "test stop", "confirm": "org_traffic"},
+                          headers=auth_headers(admin_token))
+    assert r.status_code == 201, r.text
+
+    after = await client.get(f"{BASE}/config", headers={**key, "If-None-Match": etag})
+    assert after.status_code == 200, after.text
+    assert after.headers["ETag"] != etag
+    assert all(w["isolated"] and w["isolated_reason"] == "org_traffic_stopped"
+               for w in after.json()["workloads"])

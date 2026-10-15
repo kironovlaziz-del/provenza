@@ -413,8 +413,8 @@ async def get_config(
     etag = (request.headers.get("if-none-match") or "").strip().strip('"')
 
     # Cheap path: answer from the revision alone when nothing has changed.
-    current_rev = await svc.revision_for(db, sensor.org_id)
-    if etag and etag == str(current_rev):
+    current = await svc.policy_version(db, sensor.org_id)
+    if etag and etag == current:
         return Response(status_code=status.HTTP_304_NOT_MODIFIED)
 
     pol = await svc.build_policy(db, sensor.org_id)

@@ -116,6 +116,55 @@ def _allow_rules(raw: Any) -> list[PolicyAllow]:
     return out
 
 
+async def forced_isolation(db: AsyncSession, org_id: int, workloads) -> dict:
+    """Workloads that must have no network now, whatever their own setting:
+    every one while the organization's AI traffic is stopped (kill switch),
+    and those linked to an agent that is not active (stopped, quarantined,
+    suspended, retired or gone). workload id -> reason."""
+    from app.models.agent import Agent
+    from app.services.kill_switch import traffic_stop
+
+    if not workloads:
+        return {}
+    if await traffic_stop(db, org_id) is not None:
+        return {w.id: "org_traffic_stopped" for w in workloads}
+    agent_ids = {w.agent_id for w in workloads if w.agent_id is not None}
+    if not agent_ids:
+        return {}
+    statuses = dict((await db.execute(
+        select(Agent.id, Agent.status).where(Agent.org_id == org_id, Agent.id.in_(agent_ids))
+    )).all())
+    return {w.id: f"agent_{statuses.get(w.agent_id) or 'missing'}" for w in workloads
+            if w.agent_id is not None and statuses.get(w.agent_id) != "active"}
+
+
+async def _policy_workloads(db: AsyncSession, org_id: int):
+    return (await db.execute(
+        select(EgressWorkload)
+        .where(
+            EgressWorkload.org_id == org_id,
+            EgressWorkload.enabled.is_(True),
+            EgressWorkload.deleted_at.is_(None),
+        )
+        .order_by(EgressWorkload.id.asc())
+    )).scalars().all()
+
+
+async def policy_version(db: AsyncSession, org_id: int) -> str:
+    """The policy's version (and ETag): the revision, plus a digest of what the
+    kill switch and agent statuses isolate - those change without a workload
+    edit, and the sensors must notice at their next poll."""
+    import hashlib
+    import json
+
+    rev = await revision_for(db, org_id)
+    forced = await forced_isolation(db, org_id, await _policy_workloads(db, org_id))
+    if not forced:
+        return str(rev)
+    digest = hashlib.sha256(json.dumps(sorted(forced.items())).encode()).hexdigest()[:12]
+    return f"{rev}-{digest}"
+
+
 async def build_policy(db: AsyncSession, org_id: int) -> PolicyOut:
     """Assemble the policy document for the sensor.
 
@@ -136,6 +185,7 @@ async def build_policy(db: AsyncSession, org_id: int) -> PolicyOut:
         .order_by(EgressWorkload.id.asc())
     )
     workloads = result.scalars().all()
+    forced = await forced_isolation(db, org_id, workloads)
 
     out_workloads: list[PolicyWorkload] = []
     for w in workloads:
@@ -149,13 +199,13 @@ async def build_policy(db: AsyncSession, org_id: int) -> PolicyOut:
             ingress_allow=_allow_rules(w.ingress_allow),
             dns=w.dns or "off",
             mode=w.mode or "observe",
-            isolated=bool(w.isolated),
-            isolated_reason=w.isolated_reason,
+            isolated=bool(w.isolated) or w.id in forced,
+            isolated_reason=w.isolated_reason if w.isolated else forced.get(w.id),
         ))
 
     return PolicyOut(
         schema=1,
-        version=str(rev),
+        version=await policy_version(db, org_id),
         refresh_seconds=30,
         heartbeat_seconds=30,
         workloads=out_workloads,
