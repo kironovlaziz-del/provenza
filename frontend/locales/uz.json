@@ -3399,7 +3399,11 @@
       "copied": "Kalit vaqtinchalik xotiraga nusxalandi.",
       "copy_manual": "Maydonni belgilab, qo'lda nusxalang.",
       "key_saved": "Kalitni saqladim",
-      "show_revoked": "Bekor qilinganlarni ko'rsatish"
+      "show_revoked": "Bekor qilinganlarni ko'rsatish",
+      "install_hint": "Yoki sensorni ishga tushirmoqchi bo'lgan xostda bu bitta buyruqni qo'ying:",
+      "install_command": "Bir qatorli o'rnatish buyrug'i",
+      "copy_install": "O'rnatish buyrug'ini nusxalash",
+      "install_copied": "O'rnatish buyrug'i nusxalandi. Uni sensor xostining qobig'iga qo'ying."
     },
     "load_failed": "Runtime ma'lumotlarini yuklab bo'lmadi.",
     "save_failed": "Ish yukini saqlab bo'lmadi.",

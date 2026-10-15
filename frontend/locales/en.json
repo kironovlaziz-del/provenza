@@ -3399,7 +3399,11 @@
       "copied": "Key copied to the clipboard.",
       "copy_manual": "Select the field and copy it manually.",
       "key_saved": "I have saved the key",
-      "show_revoked": "Show revoked"
+      "show_revoked": "Show revoked",
+      "install_hint": "Or, on the host where the sensor should run, paste this one command:",
+      "install_command": "One-line install command",
+      "copy_install": "Copy install command",
+      "install_copied": "Install command copied to the clipboard. Paste it into the sensor host's shell."
     },
     "load_failed": "Could not load runtime data.",
     "save_failed": "Could not save the workload.",

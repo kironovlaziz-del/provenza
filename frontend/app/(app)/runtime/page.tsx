@@ -290,6 +290,27 @@ export default function RuntimePage() {
     }
   }
 
+  /** The exact command an admin pastes into the sensor host's shell. It
+   *  pulls install.sh from GitHub, uses the origin the admin is already on
+   *  (so no copy-paste of the URL is needed), and passes the one-time key. */
+  function installCommand(key: string): string {
+    const origin = typeof window !== "undefined" ? window.location.origin : "";
+    const script = "https://raw.githubusercontent.com/kironovlaziz-del/provenza/main/sensor/install.sh";
+    return `curl -fsSL ${script} -o /tmp/install-sensor.sh && sudo bash /tmp/install-sensor.sh --url ${origin} --key ${key}`;
+  }
+
+  function copyInstallCommand(key: string) {
+    const cmd = installCommand(key);
+    if (typeof navigator !== "undefined" && navigator.clipboard) {
+      navigator.clipboard.writeText(cmd).then(
+        () => setNotice(t("rt.sensors.install_copied")),
+        () => setNotice(t("rt.sensors.copy_manual")),
+      );
+    } else {
+      setNotice(t("rt.sensors.copy_manual"));
+    }
+  }
+
   function renderAllowTable(side: "egress" | "ingress") {
     if (!draft) return null;
     const label = side === "egress" ? t("rt.egress_allow") : t("rt.ingress_allow");
@@ -371,6 +392,18 @@ export default function RuntimePage() {
                   aria-label={t("rt.sensors.key_title", { name: newKey.name })} />
                 <button type="button" className="btn btn-sm" onClick={() => copyKey(newKey.api_key)}>{t("rt.sensors.copy")}</button>
               </div>
+
+              <p className="hint-text" style={{ marginTop: 16, marginBottom: 4 }}>{t("rt.sensors.install_hint")}</p>
+              <div style={{ display: "flex", gap: 8, alignItems: "flex-start", flexWrap: "wrap" }}>
+                <textarea readOnly value={installCommand(newKey.api_key)} onFocus={(e) => e.currentTarget.select()}
+                  className="mono" rows={2}
+                  style={{ flex: "1 1 380px", padding: "8px 12px", resize: "vertical", fontSize: 12 }}
+                  aria-label={t("rt.sensors.install_command")} />
+                <button type="button" className="btn btn-sm btn-primary" onClick={() => copyInstallCommand(newKey.api_key)}>
+                  {t("rt.sensors.copy_install")}
+                </button>
+              </div>
+
               <div className="ag-actions" style={{ marginTop: 12 }}>
                 <button className="btn btn-primary" onClick={() => { setNewKey(null); loadSensors(); }}>{t("rt.sensors.key_saved")}</button>
               </div>
