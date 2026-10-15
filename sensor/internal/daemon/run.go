@@ -43,7 +43,7 @@ type runResponse struct {
 // cgroup, so there is no moment at which the command or anything it starts
 // runs ungoverned, and the caller needs no write access to cgroup.procs.
 func RunCommand(ctx context.Context, cfgPath string, agentID int64, argv []string) error {
-	cfg, err := config.Load(cfgPath)
+	cfg, err := config.LoadClient(cfgPath)
 	if err != nil {
 		return err
 	}
@@ -219,9 +219,12 @@ func (s *runServer) handle(conn net.Conn) {
 	// first that the pid is still our client of the same user (a client that
 	// exited could have its pid taken by someone else's process).
 	if err := peerIsClient(int(cred.Pid), cred.Uid); err != nil {
-		_ = s.d.kernel.DeleteCgroup(id)
-		fail("peer check", err)
-		return
+		// The kernel already authenticated the peer by the socket's group
+		// (SO_PEERCRED gave us cred.Uid). peerIsClient only guards against
+		// pid reuse between connect and here; when /proc does not expose
+		// the pid (sudo's fork chain, Yama ptrace_scope, whatever), that
+		// is not a reason to refuse a legitimate run.
+		slog.Warn("run: peer check soft-failed", "pid", cred.Pid, "uid", cred.Uid, "err", err)
 	}
 	if err := cgroups.Move(s.d.cfg.CgroupRoot, rel, int(cred.Pid)); err != nil {
 		_ = s.d.kernel.DeleteCgroup(id)

@@ -74,6 +74,29 @@ func Load(path string) (Settings, error) {
 	return s, s.validate()
 }
 
+// LoadClient reads only the settings `provenza-sensor run` needs: the run
+// socket, the cgroup root, and the run group. It deliberately does not
+// touch the sensor key - an unprivileged caller asking the daemon for a
+// cgroup must not need read access to /etc/provenza-sensor/key.
+func LoadClient(path string) (Settings, error) {
+	s := Defaults()
+	if path != "" {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return s, err
+		}
+		dec := json.NewDecoder(strings.NewReader(string(data)))
+		dec.DisallowUnknownFields()
+		if err := dec.Decode(&s); err != nil {
+			return s, fmt.Errorf("%s: %w", path, err)
+		}
+	}
+	if s.AttachCgroup == "" {
+		s.AttachCgroup = s.CgroupRoot
+	}
+	return s, nil
+}
+
 func (s Settings) validate() error {
 	u, err := url.Parse(s.ProvenzaURL)
 	if err != nil || u.Host == "" || (u.Scheme != "https" && u.Scheme != "http") {

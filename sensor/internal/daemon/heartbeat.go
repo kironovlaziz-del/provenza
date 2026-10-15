@@ -53,10 +53,17 @@ func (d *Daemon) sendHeartbeat(ctx context.Context) {
 			if w.Mode == "enforce" && !w.Isolated {
 				enforcing = true
 			}
-			wls = append(wls, client.WorkloadReport{ID: w.ID})
-		}
-		for i := range wls {
-			wls[i].Cgroups = d.countCgroupsFor(wls[i].ID)
+			// Count governed cgroups inline. countCgroupsFor also takes
+			// d.mu, and sync.Mutex is not reentrant - calling it here
+			// deadlocks the daemon on its own lock (the heartbeat goroutine
+			// holds d.mu and waits for itself, everything else queues behind).
+			cg := 0
+			for _, wid := range d.cgWid {
+				if wid == w.ID {
+					cg++
+				}
+			}
+			wls = append(wls, client.WorkloadReport{ID: w.ID, Cgroups: cg})
 		}
 	}
 	d.mu.Unlock()
@@ -81,16 +88,4 @@ func (d *Daemon) sendHeartbeat(ctx context.Context) {
 	if err := d.client.Heartbeat(ctx, h); err != nil {
 		slog.Warn("heartbeat", "err", err)
 	}
-}
-
-func (d *Daemon) countCgroupsFor(wid uint32) int {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-	n := 0
-	for _, w := range d.cgWid {
-		if w == wid {
-			n++
-		}
-	}
-	return n
 }

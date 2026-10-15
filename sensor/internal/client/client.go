@@ -147,10 +147,12 @@ type Heartbeat struct {
 }
 
 type WorkloadReport struct {
-	ID         uint32   `json:"id"`
-	Cgroups    int      `json:"cgroups"`
-	Processes  int      `json:"processes"`
-	Privileged []string `json:"privileged"`
+	ID        uint32 `json:"id"`
+	Cgroups   int    `json:"cgroups"`
+	Processes int    `json:"processes"`
+	// A nil slice serializes as null, which the backend rejects for a
+	// List[str]; omit it, and the schema's default_factory fills it.
+	Privileged []string `json:"privileged,omitempty"`
 }
 
 func (c *Client) Heartbeat(ctx context.Context, h Heartbeat) error {

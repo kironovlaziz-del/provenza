@@ -218,7 +218,8 @@ class WorkloadReportIn(BaseModel):
     id: int
     cgroups: int = 0
     processes: int = 0
-    privileged: List[str] = Field(default_factory=list)
+    # A Go client whose slice is nil sends null; accept both.
+    privileged: Optional[List[str]] = None
 
 
 class HeartbeatIn(BaseModel):

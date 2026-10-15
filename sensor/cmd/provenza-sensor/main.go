@@ -51,7 +51,13 @@ func main() {
 		return
 
 	case flag.Arg(0) == "run":
+		// flag.Parse stops at the first non-flag ("run"), so "--agent N"
+		// must come before it. The "--" separator is a convention, not
+		// parsed by flag: strip it here.
 		cmd := flag.Args()[1:]
+		if len(cmd) > 0 && cmd[0] == "--" {
+			cmd = cmd[1:]
+		}
 		if len(cmd) == 0 {
 			slog.Error("run: no command")
 			os.Exit(2)
