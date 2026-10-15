@@ -1092,7 +1092,9 @@
     "guardrail.provider_required": "Klassifikator ishlaydigan ulanishni tanlang.",
     "guardrail.provider_not_found": "Bunday ulanish yo'q.",
     "guardrail.provider_not_self_hosted": "Tashkilot faqat o'z serveridagi provayderlarga ruxsat beradi: klassifikator uchun shunday ulanishni tanlang.",
-    "guardrail.not_configured": "Avval nazorat sozlamalarini saqlang."
+    "guardrail.not_configured": "Avval nazorat sozlamalarini saqlang.",
+    "sso.jit_needs_domains": "Birinchi kirishda akkaunt yaratish uchun kamida bitta ruxsat etilgan e-pochta domeni kerak.",
+    "auth.rate_limit_unavailable": "Kirish vaqtincha mavjud emas. Bir daqiqadan so'ng qayta urinib ko'ring."
   },
   "discovery": {
     "title": "Tarmoq kashfiyoti",

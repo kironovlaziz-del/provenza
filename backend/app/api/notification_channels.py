@@ -61,9 +61,12 @@ async def update_channel(
 ):
     service = NotificationChannelService(db)
     channel = await service.update_channel(channel_id, current_user.org_id, data)
+    # a webhook URL is a secret (whoever has it can post to the channel)
+    changes = data.model_dump(exclude_unset=True)
+    if "target" in changes:
+        changes["target"] = "changed"
     await AuditService(db).log(
-        current_user.org_id, current_user.id, "notification_channel", channel.id, "updated",
-        data.model_dump(exclude_unset=True),
+        current_user.org_id, current_user.id, "notification_channel", channel.id, "updated", changes,
     )
     return channel
 

@@ -112,3 +112,18 @@ async def test_non_admin_can_still_read_providers(client, org_and_users, admin_t
     )
     assert resp.status_code == 200
     assert len(resp.json()["items"]) == 1
+
+
+async def test_a_changed_key_is_not_written_to_the_audit_log(client, org_and_users, admin_token):
+    created = await client.post("/api/v1/providers/", json={"name": "Keyed", "type": "openai"},
+                                headers=auth_headers(admin_token))
+    pid = created.json()["id"]
+    r = await client.put(f"/api/v1/providers/{pid}", json={"api_key": "sk-audit-leak-check"},
+                         headers=auth_headers(admin_token))
+    assert r.status_code == 200, r.text
+    logs = await client.get("/api/v1/audit-logs/", params={"entity_type": "provider", "entity_id": pid},
+                            headers=auth_headers(admin_token))
+    assert logs.status_code == 200
+    assert "sk-audit-leak-check" not in logs.text
+    updated = [e for e in logs.json()["items"] if e["action"] == "updated"]
+    assert updated and updated[0]["metadata_json"]["api_key"] == "set"

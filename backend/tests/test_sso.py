@@ -218,7 +218,7 @@ async def test_bound_to_the_provider_account(client, admin_token, idp, db_sessio
 
 @pytest.mark.asyncio
 async def test_jit_creates_with_the_default_role(client, admin_token, idp, db_session):
-    await _configure(client, admin_token, idp, jit=True, default_role="approver")
+    await _configure(client, admin_token, idp, jit=True, default_role="approver", allowed_domains=["acme.example"])
     _, token = await _sign_in(client, idp, await _slug(db_session), email="new@acme.example")
     assert (await client.get("/api/v1/users/me", headers=auth_headers(token))).json()["role"] == "approver"
 
@@ -253,3 +253,19 @@ async def test_sso_only_leaves_passwords_to_admins(client, admin_token, approver
     r = await client.post("/api/v1/auth/login", json={"org_slug": slug, "email": "admin@test.example.com",
                                                        "password": "TestPass123!"})
     assert r.status_code == 200                       # the break-glass way in
+
+
+@pytest.mark.asyncio
+async def test_jit_needs_allowed_domains(client, admin_token, idp, db_session):
+    body = {"issuer": idp.issuer, "client_id": CLIENT_ID, "client_secret": SECRET, "jit": True}
+    r = await client.put(f"{ADMIN}/settings", json=body, headers=auth_headers(admin_token))
+    assert r.status_code == 422
+    assert r.json()["detail"] == "sso.jit_needs_domains"
+
+
+@pytest.mark.asyncio
+async def test_an_unconfirmed_email_needs_a_domain(client, admin_token, idp, db_session):
+    await _configure(client, admin_token, idp)
+    await _user(db_session)
+    landing, token = await _sign_in(client, idp, await _slug(db_session), email_verified=None)
+    assert token is None and landing == "/login?sso_error=sso.email_unverified"

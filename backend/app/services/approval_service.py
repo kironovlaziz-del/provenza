@@ -14,25 +14,36 @@ class ApprovalService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
+    async def _active_with_role(self, org_id: int, user_id: int, roles: List[str]) -> bool:
+        return (await self.db.execute(select(User.id).where(
+            User.id == user_id, User.org_id == org_id, User.status == "active", User.role.in_(roles),
+        ))).scalar_one_or_none() is not None
+
+    async def _first_with_role(self, org_id: int, role: str, exclude: Optional[int]) -> Optional[int]:
+        q = select(User.id).where(User.org_id == org_id, User.status == "active", User.role == role)
+        if exclude is not None:
+            q = q.where(User.id != exclude)
+        return (await self.db.execute(q.order_by(User.id.asc()).limit(1))).scalar_one_or_none()
+
     async def _pick_approver(
-        self, org_id: int, use_case: Optional[AIUseCase], caller_user_id: int
+        self, org_id: int, use_case: Optional[AIUseCase], caller_user_id: int,
+        requester_id: Optional[int] = None,
     ) -> int:
         """
-        Determine who should approve a given request.
+        Who approves a request. Never the person who made it (four eyes):
 
-        Priority:
-          1. If the use case links an approved policy version whose rules
-             name an "approver_user_id", use that user (if still active).
-          2. If the caller is themselves an approver, use them.
-          3. Otherwise pick any active approver in the organization.
-          4. Only if no approvers exist, fall back to the caller if admin.
-          5. Last resort: any active admin in the organization.
-          6. Otherwise 400.
-
-        This ordering means an admin creating a request does not silently
-        assign themselves as approver when there is a real approver on the
-        team who can do it.
+          1. the approver the use case's approved policy names (if still active);
+          2. the caller, if an approver;
+          3. any active approver;
+          4. the caller, if an admin;
+          5. any active admin;
+          6. otherwise 400 - add a second approver or admin.
         """
+        admin_or_approver = [UserRole.admin.value, UserRole.approver.value]
+
+        def other(uid: Optional[int]) -> bool:
+            return uid is not None and uid != requester_id
+
         # 1. Policy-driven approver
         if use_case and use_case.approved_policy_version_id:
             result = await self.db.execute(
@@ -45,79 +56,31 @@ class ApprovalService:
             )
             policy_version = result.scalar_one_or_none()
             if policy_version:
-                rules = policy_version.rules_json or {}
-                configured_id = rules.get("approver_user_id")
-                if isinstance(configured_id, int):
-                    result = await self.db.execute(
-                        select(User).where(
-                            User.id == configured_id,
-                            User.org_id == org_id,
-                            User.status == "active",
-                            User.role.in_(
-                                [UserRole.admin.value, UserRole.approver.value]
-                            ),
-                        )
-                    )
-                    if result.scalar_one_or_none():
-                        return configured_id
+                configured_id = (policy_version.rules_json or {}).get("approver_user_id")
+                if isinstance(configured_id, int) and other(configured_id) and \
+                        await self._active_with_role(org_id, configured_id, admin_or_approver):
+                    return configured_id
 
         # 2. Caller is an approver
-        result = await self.db.execute(
-            select(User).where(
-                User.id == caller_user_id,
-                User.status == "active",
-                User.role == UserRole.approver.value,
-            )
-        )
-        if result.scalar_one_or_none():
+        if other(caller_user_id) and await self._active_with_role(org_id, caller_user_id, [UserRole.approver.value]):
             return caller_user_id
-
-        # 3. Any active approver in the organization
-        result = await self.db.execute(
-            select(User)
-            .where(
-                User.org_id == org_id,
-                User.status == "active",
-                User.role == UserRole.approver.value,
-            )
-            .order_by(User.id.asc())
-            .limit(1)
-        )
-        picked = result.scalar_one_or_none()
-        if picked:
-            return picked.id
-
-        # 4. Caller is admin (only when no approvers exist)
-        result = await self.db.execute(
-            select(User).where(
-                User.id == caller_user_id,
-                User.status == "active",
-                User.role == UserRole.admin.value,
-            )
-        )
-        if result.scalar_one_or_none():
+        # 3. Any active approver
+        picked = await self._first_with_role(org_id, UserRole.approver.value, requester_id)
+        if picked is not None:
+            return picked
+        # 4. Caller is an admin
+        if other(caller_user_id) and await self._active_with_role(org_id, caller_user_id, [UserRole.admin.value]):
             return caller_user_id
-
-        # 5. Any active admin in the organization
-        result = await self.db.execute(
-            select(User)
-            .where(
-                User.org_id == org_id,
-                User.status == "active",
-                User.role == UserRole.admin.value,
-            )
-            .order_by(User.id.asc())
-            .limit(1)
-        )
-        picked = result.scalar_one_or_none()
-        if picked:
-            return picked.id
+        # 5. Any active admin
+        picked = await self._first_with_role(org_id, UserRole.admin.value, requester_id)
+        if picked is not None:
+            return picked
 
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=(
-                "No approver available: this organization has no active "
-                "approver or admin, and the policy does not name one."
+                "No approver available: a request is approved by someone other than "
+                "the person who made it - add another approver or admin."
             ),
         )
 
@@ -157,7 +120,15 @@ class ApprovalService:
             )
             use_case = result.scalar_one_or_none()
 
-        approver_id = await self._pick_approver(org_id, use_case, caller_user_id)
+        # Only a request that is waiting for approval: one the firewall blocked,
+        # or one already run, is not turned into an approvable one.
+        if request.status != "pending_approval":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Only a request waiting for approval can be sent to an approver (this one is {request.status}).",
+            )
+
+        approver_id = await self._pick_approver(org_id, use_case, caller_user_id, request.user_id)
 
         approval = AIApproval(
             request_id=data.request_id,
@@ -189,6 +160,16 @@ class ApprovalService:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Approval not found",
+            )
+
+        # Four eyes: nobody decides on their own request, admins included.
+        requester_id = (await self.db.execute(
+            select(AIRequest.user_id).where(AIRequest.id == approval.request_id)
+        )).scalar_one_or_none()
+        if requester_id is not None and requester_id == caller_user.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You cannot decide on your own request.",
             )
 
         # Only the assigned approver (or an admin) may decide.

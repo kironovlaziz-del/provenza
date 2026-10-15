@@ -60,6 +60,20 @@ def _client_ip(request: Request) -> str:
     return peer
 
 
+# Brute-force targets: when the counter store is down these refuse (503)
+# instead of letting unlimited guesses through. Other scopes fail open.
+FAIL_CLOSED_SCOPES = frozenset({
+    "login", "mfa", "mfa_codes", "mfa_disable", "mfa_enable", "password_change",
+    "signup", "sso", "enroll", "scim",
+})
+
+
+def _unavailable(scope: str):
+    if scope in FAIL_CLOSED_SCOPES:
+        return api_error(status.HTTP_503_SERVICE_UNAVAILABLE, "auth.rate_limit_unavailable")
+    return None
+
+
 def enforce(
     request: Request,
     *,
@@ -87,6 +101,9 @@ def enforce(
     try:
         client = _get_redis()
     except RedisError:
+        err = _unavailable(scope)
+        if err is not None:
+            raise err
         return
 
     try:
@@ -106,8 +123,10 @@ def enforce(
     except HTTPException:
         raise
     except RedisError:
-        # Fail-open: log in a real deployment, but don't block logins
-        # because the cache is unreachable.
+        err = _unavailable(scope)
+        if err is not None:
+            raise err
+        # Other scopes fail open: the cache being down does not stop the app.
         return
     finally:
         try:

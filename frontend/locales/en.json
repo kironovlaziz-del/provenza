@@ -1092,7 +1092,9 @@
     "guardrail.provider_required": "Choose the connection the classifier runs on.",
     "guardrail.provider_not_found": "That connection does not exist.",
     "guardrail.provider_not_self_hosted": "The organization allows only self-hosted providers: choose a self-hosted connection for the classifier.",
-    "guardrail.not_configured": "Save the guardrail settings first."
+    "guardrail.not_configured": "Save the guardrail settings first.",
+    "sso.jit_needs_domains": "Creating accounts on first sign-in needs at least one allowed e-mail domain.",
+    "auth.rate_limit_unavailable": "Sign-in is temporarily unavailable. Try again in a minute."
   },
   "discovery": {
     "title": "Network Discovery",

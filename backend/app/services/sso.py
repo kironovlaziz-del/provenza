@@ -242,6 +242,11 @@ async def user_for(db: AsyncSession, cfg: OidcSettings, claims: Dict[str, Any]) 
     domains = [d.lower().lstrip("@") for d in (cfg.allowed_domains or [])]
     if domains and email.rsplit("@", 1)[1] not in domains:
         raise SsoError("sso.domain_not_allowed", email.rsplit("@", 1)[1])
+    # An address the provider did not confirm is trusted only inside the
+    # organization's own domains (a provider may let users set any e-mail).
+    verified = claims.get("email_verified") is True
+    if not verified and not domains:
+        raise SsoError("sso.email_unverified", "the provider did not confirm the e-mail and no domain is configured")
     subject = f"{claims['iss']} {claims['sub']}"[:600]
     user = (await db.execute(select(User).where(User.org_id == cfg.org_id,
                                                 func.lower(User.email) == email))).scalar_one_or_none()
@@ -259,6 +264,9 @@ async def user_for(db: AsyncSession, cfg: OidcSettings, claims: Dict[str, Any]) 
     if user.status != "active":
         raise SsoError("sso.account_disabled")
     if user.oidc_subject is None:
+        if user.role == "admin" and not verified:
+            # an admin account is tied to a provider account only on a confirmed e-mail
+            raise SsoError("sso.email_unverified", "an admin account needs a verified e-mail to be bound")
         user.oidc_subject = subject   # bound to this provider account from now on
         await db.commit()
     elif not secrets.compare_digest(user.oidc_subject, subject):

@@ -110,9 +110,12 @@ async def update_provider(
 ):
     service = ProviderService(db)
     provider = await service.update_provider(provider_id, current_user.org_id, data)
+    # the audit log is readable by every user: never the key itself
+    changes = data.model_dump(exclude_unset=True)
+    if "api_key" in changes:
+        changes["api_key"] = "set" if changes["api_key"] else "cleared"
     await AuditService(db).log(
-        current_user.org_id, current_user.id, "provider", provider.id, "updated",
-        data.model_dump(exclude_unset=True),
+        current_user.org_id, current_user.id, "provider", provider.id, "updated", changes,
     )
     return provider
 

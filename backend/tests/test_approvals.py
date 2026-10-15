@@ -192,3 +192,53 @@ async def test_duplicate_pending_approval_rejected(
     )
     assert r2.status_code == 400
     assert "pending approval" in r2.json()["detail"]
+
+
+async def _pending_request(client, token, use_case_id, provider_id) -> int:
+    r = await client.post(
+        "/api/v1/requests/",
+        json={"use_case_id": use_case_id, "provider_id": provider_id, "input_text": "x", "purpose": "x"},
+        headers=auth_headers(token),
+    )
+    assert r.status_code == 200, r.text
+    return r.json()["id"]
+
+
+async def test_an_approver_is_never_assigned_their_own_request(
+    client, org_and_users, admin_token, approver_token
+):
+    use_case_id, provider_id, _ = await _make_use_case_with_approval_policy(client, admin_token)
+    request_id = await _pending_request(client, approver_token, use_case_id, provider_id)
+    r = await client.post("/api/v1/approvals/", json={"request_id": request_id},
+                          headers=auth_headers(approver_token))
+    assert r.status_code == 200, r.text
+    assert r.json()["approver_user_id"] != org_and_users["approver"].id
+    assert r.json()["approver_user_id"] == org_and_users["admin"].id
+
+
+async def test_an_admin_cannot_decide_their_own_request(
+    client, org_and_users, admin_token
+):
+    use_case_id, provider_id, _ = await _make_use_case_with_approval_policy(client, admin_token)
+    request_id = await _pending_request(client, admin_token, use_case_id, provider_id)
+    approval = await client.post("/api/v1/approvals/", json={"request_id": request_id},
+                                 headers=auth_headers(admin_token))
+    assert approval.status_code == 200, approval.text
+    r = await client.post(f"/api/v1/approvals/{approval.json()['id']}/decision",
+                          json={"decision": "approved"}, headers=auth_headers(admin_token))
+    assert r.status_code == 403
+    assert "own request" in r.json()["detail"]
+
+
+async def test_only_a_request_waiting_for_approval_can_be_routed(
+    client, org_and_users, admin_token
+):
+    provider = await client.post("/api/v1/providers/", json={"name": "P", "type": "openai"},
+                                 headers=auth_headers(admin_token))
+    use_case = await client.post("/api/v1/use-cases/", json={"name": "Plain", "risk_level": "low"},
+                                 headers=auth_headers(admin_token))
+    request_id = await _pending_request(client, admin_token, use_case.json()["id"], provider.json()["id"])
+    r = await client.post("/api/v1/approvals/", json={"request_id": request_id},
+                          headers=auth_headers(admin_token))
+    assert r.status_code == 400
+    assert "waiting for approval" in r.json()["detail"]

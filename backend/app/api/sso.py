@@ -180,6 +180,9 @@ async def put_sso_settings(data: SsoSettingsIn, request: Request, db: AsyncSessi
     except sso.SsoError as exc:
         raise api_error(status.HTTP_422_UNPROCESSABLE_ENTITY, exc.code, detail=exc.detail[:200])
     domains = sorted({d.strip().lower().lstrip("@") for d in data.allowed_domains if d.strip()})
+    if data.jit and not domains:
+        # without domains, anyone with an account at the provider would get one here
+        raise api_error(status.HTTP_422_UNPROCESSABLE_ENTITY, "sso.jit_needs_domains")
     row = await sso.get_settings(db, org_id)
     try:
         async with db.begin_nested():   # an unusable provider undoes only this change
