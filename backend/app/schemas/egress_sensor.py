@@ -229,10 +229,11 @@ class HeartbeatIn(BaseModel):
     kernel: Optional[str] = Field(default=None, max_length=100)
     config_version: Optional[str] = Field(default=None, max_length=64)
     enforcing: bool = False
-    hooks: List[str] = Field(default_factory=list)
-    workloads: List[WorkloadReportIn] = Field(default_factory=list)
-    warnings: List[str] = Field(default_factory=list)
-    errors: List[str] = Field(default_factory=list)
+    # A Go client whose slices are nil sends null, not []; accept both.
+    hooks: Optional[List[str]] = None
+    workloads: Optional[List[WorkloadReportIn]] = None
+    warnings: Optional[List[str]] = None
+    errors: Optional[List[str]] = None
     dropped_events: int = 0
 
 

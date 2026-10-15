@@ -436,9 +436,9 @@ async def post_heartbeat(
     sensor.version = data.version
     sensor.kernel = data.kernel
     sensor.enforcing = data.enforcing
-    sensor.hooks = list(data.hooks)
-    sensor.warnings = list(data.warnings)
-    sensor.errors = list(data.errors)
+    sensor.hooks = list(data.hooks or [])
+    sensor.warnings = list(data.warnings or [])
+    sensor.errors = list(data.errors or [])
     sensor.dropped_events = data.dropped_events
     sensor.config_version = data.config_version
     sensor.last_seen_at = svc.now_utc()

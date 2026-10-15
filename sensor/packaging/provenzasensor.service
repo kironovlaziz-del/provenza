@@ -11,27 +11,28 @@ ExecReload=/bin/kill -HUP $MAINPID
 Restart=on-failure
 RestartSec=5s
 
-# The sensor needs BPF, net admin and its own state. Its programs attach
-# to attach_cgroup (default: the cgroup root, so they see every process);
-# it writes only under /sys/fs/cgroup/provenza-run (the run cgroups).
-AmbientCapabilities=CAP_BPF CAP_SYS_ADMIN CAP_NET_ADMIN
-CapabilityBoundingSet=CAP_BPF CAP_SYS_ADMIN CAP_NET_ADMIN
+# The sensor needs BPF, net admin and its own state. Its programs attach to
+# attach_cgroup (default: the cgroup root, so they see every process) and it
+# creates run cgroups under /sys/fs/cgroup/provenza-run.
+#
+# cgroupfs does not support the writable bind-mounts ReadWritePaths sets up,
+# so the only workable setting is ProtectControlGroups=false. ProtectSystem
+# and ProtectKernelTunables cover everything else in /sys and /usr; the
+# cgroup tree is the one writable exception, and even then the sensor only
+# creates directories under provenza-run.
+AmbientCapabilities=CAP_BPF CAP_CHOWN CAP_SYS_ADMIN CAP_NET_ADMIN
+CapabilityBoundingSet=CAP_BPF CAP_CHOWN CAP_SYS_ADMIN CAP_NET_ADMIN
 LimitMEMLOCK=infinity
 LimitNOFILE=1048576
 
-# Hardening.
+# Hardening (cgroup tree is exempted above on purpose).
 NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=true
 PrivateTmp=true
-ProtectKernelTunables=true
 ProtectKernelModules=true
 ProtectControlGroups=false
-# Run cgroups live under /sys/fs/cgroup/provenza-run; created before the
-# sandbox is set up (+), writable to the sensor, the rest read-only.
-ExecStartPre=+/bin/mkdir -p /sys/fs/cgroup/provenza-run
-ReadOnlyPaths=/sys/fs/cgroup /etc/provenza-sensor
-ReadWritePaths=/sys/fs/bpf /var/lib/provenza-sensor /run/provenza-sensor -/sys/fs/cgroup/provenza-run
+ReadWritePaths=/sys/fs/bpf /var/lib/provenza-sensor /run/provenza-sensor /etc/provenza-sensor
 RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
 LockPersonality=true
 MemoryDenyWriteExecute=false

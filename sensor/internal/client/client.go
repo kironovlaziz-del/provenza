@@ -137,12 +137,12 @@ type Heartbeat struct {
 	Hostname      string           `json:"hostname"`
 	Version       string           `json:"version"`
 	Kernel        string           `json:"kernel"`
-	ConfigVersion *string          `json:"config_version"`
+	ConfigVersion *string          `json:"config_version,omitempty"`
 	Enforcing     bool             `json:"enforcing"`
-	Hooks         []string         `json:"hooks"`
-	Workloads     []WorkloadReport `json:"workloads"`
-	Warnings      []string         `json:"warnings"`
-	Errors        []string         `json:"errors"`
+	Hooks         []string         `json:"hooks,omitempty"`
+	Workloads     []WorkloadReport `json:"workloads,omitempty"`
+	Warnings      []string         `json:"warnings,omitempty"`
+	Errors        []string         `json:"errors,omitempty"`
 	DroppedEvents uint64           `json:"dropped_events"`
 }
 
