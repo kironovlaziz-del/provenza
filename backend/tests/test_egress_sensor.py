@@ -767,3 +767,61 @@ async def test_build_policy_uses_settings(client, admin_token):
 async def test_settings_requires_admin(client, approver_token):
     r = await client.get(f"{BASE}/settings", headers=auth_headers(approver_token))
     assert r.status_code in (401, 403), r.text
+
+
+
+@pytest.mark.asyncio
+async def test_settings_patch_bumps_revision(client, admin_token):
+    """A settings change must make the policy version change, otherwise a
+    sensor's If-None-Match gets a 304 and it keeps the old intervals."""
+    created = await _register_sensor(client, admin_token, name="settings-bump")
+    key = created["api_key"]
+
+    r = await client.get(f"{BASE}/config", headers={"X-Sensor-Key": key})
+    v1 = r.json()["version"]
+
+    r = await client.patch(
+        f"{BASE}/settings",
+        json={"refresh_seconds": 90},
+        headers=auth_headers(admin_token),
+    )
+    assert r.status_code == 200, r.text
+
+    r = await client.get(f"{BASE}/config", headers={"X-Sensor-Key": key})
+    v2 = r.json()["version"]
+    assert v2 != v1, f"version did not change: {v1} -> {v2}"
+    assert r.json()["refresh_seconds"] == 90
+
+
+@pytest.mark.asyncio
+async def test_settings_304_only_after_same_values(client, admin_token):
+    """PATCHing to the same values does not bump; a sensor polling twice in
+    a row gets a 304, as it should when nothing changed."""
+    created = await _register_sensor(client, admin_token, name="settings-304")
+    key = created["api_key"]
+
+    # First fetch establishes the version.
+    r = await client.get(f"{BASE}/config", headers={"X-Sensor-Key": key})
+    etag = r.headers["ETag"]
+
+    # Immediate second fetch: 304.
+    r = await client.get(
+        f"{BASE}/config",
+        headers={"X-Sensor-Key": key, "If-None-Match": etag},
+    )
+    assert r.status_code == 304, r.text
+
+    # Change settings: version moves, next poll is a 200.
+    r = await client.patch(
+        f"{BASE}/settings",
+        json={"refresh_seconds": 120},
+        headers=auth_headers(admin_token),
+    )
+    assert r.status_code == 200
+
+    r = await client.get(
+        f"{BASE}/config",
+        headers={"X-Sensor-Key": key, "If-None-Match": etag},
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["refresh_seconds"] == 120

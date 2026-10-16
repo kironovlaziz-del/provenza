@@ -455,13 +455,24 @@ async def patch_settings(
 
     row = await svc.update_settings(db, current_user.org_id, current_user.id, data)
 
-    if changes:
-        await AuditService(db).log(
-            current_user.org_id, current_user.id, "egress_policy_settings",
-            current_user.org_id, "updated", {"changes": changes},
-        )
-    else:
+    if not changes:
         await db.commit()
+        await db.refresh(row)
+        return row
+
+    # Settings are part of the policy the sensors fetch (refresh_seconds
+    # and heartbeat_seconds appear in it verbatim). Bump the revision so
+    # the version they compare against If-None-Match changes, and they
+    # refetch on the next poll instead of getting a 304 and keeping the
+    # old intervals. default_mode/default_dns do not appear in the policy,
+    # but the extra bump is cheap and keeps the rule simple: any settings
+    # change makes sensors look again.
+    await svc.bump_revision(db, current_user.org_id)
+
+    await AuditService(db).log(
+        current_user.org_id, current_user.id, "egress_policy_settings",
+        current_user.org_id, "updated", {"changes": changes},
+    )
 
     await db.refresh(row)
     return row
