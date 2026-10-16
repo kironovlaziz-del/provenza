@@ -201,6 +201,28 @@ async def revoke_sensor(
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
+@admin_router.post(
+    "/sensors/{sensor_id}/refresh",
+    summary="Bump the org's policy revision so sensors pick it up at their next poll",
+)
+async def refresh_sensor(
+    sensor_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role(UserRole.admin)),
+):
+    """Bump the organization's policy revision. Sensors notice the change on
+    their next poll (within refresh_seconds, ~30s) and fetch the new policy.
+    Nothing is sent to the sensor directly: the control plane is not a
+    command channel."""
+    sensor = await _get_org_sensor(db, sensor_id, current_user.org_id, include_revoked=True)
+    new_rev = await svc.bump_revision(db, current_user.org_id)
+    await AuditService(db).log(
+        current_user.org_id, current_user.id, "egress_sensor", sensor.id, "refreshed",
+        {"name": sensor.name, "new_revision": new_rev},
+    )
+    return {"bumped": True, "new_revision": new_rev}
+
+
 @admin_router.get("/sensors/{sensor_id}/violations", response_model=list[ViolationOut])
 async def list_sensor_violations(
     sensor_id: int,

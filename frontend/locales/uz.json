@@ -3405,7 +3405,17 @@
       "install_hint": "Yoki sensorni ishga tushirmoqchi bo'lgan xostda bu bitta buyruqni qo'ying:",
       "install_command": "Bir qatorli o'rnatish buyrug'i",
       "copy_install": "O'rnatish buyrug'ini nusxalash",
-      "install_copied": "O'rnatish buyrug'i nusxalandi. Uni sensor xostining qobig'iga qo'ying."
+      "install_copied": "O'rnatish buyrug'i nusxalandi. Uni sensor xostining qobig'iga qo'ying.",
+      "force_refresh": "Yangilashga majburlash",
+      "refreshed": "{{name}} uchun yangilash ishga tushirildi. Sensorlar yangi siyosatni 30 soniya ichida oladi (revision {{n}}).",
+      "toggle_details": "Tafsilotlarni ochish",
+      "hooks_list": "Ilgaklar",
+      "warnings_list": "Ogohlantirishlar",
+      "errors_list": "Xatolar",
+      "runtime_section": "Ish vaqti",
+      "kernel": "Yadro",
+      "config_version": "Konfiguratsiya versiyasi",
+      "dropped_events": "Yo'qolgan hodisalar"
     },
     "load_failed": "Runtime ma'lumotlarini yuklab bo'lmadi.",
     "save_failed": "Ish yukini saqlab bo'lmadi.",

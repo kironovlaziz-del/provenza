@@ -14,7 +14,7 @@ import type { Agent } from "@/lib/agent_types";
 import {
   DNS_MODES, PROTOCOLS, RUNTIME_MODES, VIOLATION_ACTIONS,
   createWorkload, deleteWorkload, listSensors, listViolations, listWorkloads,
-  registerSensor, revokeSensor, updateSensor, updateWorkload,
+  refreshSensor, registerSensor, revokeSensor, updateSensor, updateWorkload,
   type AllowT, type DNSMode, type Protocol, type RuntimeMode, type SensorCreatedT, type SensorT,
   type ViolationAction, type ViolationT, type WorkloadInput, type WorkloadT,
 } from "@/lib/egress_sensor_api";
@@ -130,6 +130,9 @@ export default function RuntimePage() {
   const [showRegister, setShowRegister] = useState(false);
   const [sensorName, setSensorName] = useState("");
   const [newKey, setNewKey] = useState<SensorCreatedT | null>(null);
+  // Which sensor's details row is expanded (null = none). One at a time:
+  // the point of the row is a focused view of one host, not a dashboard.
+  const [expandedSensorId, setExpandedSensorId] = useState<number | null>(null);
 
   const loadWorkloads = useCallback(() => {
     listWorkloads(showDeleted).then(setWorkloads).catch((err) => setError(apiError(err, t, t("rt.load_failed"))));
@@ -265,6 +268,20 @@ export default function RuntimePage() {
     } catch (err) {
       setError(apiError(err, t, t("rt.save_failed")));
     } finally { setBusy(false); }
+  }
+
+  async function forceRefresh(s: SensorT) {
+    setBusy(true); setError(null);
+    try {
+      const res = await refreshSensor(s.id);
+      setNotice(t("rt.sensors.refreshed", { name: s.name, n: res.new_revision }));
+    } catch (err) {
+      setError(apiError(err, t, t("rt.save_failed")));
+    } finally { setBusy(false); }
+  }
+
+  function toggleSensorDetails(id: number) {
+    setExpandedSensorId(expandedSensorId === id ? null : id);
   }
 
   async function revoke(s: SensorT) {
@@ -456,8 +473,19 @@ export default function RuntimePage() {
                   const revoked = s.revoked_at !== null;
                   const inactive = revoked || !s.enabled;
                   return (
+                    <>
                     <tr key={s.id} style={inactive ? { opacity: 0.6 } : undefined}>
                       <td data-label={t("rt.sensors.name")}>
+                        <button
+                          type="button"
+                          className="btn btn-sm"
+                          style={{ padding: "0 6px", marginRight: 6 }}
+                          aria-expanded={expandedSensorId === s.id}
+                          aria-label={t("rt.sensors.toggle_details")}
+                          onClick={() => toggleSensorDetails(s.id)}
+                        >
+                          {expandedSensorId === s.id ? "▾" : "▸"}
+                        </button>
                         <strong>{s.name}</strong>
                         {revoked && <div><span className="pill pill-critical">{t("rt.sensors.revoked")}</span></div>}
                         {!revoked && !s.enabled && <div><span className="pill pill-neutral">{t("rt.disabled")}</span></div>}
@@ -490,6 +518,11 @@ export default function RuntimePage() {
                       <td>
                         <div className="ag-row-actions">
                           {!revoked && (
+                            <button className="btn btn-sm" disabled={busy} onClick={() => forceRefresh(s)}>
+                              {t("rt.sensors.force_refresh")}
+                            </button>
+                          )}
+                          {!revoked && (
                             <button className="btn btn-sm" disabled={busy} onClick={() => toggleSensor(s)}>
                               {s.enabled ? t("rt.disable") : t("rt.enable")}
                             </button>
@@ -500,6 +533,59 @@ export default function RuntimePage() {
                         </div>
                       </td>
                     </tr>
+                    {expandedSensorId === s.id && (
+                      <tr className="sensor-details-row">
+                        <td colSpan={7} style={{ padding: "14px 20px 18px 52px" }}>
+                          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                            <div>
+                              <div style={{ fontWeight: 600, marginBottom: 4, fontSize: 11, textTransform: "uppercase", letterSpacing: 0.6, opacity: 0.55 }}>
+                                {t("rt.sensors.hooks_list")}
+                              </div>
+                              {s.hooks && s.hooks.length > 0
+                                ? <div className="mono" style={{ fontSize: 12, lineHeight: 1.6, wordBreak: "break-word" }}>
+                                    <span style={{ opacity: 0.6 }}>({s.hooks.length})</span> {[...s.hooks].sort().join(" · ")}
+                                  </div>
+                                : <div style={{ fontSize: 12, opacity: 0.5, fontStyle: "italic" }}>{t("rt.sensors.never")}</div>}
+                            </div>
+
+                            <div>
+                              <div style={{ fontWeight: 600, marginBottom: 4, fontSize: 11, textTransform: "uppercase", letterSpacing: 0.6, opacity: 0.55 }}>
+                                ⚠ {t("rt.sensors.warnings_list")}
+                              </div>
+                              {s.warnings && s.warnings.length > 0
+                                ? s.warnings.map((w, i) => (
+                                    <div key={i} style={{ fontSize: 12, lineHeight: 1.6 }}>{w}</div>
+                                  ))
+                                : <div style={{ fontSize: 12, opacity: 0.5, fontStyle: "italic" }}>{t("rt.sensors.never")}</div>}
+                            </div>
+
+                            <div>
+                              <div style={{ fontWeight: 600, marginBottom: 4, fontSize: 11, textTransform: "uppercase", letterSpacing: 0.6, opacity: 0.55, color: s.errors && s.errors.length > 0 ? "var(--danger, #c0392b)" : undefined }}>
+                                ✕ {t("rt.sensors.errors_list")}
+                              </div>
+                              {s.errors && s.errors.length > 0
+                                ? s.errors.map((e, i) => (
+                                    <div key={i} style={{ fontSize: 12, lineHeight: 1.6, color: "var(--danger, #c0392b)" }}>{e}</div>
+                                  ))
+                                : <div style={{ fontSize: 12, opacity: 0.5, fontStyle: "italic" }}>{t("rt.sensors.never")}</div>}
+                            </div>
+
+                            <div>
+                              <div style={{ fontWeight: 600, marginBottom: 4, fontSize: 11, textTransform: "uppercase", letterSpacing: 0.6, opacity: 0.55 }}>
+                                {t("rt.sensors.runtime_section")}
+                              </div>
+                              <div style={{ display: "flex", gap: 18, flexWrap: "wrap", fontSize: 12 }}>
+                                <span><em style={{ opacity: 0.6, fontStyle: "normal" }}>{t("rt.sensors.kernel")}</em> {s.kernel ?? "—"}</span>
+                                <span><em style={{ opacity: 0.6, fontStyle: "normal" }}>{t("rt.sensors.config_version")}</em> {s.config_version ?? "—"}</span>
+                                <span><em style={{ opacity: 0.6, fontStyle: "normal" }}>{t("rt.sensors.dropped_events")}</em> {s.dropped_events}</span>
+                                <span><em style={{ opacity: 0.6, fontStyle: "normal" }}>{t("rt.sensors.last_seen")}</em> {s.last_seen_at ? fmt(s.last_seen_at) : t("rt.sensors.never")}</span>
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                    </>
                   );
                 })}
               </tbody>

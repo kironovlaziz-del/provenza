@@ -473,3 +473,73 @@ async def test_kill_switch_isolates_every_workload(client, admin_token):
     assert after.headers["ETag"] != etag
     assert all(w["isolated"] and w["isolated_reason"] == "org_traffic_stopped"
                for w in after.json()["workloads"])
+
+
+
+@pytest.mark.asyncio
+async def test_force_refresh_bumps_revision(client, admin_token):
+    """Force refresh increments the org's revision so sensors get a 200 on
+    their next poll, not a 304."""
+    created = await _register_sensor(client, admin_token, name="host-refresh")
+    key = created["api_key"]
+
+    # Baseline: version is the current revision (no kill switch, no suspended agent).
+    r = await client.get(f"{BASE}/config", headers={"X-Sensor-Key": key})
+    base_version = r.json()["version"]
+
+    r = await client.post(
+        f"{BASE}/sensors/{created['id']}/refresh",
+        headers=auth_headers(admin_token),
+    )
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["bumped"] is True
+    assert isinstance(body["new_revision"], int)
+
+    # The sensor sees a different version on the next fetch.
+    r = await client.get(f"{BASE}/config", headers={"X-Sensor-Key": key})
+    assert r.status_code == 200
+    assert r.json()["version"] != base_version
+
+
+@pytest.mark.asyncio
+async def test_force_refresh_requires_admin(client, approver_token, admin_token):
+    """A non-admin cannot bump the org's revision."""
+    created = await _register_sensor(client, admin_token, name="host-refresh-perm")
+    r = await client.post(
+        f"{BASE}/sensors/{created['id']}/refresh",
+        headers=auth_headers(approver_token),
+    )
+    assert r.status_code in (401, 403), r.text
+
+
+@pytest.mark.asyncio
+async def test_force_refresh_unknown_sensor(client, admin_token):
+    r = await client.post(
+        f"{BASE}/sensors/999999/refresh",
+        headers=auth_headers(admin_token),
+    )
+    assert r.status_code == 404, r.text
+
+
+@pytest.mark.asyncio
+async def test_force_refresh_writes_audit(client, admin_token, db_session):
+    """Every refresh is on the audit log: who asked, when, and the new revision."""
+    from sqlalchemy import select
+    from app.models.audit_log import AIAuditLog
+
+    created = await _register_sensor(client, admin_token, name="host-refresh-audit")
+    r = await client.post(
+        f"{BASE}/sensors/{created['id']}/refresh",
+        headers=auth_headers(admin_token),
+    )
+    assert r.status_code == 200, r.text
+
+    rows = (await db_session.execute(
+        select(AIAuditLog).where(
+            AIAuditLog.entity_type == "egress_sensor",
+            AIAuditLog.entity_id == created["id"],
+            AIAuditLog.action == "refreshed",
+        )
+    )).scalars().all()
+    assert len(rows) == 1

@@ -50,6 +50,14 @@ export const revokeSensor = async (id: number) => {
   await api.delete(`/egress-sensor/sensors/${id}`);
 };
 
+/** Bump the org's policy revision so every sensor picks up the current
+ *  policy on its next poll instead of waiting for the next scheduled
+ *  change. Returns the new revision number. */
+export const refreshSensor = async (id: number) =>
+  (await api.post<{ bumped: boolean; new_revision: number }>(
+    `/egress-sensor/sensors/${id}/refresh`,
+  )).data;
+
 // ---------------------------------------------------------------- workloads
 
 export type RuntimeMode = "observe" | "alert" | "enforce";

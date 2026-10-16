@@ -3405,7 +3405,17 @@
       "install_hint": "Or, on the host where the sensor should run, paste this one command:",
       "install_command": "One-line install command",
       "copy_install": "Copy install command",
-      "install_copied": "Install command copied to the clipboard. Paste it into the sensor host's shell."
+      "install_copied": "Install command copied to the clipboard. Paste it into the sensor host's shell.",
+      "force_refresh": "Force refresh",
+      "refreshed": "Refresh triggered for {{name}}. Sensors pick up the new policy within 30 seconds (revision {{n}}).",
+      "toggle_details": "Toggle details",
+      "hooks_list": "Hooks",
+      "warnings_list": "Warnings",
+      "errors_list": "Errors",
+      "runtime_section": "Runtime",
+      "kernel": "Kernel",
+      "config_version": "Config version",
+      "dropped_events": "Dropped events"
     },
     "load_failed": "Could not load runtime data.",
     "save_failed": "Could not save the workload.",
