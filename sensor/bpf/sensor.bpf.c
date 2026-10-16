@@ -55,7 +55,14 @@ enum { EV_VIOLATION = 1, EV_MKDIR = 2, EV_RMDIR = 3 };
 enum { DIR_EGRESS = 0, DIR_INGRESS = 1 };
 enum { CLS_NONE = 0, CLS_GOVERNED = 1, CLS_HOLD = 2 };
 enum { NOTE_UNKNOWN = 0, NOTE_FREE = 1, NOTE_GOVERNED = 2, NOTE_PENDING = 3 };
-enum { STAT_EVENTS_LOST = 0, STAT_MKDIR_LOST = 1, STAT_MAX = 4 };
+enum {
+        STAT_EVENTS_LOST = 0,
+        STAT_MKDIR_LOST  = 1,
+        STAT_ALLOWED     = 2,   /* governed decision, kernel let it through */
+        STAT_DENIED      = 3,   /* governed decision, kernel refused it */
+        STAT_OBSERVED    = 4,   /* governed decision, outside policy but not blocked */
+        STAT_MAX         = 5,
+};
 
 #define WL_DNS_V6 0x1
 
@@ -525,8 +532,10 @@ static __always_inline int on_addr(struct bpf_sock_addr *ctx, int v6, __u8 kind)
 	if (!g)
 		return 0;
 	struct wl_cfg *w = workload_of(g, c.wid);
-	if (!w)
-		return 0; /* governed, but not in the policy in force: fail closed */
+	if (!w) {
+		stat_inc(STAT_DENIED); /* governed, but not in the policy in force: fail closed */
+		return 0;
+	}
 
 	__u8 proto = ctx->type == SOCK_STREAM ? IPPROTO_TCP : IPPROTO_UDP;
 	__u8 a[16] = {};
@@ -551,6 +560,7 @@ static __always_inline int on_addr(struct bpf_sock_addr *ctx, int v6, __u8 kind)
 	__u8 family = fam6 ? AF_INET6 : AF_INET;
 
 	if (w->isolated) {
+		stat_inc(STAT_DENIED);
 		emit(&c, ACT_BLOCKED, kind, proto, family, port, a, 1, 0, 1);
 		return 0;
 	}
@@ -559,9 +569,14 @@ static __always_inline int on_addr(struct bpf_sock_addr *ctx, int v6, __u8 kind)
 		int can = w->dns_port && (!fam6 || (w->flags & WL_DNS_V6));
 		if (!can) {
 			__u8 act = action_for(w);
+			if (act == ACT_BLOCKED)
+				stat_inc(STAT_DENIED);
+			else
+				stat_inc(STAT_OBSERVED);
 			emit(&c, act, kind, proto, family, port, a, 0, 0, 1);
 			return act != ACT_BLOCKED;
 		}
+		stat_inc(STAT_ALLOWED);
 		struct sk_note *n = 0;
 		if (ctx->sk)
 			n = bpf_sk_storage_get(&notes, ctx->sk, 0, BPF_SK_STORAGE_GET_F_CREATE);
@@ -596,9 +611,15 @@ static __always_inline int on_addr(struct bpf_sock_addr *ctx, int v6, __u8 kind)
 		return 1;
 	}
 
-	if (policy_allows(g->gen, c.wid, DIR_EGRESS, proto, port, fam6, a))
+	if (policy_allows(g->gen, c.wid, DIR_EGRESS, proto, port, fam6, a)) {
+		stat_inc(STAT_ALLOWED);
 		return 1;
+	}
 	__u8 act = action_for(w);
+	if (act == ACT_BLOCKED)
+		stat_inc(STAT_DENIED);
+	else
+		stat_inc(STAT_OBSERVED);
 	emit(&c, act, kind, proto, family, port, a, 0, 0, 1);
 	return act != ACT_BLOCKED;
 }

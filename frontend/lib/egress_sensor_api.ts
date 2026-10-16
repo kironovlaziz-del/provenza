@@ -28,6 +28,10 @@ export interface SensorT {
   config_version: string | null;
   last_seen_at: string | null;
 
+  allowed_total: number;
+  denied_total: number;
+  observed_total: number;
+
   created_at: string;
   updated_at: string | null;
 }

@@ -3479,7 +3479,16 @@
       "rotate_ok": "Yangi imzolash kaliti yaratildi. {{n}} sensor yangilash buyrug'ini oldi.",
       "finalize_confirm": "Oldingi imzolash kaliti olib tashlansinmi? Shundan keyin eski kalit bilan imzolangan buyruqlar hech bir sensorda tasdiqlanmaydi. Faqat barcha sensorlar yangilangach bajaring.",
       "finalize_ok": "Oldingi imzolash kaliti olib tashlandi.",
-      "finalize_hint": "Buni barcha sensorlar yangi kalitni olgandan keyin bir marta bajaring. Ungacha ikkala kalit ham tasdiqlanadi."
+      "finalize_hint": "Buni barcha sensorlar yangi kalitni olgandan keyin bir marta bajaring. Ungacha ikkala kalit ham tasdiqlanadi.",
+      "activity_section": "Faoliyat",
+      "counter_allowed": "ruxsat",
+      "counter_denied": "rad",
+      "counter_observed": "kuzatildi",
+      "act_pause": "⏸ Pauza",
+      "act_resume": "▶ Davom",
+      "act_clear": "Tozalash",
+      "act_latest": "↓ Oxirgi",
+      "act_none": "Hozircha hodisa yo'q."
     },
     "load_failed": "Runtime ma'lumotlarini yuklab bo'lmadi.",
     "save_failed": "Ish yukini saqlab bo'lmadi.",

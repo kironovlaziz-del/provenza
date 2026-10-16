@@ -1597,3 +1597,40 @@ button.sidebar-section:hover { background: var(--bg-sidebar-hover); color: var(-
   border-bottom-color: var(--accent);
   font-weight: 600;
 }
+
+/* Activity window on the expanded sensor row. Fixed height so a busy host
+   does not push the rest of the page; monospace; own scroll. */
+.sensor-activity {
+  margin-top: 4px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.55;
+  background: var(--code-bg, rgba(0, 0, 0, 0.28));
+  border: 1px solid var(--border, #333);
+  border-radius: 6px;
+  padding: 8px 10px;
+  height: 240px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.sensor-activity-empty { opacity: 0.5; font-style: italic; }
+.sensor-activity-line { display: flex; gap: 8px; }
+.sensor-activity-line .t { opacity: 0.55; flex: 0 0 auto; }
+.sensor-activity-line .icon-allow { color: var(--ok, #3fb950); }
+.sensor-activity-line .icon-deny  { color: var(--danger, #c0392b); }
+.sensor-activity-line .icon-obs   { color: var(--warn, #d29922); }
+.sensor-activity-controls {
+  display: flex; gap: 8px; align-items: center;
+  margin-bottom: 6px; font-size: 12px;
+}
+.sensor-activity-counters {
+  display: flex; gap: 18px; flex-wrap: wrap;
+  font-size: 12px; margin-bottom: 8px;
+}
+.sensor-activity-counters .num { font-weight: 600; }
+.sensor-activity-counters .lbl { opacity: 0.6; font-size: 11px; }
+.sensor-activity-counters .allow .num { color: var(--ok, #3fb950); }
+.sensor-activity-counters .deny  .num { color: var(--danger, #c0392b); }
+.sensor-activity-counters .obs   .num { color: var(--warn, #d29922); }

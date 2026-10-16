@@ -3479,7 +3479,16 @@
       "rotate_ok": "New signing key generated. {{n}} sensor(s) got an update command.",
       "finalize_confirm": "Drop the previous signing key? After this, commands signed with the old key no longer verify on any sensor. Only do it once every sensor has updated.",
       "finalize_ok": "Previous signing key dropped.",
-      "finalize_hint": "Run this once every sensor has picked up the new key. Until then, both keys verify."
+      "finalize_hint": "Run this once every sensor has picked up the new key. Until then, both keys verify.",
+      "activity_section": "Activity",
+      "counter_allowed": "allowed",
+      "counter_denied": "denied",
+      "counter_observed": "observed",
+      "act_pause": "⏸ Pause",
+      "act_resume": "▶ Resume",
+      "act_clear": "Clear",
+      "act_latest": "↓ Latest",
+      "act_none": "No events yet."
     },
     "load_failed": "Could not load runtime data.",
     "save_failed": "Could not save the workload.",

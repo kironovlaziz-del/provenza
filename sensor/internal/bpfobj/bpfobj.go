@@ -69,6 +69,9 @@ const (
 
 	StatEventsLost = 0
 	StatMkdirLost  = 1
+	StatAllowed    = 2
+	StatDenied     = 3
+	StatObserved   = 4
 
 	PathLen = 512
 )

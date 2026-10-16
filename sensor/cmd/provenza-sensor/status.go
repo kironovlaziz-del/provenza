@@ -173,6 +173,9 @@ type DNSSection struct {
 
 type StatsSection struct {
 	DroppedEvents uint64 `json:"dropped_events"`
+	Allowed       uint64 `json:"allowed"`
+	Denied        uint64 `json:"denied"`
+	Observed      uint64 `json:"observed"`
 }
 
 // ---------------------------------------------------------------- formatting
@@ -277,7 +280,10 @@ func printReport(w *os.File, st *Status) {
 
 	printDNS(w, st)
 
-	fmt.Fprintf(w, "Stats\n")
+	fmt.Fprintf(w, "Traffic\n")
+	fmt.Fprintf(w, "  allowed        %d\n", st.Stats.Allowed)
+	fmt.Fprintf(w, "  denied         %d\n", st.Stats.Denied)
+	fmt.Fprintf(w, "  observed       %d\n", st.Stats.Observed)
 	fmt.Fprintf(w, "  dropped events %d\n", st.Stats.DroppedEvents)
 }
 

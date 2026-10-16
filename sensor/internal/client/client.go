@@ -144,6 +144,9 @@ type Heartbeat struct {
 	Warnings      []string         `json:"warnings,omitempty"`
 	Errors        []string         `json:"errors,omitempty"`
 	DroppedEvents uint64           `json:"dropped_events"`
+	AllowedTotal  uint64           `json:"allowed_total,omitempty"`
+	DeniedTotal   uint64           `json:"denied_total,omitempty"`
+	ObservedTotal uint64           `json:"observed_total,omitempty"`
 }
 
 type WorkloadReport struct {

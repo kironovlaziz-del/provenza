@@ -9,6 +9,7 @@ import { useTranslation } from "react-i18next";
 import { PageHeader } from "@/components/PageHeader";
 import { confirmDialog } from "@/components/Dialog";
 import { errorMessage as apiError } from "@/lib/errors";
+import { SensorActivity } from "@/components/SensorActivity";
 import { listAgents } from "@/lib/agent_api";
 import type { Agent } from "@/lib/agent_types";
 import {
@@ -1039,6 +1040,13 @@ export default function RuntimePage() {
                                   </tbody>
                                 </table>
                               )}
+                            </div>
+
+                            <div>
+                              <div style={{ fontWeight: 600, marginBottom: 4, fontSize: 11, textTransform: "uppercase", letterSpacing: 0.6, opacity: 0.55 }}>
+                                {t("rt.sensors.activity_section")}
+                              </div>
+                              <SensorActivity sensor={s} />
                             </div>
                           </div>
                         </td>

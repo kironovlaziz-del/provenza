@@ -104,6 +104,9 @@ func (d *Daemon) sendHeartbeat(ctx context.Context) {
 		Workloads:     wls,
 		Warnings:      d.kernel.Notes,
 		DroppedEvents: d.kernel.Stat(bpfobj.StatEventsLost),
+		AllowedTotal:  d.kernel.Stat(bpfobj.StatAllowed),
+		DeniedTotal:   d.kernel.Stat(bpfobj.StatDenied),
+		ObservedTotal: d.kernel.Stat(bpfobj.StatObserved),
 	}
 	resp, err := d.client.Heartbeat(ctx, h)
 	if err != nil {
