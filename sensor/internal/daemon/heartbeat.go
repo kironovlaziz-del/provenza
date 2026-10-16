@@ -94,6 +94,7 @@ func (d *Daemon) sendHeartbeat(ctx context.Context) {
 		cfgVer = &v
 	}
 
+	aMin, dMin, oMin := d.stats.rates()
 	h := client.Heartbeat{
 		Hostname:      host,
 		Version:       d.version,
@@ -107,6 +108,9 @@ func (d *Daemon) sendHeartbeat(ctx context.Context) {
 		AllowedTotal:  d.kernel.Stat(bpfobj.StatAllowed),
 		DeniedTotal:   d.kernel.Stat(bpfobj.StatDenied),
 		ObservedTotal: d.kernel.Stat(bpfobj.StatObserved),
+		AllowedPerMin:  aMin,
+		DeniedPerMin:   dMin,
+		ObservedPerMin: oMin,
 	}
 	resp, err := d.client.Heartbeat(ctx, h)
 	if err != nil {

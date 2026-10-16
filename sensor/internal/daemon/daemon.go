@@ -46,6 +46,7 @@ type Daemon struct {
 	dns    *dnsServers
 	viol   *violationBuffer
 	act    *activityBuffer
+	stats  *statsRing
 	run    *runServer
 	status *statusServer
 
@@ -101,6 +102,7 @@ func New(cfgPath, version string) (*Daemon, error) {
 		uidSet:    map[uint32]bool{},
 		viol:      newViolationBuffer(cl),
 		act:       newActivityBuffer(cl),
+		stats:     newStatsRing(),
 		startTime: time.Now(),
 	}
 	d.dns = newDNSServers(d)
@@ -182,6 +184,7 @@ func (d *Daemon) Run(ctx context.Context) error {
 	start(d.cgroupWalkLoop)
 	start(d.viol.run)
 	start(d.act.run)
+	start(d.statsLoop)
 	d.dns.start(ctx, &wg)
 
 	<-ctx.Done()
