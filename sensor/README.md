@@ -30,6 +30,10 @@ beyond the kernel.
   running daemon for a dedicated cgroup, moves the child into it, and
   execs the command. The cgroup is named `provenza-agent-N-<random>` and
   is removed when the last process exits.
+- **Signed commands.** The control plane can queue one of three
+  operations for a sensor — detach, restart, dump-state — each signed
+  with the organization's Ed25519 key and delivered on the next
+  heartbeat. See `docs/sensor-commands.md`.
 
 ## Requirements
 
@@ -112,6 +116,29 @@ All fields have sensible defaults. `PROVENZA_URL` and
 Authentication is `X-Sensor-Key: pvz_sensor_...`. A revoked key yields
 `401` or `403`, which the client reports as `ErrUnauthorized`; the sensor
 keeps the current policy and keeps retrying.
+
+## Commands
+
+An admin can queue one of three operations for a sensor from the
+Runtime page (expand the sensor's row):
+
+- **Dump state** — the sensor sends back its own snapshot, the same JSON
+  `provenza-sensor status --json` prints locally.
+- **Restart** — systemd restarts the daemon; pinned BPF links keep
+  enforcement across the restart.
+- **Detach** — full uninstall on the host. Irreversible from the sensor
+  side; re-enroll to bring the sensor back.
+
+Every command is signed with the organization's Ed25519 key and verified
+by the sensor before anything happens. The key and the sensor's own id
+are written by `enroll` and live in
+`/etc/provenza-sensor/signing-key.pub` and
+`/etc/provenza-sensor/sensor-id`. A missing key (an older install that
+was never re-enrolled) is a warning, not an error: the sensor still
+enforces policy, it just refuses every command.
+
+The full model, including what a stolen signing key can and cannot do,
+is in `docs/sensor-commands.md`.
 
 ## Troubleshooting
 
