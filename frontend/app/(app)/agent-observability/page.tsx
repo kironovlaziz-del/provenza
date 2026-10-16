@@ -23,6 +23,7 @@ import {
   type Timeseries,
 } from "@/lib/observability_api";
 import { promptDialog } from "@/components/Dialog";
+import { PageHeader } from "@/components/PageHeader";
 
 /* ------------------------------------------------------------------ palette */
 // Categorical slots (dark steps, validated against the panel surface #25262e):
@@ -650,11 +651,12 @@ export default function AgentObservabilityPage() {
   );
 
   return (
-    <div className="obsk">
+    <>
+      <PageHeader title={t("obs.title", "Agent observability")} />
+      <div className="obsk">
       <style>{CSS}</style>
 
       <div className="bar">
-        <h1>{t("obs.title", "Agent observability")}</h1>
         <span style={{ color: stream.state === "live" ? "#3fb950" : "#d29922" }} title={stream.detail}>● {t(`obs.state_${stream.state}`, stream.state)}</span>
         <span style={{ display: "inline-flex", gap: 4 }}>
           {WINDOWS.map((m) => <button key={m} className={`btn${minutes === m ? " on" : ""}`} onClick={() => setMinutes(m)}>{fmtWin(m)}</button>)}
@@ -757,5 +759,6 @@ export default function AgentObservabilityPage() {
         <div style={{ color: "var(--muted)", marginTop: 6 }}>{held.length} {t("obs.new", "new")} — {t("obs.paused_hint", "press Resume")}</div>
       )}
     </div>
+    </>
   );
 }
