@@ -11,6 +11,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"os"
@@ -31,7 +32,11 @@ type enrollOpts struct {
 	RunSocket  string
 	RunGroup   string
 	RingBytes  uint
-	NoRestart  bool
+
+	SigningKeyFile string
+	SensorIDFile   string
+
+	NoRestart bool
 }
 
 // enrollCmd is the `provenza-sensor enroll` entry point: it takes the URL
@@ -51,6 +56,10 @@ func enrollCmd(ctx context.Context, args []string) {
 	fs.StringVar(&o.RunSocket, "run-socket", "/run/provenza-sensor/run.sock", "run socket path")
 	fs.StringVar(&o.RunGroup, "run-group", "provenza", "group allowed to use the run socket")
 	fs.UintVar(&o.RingBytes, "ring-bytes", 262144, "ring buffer size (power of two)")
+	fs.StringVar(&o.SigningKeyFile, "signing-key-file", "/etc/provenza-sensor/signing-key.pub",
+		"where to write the command signing public key")
+	fs.StringVar(&o.SensorIDFile, "sensor-id-file", "/etc/provenza-sensor/sensor-id",
+		"where to write this sensor's id")
 	fs.BoolVar(&o.NoRestart, "no-restart", false, "do not restart provenzasensor.service after writing the config")
 	fs.Usage = func() {
 		fmt.Fprintln(os.Stderr, "usage: provenza-sensor enroll --url URL --key pvz_sensor_...")
@@ -95,15 +104,17 @@ func enroll(ctx context.Context, o enrollOpts) error {
 	slog.Info("wrote key", "path", o.KeyFile)
 
 	cfg := map[string]any{
-		"provenza_url":  url,
-		"key_file":      o.KeyFile,
-		"cgroup_root":   o.CgroupRoot,
-		"attach_cgroup": o.CgroupRoot,
-		"pin_dir":       o.PinDir,
-		"state_dir":     o.StateDir,
-		"run_socket":    o.RunSocket,
-		"run_group":     o.RunGroup,
-		"ring_bytes":    uint32(o.RingBytes),
+		"provenza_url":     url,
+		"key_file":         o.KeyFile,
+		"cgroup_root":      o.CgroupRoot,
+		"attach_cgroup":    o.CgroupRoot,
+		"pin_dir":          o.PinDir,
+		"state_dir":        o.StateDir,
+		"run_socket":       o.RunSocket,
+		"run_group":        o.RunGroup,
+		"ring_bytes":       uint32(o.RingBytes),
+		"signing_key_file": o.SigningKeyFile,
+		"sensor_id_file":   o.SensorIDFile,
 	}
 	buf := &bytes.Buffer{}
 	enc := json.NewEncoder(buf)
@@ -115,6 +126,16 @@ func enroll(ctx context.Context, o enrollOpts) error {
 		return fmt.Errorf("write config: %w", err)
 	}
 	slog.Info("wrote config", "path", o.ConfigPath)
+
+	// Fetch the command signing public key and this sensor's id. Both are
+	// optional: an older backend without the command feature answers 404,
+	// and the sensor keeps working - it just cannot be commanded.
+	if err := writeSigningKey(ctx, url, o.Key, o.SigningKeyFile, o.SensorIDFile); err != nil {
+		slog.Warn("command signing key not saved; commands will be refused", "err", err)
+	} else {
+		slog.Info("wrote signing key", "path", o.SigningKeyFile)
+		slog.Info("wrote sensor id", "path", o.SensorIDFile)
+	}
 
 	if !o.NoRestart {
 		if _, err := exec.LookPath("systemctl"); err == nil {
@@ -168,4 +189,54 @@ func verifyKey(ctx context.Context, url, key string) error {
 	default:
 		return fmt.Errorf("unexpected status %d", resp.StatusCode)
 	}
+}
+
+// writeSigningKey fetches /signing-key with the sensor key and writes the
+// public key and the sensor id to files the daemon reads at every start.
+// A missing endpoint (older backend) is reported as a warn by the caller,
+// not a hard error: enforcement does not depend on it.
+func writeSigningKey(ctx context.Context, base, sensorKey, keyPath, idPath string) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet,
+		strings.TrimRight(base, "/")+"/api/v1/egress-sensor/signing-key", nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("X-Sensor-Key", sensorKey)
+	c := &http.Client{Timeout: 10 * time.Second}
+	resp, err := c.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusNotFound {
+		return errors.New("the control plane does not expose /signing-key (older version)")
+	}
+	if resp.StatusCode/100 != 2 {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		return fmt.Errorf("/signing-key: HTTP %d: %s", resp.StatusCode, body)
+	}
+	var out struct {
+		PublicKey string `json:"public_key"`
+		SensorID  int    `json:"sensor_id"`
+	}
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&out); err != nil {
+		return fmt.Errorf("decode /signing-key: %w", err)
+	}
+	if out.PublicKey == "" || out.SensorID <= 0 {
+		return errors.New("/signing-key: empty response")
+	}
+
+	if err := os.MkdirAll(filepath.Dir(keyPath), 0o755); err != nil {
+		return err
+	}
+	if err := os.WriteFile(keyPath, []byte(out.PublicKey+"\n"), 0o644); err != nil {
+		return fmt.Errorf("write signing key: %w", err)
+	}
+	if err := os.MkdirAll(filepath.Dir(idPath), 0o755); err != nil {
+		return err
+	}
+	if err := os.WriteFile(idPath, []byte(fmt.Sprintf("%d\n", out.SensorID)), 0o644); err != nil {
+		return fmt.Errorf("write sensor id: %w", err)
+	}
+	return nil
 }

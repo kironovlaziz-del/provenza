@@ -3439,7 +3439,35 @@
       "set_default_mode_hint": "What “New workload” pre-fills. Existing workloads keep their own mode.",
       "set_default_dns": "Default DNS mode for new workloads",
       "set_default_dns_hint": "What “New workload” pre-fills. Existing workloads keep their own DNS mode.",
-      "set_load_hint": "With {{n}} sensor(s) here, this is roughly {{rps}} requests per second against the control plane."
+      "set_load_hint": "With {{n}} sensor(s) here, this is roughly {{rps}} requests per second against the control plane.",
+      "commands_section": "Commands",
+      "cmd_dump": "Dump state",
+      "cmd_restart": "Restart",
+      "cmd_detach": "Detach…",
+      "cmd_queued": "{{kind}} queued for {{name}}. The sensor picks it up on its next heartbeat.",
+      "cmd_none": "No commands issued yet.",
+      "cmd_col_kind": "Command",
+      "cmd_col_status": "Status",
+      "cmd_col_issued": "Issued",
+      "cmd_col_acked": "Acked",
+      "cmd_show_result": "Show result",
+      "cmd_hide_result": "Hide result",
+      "cmd_confirm_restart": "Restart the sensor on {{name}}? The daemon will exit and systemd brings it back within a second; enforcement pauses briefly.",
+      "cmd_confirm_detach_1": "Detach the sensor from {{name}}? This uninstalls it on the host: the BPF programs are detached and the policy stops being enforced there.",
+      "cmd_confirm_detach_2": "Confirm again: run the uninstall on {{host}}? The sensor will pick up the command at its next heartbeat.",
+      "cmd_kind": {
+        "detach": "Detach",
+        "restart": "Restart",
+        "dump-state": "Dump state"
+      },
+      "cmd_status": {
+        "pending": "Pending",
+        "delivered": "Delivered",
+        "executing": "Executing",
+        "done": "Done",
+        "failed": "Failed",
+        "expired": "Expired"
+      }
     },
     "load_failed": "Could not load runtime data.",
     "save_failed": "Could not save the workload.",

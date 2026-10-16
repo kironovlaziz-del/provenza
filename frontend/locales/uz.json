@@ -3439,7 +3439,35 @@
       "set_default_mode_hint": "«Yangi ish yuki» nimani to'ldiradi. Mavjud ish yuklari o'z rejimini saqlaydi.",
       "set_default_dns": "Yangi ish yuklari uchun standart DNS rejimi",
       "set_default_dns_hint": "«Yangi ish yuki» nimani to'ldiradi. Mavjud ish yuklari o'z DNS rejimini saqlaydi.",
-      "set_load_hint": "Bu yerda {{n}} sensor bilan bu nazorat tekisligiga sekundiga taxminan {{rps}} so'rov bo'ladi."
+      "set_load_hint": "Bu yerda {{n}} sensor bilan bu nazorat tekisligiga sekundiga taxminan {{rps}} so'rov bo'ladi.",
+      "commands_section": "Buyruqlar",
+      "cmd_dump": "Holatni yuborish",
+      "cmd_restart": "Qayta ishga tushirish",
+      "cmd_detach": "Uzish…",
+      "cmd_queued": "{{name}} uchun {{kind}} navbatga qo'yildi. Sensor uni keyingi heartbeat'da oladi.",
+      "cmd_none": "Hozircha buyruq berilmagan.",
+      "cmd_col_kind": "Buyruq",
+      "cmd_col_status": "Holat",
+      "cmd_col_issued": "Berilgan",
+      "cmd_col_acked": "Tasdiqlangan",
+      "cmd_show_result": "Natijani ko'rsatish",
+      "cmd_hide_result": "Natijani yashirish",
+      "cmd_confirm_restart": "{{name}} dagi sensorni qayta ishga tushirish? Daemon chiqadi, systemd bir sekund ichida qaytaradi; himoya qisqa vaqt to'xtaydi.",
+      "cmd_confirm_detach_1": "{{name}} dan sensorni uzish? Bu xostda uni o'chiradi: BPF dasturlari uziladi va siyosat u yerda qo'llanilmaydi.",
+      "cmd_confirm_detach_2": "Yana tasdiqlang: {{host}} da o'chirishni boshlaysizmi? Sensor buyruqni keyingi heartbeat'da oladi.",
+      "cmd_kind": {
+        "detach": "Uzish",
+        "restart": "Qayta ishga tushirish",
+        "dump-state": "Holatni yuborish"
+      },
+      "cmd_status": {
+        "pending": "Kutilmoqda",
+        "delivered": "Yetkazilgan",
+        "executing": "Bajarilmoqda",
+        "done": "Bajarildi",
+        "failed": "Muvaffaqiyatsiz",
+        "expired": "Muddati o'tgan"
+      }
     },
     "load_failed": "Runtime ma'lumotlarini yuklab bo'lmadi.",
     "save_failed": "Ish yukini saqlab bo'lmadi.",

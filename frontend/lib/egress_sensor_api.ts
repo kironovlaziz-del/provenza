@@ -206,3 +206,40 @@ export const getSensorSettings = async () =>
 
 export const updateSensorSettings = async (input: SensorSettingsInput) =>
   (await api.patch<SensorSettingsT>("/egress-sensor/settings", input)).data;
+
+// ---------------------------------------------------------------- commands
+
+export type CommandKind = "detach" | "restart" | "dump-state";
+export type CommandStatus =
+  | "pending"
+  | "delivered"
+  | "executing"
+  | "done"
+  | "failed"
+  | "expired";
+
+/** One command queued for a sensor and how it is going.
+ *
+ *  The lifecycle is: pending -> delivered (heartbeat carried it) ->
+ *  executing (sensor acked) -> done | failed. A command that is not
+ *  delivered within its TTL becomes expired and is never run.
+ */
+export interface CommandT {
+  id: number;
+  sensor_id: number;
+  kind: CommandKind;
+  status: CommandStatus;
+  issued_by: number | null;
+  issued_at: string;
+  expires_at: string;
+  delivered_at: string | null;
+  acked_at: string | null;
+  result: Record<string, unknown> | null;
+  error: string | null;
+}
+
+export const listSensorCommands = async (id: number, limit = 50) =>
+  (await api.get<CommandT[]>(`/egress-sensor/sensors/${id}/commands`, { params: { limit } })).data;
+
+export const createSensorCommand = async (id: number, kind: CommandKind) =>
+  (await api.post<CommandT>(`/egress-sensor/sensors/${id}/commands`, { kind })).data;

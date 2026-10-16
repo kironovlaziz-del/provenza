@@ -13,9 +13,11 @@ import { listAgents } from "@/lib/agent_api";
 import type { Agent } from "@/lib/agent_types";
 import {
   DNS_MODES, PROTOCOLS, RUNTIME_MODES, VIOLATION_ACTIONS,
-  createWorkload, deleteWorkload, getSensorSettings, listSensorWorkloads, listSensors, listViolations, listWorkloads,
+  createSensorCommand, createWorkload, deleteWorkload, getSensorSettings,
+  listSensorCommands, listSensorWorkloads, listSensors, listViolations, listWorkloads,
   refreshSensor, registerSensor, revokeSensor, updateSensor, updateSensorSettings, updateWorkload,
-  type AllowT, type DNSMode, type Protocol, type RuntimeMode, type SensorCreatedT, type SensorSettingsInput, type SensorSettingsT, type SensorT,
+  type AllowT, type CommandKind, type CommandStatus, type CommandT, type DNSMode, type Protocol,
+  type RuntimeMode, type SensorCreatedT, type SensorSettingsInput, type SensorSettingsT, type SensorT,
   type SensorWorkloadT,
   type ViolationAction, type ViolationT, type WorkloadInput, type WorkloadT,
 } from "@/lib/egress_sensor_api";
@@ -46,6 +48,17 @@ const EMPTY: Draft = {
 };
 
 const MODE_PILL: Record<RuntimeMode, string> = { observe: "pill-neutral", alert: "pill-medium", enforce: "pill-low" };
+
+// Colour of each command status. Only "done" reads as safe, "failed" and
+// "expired" read as a problem, everything in flight is neutral-to-warning.
+const CMD_STATUS_PILL: Record<CommandStatus, string> = {
+  pending: "pill-neutral",
+  delivered: "pill-neutral",
+  executing: "pill-medium",
+  done: "pill-low",
+  failed: "pill-critical",
+  expired: "pill-critical",
+};
 const ACTION_PILL: Record<ViolationAction, string> = { observed: "pill-neutral", alerted: "pill-medium", blocked: "pill-critical" };
 
 function rowFromAllow(a: AllowT, side: "egress" | "ingress"): AllowRow {
@@ -143,6 +156,12 @@ export default function RuntimePage() {
   const [settingsDraft, setSettingsDraft] = useState<SensorSettingsInput>({});
   const [settingsOpen, setSettingsOpen] = useState(false);
 
+  // Commands per sensor, cached like workloads: null while loading, an
+  // array when fetched. Cleared on collapse so a re-open refetches.
+  const [sensorCommands, setSensorCommands] = useState<Record<number, CommandT[] | null>>({});
+  // The command history toggle per sensor in the details row.
+  const [showCommandResult, setShowCommandResult] = useState<Record<number, boolean>>({});
+
   const loadWorkloads = useCallback(() => {
     listWorkloads(showDeleted).then(setWorkloads).catch((err) => setError(apiError(err, t, t("rt.load_failed"))));
   }, [t, showDeleted]);
@@ -170,10 +189,33 @@ export default function RuntimePage() {
       .catch(err => setError(apiError(err, t, t("rt.load_failed"))));
   }, [t]);
 
+  const loadCommands = useCallback((sensorId: number) => {
+    listSensorCommands(sensorId)
+      .then(rows => setSensorCommands(prev => ({ ...prev, [sensorId]: rows })))
+      .catch(err => {
+        setError(apiError(err, t, t("rt.load_failed")));
+        setSensorCommands(prev => ({ ...prev, [sensorId]: [] }));
+      });
+  }, [t]);
+
   useEffect(loadWorkloads, [loadWorkloads]);
   useEffect(loadViolations, [loadViolations]);
   useEffect(loadSensors, [loadSensors]);
   useEffect(loadSettings, [loadSettings]);
+
+  // Poll the command history while a details row is open and something in
+  // it is still in flight. When every command is terminal (done/failed/
+  // expired) the interval stops on its own: there is nothing to watch.
+  useEffect(() => {
+    if (expandedSensorId === null) return;
+    const rows = sensorCommands[expandedSensorId];
+    if (!rows) return;
+    const active = rows.some(c =>
+      c.status === "pending" || c.status === "delivered" || c.status === "executing");
+    if (!active) return;
+    const id = window.setInterval(() => loadCommands(expandedSensorId), 5000);
+    return () => window.clearInterval(id);
+  }, [expandedSensorId, sensorCommands, loadCommands]);
   useEffect(() => { listAgents(500).then(setAgents).catch(() => setAgents([])); }, []);
 
   const agentName = useMemo(() => new Map(agents.map((a) => [a.id, a.name])), [agents]);
@@ -294,6 +336,28 @@ export default function RuntimePage() {
     } finally { setBusy(false); }
   }
 
+  /** Queue one command for a sensor. The sensor picks it up on its next
+   *  heartbeat (up to refresh_seconds away), so nothing changes for a
+   *  moment; the history table below shows the delivery. */
+  async function queueCommand(s: SensorT, kind: CommandKind) {
+    if (kind === "detach") {
+      // Detach is the destructive one: two confirmations, and the second
+      // explicitly names the host so the admin reads it.
+      if (!await confirmDialog(t("rt.sensors.cmd_confirm_detach_1", { name: s.name }), { danger: true })) return;
+      if (!await confirmDialog(t("rt.sensors.cmd_confirm_detach_2", { host: s.hostname ?? s.name }), { danger: true })) return;
+    } else if (kind === "restart") {
+      if (!await confirmDialog(t("rt.sensors.cmd_confirm_restart", { name: s.name }))) return;
+    }
+    setBusy(true); setError(null);
+    try {
+      await createSensorCommand(s.id, kind);
+      setNotice(t("rt.sensors.cmd_queued", { kind: t(`rt.sensors.cmd_kind.${kind}`), name: s.name }));
+      loadCommands(s.id);
+    } catch (err) {
+      setError(apiError(err, t, t("rt.save_failed")));
+    } finally { setBusy(false); }
+  }
+
   async function forceRefresh(s: SensorT) {
     setBusy(true); setError(null);
     try {
@@ -334,6 +398,7 @@ export default function RuntimePage() {
     if (expandedSensorId === id) {
       setExpandedSensorId(null);
       setSensorWorkloads(prev => { const next = { ...prev }; delete next[id]; return next; });
+      setSensorCommands(prev => { const next = { ...prev }; delete next[id]; return next; });
       return;
     }
     setExpandedSensorId(id);
@@ -346,6 +411,8 @@ export default function RuntimePage() {
         setError(apiError(err, t, t("rt.load_failed")));
         setSensorWorkloads(prev => ({ ...prev, [id]: [] }));
       });
+    setSensorCommands(prev => ({ ...prev, [id]: null }));
+    loadCommands(id);
   }
 
   async function revoke(s: SensorT) {
@@ -808,6 +875,81 @@ export default function RuntimePage() {
                                         </td>
                                         <td style={{ padding: "4px 8px", opacity: 0.6 }}>{fmt(wl.updated_at)}</td>
                                       </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              )}
+                            </div>
+
+                            <div>
+                              <div style={{ fontWeight: 600, marginBottom: 4, fontSize: 11, textTransform: "uppercase", letterSpacing: 0.6, opacity: 0.55 }}>
+                                {t("rt.sensors.commands_section")}
+                              </div>
+
+                              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
+                                <button className="btn btn-sm" disabled={busy}
+                                  onClick={() => queueCommand(s, "dump-state")}>
+                                  {t("rt.sensors.cmd_dump")}
+                                </button>
+                                <button className="btn btn-sm" disabled={busy}
+                                  onClick={() => queueCommand(s, "restart")}>
+                                  {t("rt.sensors.cmd_restart")}
+                                </button>
+                                <button className="btn btn-sm btn-danger" disabled={busy}
+                                  onClick={() => queueCommand(s, "detach")}>
+                                  {t("rt.sensors.cmd_detach")}
+                                </button>
+                              </div>
+
+                              {sensorCommands[s.id] === undefined || sensorCommands[s.id] === null ? (
+                                <div style={{ fontSize: 12, opacity: 0.6 }}>{t("rt.sensors.loading")}</div>
+                              ) : sensorCommands[s.id]!.length === 0 ? (
+                                <div style={{ fontSize: 12, opacity: 0.5, fontStyle: "italic" }}>{t("rt.sensors.cmd_none")}</div>
+                              ) : (
+                                <table className="table-cards" style={{ fontSize: 12 }}>
+                                  <thead>
+                                    <tr>
+                                      <th style={{ padding: "4px 8px" }}>{t("rt.sensors.cmd_col_kind")}</th>
+                                      <th style={{ padding: "4px 8px" }}>{t("rt.sensors.cmd_col_status")}</th>
+                                      <th style={{ padding: "4px 8px" }}>{t("rt.sensors.cmd_col_issued")}</th>
+                                      <th style={{ padding: "4px 8px" }}>{t("rt.sensors.cmd_col_acked")}</th>
+                                      <th style={{ padding: "4px 8px" }} />
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {sensorCommands[s.id]!.map(c => (
+                                      <React.Fragment key={c.id}>
+                                        <tr>
+                                          <td style={{ padding: "4px 8px" }}>{t(`rt.sensors.cmd_kind.${c.kind}`)}</td>
+                                          <td style={{ padding: "4px 8px" }}>
+                                            <span className={`pill ${CMD_STATUS_PILL[c.status]}`}>
+                                              {t(`rt.sensors.cmd_status.${c.status}`)}
+                                            </span>
+                                          </td>
+                                          <td style={{ padding: "4px 8px", opacity: 0.6 }}>{fmt(c.issued_at)}</td>
+                                          <td style={{ padding: "4px 8px", opacity: 0.6 }}>{c.acked_at ? fmt(c.acked_at) : "—"}</td>
+                                          <td style={{ padding: "4px 8px" }}>
+                                            {c.result && (
+                                              <button className="btn btn-sm"
+                                                onClick={() => setShowCommandResult(prev => ({ ...prev, [c.id]: !prev[c.id] }))}>
+                                                {showCommandResult[c.id] ? t("rt.sensors.cmd_hide_result") : t("rt.sensors.cmd_show_result")}
+                                              </button>
+                                            )}
+                                            {c.error && (
+                                              <span style={{ color: "var(--danger, #c0392b)", fontSize: 11 }}>{c.error}</span>
+                                            )}
+                                          </td>
+                                        </tr>
+                                        {showCommandResult[c.id] && c.result && (
+                                          <tr>
+                                            <td colSpan={5} style={{ padding: "4px 8px" }}>
+                                              <pre className="mono" style={{ fontSize: 11, lineHeight: 1.5, maxHeight: 320, overflow: "auto", margin: 0, padding: 8 }}>
+                                                {JSON.stringify(c.result, null, 2)}
+                                              </pre>
+                                            </td>
+                                          </tr>
+                                        )}
+                                      </React.Fragment>
                                     ))}
                                   </tbody>
                                 </table>

@@ -113,6 +113,7 @@ from app.workers import (  # noqa: E402,F401
     system_tasks,
     audit_tasks,
     pvp_tasks,
+    egress_sensor_commands_tasks,
     egress_sensor_tasks,
 )
 
