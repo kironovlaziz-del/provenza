@@ -12,6 +12,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
+  getSensor,
   listSensorActivity,
   listSensorViolations,
   type ActivityT,
@@ -39,6 +40,10 @@ function rowFromActivity(a: ActivityT): Row {
 export function SensorActivity({ sensor }: { sensor: SensorT }) {
   const { t, i18n } = useTranslation();
   const [rows, setRows] = useState<Row[]>([]);
+  // The parent only re-renders this component when the sensor list refreshes
+  // (every 30s at best). Poll the sensor itself so the counter row reflects
+  // the current rate within a few seconds of traffic starting.
+  const [liveSensor, setLiveSensor] = useState<SensorT>(sensor);
   const [paused, setPaused] = useState(false);
   const [atBottom, setAtBottom] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -83,6 +88,19 @@ export function SensorActivity({ sensor }: { sensor: SensorT }) {
     return () => window.clearInterval(id);
   }, [paused, load]);
 
+  // Sensor metadata changes slowly (heartbeat is 60s), but the rate must
+  // feel live. 5s polls give the UI enough resolution without a second
+  // request storm on top of the activity window.
+  useEffect(() => {
+    const refresh = () => {
+      getSensor(sensor.id).then(setLiveSensor).catch(() => {});
+    };
+    refresh();
+    if (paused) return;
+    const id = window.setInterval(refresh, 5000);
+    return () => window.clearInterval(id);
+  }, [sensor.id, paused]);
+
   // Auto-scroll only when the user is already at the bottom. Scrolling up
   // is treated as "I am reading history" and stops the scroll; scrolling
   // back down resumes it. This is the standard console behaviour.
@@ -107,13 +125,22 @@ export function SensorActivity({ sensor }: { sensor: SensorT }) {
     setPaused(false);
   }
 
+  // The headline numbers are rates (per minute), the totals go into the
+  // tooltip. A totals-only display stops meaning anything after a day;
+  // a rate keeps saying "how busy is this sensor right now".
   const counters = useMemo(() => {
     return {
-      allowed: sensor.allowed_total ?? 0,
-      denied: sensor.denied_total ?? 0,
-      observed: sensor.observed_total ?? 0,
+      allowedPerMin: liveSensor.allowed_per_min ?? 0,
+      deniedPerMin: liveSensor.denied_per_min ?? 0,
+      observedPerMin: liveSensor.observed_per_min ?? 0,
+      allowedTotal: liveSensor.allowed_total ?? 0,
+      deniedTotal: liveSensor.denied_total ?? 0,
+      observedTotal: liveSensor.observed_total ?? 0,
     };
-  }, [sensor.allowed_total, sensor.denied_total, sensor.observed_total]);
+  }, [
+    liveSensor.allowed_per_min, liveSensor.denied_per_min, liveSensor.observed_per_min,
+    liveSensor.allowed_total, liveSensor.denied_total, liveSensor.observed_total,
+  ]);
 
   const fmt = (iso: string) => new Date(iso).toLocaleTimeString(i18n.language);
 
@@ -140,16 +167,25 @@ export function SensorActivity({ sensor }: { sensor: SensorT }) {
   return (
     <div>
       <div className="sensor-activity-counters">
-        <span className="allow">
-          <span className="num">{counters.allowed.toLocaleString()}</span>{" "}
+        <span
+          className="allow"
+          title={t("rt.sensors.counter_total_tip", { n: counters.allowedTotal.toLocaleString() })}
+        >
+          <span className="num">{counters.allowedPerMin.toLocaleString()}</span>{" "}
           <span className="lbl">{t("rt.sensors.counter_allowed")}</span>
         </span>
-        <span className="deny">
-          <span className="num">{counters.denied.toLocaleString()}</span>{" "}
+        <span
+          className="deny"
+          title={t("rt.sensors.counter_total_tip", { n: counters.deniedTotal.toLocaleString() })}
+        >
+          <span className="num">{counters.deniedPerMin.toLocaleString()}</span>{" "}
           <span className="lbl">{t("rt.sensors.counter_denied")}</span>
         </span>
-        <span className="obs">
-          <span className="num">{counters.observed.toLocaleString()}</span>{" "}
+        <span
+          className="obs"
+          title={t("rt.sensors.counter_total_tip", { n: counters.observedTotal.toLocaleString() })}
+        >
+          <span className="num">{counters.observedPerMin.toLocaleString()}</span>{" "}
           <span className="lbl">{t("rt.sensors.counter_observed")}</span>
         </span>
       </div>
