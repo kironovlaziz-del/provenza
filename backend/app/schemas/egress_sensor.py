@@ -431,3 +431,47 @@ class ViolationOut(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class ActivityIn(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    workload_id: int
+    action: Literal["allowed"] = "allowed"
+    kind: str = Field(max_length=20)
+    protocol: str = Field(default="", max_length=10)
+
+    dst_ip: Optional[str] = Field(default=None, max_length=64)
+    dst_port: Optional[int] = Field(default=None, ge=0, le=65535)
+    dst_name: Optional[str] = Field(default=None, max_length=255)
+    comm: Optional[str] = Field(default=None, max_length=64)
+    cgroup: Optional[str] = Field(default=None, max_length=500)
+
+    isolated: bool = False
+    count: int = Field(default=1, ge=1)
+
+
+class ActivityBatch(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    events: List[ActivityIn] = Field(default_factory=list, max_length=500)
+
+
+class ActivityOut(BaseModel):
+    id: int
+    sensor_id: Optional[int] = None
+    workload_id: Optional[int] = None
+    action: str
+    kind: str
+    protocol: Optional[str] = None
+    dst_ip: Optional[str] = None
+    dst_port: Optional[int] = None
+    dst_name: Optional[str] = None
+    comm: Optional[str] = None
+    cgroup: Optional[str] = None
+    isolated: bool = False
+    count: int = 1
+    created_at: datetime
+
+    class Config:
+        from_attributes = True

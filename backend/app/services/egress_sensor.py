@@ -26,7 +26,7 @@ from app.models.egress_sensor import (
     EgressSensorWorkload,
     EgressViolation,
     EgressWorkload,
-)
+    SensorActivity,)
 from app.schemas.egress_sensor import (HeartbeatIn, PolicyAllow, PolicyOut, PolicySettingsOut,
                                     PolicySettingsUpdate, PolicyWorkload, SensorWorkloadOut,
                                     ViolationIn)
@@ -522,6 +522,49 @@ async def ingest_violations(
 
 
 # ---------------------------------------------------------------- offline
+
+async def ingest_activities(db, sensor, events):
+    """Store a batch of sampled allowed connections.
+
+    Mirrors ingest_violations: events whose workload_id is not this
+    organization's are dropped and counted. No incidents, no notifications,
+    no counter bumps -- activity is read-only telemetry.
+    """
+    if not events:
+        return 0
+
+    wids = {e.workload_id for e in events}
+    q = select(EgressWorkload.id).where(
+        EgressWorkload.id.in_(wids),
+        EgressWorkload.org_id == sensor.org_id,
+    )
+    valid = {row[0] for row in (await db.execute(q)).all()}
+
+    dropped = 0
+    rows = []
+    for e in events:
+        if e.workload_id not in valid:
+            dropped += 1
+            continue
+        rows.append(SensorActivity(
+            org_id=sensor.org_id,
+            sensor_id=sensor.id,
+            workload_id=e.workload_id,
+            action=e.action,
+            kind=e.kind,
+            protocol=e.protocol or None,
+            dst_ip=e.dst_ip,
+            dst_port=e.dst_port,
+            dst_name=e.dst_name,
+            comm=e.comm,
+            cgroup=e.cgroup,
+            isolated=e.isolated,
+            count=e.count,
+        ))
+
+    if rows:
+        db.add_all(rows)
+    return dropped
 
 async def warn_offline_sensors(db: AsyncSession) -> int:
     """Warn once per silent sensor. A sensor counts as silent when it has
