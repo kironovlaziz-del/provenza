@@ -37,6 +37,8 @@ from app.models.egress_sensor import (
 from app.models.user import User, UserRole
 from app.schemas.egress_sensor import (
     HeartbeatIn,
+    PolicySettingsOut,
+    PolicySettingsUpdate,
     SensorCreated,
     SensorOut,
     SensorWorkloadOut,
@@ -416,6 +418,53 @@ async def list_all_violations(
         q = q.where(EgressViolation.action == action)
     q = q.order_by(EgressViolation.created_at.desc()).limit(limit)
     return list((await db.execute(q)).scalars().all())
+
+
+@admin_router.get(
+    "/settings",
+    response_model=PolicySettingsOut,
+    summary="The organization's policy settings (created with defaults on first read)",
+)
+async def get_settings(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role(UserRole.admin)),
+):
+    row = await svc.settings_for(db, current_user.org_id)
+    await db.commit()
+    await db.refresh(row)
+    return row
+
+
+@admin_router.patch(
+    "/settings",
+    response_model=PolicySettingsOut,
+    summary="Update the organization's policy settings",
+)
+async def patch_settings(
+    data: PolicySettingsUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role(UserRole.admin)),
+):
+    before = await svc.settings_for(db, current_user.org_id)
+    changes: dict = {}
+    fields = data.model_dump(exclude_unset=True)
+    for k, v in fields.items():
+        old = getattr(before, k)
+        if old != v:
+            changes[k] = {"from": old, "to": v}
+
+    row = await svc.update_settings(db, current_user.org_id, current_user.id, data)
+
+    if changes:
+        await AuditService(db).log(
+            current_user.org_id, current_user.id, "egress_policy_settings",
+            current_user.org_id, "updated", {"changes": changes},
+        )
+    else:
+        await db.commit()
+
+    await db.refresh(row)
+    return row
 
 
 # ---------------------------------------------------------------- sensor

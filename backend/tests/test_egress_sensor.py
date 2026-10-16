@@ -668,3 +668,102 @@ async def test_heartbeat_deletes_removed_workload(client, admin_token):
 
     r = await client.get(f"{BASE}/sensors/{created['id']}/workloads", headers=auth_headers(admin_token))
     assert r.json() == []
+
+
+
+@pytest.mark.asyncio
+async def test_settings_create_defaults_on_first_read(client, admin_token):
+    """GET /settings creates the row with defaults the first time it is
+    asked, and returns those defaults."""
+    r = await client.get(f"{BASE}/settings", headers=auth_headers(admin_token))
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["refresh_seconds"] == 30
+    assert body["heartbeat_seconds"] == 30
+    assert body["default_mode"] == "observe"
+    assert body["default_dns"] == "off"
+
+
+@pytest.mark.asyncio
+async def test_settings_patch_updates_and_audits(client, admin_token, db_session):
+    """PATCH /settings applies the change and writes an audit record."""
+    from sqlalchemy import select
+    from app.models.audit_log import AIAuditLog
+
+    # Ensure the row exists first.
+    await client.get(f"{BASE}/settings", headers=auth_headers(admin_token))
+
+    r = await client.patch(
+        f"{BASE}/settings",
+        json={"refresh_seconds": 120, "heartbeat_seconds": 60},
+        headers=auth_headers(admin_token),
+    )
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["refresh_seconds"] == 120
+    assert body["heartbeat_seconds"] == 60
+
+    rows = (await db_session.execute(
+        select(AIAuditLog).where(
+            AIAuditLog.entity_type == "egress_policy_settings",
+            AIAuditLog.action == "updated",
+        )
+    )).scalars().all()
+    assert len(rows) >= 1
+
+
+@pytest.mark.asyncio
+async def test_settings_patch_validates_ranges(client, admin_token):
+    """Out-of-range values are refused; a bad value must not take every
+    sensor offline."""
+    r = await client.patch(
+        f"{BASE}/settings",
+        json={"refresh_seconds": 5},
+        headers=auth_headers(admin_token),
+    )
+    assert r.status_code == 422, r.text
+
+    r = await client.patch(
+        f"{BASE}/settings",
+        json={"heartbeat_seconds": 10000},
+        headers=auth_headers(admin_token),
+    )
+    assert r.status_code == 422, r.text
+
+    r = await client.patch(
+        f"{BASE}/settings",
+        json={"default_mode": "wrong"},
+        headers=auth_headers(admin_token),
+    )
+    assert r.status_code == 422, r.text
+
+
+@pytest.mark.asyncio
+async def test_build_policy_uses_settings(client, admin_token):
+    """The policy a sensor fetches carries the organization's settings,
+    not the hardcoded defaults."""
+    created = await _register_sensor(client, admin_token, name="settings-policy")
+    key = created["api_key"]
+
+    r = await client.get(f"{BASE}/config", headers={"X-Sensor-Key": key})
+    assert r.status_code == 200
+    assert r.json()["refresh_seconds"] == 30
+    assert r.json()["heartbeat_seconds"] == 30
+
+    r = await client.patch(
+        f"{BASE}/settings",
+        json={"refresh_seconds": 90, "heartbeat_seconds": 45},
+        headers=auth_headers(admin_token),
+    )
+    assert r.status_code == 200
+
+    r = await client.get(f"{BASE}/config", headers={"X-Sensor-Key": key})
+    assert r.status_code == 200
+    assert r.json()["refresh_seconds"] == 90
+    assert r.json()["heartbeat_seconds"] == 45
+
+
+@pytest.mark.asyncio
+async def test_settings_requires_admin(client, approver_token):
+    r = await client.get(f"{BASE}/settings", headers=auth_headers(approver_token))
+    assert r.status_code in (401, 403), r.text

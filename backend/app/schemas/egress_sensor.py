@@ -228,6 +228,33 @@ class PolicyOut(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
 
+# ---------------------------------------------------------------- settings
+
+class PolicySettingsOut(BaseModel):
+    """The organization's policy settings, as returned by GET /settings and
+    embedded in every policy the sensors fetch."""
+    refresh_seconds: int
+    heartbeat_seconds: int
+    default_mode: Literal["observe", "alert", "enforce"]
+    default_dns: Literal["off", "listed", "any"]
+    updated_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+class PolicySettingsUpdate(BaseModel):
+    """Admin input for PATCH /settings. All fields optional: only what is
+    sent is changed, and each is range-checked so a bad value cannot take
+    every sensor of the organization offline."""
+    model_config = ConfigDict(extra="forbid")
+
+    refresh_seconds: Optional[int] = Field(default=None, ge=10, le=600)
+    heartbeat_seconds: Optional[int] = Field(default=None, ge=10, le=300)
+    default_mode: Optional[Literal["observe", "alert", "enforce"]] = None
+    default_dns: Optional[Literal["off", "listed", "any"]] = None
+
+
 # ---------------------------------------------------------------- heartbeat (sensor input)
 
 class WorkloadReportIn(BaseModel):

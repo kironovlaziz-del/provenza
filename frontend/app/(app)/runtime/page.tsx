@@ -13,9 +13,9 @@ import { listAgents } from "@/lib/agent_api";
 import type { Agent } from "@/lib/agent_types";
 import {
   DNS_MODES, PROTOCOLS, RUNTIME_MODES, VIOLATION_ACTIONS,
-  createWorkload, deleteWorkload, listSensorWorkloads, listSensors, listViolations, listWorkloads,
-  refreshSensor, registerSensor, revokeSensor, updateSensor, updateWorkload,
-  type AllowT, type DNSMode, type Protocol, type RuntimeMode, type SensorCreatedT, type SensorT,
+  createWorkload, deleteWorkload, getSensorSettings, listSensorWorkloads, listSensors, listViolations, listWorkloads,
+  refreshSensor, registerSensor, revokeSensor, updateSensor, updateSensorSettings, updateWorkload,
+  type AllowT, type DNSMode, type Protocol, type RuntimeMode, type SensorCreatedT, type SensorSettingsInput, type SensorSettingsT, type SensorT,
   type SensorWorkloadT,
   type ViolationAction, type ViolationT, type WorkloadInput, type WorkloadT,
 } from "@/lib/egress_sensor_api";
@@ -138,6 +138,11 @@ export default function RuntimePage() {
   // a sensor is expanded; cleared on collapse so a re-open refetches.
   const [sensorWorkloads, setSensorWorkloads] = useState<Record<number, SensorWorkloadT[] | null>>({});
 
+  // Organization policy settings; loaded once on mount and edited in place.
+  const [settings, setSettings] = useState<SensorSettingsT | null>(null);
+  const [settingsDraft, setSettingsDraft] = useState<SensorSettingsInput>({});
+  const [settingsOpen, setSettingsOpen] = useState(false);
+
   const loadWorkloads = useCallback(() => {
     listWorkloads(showDeleted).then(setWorkloads).catch((err) => setError(apiError(err, t, t("rt.load_failed"))));
   }, [t, showDeleted]);
@@ -151,9 +156,24 @@ export default function RuntimePage() {
     listSensors(showRevokedSensors).then(setSensors).catch((err) => setError(apiError(err, t, t("rt.load_failed"))));
   }, [t, showRevokedSensors]);
 
+  const loadSettings = useCallback(() => {
+    getSensorSettings()
+      .then(s => {
+        setSettings(s);
+        setSettingsDraft({
+          refresh_seconds: s.refresh_seconds,
+          heartbeat_seconds: s.heartbeat_seconds,
+          default_mode: s.default_mode,
+          default_dns: s.default_dns,
+        });
+      })
+      .catch(err => setError(apiError(err, t, t("rt.load_failed"))));
+  }, [t]);
+
   useEffect(loadWorkloads, [loadWorkloads]);
   useEffect(loadViolations, [loadViolations]);
   useEffect(loadSensors, [loadSensors]);
+  useEffect(loadSettings, [loadSettings]);
   useEffect(() => { listAgents(500).then(setAgents).catch(() => setAgents([])); }, []);
 
   const agentName = useMemo(() => new Map(agents.map((a) => [a.id, a.name])), [agents]);
@@ -284,6 +304,32 @@ export default function RuntimePage() {
     } finally { setBusy(false); }
   }
 
+  async function saveSettings(e: React.FormEvent) {
+    e.preventDefault();
+    setBusy(true); setError(null);
+    try {
+      const updated = await updateSensorSettings(settingsDraft);
+      setSettings(updated);
+      setNotice(t("rt.sensors.settings_saved"));
+      setSettingsOpen(false);
+    } catch (err) {
+      setError(apiError(err, t, t("rt.save_failed")));
+    } finally { setBusy(false); }
+  }
+
+  function cancelSettings() {
+    if (settings) {
+      setSettingsDraft({
+        refresh_seconds: settings.refresh_seconds,
+        heartbeat_seconds: settings.heartbeat_seconds,
+        default_mode: settings.default_mode,
+        default_dns: settings.default_dns,
+      });
+    }
+    setSettingsOpen(false);
+    setError(null);
+  }
+
   function toggleSensorDetails(id: number) {
     if (expandedSensorId === id) {
       setExpandedSensorId(null);
@@ -312,6 +358,40 @@ export default function RuntimePage() {
     } catch (err) {
       setError(apiError(err, t, t("rt.save_failed")));
     } finally { setBusy(false); }
+  }
+
+  /** The uninstall reminder: copy the host-side command to the clipboard,
+   *  tell the admin to run it there, then offer to revoke the key. There
+   *  is no remote channel to the sensor: the control plane never asks a
+   *  host to do anything. This is a reminder, not a command. */
+  async function uninstallReminder(s: SensorT) {
+    const host = s.hostname ?? s.name;
+    const ready = await confirmDialog(
+      t("rt.sensors.uninstall_hint", { host }),
+      { confirmLabel: t("rt.sensors.copy_uninstall") },
+    );
+    if (!ready) return;
+
+    const cmd = "sudo provenza-sensor --uninstall";
+    if (typeof navigator !== "undefined" && navigator.clipboard) {
+      try {
+        await navigator.clipboard.writeText(cmd);
+      } catch {
+        setNotice(t("rt.sensors.copy_manual"));
+        return;
+      }
+    } else {
+      setNotice(t("rt.sensors.copy_manual"));
+      return;
+    }
+    setNotice(t("rt.sensors.uninstall_copied", { host }));
+
+    // A second step: revoke is what makes the sensor disappear from this
+    // list and stop matching a policy. Do it only after the host-side
+    // uninstall has finished.
+    if (await confirmDialog(t("rt.sensors.uninstall_revoke_now", { host }), { danger: true })) {
+      await revoke(s);
+    }
   }
 
   function copyKey(key: string) {
@@ -405,6 +485,91 @@ export default function RuntimePage() {
         <p className="hint-text u-mb-16">{t("rt.intro")}</p>
         {error && <p className="error-text u-mb-16">{error}</p>}
         {notice && <p className="hint-text u-mb-16">{notice}</p>}
+
+        {/* ---------------- policy settings ---------------- */}
+        <section className="panel ag-section">
+          <div className="panel-header">
+            <h2>{t("rt.sensors.settings_title")}</h2>
+            {!settingsOpen && (
+              <button className="btn btn-sm" disabled={busy || !settings} onClick={() => setSettingsOpen(true)}>
+                {t("rt.sensors.settings_edit")}
+              </button>
+            )}
+          </div>
+
+          {settingsOpen ? (
+            <div className="panel-body">
+              <form onSubmit={saveSettings} className="ag-stack">
+                <div style={{ display: "flex", gap: 24, flexWrap: "wrap" }}>
+                  <div className="field" style={{ margin: 0, flex: "1 1 200px" }}>
+                    <label htmlFor="rt-set-refresh">{t("rt.sensors.set_refresh")}</label>
+                    <select id="rt-set-refresh"
+                      value={settingsDraft.refresh_seconds ?? 30}
+                      onChange={(e) => setSettingsDraft({ ...settingsDraft, refresh_seconds: Number(e.target.value) })}>
+                      {[30, 60, 120, 300].map(n => <option key={n} value={n}>{n}s</option>)}
+                    </select>
+                    <p className="hint-text">{t("rt.sensors.set_refresh_hint")}</p>
+                  </div>
+
+                  <div className="field" style={{ margin: 0, flex: "1 1 200px" }}>
+                    <label htmlFor="rt-set-heartbeat">{t("rt.sensors.set_heartbeat")}</label>
+                    <select id="rt-set-heartbeat"
+                      value={settingsDraft.heartbeat_seconds ?? 30}
+                      onChange={(e) => setSettingsDraft({ ...settingsDraft, heartbeat_seconds: Number(e.target.value) })}>
+                      {[30, 60, 120].map(n => <option key={n} value={n}>{n}s</option>)}
+                    </select>
+                    <p className="hint-text">{t("rt.sensors.set_heartbeat_hint")}</p>
+                  </div>
+
+                  <div className="field" style={{ margin: 0, flex: "1 1 200px" }}>
+                    <label htmlFor="rt-set-mode">{t("rt.sensors.set_default_mode")}</label>
+                    <select id="rt-set-mode"
+                      value={settingsDraft.default_mode ?? "observe"}
+                      onChange={(e) => setSettingsDraft({ ...settingsDraft, default_mode: e.target.value as RuntimeMode })}>
+                      {RUNTIME_MODES.map(m => <option key={m} value={m}>{t(`rt.modes.${m}`)}</option>)}
+                    </select>
+                    <p className="hint-text">{t("rt.sensors.set_default_mode_hint")}</p>
+                  </div>
+
+                  <div className="field" style={{ margin: 0, flex: "1 1 200px" }}>
+                    <label htmlFor="rt-set-dns">{t("rt.sensors.set_default_dns")}</label>
+                    <select id="rt-set-dns"
+                      value={settingsDraft.default_dns ?? "off"}
+                      onChange={(e) => setSettingsDraft({ ...settingsDraft, default_dns: e.target.value as DNSMode })}>
+                      {DNS_MODES.map(m => <option key={m} value={m}>{t(`rt.dns.${m}`)}</option>)}
+                    </select>
+                    <p className="hint-text">{t("rt.sensors.set_default_dns_hint")}</p>
+                  </div>
+                </div>
+
+                <p className="hint-text" style={{ margin: 0 }}>
+                  {t("rt.sensors.set_load_hint", {
+                    n: sensors.length,
+                    rps: ((sensors.length * 2) / Math.max(1, settingsDraft.refresh_seconds ?? 30)).toFixed(2),
+                  })}
+                </p>
+
+                <div className="ag-actions">
+                  <button className="btn btn-primary" type="submit" disabled={busy}>{t("rt.save")}</button>
+                  <button className="btn" type="button" onClick={cancelSettings}>{t("rt.cancel")}</button>
+                </div>
+              </form>
+            </div>
+          ) : (
+            <div className="panel-body" style={{ fontSize: 13 }}>
+              {settings ? (
+                <div style={{ display: "flex", gap: 24, flexWrap: "wrap" }}>
+                  <span><em style={{ opacity: 0.6, fontStyle: "normal" }}>{t("rt.sensors.set_refresh")}:</em> {settings.refresh_seconds}s</span>
+                  <span><em style={{ opacity: 0.6, fontStyle: "normal" }}>{t("rt.sensors.set_heartbeat")}:</em> {settings.heartbeat_seconds}s</span>
+                  <span><em style={{ opacity: 0.6, fontStyle: "normal" }}>{t("rt.sensors.set_default_mode")}:</em> {t(`rt.modes.${settings.default_mode}`)}</span>
+                  <span><em style={{ opacity: 0.6, fontStyle: "normal" }}>{t("rt.sensors.set_default_dns")}:</em> {t(`rt.dns.${settings.default_dns}`)}</span>
+                </div>
+              ) : (
+                <span className="hint-text">{t("rt.sensors.loading")}</span>
+              )}
+            </div>
+          )}
+        </section>
 
         {/* ---------------- sensors ---------------- */}
         <section className="panel ag-section">
@@ -547,6 +712,9 @@ export default function RuntimePage() {
                           )}
                           {!revoked && (
                             <button className="btn btn-sm btn-danger" disabled={busy} onClick={() => revoke(s)}>{t("rt.sensors.revoke")}</button>
+                          )}
+                          {!revoked && (
+                            <button className="btn btn-sm" disabled={busy} onClick={() => uninstallReminder(s)}>{t("rt.sensors.uninstall")}</button>
                           )}
                         </div>
                       </td>

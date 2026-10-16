@@ -181,3 +181,28 @@ export interface SensorWorkloadT {
 
 export const listSensorWorkloads = async (id: number) =>
   (await api.get<SensorWorkloadT[]>(`/egress-sensor/sensors/${id}/workloads`)).data;
+
+// ---------------------------------------------------------------- policy settings
+
+/** One row per organization: intervals the sensors poll and heartbeat at,
+ *  and defaults for new workloads. */
+export interface SensorSettingsT {
+  refresh_seconds: number;
+  heartbeat_seconds: number;
+  default_mode: RuntimeMode;
+  default_dns: DNSMode;
+  updated_at: string | null;
+}
+
+export interface SensorSettingsInput {
+  refresh_seconds?: number;
+  heartbeat_seconds?: number;
+  default_mode?: RuntimeMode;
+  default_dns?: DNSMode;
+}
+
+export const getSensorSettings = async () =>
+  (await api.get<SensorSettingsT>("/egress-sensor/settings")).data;
+
+export const updateSensorSettings = async (input: SensorSettingsInput) =>
+  (await api.patch<SensorSettingsT>("/egress-sensor/settings", input)).data;

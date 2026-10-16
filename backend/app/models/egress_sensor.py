@@ -134,6 +134,34 @@ class EgressPolicyRevision(Base):
     updated_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())
 
 
+class EgressPolicySettings(Base):
+    """One row per organization, holding the policy settings the sensor
+    reads on every fetch. A row is created lazily the first time it is
+    read; the defaults are the values that used to be hardcoded.
+
+    refresh_seconds and heartbeat_seconds drive the sensor's poll and
+    heartbeat loops; a busy host with hundreds of sensors can raise them
+    to cut API load, a small install can lower them for faster reaction.
+    """
+
+    __tablename__ = "egress_policy_settings"
+
+    id = Column(Integer, primary_key=True)
+    org_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, unique=True, index=True)
+
+    refresh_seconds = Column(Integer, nullable=False, default=30)
+    heartbeat_seconds = Column(Integer, nullable=False, default=30)
+
+    # Defaults for new workloads; existing rows are never rewritten by a
+    # change here - the settings only affect what "New workload" pre-fills.
+    default_mode = Column(String(10), nullable=False, default="observe")
+    default_dns = Column(String(10), nullable=False, default="off")
+
+    updated_by = Column(Integer, ForeignKey("users.id"))
+    updated_at = Column(DateTime(timezone=True), nullable=False,
+                        server_default=func.now(), onupdate=func.now())
+
+
 class EgressViolation(Base):
     __tablename__ = "egress_violations"
     __table_args__ = (

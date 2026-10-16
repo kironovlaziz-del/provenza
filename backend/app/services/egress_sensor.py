@@ -21,13 +21,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.security import hash_api_key
 from app.models.egress_sensor import (
     EgressPolicyRevision,
+    EgressPolicySettings,
     EgressSensor,
     EgressSensorWorkload,
     EgressViolation,
     EgressWorkload,
 )
-from app.schemas.egress_sensor import (HeartbeatIn, PolicyAllow, PolicyOut, PolicyWorkload,
-                                    SensorWorkloadOut, ViolationIn)
+from app.schemas.egress_sensor import (HeartbeatIn, PolicyAllow, PolicyOut, PolicySettingsOut,
+                                    PolicySettingsUpdate, PolicyWorkload, SensorWorkloadOut,
+                                    ViolationIn)
 
 logger = logging.getLogger(__name__)
 
@@ -88,6 +90,47 @@ async def bump_revision(db: AsyncSession, org_id: int) -> int:
     row.revision = (row.revision or 0) + 1
     await db.flush()
     return row.revision
+
+
+# ---------------------------------------------------------------- settings
+
+# Values that used to be hardcoded in build_policy. Kept here so a fresh
+# organization and an explicit settings row agree.
+SETTINGS_DEFAULTS = {
+    "refresh_seconds": 30,
+    "heartbeat_seconds": 30,
+    "default_mode": "observe",
+    "default_dns": "off",
+}
+
+
+async def settings_for(db: AsyncSession, org_id: int) -> EgressPolicySettings:
+    """Return the organization's policy settings, creating the row with
+    defaults on first call. Callers commit; this only stages a new row."""
+    row = (await db.execute(
+        select(EgressPolicySettings).where(EgressPolicySettings.org_id == org_id)
+    )).scalar_one_or_none()
+    if row is not None:
+        return row
+    row = EgressPolicySettings(org_id=org_id, **SETTINGS_DEFAULTS)
+    db.add(row)
+    await db.flush()
+    return row
+
+
+async def update_settings(
+    db: AsyncSession, org_id: int, actor_user_id: int, data: PolicySettingsUpdate
+) -> EgressPolicySettings:
+    """Apply an update to the organization's policy settings. Because the
+    settings row may not exist yet, this reads through settings_for first,
+    then applies only the fields the caller sent."""
+    row = await settings_for(db, org_id)
+    fields = data.model_dump(exclude_unset=True)
+    for k, v in fields.items():
+        setattr(row, k, v)
+    row.updated_by = actor_user_id
+    await db.flush()
+    return row
 
 
 # ---------------------------------------------------------------- policy
@@ -205,11 +248,13 @@ async def build_policy(db: AsyncSession, org_id: int) -> PolicyOut:
             isolated_reason=w.isolated_reason if w.isolated else forced.get(w.id),
         ))
 
+    settings = await settings_for(db, org_id)
+
     return PolicyOut(
         schema=1,
         version=await policy_version(db, org_id),
-        refresh_seconds=30,
-        heartbeat_seconds=30,
+        refresh_seconds=settings.refresh_seconds,
+        heartbeat_seconds=settings.heartbeat_seconds,
         workloads=out_workloads,
     )
 
