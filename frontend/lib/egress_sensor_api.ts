@@ -153,6 +153,29 @@ export interface ViolationT {
   created_at: string;
 }
 
+/**
+ * A sampled allowed connection from the sensor's activity feed. Same shape
+ * as ViolationT, different stream: these are not violations, they are the
+ * allowed connects the kernel normally keeps silent, sampled every Nth one.
+ */
+export interface ActivityT {
+  id: number;
+  sensor_id: number | null;
+  workload_id: number | null;
+  action: string;
+  kind: string;
+  protocol: string | null;
+  dst_ip: string | null;
+  dst_port: number | null;
+  dst_name: string | null;
+  comm: string | null;
+  cgroup: string | null;
+  isolated: boolean;
+  count: number;
+  created_at: string;
+}
+
+
 export interface ViolationFilter {
   workload_id?: number;
   action?: ViolationAction;
@@ -165,6 +188,9 @@ export const listViolations = async (filter: ViolationFilter = {}, limit = 200) 
 /** Violations from one sensor only — same shape, narrower query. */
 export const listSensorViolations = async (id: number, limit = 100) =>
   (await api.get<ViolationT[]>(`/egress-sensor/sensors/${id}/violations`, { params: { limit } })).data;
+
+export const listSensorActivity = async (id: number, limit = 200) =>
+  (await api.get<ActivityT[]>(`/egress-sensor/sensors/${id}/activity`, { params: { limit } })).data;
 
 // ---------------------------------------------------------------- per-workload snapshot
 
