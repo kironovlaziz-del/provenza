@@ -227,6 +227,7 @@ export interface SensorSettingsT {
   heartbeat_seconds: number;
   default_mode: RuntimeMode;
   default_dns: DNSMode;
+  activity_retention_days: number;
   updated_at: string | null;
 }
 
@@ -235,6 +236,7 @@ export interface SensorSettingsInput {
   heartbeat_seconds?: number;
   default_mode?: RuntimeMode;
   default_dns?: DNSMode;
+  activity_retention_days?: number;
 }
 
 export const getSensorSettings = async () =>

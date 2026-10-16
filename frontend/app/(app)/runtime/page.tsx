@@ -24,6 +24,16 @@ import {
   type ViolationAction, type ViolationT, type WorkloadInput, type WorkloadT,
 } from "@/lib/egress_sensor_api";
 
+// Retention options for the Activity window. 0 disables pruning entirely;
+// the backend accepts anything 0..365.
+const RETENTION_OPTIONS = [0, 7, 30, 90, 365] as const;
+
+function retentionLabel(t: (k: string) => string, days: number): string {
+  if (days === 0) return t("rt.sensors.retention_forever");
+  if (days === 365) return t("rt.sensors.retention_365d");
+  return t(`rt.sensors.retention_${days}d`) || `${days}d`;
+}
+
 interface AllowRow { dest: string; ports: string; protocols: Protocol[] }
 
 interface Draft {
@@ -190,6 +200,7 @@ export default function RuntimePage() {
           heartbeat_seconds: s.heartbeat_seconds,
           default_mode: s.default_mode,
           default_dns: s.default_dns,
+          activity_retention_days: s.activity_retention_days,
         });
       })
       .catch(err => setError(apiError(err, t, t("rt.load_failed"))));
@@ -425,6 +436,7 @@ export default function RuntimePage() {
         heartbeat_seconds: settings.heartbeat_seconds,
         default_mode: settings.default_mode,
         default_dns: settings.default_dns,
+        activity_retention_days: settings.activity_retention_days,
       });
     }
     setSettingsOpen(false);
@@ -644,6 +656,18 @@ export default function RuntimePage() {
                     </select>
                     <p className="hint-text">{t("rt.sensors.set_default_dns_hint")}</p>
                   </div>
+
+                  <div className="field" style={{ margin: 0, flex: "1 1 200px" }}>
+                    <label htmlFor="rt-set-retention">{t("rt.sensors.set_retention")}</label>
+                    <select id="rt-set-retention"
+                      value={settingsDraft.activity_retention_days ?? 30}
+                      onChange={(e) => setSettingsDraft({ ...settingsDraft, activity_retention_days: Number(e.target.value) })}>
+                      {RETENTION_OPTIONS.map(n => (
+                        <option key={n} value={n}>{retentionLabel(t, n)}</option>
+                      ))}
+                    </select>
+                    <p className="hint-text">{t("rt.sensors.set_retention_hint")}</p>
+                  </div>
                 </div>
 
                 <p className="hint-text" style={{ margin: 0 }}>
@@ -667,6 +691,7 @@ export default function RuntimePage() {
                   <span><em style={{ opacity: 0.6, fontStyle: "normal" }}>{t("rt.sensors.set_heartbeat")}:</em> {settings.heartbeat_seconds}s</span>
                   <span><em style={{ opacity: 0.6, fontStyle: "normal" }}>{t("rt.sensors.set_default_mode")}:</em> {t(`rt.modes.${settings.default_mode}`)}</span>
                   <span><em style={{ opacity: 0.6, fontStyle: "normal" }}>{t("rt.sensors.set_default_dns")}:</em> {t(`rt.dns.${settings.default_dns}`)}</span>
+                  <span><em style={{ opacity: 0.6, fontStyle: "normal" }}>{t("rt.sensors.set_retention")}:</em> {retentionLabel(t, settings.activity_retention_days)}</span>
                 </div>
               ) : (
                 <span className="hint-text">{t("rt.sensors.loading")}</span>
