@@ -113,6 +113,7 @@ func (d *Daemon) applyPolicy(ctx context.Context, p *config.Policy) error {
 	d.policy = p
 	d.patterns = pats
 	d.wls = wls
+	d.lastPolicyAt = time.Now()
 	d.mu.Unlock()
 
 	// Govern existing cgroups immediately.

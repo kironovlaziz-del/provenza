@@ -54,6 +54,10 @@ func main() {
 		enrollCmd(ctx, flag.Args()[1:])
 		return
 
+	case flag.Arg(0) == "status":
+		statusCmd(ctx, flag.Args()[1:])
+		return
+
 	case flag.Arg(0) == "run":
 		// flag.Parse stops at the first non-flag ("run"), so "--agent N"
 		// must come before it. The "--" separator is a convention, not

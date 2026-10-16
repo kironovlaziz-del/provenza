@@ -24,6 +24,7 @@ import (
 // Daemon is the running sensor.
 type Daemon struct {
 	version string
+	cfgPath string
 	cfg     config.Settings
 	client  *client.Client
 	kernel  *kern.Kernel
@@ -35,10 +36,16 @@ type Daemon struct {
 	cgWid    map[uint64]uint32
 	uidSet   map[uint32]bool
 
-	rb   *ringbuf.Reader
-	dns  *dnsServers
-	viol *violationBuffer
-	run  *runServer
+	// startTime and lastPolicyAt are only read by snapshot; both are set
+	// under mu or before any goroutine starts.
+	startTime    time.Time
+	lastPolicyAt time.Time
+
+	rb     *ringbuf.Reader
+	dns    *dnsServers
+	viol   *violationBuffer
+	run    *runServer
+	status *statusServer
 }
 
 // wlState holds the per-workload data the daemon needs at runtime.
@@ -71,14 +78,16 @@ func New(cfgPath, version string) (*Daemon, error) {
 	}
 
 	d := &Daemon{
-		version: version,
-		cfg:     cfg,
-		client:  cl,
-		kernel:  k,
-		wls:     map[uint32]*wlState{},
-		cgWid:   map[uint64]uint32{},
-		uidSet:  map[uint32]bool{},
-		viol:    newViolationBuffer(cl),
+		version:   version,
+		cfgPath:   cfgPath,
+		cfg:       cfg,
+		client:    cl,
+		kernel:    k,
+		wls:       map[uint32]*wlState{},
+		cgWid:     map[uint64]uint32{},
+		uidSet:    map[uint32]bool{},
+		viol:      newViolationBuffer(cl),
+		startTime: time.Now(),
 	}
 	d.dns = newDNSServers(d)
 	return d, nil
@@ -105,6 +114,12 @@ func (d *Daemon) Run(ctx context.Context) error {
 		RingBytes:    d.cfg.RingBytes,
 	}); err != nil {
 		return fmt.Errorf("attach: %w", err)
+	}
+
+	// The status socket is read-only; start it only after attach, so a
+	// client that asks before enforcement is up sees a coherent state.
+	if err := d.startStatusServer(); err != nil {
+		slog.Warn("status socket", "err", err)
 	}
 
 	rb, err := d.kernel.Reader()
@@ -137,6 +152,9 @@ func (d *Daemon) Run(ctx context.Context) error {
 	slog.Info("shutting down")
 	if d.run != nil {
 		d.run.close()
+	}
+	if d.status != nil {
+		d.status.close()
 	}
 	d.dns.stop()
 	if d.rb != nil {

@@ -10,8 +10,10 @@ import (
 	"log/slog"
 	"net"
 	"net/netip"
+	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/kironovlaziz-del/provenza/sensor/internal/bpfobj"
@@ -43,6 +45,12 @@ type dnsServer struct {
 	work    chan dnsWork
 	stop    chan struct{}
 	stopped chan struct{}
+
+	// Counters for `status`. Only atomic operations; never under any lock.
+	totalQueries   atomic.Uint64
+	allowedQueries atomic.Uint64
+	deniedQueries  atomic.Uint64
+	lastQueryAt    atomic.Int64 // unix nanoseconds
 }
 
 type dnsWork struct {
@@ -205,11 +213,16 @@ func (s *dnsServer) handle(w dnsWork, upstream []string) {
 	}
 	name := strings.TrimSuffix(strings.ToLower(q.Name.String()), ".")
 
+	s.totalQueries.Add(1)
+	s.lastQueryAt.Store(time.Now().UnixNano())
+
 	if s.mode == "listed" && !s.nameAllowed(name) {
+		s.deniedQueries.Add(1)
 		resp := refuse(w.query, hdr.ID)
 		_, _ = s.conn.WriteToUDP(resp, w.addr)
 		return
 	}
+	s.allowedQueries.Add(1)
 
 	resp, err := forward(w.query, upstream)
 	if err != nil {
@@ -375,5 +388,36 @@ func extractIPs(msg []byte) []netip.Addr {
 			}
 		}
 	}
+	return out
+}
+
+// stats returns the DNS counters of every running per-workload server.
+// cgByWid is only used to filter out workloads no longer in the policy,
+// so the output stays in step with what `status` shows for workloads.
+func (s *dnsServers) stats(cgByWid map[uint32]int) []DNSSection {
+	s.mu.Lock()
+	servers := make([]*dnsServer, 0, len(s.svc))
+	for _, srv := range s.svc {
+		servers = append(servers, srv)
+	}
+	s.mu.Unlock()
+
+	out := make([]DNSSection, 0, len(servers))
+	for _, srv := range servers {
+		sec := DNSSection{
+			WorkloadID: srv.wid,
+			Port:       srv.port,
+			Total:      srv.totalQueries.Load(),
+			Allowed:    srv.allowedQueries.Load(),
+			Denied:     srv.deniedQueries.Load(),
+		}
+		if ns := srv.lastQueryAt.Load(); ns > 0 {
+			t := time.Unix(0, ns).UTC()
+			sec.LastQueryAt = &t
+		}
+		out = append(out, sec)
+	}
+	// Stable order by workload id, so output is diffable.
+	sort.Slice(out, func(i, j int) bool { return out[i].WorkloadID < out[j].WorkloadID })
 	return out
 }
