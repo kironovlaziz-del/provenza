@@ -3422,7 +3422,12 @@
       "snap_processes": "jarayonlar",
       "snap_dns": "DNS",
       "snap_denied": "rad etildi",
-      "snap_updated": "xabar berildi"
+      "snap_updated": "xabar berildi",
+      "uninstall": "O'chirish…",
+      "uninstall_hint": "Sensorni {{host}} dan olib tashlash uchun shu xostda bajaring:\n\n  sudo provenza-sensor --uninstall\n\nBu daemonni to'xtatadi, BPF dasturlarini uzadi va /etc/provenza-sensor, /var/lib/provenza-sensor hamda /run/provenza-sensor ni o'chiradi. Buyruqni hozir vaqtinchalik xotiraga nusxalash?",
+      "copy_uninstall": "Buyruqni nusxalash",
+      "uninstall_copied": "Buyruq nusxalandi. Uni {{host}} qobig'iga qo'ying.",
+      "uninstall_revoke_now": "Sensorni Provenza'da hozir bekor qilish? Faqat xost tomondagi o'chirish tugagandan keyin qiling — kalit darhol ishlamaydi va sensor bu ro'yxatdan yo'qoladi."
     },
     "load_failed": "Runtime ma'lumotlarini yuklab bo'lmadi.",
     "save_failed": "Ish yukini saqlab bo'lmadi.",

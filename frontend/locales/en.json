@@ -3422,7 +3422,12 @@
       "snap_processes": "processes",
       "snap_dns": "DNS",
       "snap_denied": "denied",
-      "snap_updated": "reported"
+      "snap_updated": "reported",
+      "uninstall": "Uninstall…",
+      "uninstall_hint": "To remove the sensor from {{host}}, run this on that host:\n\n  sudo provenza-sensor --uninstall\n\nIt stops the daemon, detaches the BPF programs, and removes /etc/provenza-sensor, /var/lib/provenza-sensor and /run/provenza-sensor. Copy the command to the clipboard now?",
+      "copy_uninstall": "Copy command",
+      "uninstall_copied": "Command copied. Paste it into {{host}}'s shell.",
+      "uninstall_revoke_now": "Revoke the sensor in Provenza now? Do this only after the host-side uninstall has finished — the key stops working immediately and the sensor disappears from this list."
     },
     "load_failed": "Could not load runtime data.",
     "save_failed": "Could not save the workload.",
