@@ -256,10 +256,27 @@ class SigningKeyOut(BaseModel):
     id of the sensor asking for it. The sensor needs its own id to reject
     a command addressed to another sensor of the same organization (the
     signing key is per organization, so the id is what tells commands
-    apart)."""
+    apart).
+
+    previous_public_key is set during a rotation grace period. The sensor
+    verifies a command against the current key first, then against the
+    previous one; when both fail, the command is refused.
+    """
     public_key: str
     fingerprint: str
     sensor_id: int
+    previous_public_key: Optional[str] = None
+    previous_fingerprint: Optional[str] = None
+    previous_valid_until: Optional[datetime] = None
+
+
+class SigningKeyRotationOut(BaseModel):
+    """What a rotation or its finalization returns to the admin."""
+    fingerprint: str
+    previous_fingerprint: Optional[str] = None
+    previous_valid_until: Optional[datetime] = None
+    sensors_notified: int = 0
+    rotated_at: Optional[datetime] = None
 
 
 # ---------------------------------------------------------------- policy (sensor output)

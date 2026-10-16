@@ -29,8 +29,9 @@ type dnsServers struct {
 	d        *Daemon
 	upstream []string
 
-	mu  sync.Mutex
-	svc map[uint32]*dnsServer // workload id -> running server
+	mu      sync.Mutex
+	svc     map[uint32]*dnsServer // workload id -> running server
+	started bool                  // set by start(); reload only starts run when true
 }
 
 type dnsServer struct {
@@ -45,6 +46,12 @@ type dnsServer struct {
 	work    chan dnsWork
 	stop    chan struct{}
 	stopped chan struct{}
+
+	// closeOnce guards close(stop) and close(stopped): Run can call
+	// start() and reload() in the same tick, and either path may race
+	// with the other's shutdown. sync.Once makes a second close a no-op
+	// instead of a panic.
+	closeOnce sync.Once
 
 	// Counters for `status`. Only atomic operations; never under any lock.
 	totalQueries   atomic.Uint64
@@ -81,6 +88,7 @@ func (s *dnsServers) start(ctx context.Context, wg *sync.WaitGroup) {
 	for _, srv := range s.svc {
 		all = append(all, srv)
 	}
+	s.started = true
 	s.mu.Unlock()
 	for _, srv := range all {
 		wg.Add(1)
@@ -124,7 +132,12 @@ func (s *dnsServers) reload(ctx context.Context, wls map[uint32]*wlState) {
 			continue
 		}
 		s.svc[wid] = srv
-		go srv.run(ctx, s.upstream)
+		// Before start(), the server is only created; start() will run
+		// every svc entry once and set started. After start(), a new
+		// workload means a new listener, so run it immediately.
+		if s.started {
+			go srv.run(ctx, s.upstream)
+		}
 	}
 }
 
@@ -159,14 +172,11 @@ func newDNSServer(d *Daemon, wid uint32, ws *wlState) (*dnsServer, error) {
 }
 
 func (s *dnsServer) close() {
-	select {
-	case <-s.stop:
-		return
-	default:
-	}
-	close(s.stop)
-	_ = s.conn.Close()
-	<-s.stopped
+	s.closeOnce.Do(func() {
+		close(s.stop)
+		_ = s.conn.Close()
+		<-s.stopped
+	})
 }
 
 func (s *dnsServer) run(ctx context.Context, upstream []string) {

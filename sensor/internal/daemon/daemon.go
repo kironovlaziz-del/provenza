@@ -53,6 +53,11 @@ type Daemon struct {
 	// continues.
 	signingKey ed25519.PublicKey
 	sensorID   int
+
+	// During a rotation grace period, the previous key still verifies.
+	// previousValidUntil bounds it; a zero time means unbounded.
+	previousSigningKey ed25519.PublicKey
+	previousValidUntil time.Time
 }
 
 // wlState holds the per-workload data the daemon needs at runtime.
@@ -105,6 +110,12 @@ func New(cfgPath, version string) (*Daemon, error) {
 		slog.Warn("no command signing key; commands will be refused", "err", err)
 	} else {
 		d.signingKey = key
+	}
+	if prev, err := loadPreviousSigningKey(cfg.SigningPublicKeyFile); err == nil {
+		d.previousSigningKey = prev
+	}
+	if until, err := loadPreviousValidUntil(cfg.SigningPublicKeyFile); err == nil {
+		d.previousValidUntil = until
 	}
 	if id, err := loadSensorID(cfg.SensorIDFile); err != nil {
 		slog.Warn("no sensor id; commands will be refused", "err", err)

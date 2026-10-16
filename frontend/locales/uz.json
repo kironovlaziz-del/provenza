@@ -3458,7 +3458,8 @@
       "cmd_kind": {
         "detach": "Uzish",
         "restart": "Qayta ishga tushirish",
-        "dump-state": "Holatni yuborish"
+        "dump-state": "Holatni yuborish",
+        "update-signing-key": "Imzolash kalitini yangilash"
       },
       "cmd_status": {
         "pending": "Kutilmoqda",
@@ -3467,7 +3468,18 @@
         "done": "Bajarildi",
         "failed": "Muvaffaqiyatsiz",
         "expired": "Muddati o'tgan"
-      }
+      },
+      "signing_key_title": "Buyruq imzolash kaliti",
+      "signing_key_current": "Joriy",
+      "signing_key_previous": "Oldingi",
+      "signing_key_valid_until": "{{when}} gacha amal qiladi",
+      "rotate_key": "Almashtirish…",
+      "finalize_key": "Almashtirishni yakunlash",
+      "rotate_confirm": "Yangi buyruq imzolash kaliti yaratilsinmi? Har bir yoqilgan sensor ESKI kalit bilan imzolangan update-signing-key buyrug'ini oladi. Eski kalitda ishlayotgan sensorlar 24 soat davomida buyruqlarni qabul qiladi.",
+      "rotate_ok": "Yangi imzolash kaliti yaratildi. {{n}} sensor yangilash buyrug'ini oldi.",
+      "finalize_confirm": "Oldingi imzolash kaliti olib tashlansinmi? Shundan keyin eski kalit bilan imzolangan buyruqlar hech bir sensorda tasdiqlanmaydi. Faqat barcha sensorlar yangilangach bajaring.",
+      "finalize_ok": "Oldingi imzolash kaliti olib tashlandi.",
+      "finalize_hint": "Buni barcha sensorlar yangi kalitni olgandan keyin bir marta bajaring. Ungacha ikkala kalit ham tasdiqlanadi."
     },
     "load_failed": "Runtime ma'lumotlarini yuklab bo'lmadi.",
     "save_failed": "Ish yukini saqlab bo'lmadi.",

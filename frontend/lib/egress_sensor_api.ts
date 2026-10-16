@@ -243,3 +243,36 @@ export const listSensorCommands = async (id: number, limit = 50) =>
 
 export const createSensorCommand = async (id: number, kind: CommandKind) =>
   (await api.post<CommandT>(`/egress-sensor/sensors/${id}/commands`, { kind })).data;
+
+// ---------------------------------------------------------------- signing key
+
+export interface SigningKeyT {
+  public_key: string;
+  fingerprint: string;
+  sensor_id: number;
+  previous_public_key: string | null;
+  previous_fingerprint: string | null;
+  previous_valid_until: string | null;
+}
+
+export interface SigningKeyRotationT {
+  fingerprint: string;
+  previous_fingerprint: string | null;
+  previous_valid_until: string | null;
+  sensors_notified: number;
+  rotated_at: string | null;
+}
+
+export const getSigningKey = async () =>
+  (await api.get<SigningKeyT>("/egress-sensor/settings/signing-key")).data;
+
+/** Generate a new signing key and queue an update-signing-key command for
+ *  every enabled sensor. The new key is introduced by a command signed
+ *  with the OLD key, which every sensor already trusts. */
+export const rotateSigningKey = async () =>
+  (await api.post<SigningKeyRotationT>("/egress-sensor/settings/signing-key/rotate")).data;
+
+/** Drop the previous key once every sensor has picked up the new one.
+ *  After this, commands signed with the old key no longer verify. */
+export const finalizeSigningKeyRotation = async () =>
+  (await api.post<SigningKeyRotationT>("/egress-sensor/settings/signing-key/finalize")).data;

@@ -3458,7 +3458,8 @@
       "cmd_kind": {
         "detach": "Detach",
         "restart": "Restart",
-        "dump-state": "Dump state"
+        "dump-state": "Dump state",
+        "update-signing-key": "Update signing key"
       },
       "cmd_status": {
         "pending": "Pending",
@@ -3467,7 +3468,18 @@
         "done": "Done",
         "failed": "Failed",
         "expired": "Expired"
-      }
+      },
+      "signing_key_title": "Command signing key",
+      "signing_key_current": "Current",
+      "signing_key_previous": "Previous",
+      "signing_key_valid_until": "valid until {{when}}",
+      "rotate_key": "Rotate…",
+      "finalize_key": "Finalize rotation",
+      "rotate_confirm": "Generate a new command signing key? Every enabled sensor gets an update-signing-key command signed with the OLD key. Sensors still running the old key keep accepting commands for 24 hours.",
+      "rotate_ok": "New signing key generated. {{n}} sensor(s) got an update command.",
+      "finalize_confirm": "Drop the previous signing key? After this, commands signed with the old key no longer verify on any sensor. Only do it once every sensor has updated.",
+      "finalize_ok": "Previous signing key dropped.",
+      "finalize_hint": "Run this once every sensor has picked up the new key. Until then, both keys verify."
     },
     "load_failed": "Could not load runtime data.",
     "save_failed": "Could not save the workload.",

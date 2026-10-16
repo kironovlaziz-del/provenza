@@ -13,12 +13,13 @@ import { listAgents } from "@/lib/agent_api";
 import type { Agent } from "@/lib/agent_types";
 import {
   DNS_MODES, PROTOCOLS, RUNTIME_MODES, VIOLATION_ACTIONS,
-  createSensorCommand, createWorkload, deleteWorkload, getSensorSettings,
+  createSensorCommand, createWorkload, deleteWorkload,
+  finalizeSigningKeyRotation, getSensorSettings, getSigningKey,
   listSensorCommands, listSensorWorkloads, listSensors, listViolations, listWorkloads,
-  refreshSensor, registerSensor, revokeSensor, updateSensor, updateSensorSettings, updateWorkload,
+  refreshSensor, registerSensor, revokeSensor, rotateSigningKey, updateSensor, updateSensorSettings, updateWorkload,
   type AllowT, type CommandKind, type CommandStatus, type CommandT, type DNSMode, type Protocol,
   type RuntimeMode, type SensorCreatedT, type SensorSettingsInput, type SensorSettingsT, type SensorT,
-  type SensorWorkloadT,
+  type SensorWorkloadT, type SigningKeyT,
   type ViolationAction, type ViolationT, type WorkloadInput, type WorkloadT,
 } from "@/lib/egress_sensor_api";
 
@@ -156,6 +157,10 @@ export default function RuntimePage() {
   const [settingsDraft, setSettingsDraft] = useState<SensorSettingsInput>({});
   const [settingsOpen, setSettingsOpen] = useState(false);
 
+  // Command signing key: current fingerprint and, during a rotation, the
+  // previous key and its deadline.
+  const [signingKey, setSigningKey] = useState<SigningKeyT | null>(null);
+
   // Commands per sensor, cached like workloads: null while loading, an
   // array when fetched. Cleared on collapse so a re-open refetches.
   const [sensorCommands, setSensorCommands] = useState<Record<number, CommandT[] | null>>({});
@@ -189,6 +194,12 @@ export default function RuntimePage() {
       .catch(err => setError(apiError(err, t, t("rt.load_failed"))));
   }, [t]);
 
+  const loadSigningKey = useCallback(() => {
+    getSigningKey()
+      .then(setSigningKey)
+      .catch(err => setError(apiError(err, t, t("rt.load_failed"))));
+  }, [t]);
+
   const loadCommands = useCallback((sensorId: number) => {
     listSensorCommands(sensorId)
       .then(rows => setSensorCommands(prev => ({ ...prev, [sensorId]: rows })))
@@ -202,6 +213,7 @@ export default function RuntimePage() {
   useEffect(loadViolations, [loadViolations]);
   useEffect(loadSensors, [loadSensors]);
   useEffect(loadSettings, [loadSettings]);
+  useEffect(loadSigningKey, [loadSigningKey]);
 
   // Poll the command history while a details row is open and something in
   // it is still in flight. When every command is terminal (done/failed/
@@ -363,6 +375,30 @@ export default function RuntimePage() {
     try {
       const res = await refreshSensor(s.id);
       setNotice(t("rt.sensors.refreshed", { name: s.name, n: res.new_revision }));
+    } catch (err) {
+      setError(apiError(err, t, t("rt.save_failed")));
+    } finally { setBusy(false); }
+  }
+
+  async function rotateKey() {
+    if (!await confirmDialog(t("rt.sensors.rotate_confirm"), { danger: true })) return;
+    setBusy(true); setError(null);
+    try {
+      const res = await rotateSigningKey();
+      setNotice(t("rt.sensors.rotate_ok", { n: res.sensors_notified }));
+      loadSigningKey();
+    } catch (err) {
+      setError(apiError(err, t, t("rt.save_failed")));
+    } finally { setBusy(false); }
+  }
+
+  async function finalizeKey() {
+    if (!await confirmDialog(t("rt.sensors.finalize_confirm"), { danger: true })) return;
+    setBusy(true); setError(null);
+    try {
+      await finalizeSigningKeyRotation();
+      setNotice(t("rt.sensors.finalize_ok"));
+      loadSigningKey();
     } catch (err) {
       setError(apiError(err, t, t("rt.save_failed")));
     } finally { setBusy(false); }
@@ -636,6 +672,55 @@ export default function RuntimePage() {
               )}
             </div>
           )}
+        </section>
+
+        {/* ---------------- signing key ---------------- */}
+        <section className="panel ag-section">
+          <div className="panel-header">
+            <h2>{t("rt.sensors.signing_key_title")}</h2>
+          </div>
+
+          <div className="panel-body" style={{ fontSize: 13 }}>
+            {signingKey ? (
+              <>
+                <div style={{ display: "flex", gap: 24, flexWrap: "wrap", alignItems: "center" }}>
+                  <span>
+                    <em style={{ opacity: 0.6, fontStyle: "normal" }}>{t("rt.sensors.signing_key_current")}:</em>{" "}
+                    <span className="mono ag-small">{signingKey.fingerprint}</span>
+                  </span>
+                  <button className="btn btn-sm btn-danger" disabled={busy} onClick={rotateKey}>
+                    {t("rt.sensors.rotate_key")}
+                  </button>
+                </div>
+
+                {signingKey.previous_public_key && (
+                  <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid var(--border, #333)" }}>
+                    <div style={{ display: "flex", gap: 24, flexWrap: "wrap", alignItems: "center" }}>
+                      <span>
+                        <em style={{ opacity: 0.6, fontStyle: "normal" }}>{t("rt.sensors.signing_key_previous")}:</em>{" "}
+                        <span className="mono ag-small">{signingKey.previous_fingerprint}</span>
+                      </span>
+                      {signingKey.previous_valid_until && (
+                        <span className="hint-text">
+                          {t("rt.sensors.signing_key_valid_until", {
+                            when: fmt(signingKey.previous_valid_until),
+                          })}
+                        </span>
+                      )}
+                      <button className="btn btn-sm btn-danger" disabled={busy} onClick={finalizeKey}>
+                        {t("rt.sensors.finalize_key")}
+                      </button>
+                    </div>
+                    <p className="hint-text" style={{ marginTop: 6, marginBottom: 0 }}>
+                      {t("rt.sensors.finalize_hint")}
+                    </p>
+                  </div>
+                )}
+              </>
+            ) : (
+              <span className="hint-text">{t("rt.sensors.loading")}</span>
+            )}
+          </div>
         </section>
 
         {/* ---------------- sensors ---------------- */}

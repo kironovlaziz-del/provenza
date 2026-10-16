@@ -46,7 +46,7 @@ log = logging.getLogger(__name__)
 # Kinds the sensor understands. A payload with anything else is refused by
 # the sensor before execution, but we also reject it here so an admin gets
 # an immediate, clear error instead of a command that silently does nothing.
-ALLOWED_KINDS = {"detach", "restart", "dump-state"}
+ALLOWED_KINDS = {"detach", "restart", "dump-state", "update-signing-key"}
 
 # A command is valid for this long. Short enough that a leaked payload
 # cannot be replayed much later; long enough that a sensor polling every
@@ -133,14 +133,24 @@ class NotFound(CommandError):
 
 
 def _build_payload(
-    command_id: int, sensor: EgressSensor, kind: str, now: datetime, expires: datetime
+    command_id: int,
+    sensor: EgressSensor,
+    kind: str,
+    now: datetime,
+    expires: datetime,
+    extra: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """The exact dictionary the sensor will canonicalize and verify.
 
     Kept in one place so the signature is over a shape both ends agree on:
     a change to the fields here would invalidate every stored signature.
+
+    `extra` carries kind-specific fields. Only fields whose value is not
+    None are added, so a non-rotation command's bytes are unchanged from
+    what earlier versions signed (the pinned canonical-bytes test relies
+    on this).
     """
-    return {
+    payload: Dict[str, Any] = {
         "id": command_id,
         "kind": kind,
         "org_id": sensor.org_id,
@@ -148,13 +158,26 @@ def _build_payload(
         "issued_at": _iso(now),
         "expires_at": _iso(expires),
     }
+    for k, v in (extra or {}).items():
+        if v is not None:
+            payload[k] = v
+    return payload
 
 
 async def create_command(
-    db: AsyncSession, sensor: EgressSensor, kind: str, actor_user_id: int
+    db: AsyncSession,
+    sensor: EgressSensor,
+    kind: str,
+    actor_user_id: int,
+    extra: Optional[Dict[str, Any]] = None,
 ) -> EgressSensorCommand:
     """Queue a command for one sensor. The sensor sees it on its next
-    heartbeat (within refresh_seconds), verifies it, and acks."""
+    heartbeat (within refresh_seconds), verifies it, and acks.
+
+    `extra` adds kind-specific fields to the payload (the new public key
+    for update-signing-key); anything None is left out so the canonical
+    bytes of ordinary commands stay unchanged.
+    """
     if kind not in ALLOWED_KINDS:
         raise UnknownKind(f"unknown command kind: {kind}", kind=kind)
 
@@ -179,7 +202,7 @@ async def create_command(
     db.add(row)
     await db.flush()
 
-    payload = _build_payload(row.id, sensor, kind, now, expires)
+    payload = _build_payload(row.id, sensor, kind, now, expires, extra)
     row.payload = payload
     row.signature = sign_payload_with(key, payload)
     await db.flush()
@@ -260,6 +283,110 @@ async def expire_old_commands(db: AsyncSession) -> int:
         .values(status="expired")
     )
     return r.rowcount or 0
+
+
+# ---------------------------------------------------------------- rotation
+
+# How long the previous key keeps verifying on a sensor after a rotation.
+# A sensor that missed the update command in this window still accepts the
+# commands it has in flight; after the window, only the current key works.
+PREVIOUS_KEY_GRACE = timedelta(hours=24)
+
+
+async def rotate_signing_key(
+    db: AsyncSession, org_id: int, actor_user_id: int
+) -> tuple[EgressSensorSigningKey, int]:
+    """Generate a new command signing key and hand it to every sensor.
+
+    The new key is introduced by an update-signing-key command signed with
+    the OLD key, which the sensors already trust. Every enabled sensor of
+    the organization gets one; a sensor that is offline receives it on the
+    next heartbeat it sends (commands are redelivered until acked).
+
+    The old public key is kept for PREVIOUS_KEY_GRACE, so commands already
+    in flight still verify; finalize_rotation() drops it once the grace
+    period is over.
+    """
+    key = await signing_key_for(db, org_id, actor_user_id)
+
+    # Keep the current keypair around for one more signing job: the
+    # broadcast command must be signed with what the sensors already have.
+    old_public_b64 = key.public_key
+    old_private_b64 = decrypt_secret(key.private_key_encrypted)
+
+    # New keypair, replaces the current one for everything issued after
+    # this call.
+    new_private_b64, new_public_b64 = generate_keypair()
+    key.public_key = new_public_b64
+    key.private_key_encrypted = encrypt_secret(new_private_b64, org_id)
+    key.fingerprint = key_fingerprint(new_public_b64) or ""
+
+    key.previous_public_key = old_public_b64
+    key.previous_fingerprint = key_fingerprint(old_public_b64)
+    key.previous_valid_until = _utcnow() + PREVIOUS_KEY_GRACE
+    key.rotated_at = _utcnow()
+
+    # Queue one update-signing-key command per enabled sensor. The
+    # signature is over the OLD key: it is the last thing that key signs,
+    # and the only thing the sensors can already verify.
+    sensors = (await db.execute(
+        select(EgressSensor).where(
+            EgressSensor.org_id == org_id,
+            EgressSensor.enabled.is_(True),
+            EgressSensor.revoked_at.is_(None),
+        )
+    )).scalars().all()
+
+    now = _utcnow()
+    count = 0
+    for s in sensors:
+        row = EgressSensorCommand(
+            org_id=org_id,
+            sensor_id=s.id,
+            kind="update-signing-key",
+            payload={},
+            signature="",
+            issued_by=actor_user_id,
+            issued_at=now,
+            expires_at=now + COMMAND_TTL,
+            status="pending",
+        )
+        db.add(row)
+        await db.flush()
+
+        payload = _build_payload(row.id, s, "update-signing-key", now, now + COMMAND_TTL,
+                                 extra={
+                                     "new_public_key": new_public_b64,
+                                     "previous_valid_until": _iso(key.previous_valid_until),
+                                 })
+        row.payload = payload
+        # Sign with the OLD key: that is the key each sensor trusts right
+        # now, so this is exactly the one command it can verify.
+        row.signature = sign_payload(payload, old_private_b64)
+        await db.flush()
+        count += 1
+
+    log.info("rotated egress sensor signing key for org %d, %d sensors updated",
+             org_id, count)
+    return key, count
+
+
+async def finalize_rotation(db: AsyncSession, org_id: int) -> bool:
+    """Drop the previous key once its grace period has passed. After this,
+    commands signed by the old key no longer verify on any sensor.
+
+    Returns True if a previous key existed and was removed."""
+    key = (await db.execute(
+        select(EgressSensorSigningKey).where(EgressSensorSigningKey.org_id == org_id)
+    )).scalar_one_or_none()
+    if key is None or key.previous_public_key is None:
+        return False
+    key.previous_public_key = None
+    key.previous_fingerprint = None
+    key.previous_valid_until = None
+    await db.flush()
+    log.info("finalized egress sensor signing key rotation for org %d", org_id)
+    return True
 
 
 # ---------------------------------------------------------------- verification

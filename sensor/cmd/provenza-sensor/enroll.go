@@ -216,8 +216,10 @@ func writeSigningKey(ctx context.Context, base, sensorKey, keyPath, idPath strin
 		return fmt.Errorf("/signing-key: HTTP %d: %s", resp.StatusCode, body)
 	}
 	var out struct {
-		PublicKey string `json:"public_key"`
-		SensorID  int    `json:"sensor_id"`
+		PublicKey          string `json:"public_key"`
+		SensorID           int    `json:"sensor_id"`
+		PreviousPublicKey  string `json:"previous_public_key"`
+		PreviousValidUntil string `json:"previous_valid_until"`
 	}
 	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&out); err != nil {
 		return fmt.Errorf("decode /signing-key: %w", err)
@@ -238,5 +240,43 @@ func writeSigningKey(ctx context.Context, base, sensorKey, keyPath, idPath strin
 	if err := os.WriteFile(idPath, []byte(fmt.Sprintf("%d\n", out.SensorID)), 0o644); err != nil {
 		return fmt.Errorf("write sensor id: %w", err)
 	}
+
+	// Rotation companion files. A missing .prev.pub means no rotation has
+	// happened yet; a stale one from an earlier rotation is overwritten or
+	// removed so the sensor does not silently accept signatures made with
+	// a key the backend no longer trusts.
+	prevPath := prevKeyPath(keyPath)
+	untilPath := prevUntilPath(keyPath)
+	if out.PreviousPublicKey != "" {
+		if err := os.WriteFile(prevPath, []byte(out.PreviousPublicKey+"\n"), 0o644); err != nil {
+			return fmt.Errorf("write previous signing key: %w", err)
+		}
+		if out.PreviousValidUntil != "" {
+			if err := os.WriteFile(untilPath, []byte(out.PreviousValidUntil+"\n"), 0o644); err != nil {
+				return fmt.Errorf("write previous deadline: %w", err)
+			}
+		} else {
+			_ = os.Remove(untilPath)
+		}
+	} else {
+		_ = os.Remove(prevPath)
+		_ = os.Remove(untilPath)
+	}
 	return nil
+}
+
+// prevKeyPath / prevUntilPath mirror the daemon's helpers. Kept separate
+// because the cmd package does not import internal/daemon.
+func prevKeyPath(active string) string {
+	if strings.HasSuffix(active, ".pub") {
+		return strings.TrimSuffix(active, ".pub") + ".prev.pub"
+	}
+	return active + ".prev.pub"
+}
+
+func prevUntilPath(active string) string {
+	if strings.HasSuffix(active, ".pub") {
+		return strings.TrimSuffix(active, ".pub") + ".prev.until"
+	}
+	return active + ".prev.until"
 }

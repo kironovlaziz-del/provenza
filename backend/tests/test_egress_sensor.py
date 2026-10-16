@@ -1079,3 +1079,114 @@ def test_canonical_command_payload_bytes():
         '"org_id":7,"sensor_id":3}'
     )
     assert canonical_text(payload) == expected
+
+
+
+# ---------------------------------------------------------------- key rotation
+
+@pytest.mark.asyncio
+async def test_rotate_generates_new_key_and_broadcasts(client, admin_token):
+    """POST /rotate changes the current fingerprint and queues exactly one
+    update-signing-key command per enabled sensor."""
+    a = await _register_sensor(client, admin_token, name="rot-a")
+    b = await _register_sensor(client, admin_token, name="rot-b")
+
+    # Baseline: current key fingerprint.
+    r = await client.get(f"{BASE}/settings/signing-key", headers=auth_headers(admin_token))
+    assert r.status_code == 200, r.text
+    before = r.json()["fingerprint"]
+    assert before
+
+    r = await client.post(f"{BASE}/settings/signing-key/rotate", headers=auth_headers(admin_token))
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["fingerprint"] != before
+    assert body["previous_fingerprint"] == before
+    assert body["sensors_notified"] >= 2
+    assert body["previous_valid_until"] is not None
+
+    # Each sensor has its own update-signing-key command queued.
+    for s in (a, b):
+        r = await client.get(f"{BASE}/sensors/{s['id']}/commands", headers=auth_headers(admin_token))
+        assert r.status_code == 200
+        kinds = [c["kind"] for c in r.json()]
+        assert "update-signing-key" in kinds
+
+
+@pytest.mark.asyncio
+async def test_rotate_command_signed_with_previous_key(client, admin_token, db_session):
+    """The update-signing-key command must verify against the PREVIOUS
+    public key: that is what the sensor already trusts."""
+    from app.models.egress_sensor import EgressSensorCommand, EgressSensorSigningKey
+    from app.services.egress_sensor_commands import verify_command_signature
+    from sqlalchemy import select
+
+    created = await _register_sensor(client, admin_token, name="rot-verify")
+
+    # Get current (pre-rotation) key.
+    r = await client.get(f"{BASE}/settings/signing-key", headers=auth_headers(admin_token))
+    old_public = r.json()["public_key"]
+
+    # Rotate.
+    r = await client.post(f"{BASE}/settings/signing-key/rotate", headers=auth_headers(admin_token))
+    assert r.status_code == 200
+
+    # The command payload verifies against the OLD key.
+    r = await client.get(f"{BASE}/sensors/{created['id']}/commands", headers=auth_headers(admin_token))
+    cmds = [c for c in r.json() if c["kind"] == "update-signing-key"]
+    assert len(cmds) == 1
+
+    # Fetch the payload + signature.
+    rows = (await db_session.execute(
+        select(EgressSensorCommand).where(EgressSensorCommand.id == cmds[0]["id"])
+    )).scalars().all()
+    assert len(rows) == 1
+    payload = rows[0].payload
+    signature = rows[0].signature
+
+    assert "new_public_key" in payload
+    assert verify_command_signature(old_public, payload, signature), \
+        "update-signing-key must verify against the OLD key"
+
+
+@pytest.mark.asyncio
+async def test_finalize_clears_previous_key(client, admin_token):
+    """POST /finalize drops the previous key from the settings response."""
+    await _register_sensor(client, admin_token, name="rot-fin")
+
+    r = await client.post(f"{BASE}/settings/signing-key/rotate", headers=auth_headers(admin_token))
+    assert r.status_code == 200
+
+    r = await client.get(f"{BASE}/settings/signing-key", headers=auth_headers(admin_token))
+    assert r.json()["previous_public_key"] is not None
+
+    r = await client.post(f"{BASE}/settings/signing-key/finalize", headers=auth_headers(admin_token))
+    assert r.status_code == 200
+
+    r = await client.get(f"{BASE}/settings/signing-key", headers=auth_headers(admin_token))
+    assert r.json()["previous_public_key"] is None
+
+
+@pytest.mark.asyncio
+async def test_signing_key_out_includes_previous_after_rotate(client, admin_token):
+    """The sensor-facing /signing-key returns the previous public key while
+    the grace period is running."""
+    created = await _register_sensor(client, admin_token, name="rot-sensor")
+
+    r = await client.get(f"{BASE}/signing-key", headers={"X-Sensor-Key": created["api_key"]})
+    assert r.status_code == 200
+    assert r.json()["previous_public_key"] is None
+
+    r = await client.post(f"{BASE}/settings/signing-key/rotate", headers=auth_headers(admin_token))
+    assert r.status_code == 200
+
+    r = await client.get(f"{BASE}/signing-key", headers={"X-Sensor-Key": created["api_key"]})
+    assert r.status_code == 200
+    assert r.json()["previous_public_key"] is not None
+    assert r.json()["previous_valid_until"] is not None
+
+
+@pytest.mark.asyncio
+async def test_rotate_requires_admin(client, approver_token):
+    r = await client.post(f"{BASE}/settings/signing-key/rotate", headers=auth_headers(approver_token))
+    assert r.status_code in (401, 403)

@@ -49,6 +49,7 @@ from app.schemas.egress_sensor import (
     SensorOut,
     SensorWorkloadOut,
     SigningKeyOut,
+    SigningKeyRotationOut,
     SensorRegister,
     SensorUpdate,
     ViolationOut,
@@ -486,6 +487,97 @@ async def patch_settings(
     return row
 
 
+# ---- signing key rotation (admin)
+
+@admin_router.get(
+    "/settings/signing-key",
+    response_model=SigningKeyOut,
+    summary="The organization's command signing key (public half) and its status",
+)
+async def get_org_signing_key(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role(UserRole.admin)),
+):
+    key = await cmd_svc.signing_key_for(db, current_user.org_id, current_user.id)
+    await db.commit()
+    return SigningKeyOut(
+        public_key=key.public_key,
+        fingerprint=key.fingerprint,
+        sensor_id=0,  # admin view; not for a specific sensor
+        previous_public_key=key.previous_public_key,
+        previous_fingerprint=key.previous_fingerprint,
+        previous_valid_until=key.previous_valid_until,
+    )
+
+
+@admin_router.post(
+    "/settings/signing-key/rotate",
+    response_model=SigningKeyRotationOut,
+    summary="Generate a new command signing key and hand it to every sensor",
+)
+async def rotate_org_signing_key(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role(UserRole.admin)),
+):
+    """A new key replaces the current one for everything signed from now
+    on, and one update-signing-key command per enabled sensor is queued.
+    Each is signed with the OLD key, which every sensor already trusts.
+
+    Sensors pick the new key up on their next heartbeat; until they do,
+    any other command issued in that window may fail verification on a
+    sensor that has not updated yet. Wait one refresh_seconds before
+    issuing unrelated commands.
+    """
+    key, count = await cmd_svc.rotate_signing_key(db, current_user.org_id, current_user.id)
+    await AuditService(db).log(
+        current_user.org_id, current_user.id, "egress_sensor_signing_key",
+        current_user.org_id, "rotated",
+        {
+            "fingerprint": key.fingerprint,
+            "previous_fingerprint": key.previous_fingerprint,
+            "sensors_notified": count,
+            "previous_valid_until": key.previous_valid_until.isoformat()
+                if key.previous_valid_until else None,
+        },
+    )
+    await db.refresh(key)
+    return SigningKeyRotationOut(
+        fingerprint=key.fingerprint,
+        previous_fingerprint=key.previous_fingerprint,
+        previous_valid_until=key.previous_valid_until,
+        sensors_notified=count,
+        rotated_at=key.rotated_at,
+    )
+
+
+@admin_router.post(
+    "/settings/signing-key/finalize",
+    response_model=SigningKeyRotationOut,
+    summary="Drop the previous key once its grace period has passed",
+)
+async def finalize_org_signing_key(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role(UserRole.admin)),
+):
+    """After this, commands signed by the old key no longer verify on any
+    sensor. Do it once every sensor has had time to receive the update
+    (the default grace is 24 hours, shown in the rotation response)."""
+    removed = await cmd_svc.finalize_rotation(db, current_user.org_id)
+    key = await cmd_svc.signing_key_for(db, current_user.org_id, current_user.id)
+    await AuditService(db).log(
+        current_user.org_id, current_user.id, "egress_sensor_signing_key",
+        current_user.org_id, "finalized",
+        {"fingerprint": key.fingerprint, "previous_removed": removed},
+    )
+    await db.commit()
+    await db.refresh(key)
+    return SigningKeyRotationOut(
+        fingerprint=key.fingerprint,
+        sensors_notified=0,
+        rotated_at=key.rotated_at,
+    )
+
+
 # ---- commands (admin)
 
 @admin_router.post(
@@ -664,6 +756,9 @@ async def get_signing_key(
         public_key=key.public_key,
         fingerprint=key.fingerprint,
         sensor_id=sensor.id,
+        previous_public_key=key.previous_public_key,
+        previous_fingerprint=key.previous_fingerprint,
+        previous_valid_until=key.previous_valid_until,
     )
 
 

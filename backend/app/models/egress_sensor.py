@@ -210,6 +210,14 @@ class EgressSensorSigningKey(Base):
     private_key_encrypted = Column(Text, nullable=False)  # Fernet(ENCRYPTION_KEY)
     fingerprint = Column(String(60), nullable=False)   # "SHA256:..." for display
 
+    # During and after a rotation, the previous key stays valid on sensors
+    # for a grace period. Commands signed before the rotation are still
+    # verified; a sensor that misses the update command for a moment does
+    # not silently drop every command.
+    previous_public_key = Column(Text)
+    previous_fingerprint = Column(String(60))
+    previous_valid_until = Column(DateTime(timezone=True))
+
     created_by = Column(Integer, ForeignKey("users.id"))
     created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
     rotated_at = Column(DateTime(timezone=True))       # when this key replaced an older one

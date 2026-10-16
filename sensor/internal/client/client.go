@@ -298,8 +298,23 @@ type CommandPayload struct {
 	ID        int    `json:"id"`
 	IssuedAt  string `json:"issued_at"`
 	Kind      string `json:"kind"`
-	OrgID     int    `json:"org_id"`
-	SensorID  int    `json:"sensor_id"`
+
+	// Only set for kind == "update-signing-key". Empty on every other
+	// command, and omitted by encoding/json, so the canonical bytes of
+	// existing commands stay the same.
+	//
+	// Field order below matches the alphabetical order the Python side
+	// applies (RFC 8785 JCS): expires_at, id, issued_at, kind,
+	// new_public_key, org_id, previous_valid_until, sensor_id.
+	// encoding/json writes struct fields in declaration order, so this
+	// ordering is what makes the two ends produce the same bytes.
+	NewPublicKey string `json:"new_public_key,omitempty"`
+
+	OrgID int `json:"org_id"`
+
+	PreviousValidUntil string `json:"previous_valid_until,omitempty"`
+
+	SensorID int `json:"sensor_id"`
 }
 
 // Command is one queued command as the backend sends it: the payload it
@@ -325,4 +340,10 @@ type SigningKeyResponse struct {
 	PublicKey   string `json:"public_key"`
 	Fingerprint string `json:"fingerprint"`
 	SensorID    int    `json:"sensor_id"`
+
+	// Set while the organization is in a key rotation grace period. The
+	// sensor verifies a command against the current key first, then
+	// against this one until PreviousValidUntil passes.
+	PreviousPublicKey  string `json:"previous_public_key,omitempty"`
+	PreviousValidUntil string `json:"previous_valid_until,omitempty"`
 }
