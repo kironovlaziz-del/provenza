@@ -31,6 +31,9 @@ export interface SensorT {
   allowed_total: number;
   denied_total: number;
   observed_total: number;
+  allowed_per_min?: number | null;
+  denied_per_min?: number | null;
+  observed_per_min?: number | null;
 
   created_at: string;
   updated_at: string | null;
@@ -46,6 +49,9 @@ export const listSensors = async (includeRevoked = false) =>
 
 export const registerSensor = async (name: string) =>
   (await api.post<SensorCreatedT>("/egress-sensor/sensors", { name })).data;
+
+export const getSensor = async (id: number) =>
+  (await api.get<SensorT>(`/egress-sensor/sensors/${id}`)).data;
 
 export const updateSensor = async (id: number, input: { name?: string; enabled?: boolean }) =>
   (await api.patch<SensorT>(`/egress-sensor/sensors/${id}`, input)).data;

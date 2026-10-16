@@ -176,6 +176,9 @@ type StatsSection struct {
 	Allowed       uint64 `json:"allowed"`
 	Denied        uint64 `json:"denied"`
 	Observed      uint64 `json:"observed"`
+	AllowedPerMin  uint64 `json:"allowed_per_min"`
+	DeniedPerMin   uint64 `json:"denied_per_min"`
+	ObservedPerMin uint64 `json:"observed_per_min"`
 }
 
 // ---------------------------------------------------------------- formatting
@@ -281,9 +284,9 @@ func printReport(w *os.File, st *Status) {
 	printDNS(w, st)
 
 	fmt.Fprintf(w, "Traffic\n")
-	fmt.Fprintf(w, "  allowed        %d\n", st.Stats.Allowed)
-	fmt.Fprintf(w, "  denied         %d\n", st.Stats.Denied)
-	fmt.Fprintf(w, "  observed       %d\n", st.Stats.Observed)
+	fmt.Fprintf(w, "  allowed        %d  (%d/min)\n", st.Stats.Allowed, st.Stats.AllowedPerMin)
+	fmt.Fprintf(w, "  denied         %d  (%d/min)\n", st.Stats.Denied, st.Stats.DeniedPerMin)
+	fmt.Fprintf(w, "  observed       %d  (%d/min)\n", st.Stats.Observed, st.Stats.ObservedPerMin)
 	fmt.Fprintf(w, "  dropped events %d\n", st.Stats.DroppedEvents)
 }
 

@@ -40,6 +40,12 @@ class EgressSensor(Base):
     allowed_total  = Column(BigInteger, nullable=False, default=0)
     denied_total   = Column(BigInteger, nullable=False, default=0)
     observed_total = Column(BigInteger, nullable=False, default=0)
+    # Per-minute rates, computed by the daemon from a 60s sliding
+    # window. nullable so an old sensor that does not send them reads
+    # as null rather than as a fake zero.
+    allowed_per_min  = Column(BigInteger, nullable=True)
+    denied_per_min   = Column(BigInteger, nullable=True)
+    observed_per_min = Column(BigInteger, nullable=True)
     last_seen_at = Column(DateTime(timezone=True))
     # Set by the offline checker the first time we warned about this sensor;
     # cleared (set back) when it starts sending heartbeats again, so the

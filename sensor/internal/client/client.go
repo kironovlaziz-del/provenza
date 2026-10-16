@@ -147,6 +147,9 @@ type Heartbeat struct {
 	AllowedTotal  uint64           `json:"allowed_total,omitempty"`
 	DeniedTotal   uint64           `json:"denied_total,omitempty"`
 	ObservedTotal uint64           `json:"observed_total,omitempty"`
+	AllowedPerMin  uint64           `json:"allowed_per_min"`
+	DeniedPerMin   uint64           `json:"denied_per_min"`
+	ObservedPerMin uint64           `json:"observed_per_min"`
 }
 
 type WorkloadReport struct {

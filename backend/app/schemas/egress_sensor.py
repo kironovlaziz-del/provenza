@@ -58,12 +58,11 @@ class SensorOut(BaseModel):
     allowed_total: Optional[int] = None
     denied_total: Optional[int] = None
     observed_total: Optional[int] = None
+    allowed_per_min: Optional[int] = None
+    denied_per_min: Optional[int] = None
+    observed_per_min: Optional[int] = None
     config_version: Optional[str] = None
     last_seen_at: Optional[datetime] = None
-
-    allowed_total: int = 0
-    denied_total: int = 0
-    observed_total: int = 0
 
     created_at: datetime
     updated_at: Optional[datetime] = None
@@ -385,6 +384,9 @@ class HeartbeatIn(BaseModel):
     allowed_total: Optional[int] = None
     denied_total: Optional[int] = None
     observed_total: Optional[int] = None
+    allowed_per_min: Optional[int] = None
+    denied_per_min: Optional[int] = None
+    observed_per_min: Optional[int] = None
 
 
 # ---------------------------------------------------------------- violations (sensor input)

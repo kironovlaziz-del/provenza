@@ -6,7 +6,6 @@ package daemon
 
 import (
 	"encoding/json"
-	"github.com/kironovlaziz-del/provenza/sensor/internal/bpfobj"
 	"log/slog"
 	"net"
 	"os"
@@ -106,6 +105,9 @@ type StatsSection struct {
 	Allowed       uint64 `json:"allowed"`
 	Denied        uint64 `json:"denied"`
 	Observed      uint64 `json:"observed"`
+	AllowedPerMin  uint64 `json:"allowed_per_min"`
+	DeniedPerMin   uint64 `json:"denied_per_min"`
+	ObservedPerMin uint64 `json:"observed_per_min"`
 }
 
 // maskKey returns the display form of a sensor key: the pvz_sensor_ prefix
@@ -180,12 +182,7 @@ func (d *Daemon) snapshot() Status {
 		},
 		Warnings: append([]string(nil), d.kernel.Notes...),
 		DNS:      d.dns.stats(cgByWid),
-		Stats: StatsSection{
-			DroppedEvents: d.kernel.Stat(bpfobj.StatEventsLost),
-			Allowed:       d.kernel.Stat(bpfobj.StatAllowed),
-			Denied:        d.kernel.Stat(bpfobj.StatDenied),
-			Observed:      d.kernel.Stat(bpfobj.StatObserved),
-		},
+		Stats: d.statsAndRates(),
 	}
 
 	cgroups := CgroupsSection{RunGroups: runGroups}
