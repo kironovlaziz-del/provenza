@@ -3415,7 +3415,14 @@
       "runtime_section": "Ish vaqti",
       "kernel": "Yadro",
       "config_version": "Konfiguratsiya versiyasi",
-      "dropped_events": "Yo'qolgan hodisalar"
+      "dropped_events": "Yo'qolgan hodisalar",
+      "workloads_snapshot": "Boshqariladigan ish yuklari",
+      "no_workloads_snapshot": "Sensor hali hech qanday ish yuki haqida xabar bermadi.",
+      "snap_cgroups": "cgroup'lar",
+      "snap_processes": "jarayonlar",
+      "snap_dns": "DNS",
+      "snap_denied": "rad etildi",
+      "snap_updated": "xabar berildi"
     },
     "load_failed": "Runtime ma'lumotlarini yuklab bo'lmadi.",
     "save_failed": "Ish yukini saqlab bo'lmadi.",

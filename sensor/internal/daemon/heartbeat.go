@@ -68,6 +68,26 @@ func (d *Daemon) sendHeartbeat(ctx context.Context) {
 	}
 	d.mu.Unlock()
 
+	// Attach DNS counters after releasing d.mu: dnsServers.stats takes its
+	// own lock, and holding d.mu while acquiring it would fix a lock order
+	// (d.mu -> dns.mu) that any future path needing the reverse would turn
+	// into a deadlock. Nothing here touches d.mu, so the snapshot is still
+	// consistent enough for a heartbeat.
+	if stats := d.dns.stats(nil); len(stats) > 0 {
+		byWid := make(map[uint32]DNSSection, len(stats))
+		for _, s := range stats {
+			byWid[s.WorkloadID] = s
+		}
+		for i := range wls {
+			if s, ok := byWid[wls[i].ID]; ok {
+				wls[i].DNSPort = s.Port
+				wls[i].DNSTotal = s.Total
+				wls[i].DNSAllowed = s.Allowed
+				wls[i].DNSDenied = s.Denied
+			}
+		}
+	}
+
 	var cfgVer *string
 	if ver != "" {
 		v := ver

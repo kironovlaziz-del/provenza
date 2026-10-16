@@ -161,3 +161,23 @@ export const listViolations = async (filter: ViolationFilter = {}, limit = 200) 
 /** Violations from one sensor only — same shape, narrower query. */
 export const listSensorViolations = async (id: number, limit = 100) =>
   (await api.get<ViolationT[]>(`/egress-sensor/sensors/${id}/violations`, { params: { limit } })).data;
+
+// ---------------------------------------------------------------- per-workload snapshot
+
+/** One row of a sensor's latest heartbeat: what the sensor governs under a
+ *  workload, and how its DNS proxy is doing. */
+export interface SensorWorkloadT {
+  workload_id: number;
+  workload_name: string;
+  cgroups: number;
+  processes: number;
+  privileged: string[];
+  dns_port: number | null;
+  dns_total: number;
+  dns_allowed: number;
+  dns_denied: number;
+  updated_at: string;
+}
+
+export const listSensorWorkloads = async (id: number) =>
+  (await api.get<SensorWorkloadT[]>(`/egress-sensor/sensors/${id}/workloads`)).data;

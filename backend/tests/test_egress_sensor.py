@@ -543,3 +543,128 @@ async def test_force_refresh_writes_audit(client, admin_token, db_session):
         )
     )).scalars().all()
     assert len(rows) == 1
+
+
+
+@pytest.mark.asyncio
+async def test_heartbeat_stores_per_workload_snapshot(client, admin_token):
+    """The heartbeat's per-workload rows land in egress_sensor_workloads and
+    are returned by GET /sensors/{id}/workloads, with names joined in."""
+    w = await _make_workload(client, admin_token, name="snap-wl", dns="listed")
+    created = await _register_sensor(client, admin_token, name="snap-sensor")
+    key = created["api_key"]
+
+    r = await client.post(
+        f"{BASE}/heartbeat",
+        json={
+            "hostname": "h1", "version": "v1", "kernel": "linux/amd64",
+            "enforcing": True,
+            "hooks": ["connect4"], "warnings": [], "errors": [],
+            "dropped_events": 0,
+            "workloads": [
+                {"id": w["id"], "cgroups": 3, "processes": 12, "privileged": ["curl"],
+                 "dns_port": 15353, "dns_total": 100, "dns_allowed": 90, "dns_denied": 10},
+            ],
+        },
+        headers={"X-Sensor-Key": key},
+    )
+    assert r.status_code == 204, r.text
+
+    r = await client.get(f"{BASE}/sensors/{created['id']}/workloads", headers=auth_headers(admin_token))
+    assert r.status_code == 200, r.text
+    rows = r.json()
+    assert len(rows) == 1
+    row = rows[0]
+    assert row["workload_id"] == w["id"]
+    assert row["workload_name"] == "snap-wl"
+    assert row["cgroups"] == 3
+    assert row["processes"] == 12
+    assert row["privileged"] == ["curl"]
+    assert row["dns_port"] == 15353
+    assert row["dns_total"] == 100
+    assert row["dns_allowed"] == 90
+    assert row["dns_denied"] == 10
+
+
+@pytest.mark.asyncio
+async def test_heartbeat_overwrites_snapshot(client, admin_token):
+    """A second heartbeat replaces the row, not appends to it."""
+    w = await _make_workload(client, admin_token, name="snap-overwrite", dns="listed")
+    created = await _register_sensor(client, admin_token, name="snap-overwrite-sensor")
+    key = created["api_key"]
+
+    def hb(cgroups, total):
+        return {
+            "hostname": "h1", "version": "v1", "enforcing": False,
+            "hooks": [], "warnings": [], "errors": [], "dropped_events": 0,
+            "workloads": [
+                {"id": w["id"], "cgroups": cgroups, "processes": 0, "privileged": [],
+                 "dns_port": 15353, "dns_total": total, "dns_allowed": total, "dns_denied": 0},
+            ],
+        }
+
+    r = await client.post(f"{BASE}/heartbeat", json=hb(3, 100), headers={"X-Sensor-Key": key})
+    assert r.status_code == 204
+    r = await client.post(f"{BASE}/heartbeat", json=hb(7, 250), headers={"X-Sensor-Key": key})
+    assert r.status_code == 204
+
+    r = await client.get(f"{BASE}/sensors/{created['id']}/workloads", headers=auth_headers(admin_token))
+    rows = r.json()
+    assert len(rows) == 1
+    assert rows[0]["cgroups"] == 7
+    assert rows[0]["dns_total"] == 250
+
+
+@pytest.mark.asyncio
+async def test_heartbeat_drops_unknown_workload(client, admin_token):
+    """A row naming another organization's workload is dropped, not
+    upserted into the snapshot."""
+    created = await _register_sensor(client, admin_token, name="snap-unknown")
+    key = created["api_key"]
+
+    r = await client.post(
+        f"{BASE}/heartbeat",
+        json={
+            "hostname": "h1", "version": "v1", "enforcing": False,
+            "hooks": [], "warnings": [], "errors": [], "dropped_events": 0,
+            "workloads": [
+                {"id": 999999, "cgroups": 1, "processes": 0, "privileged": [],
+                 "dns_port": 15353, "dns_total": 5, "dns_allowed": 5, "dns_denied": 0},
+            ],
+        },
+        headers={"X-Sensor-Key": key},
+    )
+    assert r.status_code == 204
+    r = await client.get(f"{BASE}/sensors/{created['id']}/workloads", headers=auth_headers(admin_token))
+    assert r.json() == []
+
+
+@pytest.mark.asyncio
+async def test_heartbeat_deletes_removed_workload(client, admin_token):
+    """A workload the sensor stops reporting is removed from the snapshot
+    on the next heartbeat."""
+    w = await _make_workload(client, admin_token, name="snap-drop", dns="listed")
+    created = await _register_sensor(client, admin_token, name="snap-drop-sensor")
+    key = created["api_key"]
+
+    r = await client.post(
+        f"{BASE}/heartbeat",
+        json={"hostname": "h1", "version": "v1", "enforcing": False,
+              "hooks": [], "warnings": [], "errors": [], "dropped_events": 0,
+              "workloads": [{"id": w["id"], "cgroups": 1, "processes": 0, "privileged": [],
+                             "dns_port": 15353, "dns_total": 1, "dns_allowed": 1, "dns_denied": 0}]},
+        headers={"X-Sensor-Key": key},
+    )
+    assert r.status_code == 204
+
+    r = await client.post(
+        f"{BASE}/heartbeat",
+        json={"hostname": "h1", "version": "v1", "enforcing": False,
+              "hooks": [], "warnings": [], "errors": [], "dropped_events": 0,
+              "workloads": []},
+        headers={"X-Sensor-Key": key},
+    )
+    assert r.status_code == 204
+
+    r = await client.get(f"{BASE}/sensors/{created['id']}/workloads", headers=auth_headers(admin_token))
+    assert r.json() == []

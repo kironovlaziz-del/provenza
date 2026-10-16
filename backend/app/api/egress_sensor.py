@@ -39,6 +39,7 @@ from app.schemas.egress_sensor import (
     HeartbeatIn,
     SensorCreated,
     SensorOut,
+    SensorWorkloadOut,
     SensorRegister,
     SensorUpdate,
     ViolationOut,
@@ -241,6 +242,20 @@ async def list_sensor_violations(
 
 
 # ---- workloads
+
+@admin_router.get(
+    "/sensors/{sensor_id}/workloads",
+    response_model=list[SensorWorkloadOut],
+    summary="Per-workload snapshot from the sensor's latest heartbeat",
+)
+async def list_sensor_workloads(
+    sensor_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role(UserRole.admin)),
+):
+    await _get_org_sensor(db, sensor_id, current_user.org_id, include_revoked=True)
+    return await svc.workloads_for_sensor(db, sensor_id)
+
 
 @admin_router.post(
     "/workloads",
@@ -447,23 +462,14 @@ async def get_config(
 @sensor_router.post(
     "/heartbeat",
     status_code=status.HTTP_204_NO_CONTENT,
-    summary="Sensor reports itself: hostname, version, attached hooks, warnings",
+    summary="Sensor reports itself: hostname, version, hooks, warnings, per-workload snapshot",
 )
 async def post_heartbeat(
     data: HeartbeatIn,
     db: AsyncSession = Depends(get_db),
     sensor: EgressSensor = Depends(get_current_sensor),
 ):
-    sensor.hostname = data.hostname
-    sensor.version = data.version
-    sensor.kernel = data.kernel
-    sensor.enforcing = data.enforcing
-    sensor.hooks = list(data.hooks or [])
-    sensor.warnings = list(data.warnings or [])
-    sensor.errors = list(data.errors or [])
-    sensor.dropped_events = data.dropped_events
-    sensor.config_version = data.config_version
-    sensor.last_seen_at = svc.now_utc()
+    await svc.ingest_heartbeat(db, sensor, data)
     await db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 

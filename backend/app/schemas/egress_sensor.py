@@ -65,6 +65,24 @@ class SensorOut(BaseModel):
         from_attributes = True
 
 
+class SensorWorkloadOut(BaseModel):
+    """One per-workload row of a sensor's latest heartbeat: what the sensor
+    governs under the workload and how its DNS proxy is doing."""
+    workload_id: int
+    workload_name: str
+    cgroups: int = 0
+    processes: int = 0
+    privileged: List[str] = Field(default_factory=list)
+    dns_port: Optional[int] = None
+    dns_total: int = 0
+    dns_allowed: int = 0
+    dns_denied: int = 0
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
 class SensorCreated(SensorOut):
     # Shown once at registration; never returned again.
     api_key: str
@@ -213,6 +231,9 @@ class PolicyOut(BaseModel):
 # ---------------------------------------------------------------- heartbeat (sensor input)
 
 class WorkloadReportIn(BaseModel):
+    """A per-workload snapshot the sensor sends on every heartbeat. The DNS
+    fields are optional so a sensor older than the per-workload DNS proxy
+    reports without them; a newer sensor fills them in."""
     model_config = ConfigDict(extra="ignore")
 
     id: int
@@ -220,6 +241,11 @@ class WorkloadReportIn(BaseModel):
     processes: int = 0
     # A Go client whose slice is nil sends null; accept both.
     privileged: Optional[List[str]] = None
+
+    dns_port: Optional[int] = Field(default=None, ge=0, le=65535)
+    dns_total: int = Field(default=0, ge=0)
+    dns_allowed: int = Field(default=0, ge=0)
+    dns_denied: int = Field(default=0, ge=0)
 
 
 class HeartbeatIn(BaseModel):

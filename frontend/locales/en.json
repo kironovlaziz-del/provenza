@@ -3415,7 +3415,14 @@
       "runtime_section": "Runtime",
       "kernel": "Kernel",
       "config_version": "Config version",
-      "dropped_events": "Dropped events"
+      "dropped_events": "Dropped events",
+      "workloads_snapshot": "Workloads governed",
+      "no_workloads_snapshot": "The sensor has not reported any workload yet.",
+      "snap_cgroups": "cgroups",
+      "snap_processes": "processes",
+      "snap_dns": "DNS",
+      "snap_denied": "denied",
+      "snap_updated": "reported"
     },
     "load_failed": "Could not load runtime data.",
     "save_failed": "Could not save the workload.",

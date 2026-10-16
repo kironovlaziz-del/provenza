@@ -13,9 +13,10 @@ import { listAgents } from "@/lib/agent_api";
 import type { Agent } from "@/lib/agent_types";
 import {
   DNS_MODES, PROTOCOLS, RUNTIME_MODES, VIOLATION_ACTIONS,
-  createWorkload, deleteWorkload, listSensors, listViolations, listWorkloads,
+  createWorkload, deleteWorkload, listSensorWorkloads, listSensors, listViolations, listWorkloads,
   refreshSensor, registerSensor, revokeSensor, updateSensor, updateWorkload,
   type AllowT, type DNSMode, type Protocol, type RuntimeMode, type SensorCreatedT, type SensorT,
+  type SensorWorkloadT,
   type ViolationAction, type ViolationT, type WorkloadInput, type WorkloadT,
 } from "@/lib/egress_sensor_api";
 
@@ -133,6 +134,9 @@ export default function RuntimePage() {
   // Which sensor's details row is expanded (null = none). One at a time:
   // the point of the row is a focused view of one host, not a dashboard.
   const [expandedSensorId, setExpandedSensorId] = useState<number | null>(null);
+  // Per-sensor workload snapshots, cached by sensor id. Loaded lazily when
+  // a sensor is expanded; cleared on collapse so a re-open refetches.
+  const [sensorWorkloads, setSensorWorkloads] = useState<Record<number, SensorWorkloadT[] | null>>({});
 
   const loadWorkloads = useCallback(() => {
     listWorkloads(showDeleted).then(setWorkloads).catch((err) => setError(apiError(err, t, t("rt.load_failed"))));
@@ -281,7 +285,21 @@ export default function RuntimePage() {
   }
 
   function toggleSensorDetails(id: number) {
-    setExpandedSensorId(expandedSensorId === id ? null : id);
+    if (expandedSensorId === id) {
+      setExpandedSensorId(null);
+      setSensorWorkloads(prev => { const next = { ...prev }; delete next[id]; return next; });
+      return;
+    }
+    setExpandedSensorId(id);
+    // Fresh fetch on every expand: a heartbeat runs every 30s and the
+    // numbers move, so a cached row goes stale between two clicks.
+    setSensorWorkloads(prev => ({ ...prev, [id]: null }));
+    listSensorWorkloads(id)
+      .then(rows => setSensorWorkloads(prev => ({ ...prev, [id]: rows })))
+      .catch(err => {
+        setError(apiError(err, t, t("rt.load_failed")));
+        setSensorWorkloads(prev => ({ ...prev, [id]: [] }));
+      });
   }
 
   async function revoke(s: SensorT) {
@@ -580,6 +598,52 @@ export default function RuntimePage() {
                                 <span><em style={{ opacity: 0.6, fontStyle: "normal" }}>{t("rt.sensors.dropped_events")}</em> {s.dropped_events}</span>
                                 <span><em style={{ opacity: 0.6, fontStyle: "normal" }}>{t("rt.sensors.last_seen")}</em> {s.last_seen_at ? fmt(s.last_seen_at) : t("rt.sensors.never")}</span>
                               </div>
+                            </div>
+
+                            <div>
+                              <div style={{ fontWeight: 600, marginBottom: 4, fontSize: 11, textTransform: "uppercase", letterSpacing: 0.6, opacity: 0.55 }}>
+                                {t("rt.sensors.workloads_snapshot")}
+                              </div>
+                              {sensorWorkloads[s.id] === undefined || sensorWorkloads[s.id] === null ? (
+                                <div style={{ fontSize: 12, opacity: 0.6 }}>{t("rt.sensors.loading")}</div>
+                              ) : sensorWorkloads[s.id]!.length === 0 ? (
+                                <div style={{ fontSize: 12, opacity: 0.5, fontStyle: "italic" }}>{t("rt.sensors.no_workloads_snapshot")}</div>
+                              ) : (
+                                <table className="table-cards" style={{ fontSize: 12, marginTop: 4 }}>
+                                  <thead>
+                                    <tr>
+                                      <th style={{ padding: "4px 8px" }}>{t("rt.workload")}</th>
+                                      <th style={{ padding: "4px 8px" }}>{t("rt.sensors.snap_cgroups")}</th>
+                                      <th style={{ padding: "4px 8px" }}>{t("rt.sensors.snap_processes")}</th>
+                                      <th style={{ padding: "4px 8px" }}>{t("rt.sensors.snap_dns")}</th>
+                                      <th style={{ padding: "4px 8px" }}>{t("rt.sensors.snap_updated")}</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {sensorWorkloads[s.id]!.map(wl => (
+                                      <tr key={wl.workload_id}>
+                                        <td style={{ padding: "4px 8px" }}>
+                                          <strong>#{wl.workload_id}</strong> {wl.workload_name}
+                                        </td>
+                                        <td style={{ padding: "4px 8px" }}>{wl.cgroups}</td>
+                                        <td style={{ padding: "4px 8px" }}>{wl.processes}</td>
+                                        <td style={{ padding: "4px 8px" }} className="mono">
+                                          {wl.dns_port === null
+                                            ? <span style={{ opacity: 0.5 }}>—</span>
+                                            : <span>
+                                                :{wl.dns_port}{" "}
+                                                <span style={{ opacity: 0.7 }}>
+                                                  {wl.dns_allowed}/{wl.dns_total}
+                                                  {wl.dns_denied > 0 && <span style={{ color: "var(--danger, #c0392b)" }}> ({t("rt.sensors.snap_denied")} {wl.dns_denied})</span>}
+                                                </span>
+                                              </span>}
+                                        </td>
+                                        <td style={{ padding: "4px 8px", opacity: 0.6 }}>{fmt(wl.updated_at)}</td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              )}
                             </div>
                           </div>
                         </td>

@@ -153,6 +153,15 @@ type WorkloadReport struct {
 	// A nil slice serializes as null, which the backend rejects for a
 	// List[str]; omit it, and the schema's default_factory fills it.
 	Privileged []string `json:"privileged,omitempty"`
+
+	// DNS proxy counters for this workload's listener, accumulated since
+	// the sensor started. Zeroed on the backend when a sensor restarts.
+	// Omitted when the workload has no DNS listener (dns: off), so an older
+	// backend that does not know these fields simply sees no change.
+	DNSPort    uint16 `json:"dns_port,omitempty"`
+	DNSTotal   uint64 `json:"dns_total,omitempty"`
+	DNSAllowed uint64 `json:"dns_allowed,omitempty"`
+	DNSDenied  uint64 `json:"dns_denied,omitempty"`
 }
 
 func (c *Client) Heartbeat(ctx context.Context, h Heartbeat) error {

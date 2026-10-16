@@ -67,7 +67,8 @@ from app.models.egress_check import AgentEgressCheck
 from app.models.a2a_gateway import A2APeer, A2ATask
 from app.models.pvp_seal import PVPActionSeal
 from app.models.egress_proxy import EgressProxy, EgressRedemption, EgressRoute
-from app.models.egress_sensor import EgressPolicyRevision, EgressSensor, EgressViolation, EgressWorkload
+from app.models.egress_sensor import (EgressPolicyRevision, EgressSensor, EgressSensorWorkload,
+                                    EgressViolation, EgressWorkload)
 
 __all__ = [
     "Organization",

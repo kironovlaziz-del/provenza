@@ -15,17 +15,19 @@ import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional, Tuple
 
-from sqlalchemy import or_, select
+from sqlalchemy import delete, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import hash_api_key
 from app.models.egress_sensor import (
     EgressPolicyRevision,
     EgressSensor,
+    EgressSensorWorkload,
     EgressViolation,
     EgressWorkload,
 )
-from app.schemas.egress_sensor import PolicyAllow, PolicyOut, PolicyWorkload, ViolationIn
+from app.schemas.egress_sensor import (HeartbeatIn, PolicyAllow, PolicyOut, PolicyWorkload,
+                                    SensorWorkloadOut, ViolationIn)
 
 logger = logging.getLogger(__name__)
 
@@ -210,6 +212,134 @@ async def build_policy(db: AsyncSession, org_id: int) -> PolicyOut:
         heartbeat_seconds=30,
         workloads=out_workloads,
     )
+
+
+async def ingest_heartbeat(
+    db: AsyncSession, sensor: EgressSensor, data: HeartbeatIn
+) -> None:
+    """Apply a heartbeat to a sensor.
+
+    Two writes happen here, both under the caller's transaction:
+
+      * the sensor row - version, hostname, hooks, warnings, errors, the
+        dropped-event counter, last_seen_at;
+      * the per-workload snapshot rows - cgroups and DNS counters for every
+        workload the sensor says it governs.
+
+    A workload the sensor reports but this organization does not have is
+    dropped (with a log line): that is a deleted workload, and the sensor
+    picks up the new policy on its next poll. A snapshot row this sensor
+    had before, and no longer reports, is deleted: the workload either
+    left the policy or the sensor's view of it changed.
+    """
+    # -------- sensor row
+    sensor.hostname = data.hostname
+    sensor.version = data.version
+    sensor.kernel = data.kernel
+    sensor.enforcing = data.enforcing
+    sensor.hooks = list(data.hooks or [])
+    sensor.warnings = list(data.warnings or [])
+    sensor.errors = list(data.errors or [])
+    sensor.dropped_events = data.dropped_events
+    sensor.config_version = data.config_version
+    sensor.last_seen_at = now_utc()
+
+    # -------- per-workload snapshot
+    reported = data.workloads or []
+    if not reported:
+        # No workloads in the payload: nothing to upsert, and any rows this
+        # sensor had are stale. Clean them so the UI does not show ghost
+        # cgroups after a policy narrowed down to zero workloads.
+        await db.execute(
+            delete(EgressSensorWorkload).where(EgressSensorWorkload.sensor_id == sensor.id)
+        )
+        return
+
+    wids = {w.id for w in reported}
+    known = set((await db.execute(
+        select(EgressWorkload.id).where(
+            EgressWorkload.org_id == sensor.org_id,
+            EgressWorkload.id.in_(wids),
+        )
+    )).scalars())
+
+    # Existing rows for this sensor: what we have to update, and what we
+    # have to delete because the sensor no longer reports it.
+    existing = {row.workload_id: row for row in (await db.execute(
+        select(EgressSensorWorkload).where(EgressSensorWorkload.sensor_id == sensor.id)
+    )).scalars()}
+
+    seen: set[int] = set()
+    for w in reported:
+        if w.id not in known:
+            logger.warning(
+                "egress_sensor %s: heartbeat reports unknown workload %d, dropped",
+                sensor.id, w.id,
+            )
+            continue
+        seen.add(w.id)
+        privileged = list(w.privileged or [])
+        port = w.dns_port
+        if w.id in existing:
+            row = existing[w.id]
+            row.cgroups = w.cgroups
+            row.processes = w.processes
+            row.privileged = privileged
+            row.dns_port = port
+            row.dns_total = w.dns_total
+            row.dns_allowed = w.dns_allowed
+            row.dns_denied = w.dns_denied
+            # updated_at is onupdate=func.now(); flush will bump it.
+        else:
+            db.add(EgressSensorWorkload(
+                org_id=sensor.org_id,
+                sensor_id=sensor.id,
+                workload_id=w.id,
+                cgroups=w.cgroups,
+                processes=w.processes,
+                privileged=privileged,
+                dns_port=port,
+                dns_total=w.dns_total,
+                dns_allowed=w.dns_allowed,
+                dns_denied=w.dns_denied,
+            ))
+
+    for wid, row in existing.items():
+        if wid not in seen:
+            await db.delete(row)
+
+    await db.flush()
+
+
+async def workloads_for_sensor(
+    db: AsyncSession, sensor_id: int
+) -> list[SensorWorkloadOut]:
+    """The sensor's latest per-workload snapshot, joined with names, sorted
+    by workload id. Only workloads of the sensor's organization are shown,
+    so a workload that left the policy drops out even before the sensor's
+    next heartbeat."""
+    rows = (await db.execute(
+        select(EgressSensorWorkload, EgressWorkload.name)
+        .join(EgressWorkload, EgressWorkload.id == EgressSensorWorkload.workload_id)
+        .where(EgressSensorWorkload.sensor_id == sensor_id)
+        .order_by(EgressSensorWorkload.workload_id.asc())
+    )).all()
+
+    out: list[SensorWorkloadOut] = []
+    for snap, name in rows:
+        out.append(SensorWorkloadOut(
+            workload_id=snap.workload_id,
+            workload_name=name,
+            cgroups=snap.cgroups,
+            processes=snap.processes,
+            privileged=list(snap.privileged or []),
+            dns_port=snap.dns_port,
+            dns_total=snap.dns_total,
+            dns_allowed=snap.dns_allowed,
+            dns_denied=snap.dns_denied,
+            updated_at=snap.updated_at,
+        ))
+    return out
 
 
 def policy_etag(version: str) -> str:

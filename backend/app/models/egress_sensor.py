@@ -2,7 +2,8 @@
 # Licensed under the Apache License, Version 2.0.
 # Part of Provenza — https://github.com/kironovlaziz-del/provenza
 
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint, func
+from sqlalchemy import (BigInteger, Boolean, Column, DateTime, ForeignKey, Index, Integer, String, Text,
+                        UniqueConstraint, func)
 from sqlalchemy.dialects.postgresql import JSONB
 
 from app.core.database import Base
@@ -42,6 +43,52 @@ class EgressSensor(Base):
     created_by = Column(Integer, ForeignKey("users.id"))
     created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+
+class EgressSensorWorkload(Base):
+    """
+    Per-workload snapshot the sensor reports on every heartbeat: how many
+    cgroups on the host are governed under each workload, and the DNS proxy
+    counters of that workload's listener.
+
+    One row per (sensor, workload); the sensor overwrites it on every
+    heartbeat. When the sensor stops reporting a workload (it was removed
+    from the policy, or the sensor is gone), the row is deleted on the next
+    heartbeat from the same sensor. Rows of silent sensors stay: the
+    sensor card shows last_seen_at and the UI dims them.
+
+    Keeping this in its own table (rather than as JSONB on the sensor)
+    means a workload-level query - "which hosts govern this workload, and
+    is DNS working there" - is a plain index scan, not a JSON traversal.
+    """
+
+    __tablename__ = "egress_sensor_workloads"
+    __table_args__ = (
+        UniqueConstraint("sensor_id", "workload_id", name="uq_egress_sensor_workloads"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    org_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
+    sensor_id = Column(Integer, ForeignKey("egress_sensors.id", ondelete="CASCADE"),
+                       nullable=False, index=True)
+    workload_id = Column(Integer, ForeignKey("egress_workloads.id", ondelete="CASCADE"),
+                         nullable=False, index=True)
+
+    # Counts of what the kernel currently governs on this sensor for the workload.
+    cgroups = Column(Integer, nullable=False, default=0)
+    processes = Column(Integer, nullable=False, default=0)
+    # Process names running inside, reported by the sensor for visibility.
+    privileged = Column(JSONB, nullable=False, default=list)
+
+    # DNS proxy counters of the workload's listener, accumulated since the
+    # sensor started. A counter reset to zero means the sensor restarted.
+    dns_port = Column(Integer)
+    dns_total = Column(BigInteger, nullable=False, default=0)
+    dns_allowed = Column(BigInteger, nullable=False, default=0)
+    dns_denied = Column(BigInteger, nullable=False, default=0)
+
+    updated_at = Column(DateTime(timezone=True), nullable=False,
+                        server_default=func.now(), onupdate=func.now())
 
 
 class EgressWorkload(Base):
