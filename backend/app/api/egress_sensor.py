@@ -31,17 +31,24 @@ from app.core.database import get_db
 from app.core.errors import api_error
 from app.models.egress_sensor import (
     EgressSensor,
+    EgressSensorCommand,
     EgressViolation,
     EgressWorkload,
 )
 from app.models.user import User, UserRole
 from app.schemas.egress_sensor import (
+    CommandAckIn,
+    CommandForSensor,
+    CommandIn,
+    CommandOut,
     HeartbeatIn,
+    HeartbeatResponseOut,
     PolicySettingsOut,
     PolicySettingsUpdate,
     SensorCreated,
     SensorOut,
     SensorWorkloadOut,
+    SigningKeyOut,
     SensorRegister,
     SensorUpdate,
     ViolationOut,
@@ -51,6 +58,7 @@ from app.schemas.egress_sensor import (
     WorkloadUpdate,
 )
 from app.services import egress_sensor as svc
+from app.services import egress_sensor_commands as cmd_svc
 from app.services.audit_service import AuditService
 
 # ---------------------------------------------------------------- admin
@@ -478,6 +486,63 @@ async def patch_settings(
     return row
 
 
+# ---- commands (admin)
+
+@admin_router.post(
+    "/sensors/{sensor_id}/commands",
+    response_model=CommandOut,
+    status_code=status.HTTP_201_CREATED,
+    summary="Queue a command for one sensor (delivered on its next heartbeat)",
+)
+async def create_sensor_command(
+    sensor_id: int,
+    data: CommandIn,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role(UserRole.admin)),
+):
+    sensor = await _get_org_sensor(db, sensor_id, current_user.org_id, include_revoked=True)
+    try:
+        row = await cmd_svc.create_command(db, sensor, data.kind, current_user.id)
+    except cmd_svc.UnknownKind as e:
+        raise api_error(status.HTTP_422_UNPROCESSABLE_CONTENT, e.code, **e.context)
+
+    await AuditService(db).log(
+        current_user.org_id, current_user.id, "egress_sensor_command", row.id, "issued",
+        {
+            "sensor_id": sensor.id,
+            "sensor_name": sensor.name,
+            "kind": row.kind,
+            "expires_at": row.expires_at.isoformat(),
+        },
+    )
+    await db.refresh(row)
+    return row
+
+
+@admin_router.get(
+    "/sensors/{sensor_id}/commands",
+    response_model=list[CommandOut],
+    summary="The command history for one sensor, newest first",
+)
+async def list_sensor_commands(
+    sensor_id: int,
+    limit: int = Query(50, ge=1, le=200),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role(UserRole.admin)),
+):
+    await _get_org_sensor(db, sensor_id, current_user.org_id, include_revoked=True)
+    rows = (await db.execute(
+        select(EgressSensorCommand)
+        .where(
+            EgressSensorCommand.sensor_id == sensor_id,
+            EgressSensorCommand.org_id == current_user.org_id,
+        )
+        .order_by(EgressSensorCommand.id.desc())
+        .limit(limit)
+    )).scalars().all()
+    return list(rows)
+
+
 # ---------------------------------------------------------------- sensor
 
 sensor_router = APIRouter()
@@ -521,17 +586,81 @@ async def get_config(
 
 @sensor_router.post(
     "/heartbeat",
-    status_code=status.HTTP_204_NO_CONTENT,
-    summary="Sensor reports itself: hostname, version, hooks, warnings, per-workload snapshot",
+    response_model=HeartbeatResponseOut,
+    status_code=status.HTTP_200_OK,
+    summary="Sensor reports itself; the response carries any queued commands",
 )
 async def post_heartbeat(
     data: HeartbeatIn,
     db: AsyncSession = Depends(get_db),
     sensor: EgressSensor = Depends(get_current_sensor),
 ):
+    """The sensor reports its state on every heartbeat and, in the same
+    round trip, receives whatever commands are queued for it. An empty
+    commands list is the normal case.
+
+    A sensor older than the command feature will see 200 instead of 204
+    and ignore the body; nothing about heartbeat ingestion changes."""
     await svc.ingest_heartbeat(db, sensor, data)
+
+    pending = await cmd_svc.pending_for_sensor(db, sensor.id)
+    out: list[CommandForSensor] = []
+    delivered_ids: list[int] = []
+    for row in pending:
+        out.append(CommandForSensor(
+            id=row.id,
+            kind=row.kind,
+            payload=row.payload,
+            signature=row.signature,
+            expires_at=row.expires_at,
+        ))
+        delivered_ids.append(row.id)
+    if delivered_ids:
+        await cmd_svc.mark_delivered(db, delivered_ids)
+
+    await db.commit()
+    return HeartbeatResponseOut(commands=out)
+
+
+@sensor_router.post(
+    "/commands/{command_id}/ack",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="The sensor acknowledges a command it was given",
+)
+async def ack_command(
+    command_id: int,
+    data: CommandAckIn,
+    db: AsyncSession = Depends(get_db),
+    sensor: EgressSensor = Depends(get_current_sensor),
+):
+    """The sensor calls this after it has verified the command signature
+    and (for detach) before it uninstalls, so the ack is recorded even
+    though the daemon is about to exit."""
+    try:
+        await cmd_svc.ack_command(db, sensor.id, command_id, data.status, data.result, data.error)
+    except cmd_svc.NotFound as e:
+        raise api_error(status.HTTP_404_NOT_FOUND, e.code, **e.context)
+    except cmd_svc.CommandError as e:
+        raise api_error(status.HTTP_422_UNPROCESSABLE_CONTENT, e.code, **e.context)
     await db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@sensor_router.get(
+    "/signing-key",
+    response_model=SigningKeyOut,
+    summary="The public key a sensor uses to verify queued commands",
+)
+async def get_signing_key(
+    db: AsyncSession = Depends(get_db),
+    sensor: EgressSensor = Depends(get_current_sensor),
+):
+    """The sensor caches this key on disk; it can then verify a command
+    even when the control plane is unreachable. Only enrolled sensors get
+    it (the same X-Sensor-Key check as every other call)."""
+    key = await cmd_svc.signing_key_for(db, sensor.org_id)
+    await db.commit()
+    return SigningKeyOut(public_key=key.public_key, fingerprint=key.fingerprint)
 
 
 @sensor_router.post(

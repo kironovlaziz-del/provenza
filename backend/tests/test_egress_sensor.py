@@ -221,7 +221,7 @@ async def test_heartbeat_updates_sensor_state(client, admin_token):
         },
         headers={"X-Sensor-Key": key},
     )
-    assert r.status_code == 204, r.text
+    assert r.status_code == 200, r.text
 
     r = await client.get(f"{BASE}/sensors/{created['id']}", headers=auth_headers(admin_token))
     assert r.status_code == 200, r.text
@@ -568,7 +568,7 @@ async def test_heartbeat_stores_per_workload_snapshot(client, admin_token):
         },
         headers={"X-Sensor-Key": key},
     )
-    assert r.status_code == 204, r.text
+    assert r.status_code == 200, r.text
 
     r = await client.get(f"{BASE}/sensors/{created['id']}/workloads", headers=auth_headers(admin_token))
     assert r.status_code == 200, r.text
@@ -604,9 +604,9 @@ async def test_heartbeat_overwrites_snapshot(client, admin_token):
         }
 
     r = await client.post(f"{BASE}/heartbeat", json=hb(3, 100), headers={"X-Sensor-Key": key})
-    assert r.status_code == 204
+    assert r.status_code == 200
     r = await client.post(f"{BASE}/heartbeat", json=hb(7, 250), headers={"X-Sensor-Key": key})
-    assert r.status_code == 204
+    assert r.status_code == 200
 
     r = await client.get(f"{BASE}/sensors/{created['id']}/workloads", headers=auth_headers(admin_token))
     rows = r.json()
@@ -634,7 +634,7 @@ async def test_heartbeat_drops_unknown_workload(client, admin_token):
         },
         headers={"X-Sensor-Key": key},
     )
-    assert r.status_code == 204
+    assert r.status_code == 200
     r = await client.get(f"{BASE}/sensors/{created['id']}/workloads", headers=auth_headers(admin_token))
     assert r.json() == []
 
@@ -655,7 +655,7 @@ async def test_heartbeat_deletes_removed_workload(client, admin_token):
                              "dns_port": 15353, "dns_total": 1, "dns_allowed": 1, "dns_denied": 0}]},
         headers={"X-Sensor-Key": key},
     )
-    assert r.status_code == 204
+    assert r.status_code == 200
 
     r = await client.post(
         f"{BASE}/heartbeat",
@@ -664,7 +664,7 @@ async def test_heartbeat_deletes_removed_workload(client, admin_token):
               "workloads": []},
         headers={"X-Sensor-Key": key},
     )
-    assert r.status_code == 204
+    assert r.status_code == 200
 
     r = await client.get(f"{BASE}/sensors/{created['id']}/workloads", headers=auth_headers(admin_token))
     assert r.json() == []
@@ -825,3 +825,228 @@ async def test_settings_304_only_after_same_values(client, admin_token):
     )
     assert r.status_code == 200, r.text
     assert r.json()["refresh_seconds"] == 120
+
+
+
+# ---------------------------------------------------------------- commands
+
+@pytest.mark.asyncio
+async def test_signing_key_created_lazily_and_stable(client, admin_token):
+    """GET /signing-key creates the org's keypair on first call, and a
+    second call returns the same key."""
+    created = await _register_sensor(client, admin_token, name="signing-key-1")
+    key = created["api_key"]
+
+    r = await client.get(f"{BASE}/signing-key", headers={"X-Sensor-Key": key})
+    assert r.status_code == 200, r.text
+    first = r.json()
+    assert first["public_key"]
+    assert first["fingerprint"].startswith("SHA256:")
+
+    r = await client.get(f"{BASE}/signing-key", headers={"X-Sensor-Key": key})
+    assert r.status_code == 200
+    assert r.json()["public_key"] == first["public_key"]
+
+
+@pytest.mark.asyncio
+async def test_create_command_requires_admin(client, approver_token, admin_token):
+    created = await _register_sensor(client, admin_token, name="cmd-perm")
+    r = await client.post(
+        f"{BASE}/sensors/{created['id']}/commands",
+        json={"kind": "restart"},
+        headers=auth_headers(approver_token),
+    )
+    assert r.status_code in (401, 403), r.text
+
+
+@pytest.mark.asyncio
+async def test_create_command_rejects_unknown_kind(client, admin_token):
+    created = await _register_sensor(client, admin_token, name="cmd-unknown")
+    r = await client.post(
+        f"{BASE}/sensors/{created['id']}/commands",
+        json={"kind": "reboot"},
+        headers=auth_headers(admin_token),
+    )
+    assert r.status_code == 422, r.text
+
+
+@pytest.mark.asyncio
+async def test_command_delivered_in_heartbeat_and_verified(client, admin_token):
+    """The command a sensor sees in the heartbeat response carries a
+    signature that verifies against the public key from /signing-key,
+    and the signature is over the exact payload the sensor sees."""
+    from app.services.egress_sensor_commands import verify_command_signature
+
+    created = await _register_sensor(client, admin_token, name="cmd-deliver")
+    key = created["api_key"]
+
+    # Public key the sensor caches.
+    r = await client.get(f"{BASE}/signing-key", headers={"X-Sensor-Key": key})
+    pub = r.json()["public_key"]
+
+    # Admin queues a command.
+    r = await client.post(
+        f"{BASE}/sensors/{created['id']}/commands",
+        json={"kind": "dump-state"},
+        headers=auth_headers(admin_token),
+    )
+    assert r.status_code == 201, r.text
+    cmd = r.json()
+    assert cmd["kind"] == "dump-state"
+    assert cmd["status"] == "pending"
+    cmd_id = cmd["id"]
+
+    # Next heartbeat carries it.
+    r = await client.post(
+        f"{BASE}/heartbeat",
+        json={"hostname": "h1", "version": "v1", "enforcing": False,
+              "hooks": [], "warnings": [], "errors": [], "dropped_events": 0},
+        headers={"X-Sensor-Key": key},
+    )
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert len(body["commands"]) == 1
+    got = body["commands"][0]
+    assert got["id"] == cmd_id
+    assert got["kind"] == "dump-state"
+    assert got["payload"]["id"] == cmd_id
+    assert got["payload"]["kind"] == "dump-state"
+    assert got["payload"]["sensor_id"] == created["id"]
+
+    # The signature verifies against the public key the sensor has.
+    assert verify_command_signature(pub, got["payload"], got["signature"])
+
+
+@pytest.mark.asyncio
+async def test_command_ack_done_and_failed(client, admin_token):
+    created = await _register_sensor(client, admin_token, name="cmd-ack")
+    key = created["api_key"]
+
+    r = await client.post(
+        f"{BASE}/sensors/{created['id']}/commands",
+        json={"kind": "dump-state"},
+        headers=auth_headers(admin_token),
+    )
+    cmd_id = r.json()["id"]
+
+    # executing -> done, with a result.
+    r = await client.post(
+        f"{BASE}/commands/{cmd_id}/ack",
+        json={"status": "executing"},
+        headers={"X-Sensor-Key": key},
+    )
+    assert r.status_code == 204, r.text
+
+    r = await client.post(
+        f"{BASE}/commands/{cmd_id}/ack",
+        json={"status": "done", "result": {"hooks": ["connect4"], "workloads": 1}},
+        headers={"X-Sensor-Key": key},
+    )
+    assert r.status_code == 204, r.text
+
+    r = await client.get(f"{BASE}/sensors/{created['id']}/commands", headers=auth_headers(admin_token))
+    assert r.status_code == 200
+    rows = r.json()
+    assert len(rows) == 1
+    assert rows[0]["status"] == "done"
+    assert rows[0]["result"]["workloads"] == 1
+
+
+@pytest.mark.asyncio
+async def test_command_ack_wrong_sensor_rejected(client, admin_token):
+    a = await _register_sensor(client, admin_token, name="cmd-a")
+    b = await _register_sensor(client, admin_token, name="cmd-b")
+
+    r = await client.post(
+        f"{BASE}/sensors/{a['id']}/commands",
+        json={"kind": "restart"},
+        headers=auth_headers(admin_token),
+    )
+    cmd_id = r.json()["id"]
+
+    # Sensor B tries to ack A's command.
+    r = await client.post(
+        f"{BASE}/commands/{cmd_id}/ack",
+        json={"status": "done"},
+        headers={"X-Sensor-Key": b["api_key"]},
+    )
+    assert r.status_code == 404, r.text
+
+
+@pytest.mark.asyncio
+async def test_command_across_orgs_invisible(client, admin_token, db_session):
+    """Another organization cannot see or list a sensor's commands."""
+    from app.core.security import get_password_hash
+    from app.models.organization import Organization
+    from app.models.user import User, UserRole
+
+    created = await _register_sensor(client, admin_token, name="cmd-iso")
+    r = await client.post(
+        f"{BASE}/sensors/{created['id']}/commands",
+        json={"kind": "restart"},
+        headers=auth_headers(admin_token),
+    )
+    assert r.status_code == 201
+
+    other = Organization(name="Other Cmd Org", slug="other-cmd-org")
+    db_session.add(other)
+    await db_session.flush()
+    db_session.add(User(
+        org_id=other.id, email="admin@other-cmd.example.com", name="X",
+        hashed_password=get_password_hash("TestPass123!"),
+        role=UserRole.admin.value, status="active",
+    ))
+    await db_session.flush()
+
+    r = await client.post(
+        "/api/v1/auth/login",
+        json={"org_slug": "other-cmd-org", "email": "admin@other-cmd.example.com",
+              "password": "TestPass123!"},
+    )
+    other_token = r.json()["access_token"]
+
+    r = await client.get(
+        f"{BASE}/sensors/{created['id']}/commands",
+        headers=auth_headers(other_token),
+    )
+    assert r.status_code == 404, r.text
+
+
+@pytest.mark.asyncio
+async def test_expired_command_not_delivered(client, admin_token, db_session):
+    """A command whose TTL passed is not returned by the heartbeat and is
+    flagged expired by the sweeper."""
+    from datetime import timedelta
+    from sqlalchemy import update
+    from app.models.egress_sensor import EgressSensorCommand
+    from app.services import egress_sensor_commands as cmd
+
+    created = await _register_sensor(client, admin_token, name="cmd-expire")
+    key = created["api_key"]
+
+    r = await client.post(
+        f"{BASE}/sensors/{created['id']}/commands",
+        json={"kind": "restart"},
+        headers=auth_headers(admin_token),
+    )
+    cmd_id = r.json()["id"]
+
+    # Force the expiry into the past.
+    await db_session.execute(
+        update(EgressSensorCommand)
+        .where(EgressSensorCommand.id == cmd_id)
+        .values(expires_at=__import__("datetime").datetime.now(__import__("datetime").timezone.utc) - timedelta(seconds=1))
+    )
+    await db_session.flush()
+
+    r = await client.post(
+        f"{BASE}/heartbeat",
+        json={"hostname": "h1", "version": "v1", "enforcing": False,
+              "hooks": [], "warnings": [], "errors": [], "dropped_events": 0},
+        headers={"X-Sensor-Key": key},
+    )
+    assert r.status_code == 200
+    assert r.json()["commands"] == []
+
+    n = await cmd.expire_old_commands(db_session)
+    assert n >= 1

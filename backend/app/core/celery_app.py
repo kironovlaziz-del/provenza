@@ -95,6 +95,13 @@ celery_app.conf.beat_schedule = {
         "task": "egress_sensor.warn_offline",
         "schedule": crontab(minute="3-59/5"),
     },
+    # Mark queued commands whose TTL has passed as expired. Runs every
+    # minute: the TTL is 5 minutes, so the flag is a few tens of seconds
+    # behind, which is exactly what the UI wants to show.
+    "egress-sensor-expire-commands": {
+        "task": "egress_sensor.expire_commands",
+        "schedule": crontab(minute="*"),
+    },
 }
 
 from app.workers import (  # noqa: E402,F401

@@ -193,6 +193,71 @@ class WorkloadOut(BaseModel):
         from_attributes = True
 
 
+# ---------------------------------------------------------------- commands
+
+class CommandIn(BaseModel):
+    """Admin input for POST /sensors/{id}/commands. Only the three known
+    kinds are accepted: there is no generic channel."""
+    model_config = ConfigDict(extra="forbid")
+
+    kind: Literal["detach", "restart", "dump-state"]
+
+
+class CommandForSensor(BaseModel):
+    """One queued command as the sensor sees it in the heartbeat response.
+    `payload` is what was signed; `signature` is the Ed25519 signature
+    over the RFC 8785 canonical form of the payload."""
+    id: int
+    kind: str
+    payload: Dict[str, Any]
+    signature: str
+    expires_at: datetime
+
+
+class HeartbeatResponseOut(BaseModel):
+    """The heartbeat response. An empty list is the normal case; a sensor
+    that is not the target of any command sees just this."""
+    commands: List[CommandForSensor] = Field(default_factory=list)
+
+
+class CommandOut(BaseModel):
+    """Admin view of a command and its fate. `result` carries the sensor's
+    status for dump-state; `error` carries the message from a failed ack."""
+    id: int
+    sensor_id: int
+    kind: str
+    status: str
+    issued_by: Optional[int] = None
+    issued_at: datetime
+    expires_at: datetime
+    delivered_at: Optional[datetime] = None
+    acked_at: Optional[datetime] = None
+    result: Optional[Dict[str, Any]] = None
+    error: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+class CommandAckIn(BaseModel):
+    """The sensor's ack. `status` is `executing` while a command is in
+    progress (used so a detach is recorded before the daemon exits),
+    `done` when it completed, `failed` on error. `result` is only used
+    for dump-state."""
+    model_config = ConfigDict(extra="forbid")
+
+    status: Literal["executing", "done", "failed"]
+    result: Optional[Dict[str, Any]] = None
+    error: Optional[str] = Field(default=None, max_length=500)
+
+
+class SigningKeyOut(BaseModel):
+    """The public half of the organization's command signing key. Sensors
+    verify every command against it and cache it locally."""
+    public_key: str
+    fingerprint: str
+
+
 # ---------------------------------------------------------------- policy (sensor output)
 
 class PolicyAllow(BaseModel):

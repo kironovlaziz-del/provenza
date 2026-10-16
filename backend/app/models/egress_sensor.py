@@ -188,3 +188,69 @@ class EgressViolation(Base):
     count = Column(Integer, nullable=False, default=1)
 
     created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now(), index=True)
+
+
+class EgressSensorSigningKey(Base):
+    """One Ed25519 keypair per organization, used to sign commands the
+    control plane queues for its sensors.
+
+    There is no automatic rotation: an admin would generate a new key and
+    re-enroll every sensor, or the sensors of the old key would refuse the
+    new signatures. The key is created lazily on first command or first
+    GET /signing-key; its private half is stored encrypted with the same
+    ENCRYPTION_KEY that wraps BYOK secrets.
+    """
+
+    __tablename__ = "egress_sensor_signing_keys"
+
+    id = Column(Integer, primary_key=True)
+    org_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, unique=True, index=True)
+
+    public_key = Column(Text, nullable=False)          # base64, sent to sensors
+    private_key_encrypted = Column(Text, nullable=False)  # Fernet(ENCRYPTION_KEY)
+    fingerprint = Column(String(60), nullable=False)   # "SHA256:..." for display
+
+    created_by = Column(Integer, ForeignKey("users.id"))
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    rotated_at = Column(DateTime(timezone=True))       # when this key replaced an older one
+
+
+class EgressSensorCommand(Base):
+    """A command queued for one sensor.
+
+    Created once by an admin; delivered at most once (heartbeat marks
+    delivered_at); acked by the sensor (status moves to executing, then
+    done or failed); expired if nothing happens within the TTL. There is
+    no retry: the admin queues another command if the first timed out.
+
+    The payload that was signed is kept verbatim: it is the sensor's job
+    to canonicalize and verify; keeping it as-is makes the audit trail
+    self-contained and a signature reproducible offline.
+    """
+
+    __tablename__ = "egress_sensor_commands"
+    __table_args__ = (
+        Index("ix_egress_sensor_commands_status_expires", "status", "expires_at"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    org_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
+    sensor_id = Column(Integer, ForeignKey("egress_sensors.id", ondelete="CASCADE"),
+                       nullable=False, index=True)
+
+    kind = Column(String(20), nullable=False)          # detach | restart | dump-state
+    payload = Column(JSONB, nullable=False)            # the canonical payload that was signed
+    signature = Column(Text, nullable=False)           # Ed25519 over canonical_text(payload)
+
+    issued_by = Column(Integer, ForeignKey("users.id"))
+    issued_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    delivered_at = Column(DateTime(timezone=True))
+    acked_at = Column(DateTime(timezone=True))
+
+    status = Column(String(20), nullable=False, default="pending")
+    # pending -> delivered -> executing -> done | failed
+    #                                      or expired (no delivery within TTL)
+
+    result = Column(JSONB)                             # dump-state: the sensor's full status
+    error = Column(String(500))
