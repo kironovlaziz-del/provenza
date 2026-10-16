@@ -105,7 +105,12 @@ func (d *Daemon) sendHeartbeat(ctx context.Context) {
 		Warnings:      d.kernel.Notes,
 		DroppedEvents: d.kernel.Stat(bpfobj.StatEventsLost),
 	}
-	if err := d.client.Heartbeat(ctx, h); err != nil {
+	resp, err := d.client.Heartbeat(ctx, h)
+	if err != nil {
 		slog.Warn("heartbeat", "err", err)
+		return
+	}
+	if len(resp.Commands) > 0 {
+		d.handleCommands(ctx, resp.Commands)
 	}
 }

@@ -660,7 +660,11 @@ async def get_signing_key(
     it (the same X-Sensor-Key check as every other call)."""
     key = await cmd_svc.signing_key_for(db, sensor.org_id)
     await db.commit()
-    return SigningKeyOut(public_key=key.public_key, fingerprint=key.fingerprint)
+    return SigningKeyOut(
+        public_key=key.public_key,
+        fingerprint=key.fingerprint,
+        sensor_id=sensor.id,
+    )
 
 
 @sensor_router.post(

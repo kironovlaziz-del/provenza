@@ -252,10 +252,14 @@ class CommandAckIn(BaseModel):
 
 
 class SigningKeyOut(BaseModel):
-    """The public half of the organization's command signing key. Sensors
-    verify every command against it and cache it locally."""
+    """The public half of the organization's command signing key and the
+    id of the sensor asking for it. The sensor needs its own id to reject
+    a command addressed to another sensor of the same organization (the
+    signing key is per organization, so the id is what tells commands
+    apart)."""
     public_key: str
     fingerprint: str
+    sensor_id: int
 
 
 # ---------------------------------------------------------------- policy (sensor output)

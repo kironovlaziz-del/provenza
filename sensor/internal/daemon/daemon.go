@@ -9,6 +9,7 @@ package daemon
 
 import (
 	"context"
+	"crypto/ed25519"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -46,6 +47,12 @@ type Daemon struct {
 	viol   *violationBuffer
 	run    *runServer
 	status *statusServer
+
+	// Loaded at start from the files enroll wrote. A nil signingKey or a
+	// zero sensorID only disables command handling; policy enforcement
+	// continues.
+	signingKey ed25519.PublicKey
+	sensorID   int
 }
 
 // wlState holds the per-workload data the daemon needs at runtime.
@@ -90,6 +97,21 @@ func New(cfgPath, version string) (*Daemon, error) {
 		startTime: time.Now(),
 	}
 	d.dns = newDNSServers(d)
+
+	// Command signing key and sensor id, both optional. Missing files are
+	// not fatal: an old install that was never re-enrolled can still
+	// enforce policy, it just cannot be commanded remotely.
+	if key, err := loadSigningKey(cfg.SigningPublicKeyFile); err != nil {
+		slog.Warn("no command signing key; commands will be refused", "err", err)
+	} else {
+		d.signingKey = key
+	}
+	if id, err := loadSensorID(cfg.SensorIDFile); err != nil {
+		slog.Warn("no sensor id; commands will be refused", "err", err)
+	} else {
+		d.sensorID = id
+	}
+
 	return d, nil
 }
 

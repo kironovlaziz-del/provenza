@@ -164,8 +164,65 @@ type WorkloadReport struct {
 	DNSDenied  uint64 `json:"dns_denied,omitempty"`
 }
 
-func (c *Client) Heartbeat(ctx context.Context, h Heartbeat) error {
-	return c.post(ctx, "/heartbeat", h)
+// Heartbeat sends the sensor's state and reads the control plane's answer:
+// a (possibly empty) list of commands to run. A backend older than the
+// command feature answers 204 with no body; that is not an error, the
+// sensor just has nothing new to do.
+func (c *Client) Heartbeat(ctx context.Context, h Heartbeat) (*HeartbeatResponse, error) {
+	resp, err := c.do(ctx, http.MethodPost, "/heartbeat", h, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusNoContent {
+		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<20))
+		return &HeartbeatResponse{}, nil
+	}
+	if resp.StatusCode/100 != 2 {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		return nil, fmt.Errorf("/heartbeat: HTTP %d: %s", resp.StatusCode, body)
+	}
+	var out HeartbeatResponse
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&out); err != nil {
+		return nil, fmt.Errorf("/heartbeat: decode: %w", err)
+	}
+	return &out, nil
+}
+
+// AckCommand reports the fate of one command back to the control plane.
+// "executing" is sent before the work starts, so a detach that kills the
+// daemon is recorded; "done" and "failed" close it out. result carries the
+// sensor's own state for dump-state, error carries the reason for failed.
+func (c *Client) AckCommand(ctx context.Context, id int, status string, result any, errMsg string) error {
+	body := map[string]any{"status": status}
+	if result != nil {
+		body["result"] = result
+	}
+	if errMsg != "" {
+		body["error"] = errMsg
+	}
+	return c.post(ctx, fmt.Sprintf("/commands/%d/ack", id), body)
+}
+
+// SigningKey fetches the public half of the organization's command signing
+// key and the sensor's own id. Called once at enroll; the sensor caches
+// both on disk, so it can verify a command even when the control plane is
+// unreachable.
+func (c *Client) SigningKey(ctx context.Context) (*SigningKeyResponse, error) {
+	resp, err := c.do(ctx, http.MethodGet, "/signing-key", nil, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode/100 != 2 {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		return nil, fmt.Errorf("/signing-key: HTTP %d: %s", resp.StatusCode, body)
+	}
+	var out SigningKeyResponse
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&out); err != nil {
+		return nil, fmt.Errorf("/signing-key: decode: %w", err)
+	}
+	return &out, nil
 }
 
 // Violation as the API takes it.
@@ -226,4 +283,46 @@ func LoadPolicy(dir string) (*config.Policy, error) {
 		return nil, err
 	}
 	return &p, p.Check()
+}
+
+// ---------------------------------------------------------------- commands
+
+// CommandPayload is the payload of one queued command, in the exact form
+// it was signed on the control plane. The field order matches the
+// alphabetical order of the JSON keys (the Python side uses RFC 8785 JCS
+// canonicalization): expires_at, id, issued_at, kind, org_id, sensor_id.
+// encoding/json emits struct fields in declaration order, so this
+// ordering is what makes Go and Python produce the same bytes.
+type CommandPayload struct {
+	ExpiresAt string `json:"expires_at"`
+	ID        int    `json:"id"`
+	IssuedAt  string `json:"issued_at"`
+	Kind      string `json:"kind"`
+	OrgID     int    `json:"org_id"`
+	SensorID  int    `json:"sensor_id"`
+}
+
+// Command is one queued command as the backend sends it: the payload it
+// signed, and the Ed25519 signature over the canonical form of that
+// payload. Expiry is not a separate field: it is inside the payload, so
+// the value the sensor trusts is the one that was signed.
+type Command struct {
+	ID        int            `json:"id"`
+	Kind      string         `json:"kind"`
+	Payload   CommandPayload `json:"payload"`
+	Signature string         `json:"signature"`
+}
+
+// HeartbeatResponse is what the control plane sends back for a heartbeat.
+// An empty Commands is the normal case.
+type HeartbeatResponse struct {
+	Commands []Command `json:"commands"`
+}
+
+// SigningKeyResponse is what /signing-key returns: the public key the
+// sensor verifies command signatures against, and the sensor's own id.
+type SigningKeyResponse struct {
+	PublicKey   string `json:"public_key"`
+	Fingerprint string `json:"fingerprint"`
+	SensorID    int    `json:"sensor_id"`
 }

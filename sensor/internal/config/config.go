@@ -28,6 +28,12 @@ type Settings struct {
 	RunGroup     string `json:"run_group"`     // group allowed to use it ("" = root only)
 	RingBytes    uint32 `json:"ring_bytes"`
 
+	// Command signing key and sensor id, both written by enroll and read
+	// at every start. Their absence is not an error: the sensor enforces
+	// policy without them, it just cannot receive commands.
+	SigningPublicKeyFile string `json:"signing_key_file"`
+	SensorIDFile         string `json:"sensor_id_file"`
+
 	Key string `json:"-"`
 }
 
@@ -39,6 +45,9 @@ func Defaults() Settings {
 		StateDir:   "/var/lib/provenza-sensor",
 		RunSocket:  "/run/provenza-sensor/run.sock",
 		RunGroup:   "provenza",
+
+		SigningPublicKeyFile: "/etc/provenza-sensor/signing-key.pub",
+		SensorIDFile:         "/etc/provenza-sensor/sensor-id",
 	}
 }
 

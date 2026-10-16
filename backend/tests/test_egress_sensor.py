@@ -842,6 +842,8 @@ async def test_signing_key_created_lazily_and_stable(client, admin_token):
     first = r.json()
     assert first["public_key"]
     assert first["fingerprint"].startswith("SHA256:")
+    assert first["sensor_id"] == created["id"]
+    assert first["sensor_id"] == created["id"]
 
     r = await client.get(f"{BASE}/signing-key", headers={"X-Sensor-Key": key})
     assert r.status_code == 200
@@ -1050,3 +1052,30 @@ async def test_expired_command_not_delivered(client, admin_token, db_session):
 
     n = await cmd.expire_old_commands(db_session)
     assert n >= 1
+
+
+
+def test_canonical_command_payload_bytes():
+    """The bytes a command signature is made over, pinned to a literal.
+
+    The sensor (Go) canonicalizes the same payload and must produce
+    exactly this string before verifying the signature. If either side
+    ever changes its JSON writer, this test fails - and that is the point:
+    canonicalization is the contract between the two ends.
+    """
+    from app.core.agent_signing import canonical_text
+
+    payload = {
+        "id": 42,
+        "kind": "detach",
+        "org_id": 7,
+        "sensor_id": 3,
+        "issued_at": "2026-10-16T09:00:00Z",
+        "expires_at": "2026-10-16T09:05:00Z",
+    }
+    expected = (
+        '{"expires_at":"2026-10-16T09:05:00Z","id":42,'
+        '"issued_at":"2026-10-16T09:00:00Z","kind":"detach",'
+        '"org_id":7,"sensor_id":3}'
+    )
+    assert canonical_text(payload) == expected
