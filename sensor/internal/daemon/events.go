@@ -156,6 +156,8 @@ func actionName(a uint8) string {
 		return "alerted"
 	case bpfobj.ActBlocked:
 		return "blocked"
+		case bpfobj.ActAllowed:
+		        return "allowed"
 	}
 	return "observed"
 }
