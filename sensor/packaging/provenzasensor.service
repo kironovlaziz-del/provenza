@@ -36,7 +36,6 @@ ReadWritePaths=/sys/fs/bpf /var/lib/provenza-sensor /run/provenza-sensor /etc/pr
 RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
 LockPersonality=true
 MemoryDenyWriteExecute=false
-SystemCallFilter=@system-service @bpf @network-io
 SystemCallArchitectures=native
 
 [Install]
