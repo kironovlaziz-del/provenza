@@ -95,6 +95,13 @@ celery_app.conf.beat_schedule = {
         "task": "egress_sensor.warn_offline",
         "schedule": crontab(minute="3-59/5"),
     },
+    # Prune sampled allowed connections older than each organization's
+    # retention (EgressPolicySettings.activity_retention_days). Runs hourly
+    # at minute 41 — a quiet minute, not competing with other jobs.
+    "egress-sensor-prune-activity": {
+        "task": "egress_sensor.prune_activity",
+        "schedule": crontab(minute=41),
+    },
     # Mark queued commands whose TTL has passed as expired. Runs every
     # minute: the TTL is 5 minutes, so the flag is a few tens of seconds
     # behind, which is exactly what the UI wants to show.

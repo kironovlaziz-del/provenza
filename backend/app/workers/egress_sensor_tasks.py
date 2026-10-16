@@ -22,3 +22,17 @@ async def _warn_offline() -> int:
 @celery_app.task(name="egress_sensor.warn_offline", ignore_result=True, expires=300)
 def warn_offline_task() -> int:
     return asyncio.run(_warn_offline())
+
+async def _prune_activity() -> int:
+    from app.services import egress_sensor as svc
+    async with AsyncSessionLocal() as db:
+        try:
+            return await svc.prune_sensor_activity(db)
+        finally:
+            await db.commit()
+
+
+@celery_app.task(name="egress_sensor.prune_activity", ignore_result=True, expires=3500)
+def prune_activity_task() -> int:
+    return asyncio.run(_prune_activity())
+

@@ -259,6 +259,55 @@ async def build_policy(db: AsyncSession, org_id: int) -> PolicyOut:
     )
 
 
+async def prune_sensor_activity(db: AsyncSession, default_days: int = 30) -> int:
+    """Delete sensor_activity rows older than each organization's retention.
+
+    Retention is per-org (EgressPolicySettings.activity_retention_days); an
+    organization without a settings row falls back to default_days. A value
+    of 0 disables pruning for that organization entirely.
+
+    Deletion is chunked so a large backlog does not hold a long lock on the
+    table. Called hourly by the egress_sensor.prune_activity task.
+    """
+    retentions = {
+        row.org_id: row.activity_retention_days
+        for row in (
+            await db.execute(
+                select(EgressPolicySettings.org_id, EgressPolicySettings.activity_retention_days)
+            )
+        ).all()
+    }
+    org_ids = (
+        await db.execute(select(SensorActivity.org_id).distinct())
+    ).scalars().all()
+
+    total = 0
+    chunk = 5000
+    for org_id in org_ids:
+        days = retentions.get(org_id, default_days)
+        if days <= 0:
+            continue
+        cutoff = now_utc() - timedelta(days=days)
+        while True:
+            ids = (
+                await db.execute(
+                    select(SensorActivity.id)
+                    .where(
+                        SensorActivity.org_id == org_id,
+                        SensorActivity.created_at < cutoff,
+                    )
+                    .limit(chunk)
+                )
+            ).scalars().all()
+            if not ids:
+                break
+            await db.execute(delete(SensorActivity).where(SensorActivity.id.in_(ids)))
+            total += len(ids)
+            if len(ids) < chunk:
+                break
+    return total
+
+
 async def ingest_heartbeat(
     db: AsyncSession, sensor: EgressSensor, data: HeartbeatIn
 ) -> None:

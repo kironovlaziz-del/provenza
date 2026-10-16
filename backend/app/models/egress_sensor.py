@@ -169,6 +169,11 @@ class EgressPolicySettings(Base):
     default_mode = Column(String(10), nullable=False, default="observe")
     default_dns = Column(String(10), nullable=False, default="off")
 
+    # How long sampled allowed connections stay in sensor_activity.
+    # 0 means keep forever. Rows older than this are pruned hourly by
+    # the egress_sensor.prune_activity task.
+    activity_retention_days = Column(Integer, nullable=False, default=30, server_default="30")
+
     updated_by = Column(Integer, ForeignKey("users.id"))
     updated_at = Column(DateTime(timezone=True), nullable=False,
                         server_default=func.now(), onupdate=func.now())

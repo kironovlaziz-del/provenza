@@ -329,6 +329,7 @@ class PolicySettingsOut(BaseModel):
     heartbeat_seconds: int
     default_mode: Literal["observe", "alert", "enforce"]
     default_dns: Literal["off", "listed", "any"]
+    activity_retention_days: int = 30
     updated_at: Optional[datetime] = None
 
     class Config:
@@ -345,6 +346,8 @@ class PolicySettingsUpdate(BaseModel):
     heartbeat_seconds: Optional[int] = Field(default=None, ge=10, le=300)
     default_mode: Optional[Literal["observe", "alert", "enforce"]] = None
     default_dns: Optional[Literal["off", "listed", "any"]] = None
+    # 0 disables pruning for this organization.
+    activity_retention_days: Optional[int] = Field(default=None, ge=0, le=365)
 
 
 # ---------------------------------------------------------------- heartbeat (sensor input)
