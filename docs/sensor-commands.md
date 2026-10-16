@@ -169,12 +169,46 @@ is re-enrolled against a backend that has the feature.
 
 ## Rotating or revoking the signing key
 
-There is no automatic rotation. If the organization's signing key is
-suspected compromised, generate a new one and re-enroll every sensor:
-the sensors of the old key will refuse signatures made with the new
-key, and vice versa. This is the same trade as the audit key: a simple
-mechanism that is easy to reason about, at the cost of a manual step
-when the trust root changes.
+The control plane generates the organization's signing keypair. When it
+should be replaced, the admin opens the *Command signing key* panel on
+the Runtime page and clicks **Rotate…**. Nothing is manual and nothing
+is re-enrolled:
+
+1. The backend generates a new Ed25519 keypair and marks the previous
+   one as "valid until now + 24 hours".
+2. It queues one **update-signing-key** command per enabled sensor,
+   each signed with the **old** key — the only key the sensors already
+   trust.
+3. On their next heartbeat the sensors verify the command with the old
+   key, write the new public key to `signing-key.pub`, move the previous
+   key to `signing-key.prev.pub`, store the deadline in
+   `signing-key.prev.until`, and acknowledge.
+4. From the moment the backend generates the new key, all *new*
+   commands are signed with it. A sensor that has not yet received
+   `update-signing-key` still verifies against the previous key, so
+   nothing in flight is lost. Sensors that have updated verify against
+   the current one first, then fall back to the previous one until the
+   deadline passes.
+5. Once every sensor has updated — the panel shows how many were
+   notified — the admin clicks **Finalize rotation**. The backend drops
+   the previous key; from then on, commands signed with the old key no
+   longer verify anywhere.
+
+**The 24-hour grace window** is what makes the rotation safe: a sensor
+that is offline when the rotation starts, or that reboots in the middle
+of it, still sees the new key on its next heartbeat. After the deadline
+the previous key is refused even if a sensor still has it on disk.
+
+**Revoking without rotating.** If the signing key is suspected
+compromised, rotate it: the new key is introduced by a command signed
+with the old one, so an attacker who only has the *new* key cannot
+introduce anything. An attacker who already has the *old* key can only
+issue the same three fixed commands it could have issued before the
+rotation — nothing about the leak is amplified.
+
+**Deleting the sensor is different.** The sensor's own key
+(`pvz_sensor_...`) can be revoked from the UI at any time; it controls
+reading the policy and posting violations, and is not the signing key.
 
 ## Troubleshooting
 
