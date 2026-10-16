@@ -1,38 +1,73 @@
 "use client";
 
-// The live activity window on the expanded sensor row: the last N
-// violations the sensor reported, as a scrollable console.
+// The live activity window on the expanded sensor row.
 //
-// Only violations, not allowed traffic: the kernel writes to the ringbuf
-// on a decision it refuses or observes; allowed connections leave no
-// trace by design. The counters above give the allowed/denied/observed
-// rates; this window is where you read the detail behind them.
+// Two streams arrive here and are merged into one chronological feed:
+//   - violations: what the kernel refused or observed (EV_VIOLATION)
+//   - activity:   sampled allowed connects (EV_ALLOWED), every Nth one
+//
+// The kernel still writes allowed traffic to the ringbuf only on a
+// sample, so the window is not a packet log: it is enough to see the
+// shape of what a workload does, without the volume of every connect.
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { listSensorViolations, type SensorT, type ViolationT } from "@/lib/egress_sensor_api";
+import {
+  listSensorActivity,
+  listSensorViolations,
+  type ActivityT,
+  type SensorT,
+  type ViolationT,
+} from "@/lib/egress_sensor_api";
 
 const POLL_MS = 2000;
 const MAX_ROWS = 500;
 
+// A row is either a violation or a sampled allowed connect. The two come
+// from different tables, so their ids collide; key is namespaced.
+type Row =
+  | { kind: "violation"; key: string; id: number; ts: string; data: ViolationT }
+  | { kind: "activity"; key: string; id: number; ts: string; data: ActivityT };
+
+function rowFromViolation(v: ViolationT): Row {
+  return { kind: "violation", key: `vio-${v.id}`, id: v.id, ts: v.created_at, data: v };
+}
+
+function rowFromActivity(a: ActivityT): Row {
+  return { kind: "activity", key: `act-${a.id}`, id: a.id, ts: a.created_at, data: a };
+}
+
 export function SensorActivity({ sensor }: { sensor: SensorT }) {
   const { t, i18n } = useTranslation();
-  const [rows, setRows] = useState<ViolationT[]>([]);
+  const [rows, setRows] = useState<Row[]>([]);
   const [paused, setPaused] = useState(false);
   const [atBottom, setAtBottom] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const boxRef = useRef<HTMLDivElement>(null);
 
   const load = useCallback(() => {
-    listSensorViolations(sensor.id, 200)
-      .then((incoming) => {
-        // The API returns newest-first; the console reads oldest-first.
-        const asc = [...incoming].reverse();
+    Promise.all([
+      listSensorViolations(sensor.id, 200),
+      listSensorActivity(sensor.id, 200),
+    ])
+      .then(([vios, acts]) => {
         setRows((prev) => {
-          // Merge by id, drop rows that fell out of the API window.
-          const seen = new Map<number, ViolationT>();
-          for (const r of prev) seen.set(r.id, r);
-          for (const r of asc) seen.set(r.id, r);
-          const merged = [...seen.values()].sort((a, b) => a.id - b.id);
+          // Merge by key, dropping rows that fell out of either API window.
+          const seen = new Map<string, Row>();
+          for (const r of prev) seen.set(r.key, r);
+          for (const v of vios) {
+            const r = rowFromViolation(v);
+            seen.set(r.key, r);
+          }
+          for (const a of acts) {
+            const r = rowFromActivity(a);
+            seen.set(r.key, r);
+          }
+          // The console reads oldest-first.
+          const merged = [...seen.values()].sort((x, y) => {
+            if (x.ts < y.ts) return -1;
+            if (x.ts > y.ts) return 1;
+            return x.key.localeCompare(y.key);
+          });
           return merged.length > MAX_ROWS ? merged.slice(merged.length - MAX_ROWS) : merged;
         });
         setError(null);
@@ -73,9 +108,6 @@ export function SensorActivity({ sensor }: { sensor: SensorT }) {
   }
 
   const counters = useMemo(() => {
-    // Rates need deltas; the backend does not keep history yet, so here
-    // we show totals with the elapsed wall-clock since the sensor was
-    // last seen. A small nudge that is honest about what we know.
     return {
       allowed: sensor.allowed_total ?? 0,
       denied: sensor.denied_total ?? 0,
@@ -84,6 +116,26 @@ export function SensorActivity({ sensor }: { sensor: SensorT }) {
   }, [sensor.allowed_total, sensor.denied_total, sensor.observed_total]);
 
   const fmt = (iso: string) => new Date(iso).toLocaleTimeString(i18n.language);
+
+  function iconFor(action: string): { cls: string; glyph: string } {
+    if (action === "blocked") return { cls: "icon-deny", glyph: "✕" };
+    if (action === "alerted") return { cls: "icon-obs", glyph: "!" };
+    if (action === "allowed") return { cls: "icon-allow", glyph: "✓" };
+    return { cls: "icon-obs", glyph: "•" };
+  }
+
+  function describeRow(r: Row): string {
+    const d = r.data;
+    const parts: string[] = [];
+    parts.push(d.action);
+    parts.push(d.kind);
+    if (d.protocol) parts.push(d.protocol);
+    if (d.dst_name) parts.push(d.dst_name);
+    if (d.dst_ip) parts.push(`→ ${d.dst_ip}${d.dst_port ? ":" + d.dst_port : ""}`);
+    if (d.comm) parts.push(`[${d.comm}]`);
+    if (d.count > 1) parts.push(`×${d.count}`);
+    return parts.join(" ");
+  }
 
   return (
     <div>
@@ -121,22 +173,16 @@ export function SensorActivity({ sensor }: { sensor: SensorT }) {
         {rows.length === 0 ? (
           <div className="sensor-activity-empty">{t("rt.sensors.act_none")}</div>
         ) : (
-          rows.map((v) => (
-            <div key={v.id} className="sensor-activity-line">
-              <span className="t">{fmt(v.created_at)}</span>
-              <span className={v.action === "blocked" ? "icon-deny" : v.action === "alerted" ? "icon-obs" : "icon-allow"}>
-                {v.action === "blocked" ? "✕" : v.action === "alerted" ? "!" : "•"}
-              </span>
-              <span>
-                {v.action} {v.kind}
-                {v.protocol ? ` ${v.protocol}` : ""}
-                {v.dst_name ? ` ${v.dst_name}` : ""}
-                {v.dst_ip ? ` → ${v.dst_ip}${v.dst_port ? ":" + v.dst_port : ""}` : ""}
-                {v.comm ? ` [${v.comm}]` : ""}
-                {v.count > 1 ? ` ×${v.count}` : ""}
-              </span>
-            </div>
-          ))
+          rows.map((r) => {
+            const { cls, glyph } = iconFor(r.data.action);
+            return (
+              <div key={r.key} className="sensor-activity-line">
+                <span className="t">{fmt(r.ts)}</span>
+                <span className={cls}>{glyph}</span>
+                <span>{describeRow(r)}</span>
+              </div>
+            );
+          })
         )}
       </div>
     </div>

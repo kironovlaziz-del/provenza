@@ -49,6 +49,7 @@ const (
 	ActObserved = 1
 	ActAlerted  = 2
 	ActBlocked  = 3
+	ActAllowed  = 4
 
 	KindConnect = 1
 	KindSend    = 2
@@ -61,6 +62,7 @@ const (
 	EvViolation = 1
 	EvMkdir     = 2
 	EvRmdir     = 3
+	EvAllowed   = 4
 
 	DirEgress  = 0
 	DirIngress = 1

@@ -34,6 +34,7 @@ from app.models.egress_sensor import (
     EgressSensorCommand,
     EgressViolation,
     EgressWorkload,
+    SensorActivity,
 )
 from app.models.user import User, UserRole
 from app.schemas.egress_sensor import (
@@ -57,6 +58,8 @@ from app.schemas.egress_sensor import (
     WorkloadIn,
     WorkloadOut,
     WorkloadUpdate,
+    ActivityBatch,
+    ActivityOut,
 )
 from app.services import egress_sensor as svc
 from app.services import egress_sensor_commands as cmd_svc
@@ -266,6 +269,28 @@ async def list_sensor_workloads(
 ):
     await _get_org_sensor(db, sensor_id, current_user.org_id, include_revoked=True)
     return await svc.workloads_for_sensor(db, sensor_id)
+
+
+@admin_router.get("/sensors/{sensor_id}/activity", response_model=list[ActivityOut])
+async def list_sensor_activity(
+    sensor_id: int,
+    limit: int = 200,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """Sampled allowed connections from this sensor, newest first. The UI's
+    Activity window polls this alongside /violations."""
+    q = (
+        select(SensorActivity)
+        .where(
+            SensorActivity.sensor_id == sensor_id,
+            SensorActivity.org_id == current_user.org_id,
+        )
+        .order_by(SensorActivity.id.desc())
+        .limit(limit)
+    )
+    rows = (await db.execute(q)).scalars().all()
+    return rows
 
 
 @admin_router.post(
@@ -778,5 +803,23 @@ async def post_violations(
     them. Incidents and notifications are created for alerted/blocked events
     on agent-linked workloads only."""
     dropped = await svc.ingest_violations(db, sensor, data.events)
+    await db.commit()
+    return {"accepted": len(data.events) - dropped, "dropped": dropped}
+
+
+@sensor_router.post(
+    "/activity",
+    status_code=status.HTTP_200_OK,
+    summary="A batch of sampled allowed connections (up to 500 per call)",
+)
+async def post_activity(
+    data: ActivityBatch,
+    db: AsyncSession = Depends(get_db),
+    sensor: EgressSensor = Depends(get_current_sensor),
+):
+    """Ingest a batch of sampled allowed connects. Same shape as /violations
+    but a distinct feed: rows land in sensor_activity, no incidents or
+    notifications are created."""
+    dropped = await svc.ingest_activities(db, sensor, data.events)
     await db.commit()
     return {"accepted": len(data.events) - dropped, "dropped": dropped}

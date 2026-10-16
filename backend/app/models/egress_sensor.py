@@ -196,6 +196,39 @@ class EgressViolation(Base):
     created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now(), index=True)
 
 
+class SensorActivity(Base):
+    """Sampled allowed connections from the sensor's activity feed.
+
+    Same shape as EgressViolation but a separate table: the two feeds have
+    different volumes and, eventually, different retention. No incidents or
+    notifications are ever created from these rows.
+    """
+    __tablename__ = "sensor_activity"
+    __table_args__ = (
+        Index("ix_sensor_activity_org_time", "org_id", "created_at"),
+        Index("ix_sensor_activity_sensor_time", "sensor_id", "created_at"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    org_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
+    sensor_id = Column(Integer, ForeignKey("egress_sensors.id", ondelete="SET NULL"), index=True)
+    workload_id = Column(Integer, ForeignKey("egress_workloads.id", ondelete="SET NULL"), index=True)
+
+    action = Column(String(20), nullable=False)
+    kind = Column(String(20), nullable=False)
+    protocol = Column(String(10))
+
+    dst_ip = Column(String(64))
+    dst_port = Column(Integer)
+    dst_name = Column(String(255))
+    comm = Column(String(64))
+    cgroup = Column(String(500))
+
+    isolated = Column(Boolean, nullable=False, default=False)
+    count = Column(Integer, nullable=False, default=1)
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now(), index=True)
+
+
 class EgressSensorSigningKey(Base):
     """One Ed25519 keypair per organization, used to sign commands the
     control plane queues for its sensors.

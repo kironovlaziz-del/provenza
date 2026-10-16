@@ -47,6 +47,8 @@ func (d *Daemon) ringbufLoop(ctx context.Context) {
 		switch rec.RawSample[0] {
 		case bpfobj.EvViolation:
 			d.handleViolation(rec.RawSample)
+		case bpfobj.EvAllowed:
+			d.handleAllowed(rec.RawSample)
 		case bpfobj.EvMkdir, bpfobj.EvRmdir:
 			d.handleMkdir(rec.RawSample)
 		}
@@ -80,6 +82,35 @@ func (d *Daemon) handleViolation(raw []byte) {
 		v.Comm = &comm
 	}
 	d.viol.add(v)
+}
+
+func (d *Daemon) handleAllowed(raw []byte) {
+	if len(raw) < eventSize {
+		return
+	}
+	var e bpfobj.Event
+	if err := binary.Read(bytes.NewReader(raw), binary.NativeEndian, &e); err != nil {
+		return
+	}
+	a := client.Activity{
+		WorkloadID: e.Wid,
+		Action:     actionName(e.Action),
+		Kind:       kindName(e.Kind),
+		Protocol:   protoName(e.Proto),
+		Isolated:   e.Isolated != 0,
+		Count:      uint64(e.Count),
+	}
+	if p := int(e.Port); p != 0 {
+		a.DstPort = &p
+	}
+	if ip, ok := addrOf(e.Family, e.Addr); ok {
+		s := ip.String()
+		a.DstIP = &s
+	}
+	if comm := strings.TrimRight(string(e.Comm[:]), "\x00"); comm != "" {
+		a.Comm = &comm
+	}
+	d.act.add(a)
 }
 
 func (d *Daemon) handleMkdir(raw []byte) {
@@ -125,6 +156,8 @@ func actionName(a uint8) string {
 		return "alerted"
 	case bpfobj.ActBlocked:
 		return "blocked"
+		case bpfobj.ActAllowed:
+		        return "allowed"
 	}
 	return "observed"
 }
@@ -221,3 +254,57 @@ func (b *violationBuffer) flush(ctx context.Context) {
 		b.mu.Unlock()
 	}
 }
+
+// ---------------------------------------------------------------- activity
+
+// activityBuffer batches sampled allowed connections and posts them
+// periodically. Same cadence as violationBuffer, separate queue so a busy
+// violations path cannot starve the activity feed (and vice versa).
+type activityBuffer struct {
+	cl *client.Client
+
+	mu  sync.Mutex
+	buf []client.Activity
+}
+
+func newActivityBuffer(cl *client.Client) *activityBuffer {
+	return &activityBuffer{cl: cl}
+}
+
+func (b *activityBuffer) add(a client.Activity) {
+	b.mu.Lock()
+	b.buf = append(b.buf, a)
+	b.mu.Unlock()
+}
+
+func (b *activityBuffer) run(ctx context.Context) {
+	t := time.NewTicker(2 * time.Second)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+			b.flush(ctx)
+		}
+	}
+}
+
+func (b *activityBuffer) flush(ctx context.Context) {
+	b.mu.Lock()
+	if len(b.buf) == 0 {
+		b.mu.Unlock()
+		return
+	}
+	batch := b.buf
+	b.buf = nil
+	b.mu.Unlock()
+
+	if err := b.cl.Activities(ctx, batch); err != nil {
+		slog.Warn("post activity", "err", err)
+		b.mu.Lock()
+		b.buf = append(batch, b.buf...)
+		b.mu.Unlock()
+	}
+}
+

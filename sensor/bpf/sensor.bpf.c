@@ -49,9 +49,9 @@ char LICENSE[] SEC("license") = "Dual BSD/GPL";
 enum { MODE_OBSERVE = 0, MODE_ALERT = 1, MODE_ENFORCE = 2 };
 enum { DNS_OFF = 0, DNS_LISTED = 1, DNS_ANY = 2 };
 enum { CG_GOVERNED = 1, CG_EXEMPT = 2, CG_PENDING = 3 };
-enum { ACT_OBSERVED = 1, ACT_ALERTED = 2, ACT_BLOCKED = 3 };
+enum { ACT_OBSERVED = 1, ACT_ALERTED = 2, ACT_BLOCKED = 3, ACT_ALLOWED = 4 };
 enum { KIND_CONNECT = 1, KIND_SEND = 2, KIND_SOCKET = 3, KIND_PACKET = 4, KIND_INGRESS = 5, KIND_FAMILY = 7 };
-enum { EV_VIOLATION = 1, EV_MKDIR = 2, EV_RMDIR = 3 };
+enum { EV_VIOLATION = 1, EV_MKDIR = 2, EV_RMDIR = 3, EV_ALLOWED = 4 };
 enum { DIR_EGRESS = 0, DIR_INGRESS = 1 };
 enum { CLS_NONE = 0, CLS_GOVERNED = 1, CLS_HOLD = 2 };
 enum { NOTE_UNKNOWN = 0, NOTE_FREE = 1, NOTE_GOVERNED = 2, NOTE_PENDING = 3 };
@@ -65,6 +65,10 @@ enum {
 };
 
 #define WL_DNS_V6 0x1
+
+/* Every Nth allowed connect is sampled into the activity ring, per CPU.
+ * Power of two: the modulo compiles to a single AND. */
+#define ALLOWED_SAMPLE_EVERY 256
 
 struct cg_entry {
 	__u32 wid;
@@ -289,6 +293,15 @@ struct {
 	__uint(max_entries, STAT_MAX);
 } stats SEC(".maps");
 
+/* Per-CPU tick for the allowed-connect sampler. Each CPU owns its cell,
+ * so the increment needs no atomic and no lock. */
+struct {
+    __uint(type, BPF_MAP_TYPE_PERCPU_ARRAY);
+    __type(key, __u32);
+    __type(value, __u64);
+    __uint(max_entries, 1);
+} sample_tick SEC(".maps");
+
 /* --------------------------------------------------------------- helpers */
 
 static __always_inline void stat_inc(__u32 idx)
@@ -488,6 +501,48 @@ static __always_inline void emit(struct cls *c, __u8 action, __u8 kind, __u8 pro
 	}
 	bpf_ringbuf_submit(e, 0);
 }
+/* Emit a sampled "allowed connect" into the same ring the violations use.
+ * Carries EV_ALLOWED/ACT_ALLOWED so consumers can route it to the activity
+ * feed. The sampler itself is the rate limit: one in ALLOWED_SAMPLE_EVERY. */
+static __always_inline void emit_allowed_sample(struct cls *c, __u8 kind, __u8 proto, __u8 family,
+                                                __u16 port, const __u8 *addr, int task)
+{
+    __u32 zero = 0;
+    __u64 *tick = bpf_map_lookup_elem(&sample_tick, &zero);
+    if (!tick)
+        return;
+    *tick += 1;
+    if (*tick & (ALLOWED_SAMPLE_EVERY - 1))
+        return;
+
+    struct event *e = bpf_ringbuf_reserve(&events, sizeof(*e), 0);
+    if (!e)
+        return; /* a dropped sample is not a lost violation */
+
+    e->type = EV_ALLOWED;
+    e->action = ACT_ALLOWED;
+    e->kind = kind;
+    e->proto = proto;
+    e->family = family;
+    e->isolated = 0;
+    e->port = port;
+    e->wid = c->wid;
+    e->count = 1;
+    e->cgid = c->cgid;
+    if (addr)
+        __builtin_memcpy(e->addr, addr, 16);
+    if (task) {
+        e->pid = bpf_get_current_pid_tgid() >> 32;
+        e->uid = (__u32)bpf_get_current_uid_gid();
+        bpf_get_current_comm(e->comm, sizeof(e->comm));
+    } else {
+        e->pid = 0;
+        e->uid = 0;
+        __builtin_memset(e->comm, 0, sizeof(e->comm));
+    }
+    bpf_ringbuf_submit(e, 0);
+}
+
 
 static __always_inline __u8 action_for(struct wl_cfg *w)
 {
@@ -613,6 +668,7 @@ static __always_inline int on_addr(struct bpf_sock_addr *ctx, int v6, __u8 kind)
 
 	if (policy_allows(g->gen, c.wid, DIR_EGRESS, proto, port, fam6, a)) {
 		stat_inc(STAT_ALLOWED);
+            emit_allowed_sample(&c, kind, proto, family, port, a, 1);
 		return 1;
 	}
 	__u8 act = action_for(w);
