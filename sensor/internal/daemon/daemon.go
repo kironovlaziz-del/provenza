@@ -45,6 +45,7 @@ type Daemon struct {
 	rb     *ringbuf.Reader
 	dns    *dnsServers
 	viol   *violationBuffer
+	act    *activityBuffer
 	run    *runServer
 	status *statusServer
 
@@ -99,6 +100,7 @@ func New(cfgPath, version string) (*Daemon, error) {
 		cgWid:     map[uint64]uint32{},
 		uidSet:    map[uint32]bool{},
 		viol:      newViolationBuffer(cl),
+		act:       newActivityBuffer(cl),
 		startTime: time.Now(),
 	}
 	d.dns = newDNSServers(d)
@@ -179,6 +181,7 @@ func (d *Daemon) Run(ctx context.Context) error {
 	start(d.ringbufLoop)
 	start(d.cgroupWalkLoop)
 	start(d.viol.run)
+	start(d.act.run)
 	d.dns.start(ctx, &wg)
 
 	<-ctx.Done()
@@ -194,6 +197,7 @@ func (d *Daemon) Run(ctx context.Context) error {
 		_ = d.rb.Close()
 	}
 	d.viol.flush(context.Background())
+	d.act.flush(context.Background())
 	wg.Wait()
 	return nil
 }

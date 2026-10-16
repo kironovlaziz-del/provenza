@@ -257,6 +257,39 @@ func (c *Client) Violations(ctx context.Context, vs []Violation) error {
 	return nil
 }
 
+// Activity as the API takes it: same shape as Violation, but emitted only
+// for sampled allowed connections. Kept as a distinct Go type so the two
+// streams cannot be mixed up at compile time.
+type Activity struct {
+	WorkloadID uint32  `json:"workload_id"`
+	Action     string  `json:"action"`
+	Kind       string  `json:"kind"`
+	Protocol   string  `json:"protocol"`
+	DstIP      *string `json:"dst_ip,omitempty"`
+	DstPort    *int    `json:"dst_port,omitempty"`
+	DstName    *string `json:"dst_name,omitempty"`
+	Comm       *string `json:"comm,omitempty"`
+	Cgroup     *string `json:"cgroup,omitempty"`
+	Isolated   bool    `json:"isolated"`
+	Count      uint64  `json:"count"`
+}
+
+// Activities posts sampled allowed connections. Batches are bounded the same
+// way Violations are: at most 500 per request.
+func (c *Client) Activities(ctx context.Context, as []Activity) error {
+	for len(as) > 0 {
+		n := len(as)
+		if n > 500 {
+			n = 500
+		}
+		if err := c.post(ctx, "/activity", map[string]any{"events": as[:n]}); err != nil {
+			return err
+		}
+		as = as[n:]
+	}
+	return nil
+}
+
 // ---------------------------------------------------------------- cache
 
 // SavePolicy keeps the last policy on disk (0600), so the sensor enforces it
