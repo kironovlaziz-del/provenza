@@ -34,6 +34,12 @@ class EgressSensor(Base):
     errors = Column(JSONB)
     dropped_events = Column(Integer, nullable=False, default=0)
     config_version = Column(String(64))
+
+    # Governed socket decisions since the sensor started. BigInteger because
+    # a long-running host on a busy network passes 2^31 quickly.
+    allowed_total  = Column(BigInteger, nullable=False, default=0)
+    denied_total   = Column(BigInteger, nullable=False, default=0)
+    observed_total = Column(BigInteger, nullable=False, default=0)
     last_seen_at = Column(DateTime(timezone=True))
     # Set by the offline checker the first time we warned about this sensor;
     # cleared (set back) when it starts sending heartbeats again, so the

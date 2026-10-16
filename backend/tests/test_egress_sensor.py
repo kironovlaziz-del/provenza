@@ -1190,3 +1190,36 @@ async def test_signing_key_out_includes_previous_after_rotate(client, admin_toke
 async def test_rotate_requires_admin(client, approver_token):
     r = await client.post(f"{BASE}/settings/signing-key/rotate", headers=auth_headers(approver_token))
     assert r.status_code in (401, 403)
+
+
+
+@pytest.mark.asyncio
+async def test_heartbeat_stores_traffic_counters(client, admin_token):
+    """The three traffic counters land on the sensor row and are returned
+    by GET /sensors/{id}."""
+    created = await _register_sensor(client, admin_token, name="counters")
+    key = created["api_key"]
+
+    r = await client.get(f"{BASE}/sensors/{created['id']}", headers=auth_headers(admin_token))
+    assert r.status_code == 200
+    body = r.json()
+    assert body["allowed_total"] == 0
+    assert body["denied_total"] == 0
+    assert body["observed_total"] == 0
+
+    r = await client.post(
+        f"{BASE}/heartbeat",
+        json={
+            "hostname": "h1", "version": "v1", "enforcing": True,
+            "hooks": [], "warnings": [], "errors": [], "dropped_events": 0,
+            "allowed_total": 12345, "denied_total": 42, "observed_total": 7,
+        },
+        headers={"X-Sensor-Key": key},
+    )
+    assert r.status_code == 200, r.text
+
+    r = await client.get(f"{BASE}/sensors/{created['id']}", headers=auth_headers(admin_token))
+    body = r.json()
+    assert body["allowed_total"] == 12345
+    assert body["denied_total"] == 42
+    assert body["observed_total"] == 7

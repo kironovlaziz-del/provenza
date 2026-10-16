@@ -288,6 +288,12 @@ async def ingest_heartbeat(
     sensor.dropped_events = data.dropped_events
     sensor.config_version = data.config_version
     sensor.last_seen_at = now_utc()
+    if data.allowed_total is not None:
+        sensor.allowed_total = data.allowed_total
+    if data.denied_total is not None:
+        sensor.denied_total = data.denied_total
+    if data.observed_total is not None:
+        sensor.observed_total = data.observed_total
 
     # -------- per-workload snapshot
     reported = data.workloads or []
