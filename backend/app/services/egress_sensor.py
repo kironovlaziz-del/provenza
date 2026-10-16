@@ -294,6 +294,12 @@ async def ingest_heartbeat(
         sensor.denied_total = data.denied_total
     if data.observed_total is not None:
         sensor.observed_total = data.observed_total
+    if data.allowed_per_min is not None:
+        sensor.allowed_per_min = data.allowed_per_min
+    if data.denied_per_min is not None:
+        sensor.denied_per_min = data.denied_per_min
+    if data.observed_per_min is not None:
+        sensor.observed_per_min = data.observed_per_min
 
     # -------- per-workload snapshot
     reported = data.workloads or []
