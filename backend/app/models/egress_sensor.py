@@ -179,6 +179,18 @@ class EgressPolicySettings(Base):
     # egress_sensor.prune_violations task.
     violation_retention_days = Column(Integer, nullable=False, default=30, server_default="30")
 
+    # Last prune result, one pair per table. The Celery tasks run in their
+    # own process, so their counters never reach /metrics; the tasks
+    # instead write the outcome here and update_db_gauges reads it on each
+    # scrape. If last_pruned_at stops moving, or last_prune_error is set,
+    # the alert fires. Retention values are already covered above.
+    activity_last_pruned_at = Column(DateTime(timezone=True))
+    activity_last_prune_rows = Column(Integer, nullable=False, default=0, server_default="0")
+    activity_last_prune_error = Column(String(500))
+    violation_last_pruned_at = Column(DateTime(timezone=True))
+    violation_last_prune_rows = Column(Integer, nullable=False, default=0, server_default="0")
+    violation_last_prune_error = Column(String(500))
+
     updated_by = Column(Integer, ForeignKey("users.id"))
     updated_at = Column(DateTime(timezone=True), nullable=False,
                         server_default=func.now(), onupdate=func.now())

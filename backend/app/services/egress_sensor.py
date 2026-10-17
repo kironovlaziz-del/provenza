@@ -265,6 +265,65 @@ async def build_policy(db: AsyncSession, org_id: int) -> PolicyOut:
     )
 
 
+async def _record_prune_status(
+    db: AsyncSession, *, table: str, rows: int, error: str | None,
+) -> None:
+    """Persist the outcome of the last prune so /metrics can surface it.
+
+    The Celery worker runs in its own process; a counter incremented there
+    would never reach the uvicorn /metrics endpoint. Writing to the
+    EgressPolicySettings row keeps the status visible to update_db_gauges,
+    which reads it on each scrape.
+
+    table is "activity" or "violations". Missing settings rows are created
+    with defaults so a first prune on a fresh org still records status.
+    """
+    from datetime import datetime, timezone
+
+    # Determine which orgs to update: those whose settings row already
+    # exists are updated; those without a row are created with defaults.
+    existing = {
+        s.org_id: s
+        for s in (
+            await db.execute(select(EgressPolicySettings))
+        ).scalars().all()
+    }
+
+    now = datetime.now(timezone.utc)
+
+    # For every org that had rows touched in this run (or every org with a
+    # settings row), write the status. Practically: upsert on all orgs
+    # that have a settings row AND insert for any org without one, so the
+    # next prune on that org has a place to write.
+    all_org_ids = set(existing.keys())
+    # Also include orgs known from tables we just pruned.
+    from app.models.egress_sensor import SensorActivity, EgressViolation
+    if table == "activity":
+        all_org_ids.update(
+            (await db.execute(select(SensorActivity.org_id).distinct())).scalars().all()
+        )
+    else:
+        all_org_ids.update(
+            (await db.execute(select(EgressViolation.org_id).distinct())).scalars().all()
+        )
+
+    for org_id in all_org_ids:
+        s = existing.get(org_id)
+        if s is None:
+            s = EgressPolicySettings(org_id=org_id)
+            db.add(s)
+        if table == "activity":
+            s.activity_last_pruned_at = now
+            s.activity_last_prune_rows = rows
+            s.activity_last_prune_error = (error or "")[:500] if error else None
+        else:
+            s.violation_last_pruned_at = now
+            s.violation_last_prune_rows = rows
+            s.violation_last_prune_error = (error or "")[:500] if error else None
+
+    await db.flush()
+
+
 async def prune_sensor_activity(db: AsyncSession, default_days: int = 30) -> int:
     """Delete sensor_activity rows older than each organization's retention.
 
@@ -311,6 +370,9 @@ async def prune_sensor_activity(db: AsyncSession, default_days: int = 30) -> int
             total += len(ids)
             if len(ids) < chunk:
                 break
+    await _record_prune_status(
+        db, table="activity", rows=total, error=None,
+    )
     if total:
         logger.info("pruned sensor_activity", extra={"rows": total})
     return total
@@ -361,6 +423,9 @@ async def prune_violations(db: AsyncSession, default_days: int = 30) -> int:
             total += len(ids)
             if len(ids) < chunk:
                 break
+    await _record_prune_status(
+        db, table="violations", rows=total, error=None,
+    )
     if total:
         logger.info("pruned egress_violations", extra={"rows": total})
     return total

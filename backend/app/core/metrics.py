@@ -95,6 +95,40 @@ sensor_violations_rows = Gauge(
     ["org_id"],
 )
 
+# Retention health gauges. The two oldest-age series tell you whether the
+# prune is keeping up (age should hover just below the configured
+# retention * 86400); the three status series tell you whether the prune
+# ran at all and what it did the last time. Both tables are covered.
+sensor_activity_oldest_age_seconds = Gauge(
+    "sensor_activity_oldest_age_seconds",
+    "Age in seconds of the oldest sensor_activity row, per organization.",
+    ["org_id"],
+)
+
+sensor_violations_oldest_age_seconds = Gauge(
+    "sensor_violations_oldest_age_seconds",
+    "Age in seconds of the oldest egress_violations row, per organization.",
+    ["org_id"],
+)
+
+retention_last_pruned_at_seconds_ago = Gauge(
+    "retention_last_pruned_at_seconds_ago",
+    "Seconds since the last successful prune, per table and organization.",
+    ["table", "org_id"],
+)
+
+retention_last_prune_failed = Gauge(
+    "retention_last_prune_failed",
+    "1 if the last prune failed for this table/organization, else 0.",
+    ["table", "org_id"],
+)
+
+retention_last_prune_rows = Gauge(
+    "retention_last_prune_rows",
+    "Rows deleted by the last prune, per table and organization.",
+    ["table", "org_id"],
+)
+
 # Matches egress_sensor.warn_offline's own threshold. Kept separate on
 # purpose: the metric is a monitoring signal, the warn task sends notices.
 OFFLINE_AFTER = timedelta(minutes=5)
@@ -145,3 +179,60 @@ async def update_db_gauges(db: AsyncSession) -> None:
     ).all()
     for org_id, n in vio_rows:
         sensor_violations_rows.labels(org_id=str(org_id)).set(n)
+
+    # Oldest row age, per table and org. MIN(created_at) is a single index
+    # lookup on ix_*_org_time; even at millions of rows this is cheap.
+    from app.models.egress_sensor import EgressPolicySettings
+
+    act_oldest = (
+        await db.execute(
+            select(
+                SensorActivity.org_id,
+                func.min(SensorActivity.created_at),
+            ).group_by(SensorActivity.org_id)
+        )
+    ).all()
+    for org_id, oldest in act_oldest:
+        if oldest is not None:
+            age = (now - oldest).total_seconds()
+            sensor_activity_oldest_age_seconds.labels(org_id=str(org_id)).set(age)
+
+    vio_oldest = (
+        await db.execute(
+            select(
+                EgressViolation.org_id,
+                func.min(EgressViolation.created_at),
+            ).group_by(EgressViolation.org_id)
+        )
+    ).all()
+    for org_id, oldest in vio_oldest:
+        if oldest is not None:
+            age = (now - oldest).total_seconds()
+            sensor_violations_oldest_age_seconds.labels(org_id=str(org_id)).set(age)
+
+    # Last-prune status, read from the persisted EgressPolicySettings row.
+    settings_rows = (
+        await db.execute(
+            select(
+                EgressPolicySettings.org_id,
+                EgressPolicySettings.activity_last_pruned_at,
+                EgressPolicySettings.activity_last_prune_rows,
+                EgressPolicySettings.activity_last_prune_error,
+                EgressPolicySettings.violation_last_pruned_at,
+                EgressPolicySettings.violation_last_prune_rows,
+                EgressPolicySettings.violation_last_prune_error,
+            )
+        )
+    ).all()
+
+    for row in settings_rows:
+        org = str(row.org_id)
+        for table, at, rows, err in (
+            ("activity",   row.activity_last_pruned_at,   row.activity_last_prune_rows,   row.activity_last_prune_error),
+            ("violations", row.violation_last_pruned_at,  row.violation_last_prune_rows,  row.violation_last_prune_error),
+        ):
+            if at is not None:
+                age = (now - at).total_seconds()
+                retention_last_pruned_at_seconds_ago.labels(table=table, org_id=org).set(age)
+            retention_last_prune_failed.labels(table=table, org_id=org).set(1 if err else 0)
+            retention_last_prune_rows.labels(table=table, org_id=org).set(rows or 0)

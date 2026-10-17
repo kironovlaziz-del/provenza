@@ -7,12 +7,12 @@
 import asyncio
 
 from app.core.celery_app import celery_app
-from app.core.database import AsyncSessionLocal
+from app.core.celery_database import CelerySessionLocal
 
 
 async def _warn_offline() -> int:
     from app.services import egress_sensor as svc
-    async with AsyncSessionLocal() as db:
+    async with CelerySessionLocal() as db:
         try:
             return await svc.warn_offline_sensors(db)
         finally:
@@ -25,7 +25,7 @@ def warn_offline_task() -> int:
 
 async def _prune_activity() -> int:
     from app.services import egress_sensor as svc
-    async with AsyncSessionLocal() as db:
+    async with CelerySessionLocal() as db:
         try:
             return await svc.prune_sensor_activity(db)
         finally:
@@ -38,7 +38,7 @@ def prune_activity_task() -> int:
 
 async def _prune_violations() -> int:
     from app.services import egress_sensor as svc
-    async with AsyncSessionLocal() as db:
+    async with CelerySessionLocal() as db:
         try:
             return await svc.prune_violations(db)
         finally:

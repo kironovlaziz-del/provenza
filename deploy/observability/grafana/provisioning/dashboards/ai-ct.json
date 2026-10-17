@@ -3,7 +3,10 @@
     "list": [
       {
         "builtIn": 1,
-        "datasource": { "type": "grafana", "uid": "-- Grafana --" },
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
         "enable": true,
         "hide": true,
         "iconColor": "rgba(0, 211, 255, 1)",
@@ -20,24 +23,52 @@
   "panels": [
     {
       "id": 1,
-      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 0,
+        "y": 0
+      },
       "type": "stat",
       "title": "Sensors offline",
-      "datasource": { "type": "prometheus", "uid": "Prometheus" },
-      "targets": [{ "expr": "sensors_offline", "refId": "A" }],
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "targets": [
+        {
+          "expr": "sensors_offline",
+          "refId": "A"
+        }
+      ],
       "options": {
         "colorMode": "background",
         "graphMode": "area",
-        "reduceOptions": { "values": false, "calcs": ["lastNotNull"], "fields": "" }
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        }
       },
       "fieldConfig": {
         "defaults": {
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "green", "value": null },
-              { "color": "yellow", "value": 1 },
-              { "color": "red", "value": 2 }
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 2
+              }
             ]
           },
           "unit": "short"
@@ -47,24 +78,53 @@
     },
     {
       "id": 2,
-      "gridPos": { "h": 4, "w": 10, "x": 6, "y": 0 },
+      "gridPos": {
+        "h": 4,
+        "w": 10,
+        "x": 6,
+        "y": 0
+      },
       "type": "stat",
       "title": "Sensor heartbeat age",
-      "datasource": { "type": "prometheus", "uid": "Prometheus" },
-      "targets": [{ "expr": "sensor_last_heartbeat_age_seconds", "refId": "A", "legendFormat": "sensor {{sensor_id}}" }],
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "targets": [
+        {
+          "expr": "sensor_last_heartbeat_age_seconds",
+          "refId": "A",
+          "legendFormat": "sensor {{sensor_id}}"
+        }
+      ],
       "options": {
         "colorMode": "value",
         "graphMode": "area",
-        "reduceOptions": { "values": false, "calcs": ["lastNotNull"], "fields": "" }
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        }
       },
       "fieldConfig": {
         "defaults": {
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "green", "value": null },
-              { "color": "yellow", "value": 90 },
-              { "color": "red", "value": 300 }
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 90
+              },
+              {
+                "color": "red",
+                "value": 300
+              }
             ]
           },
           "unit": "s"
@@ -74,23 +134,48 @@
     },
     {
       "id": 3,
-      "gridPos": { "h": 4, "w": 8, "x": 16, "y": 0 },
+      "gridPos": {
+        "h": 4,
+        "w": 8,
+        "x": 16,
+        "y": 0
+      },
       "type": "stat",
       "title": "HTTP 5xx (5m rate)",
-      "datasource": { "type": "prometheus", "uid": "Prometheus" },
-      "targets": [{ "expr": "sum(rate(http_requests_total{status=~\"5..\"}[5m]))", "refId": "A" }],
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(http_requests_total{status=~\"5..\"}[5m]))",
+          "refId": "A"
+        }
+      ],
       "options": {
         "colorMode": "background",
         "graphMode": "area",
-        "reduceOptions": { "values": false, "calcs": ["lastNotNull"], "fields": "" }
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        }
       },
       "fieldConfig": {
         "defaults": {
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "green", "value": null },
-              { "color": "red", "value": 0.01 }
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 0.01
+              }
             ]
           },
           "unit": "reqps"
@@ -100,10 +185,18 @@
     },
     {
       "id": 4,
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 4
+      },
       "type": "timeseries",
       "title": "Requests by path",
-      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
       "targets": [
         {
           "expr": "sum by (path) (rate(http_requests_total[5m]))",
@@ -111,15 +204,36 @@
           "legendFormat": "{{path}}"
         }
       ],
-      "fieldConfig": { "defaults": { "unit": "reqps" }, "overrides": [] },
-      "options": { "legend": { "displayMode": "table", "placement": "right", "calcs": ["lastNotNull"] } }
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      }
     },
     {
       "id": 5,
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 4
+      },
       "type": "timeseries",
       "title": "Latency p95 / p99",
-      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
       "targets": [
         {
           "expr": "histogram_quantile(0.95, sum by (le, path) (rate(http_request_duration_seconds_bucket[5m])))",
@@ -132,47 +246,275 @@
           "legendFormat": "p99 {{path}}"
         }
       ],
-      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
-      "options": { "legend": { "displayMode": "table", "placement": "right", "calcs": ["lastNotNull"] } }
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      }
     },
     {
       "id": 6,
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 12 },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 12
+      },
       "type": "timeseries",
       "title": "Table rows (retention health)",
-      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
       "targets": [
-        { "expr": "sensor_activity_rows", "refId": "A", "legendFormat": "activity org={{org_id}}" },
-        { "expr": "sensor_violations_rows", "refId": "B", "legendFormat": "violations org={{org_id}}" }
+        {
+          "expr": "sensor_activity_rows",
+          "refId": "A",
+          "legendFormat": "activity org={{org_id}}"
+        },
+        {
+          "expr": "sensor_violations_rows",
+          "refId": "B",
+          "legendFormat": "violations org={{org_id}}"
+        }
       ],
-      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
-      "options": { "legend": { "displayMode": "table", "placement": "right", "calcs": ["lastNotNull", "max"] } }
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        }
+      }
     },
     {
       "id": 7,
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 12 },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 12
+      },
       "type": "timeseries",
       "title": "Sensor event ingestion",
-      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
       "targets": [
-        { "expr": "rate(sensor_activity_inserted_total[5m])", "refId": "A", "legendFormat": "activity inserted/s" },
-        { "expr": "rate(sensor_violations_inserted_total[5m])", "refId": "B", "legendFormat": "violations inserted/s" },
-        { "expr": "rate(sensor_activity_dropped_total[5m])", "refId": "C", "legendFormat": "activity dropped/s" },
-        { "expr": "rate(sensor_violations_dropped_total[5m])", "refId": "D", "legendFormat": "violations dropped/s" }
+        {
+          "expr": "rate(sensor_activity_inserted_total[5m])",
+          "refId": "A",
+          "legendFormat": "activity inserted/s"
+        },
+        {
+          "expr": "rate(sensor_violations_inserted_total[5m])",
+          "refId": "B",
+          "legendFormat": "violations inserted/s"
+        },
+        {
+          "expr": "rate(sensor_activity_dropped_total[5m])",
+          "refId": "C",
+          "legendFormat": "activity dropped/s"
+        },
+        {
+          "expr": "rate(sensor_violations_dropped_total[5m])",
+          "refId": "D",
+          "legendFormat": "violations dropped/s"
+        }
       ],
-      "fieldConfig": { "defaults": { "unit": "reqps" }, "overrides": [] },
-      "options": { "legend": { "displayMode": "table", "placement": "right", "calcs": ["lastNotNull", "max"] } }
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        }
+      }
+    },
+    {
+      "id": 8,
+      "gridPos": {
+        "h": 6,
+        "w": 8,
+        "x": 0,
+        "y": 20
+      },
+      "type": "timeseries",
+      "title": "Retention: oldest row age",
+      "description": "Age of the oldest row in each table. Should hover just below retention*86400; a linear climb means the prune stopped running.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "targets": [
+        {
+          "expr": "sensor_activity_oldest_age_seconds",
+          "refId": "A",
+          "legendFormat": "activity org={{org_id}}"
+        },
+        {
+          "expr": "sensor_violations_oldest_age_seconds",
+          "refId": "B",
+          "legendFormat": "violations org={{org_id}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        }
+      }
+    },
+    {
+      "id": 9,
+      "gridPos": {
+        "h": 6,
+        "w": 8,
+        "x": 8,
+        "y": 20
+      },
+      "type": "timeseries",
+      "title": "Retention: last prune ago",
+      "description": "Seconds since the last successful prune. > 2h means the hourly Celery task is not ticking.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "targets": [
+        {
+          "expr": "retention_last_pruned_at_seconds_ago",
+          "refId": "A",
+          "legendFormat": "{{table}} org={{org_id}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 3600
+              },
+              {
+                "color": "red",
+                "value": 7200
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        }
+      }
+    },
+    {
+      "id": 10,
+      "gridPos": {
+        "h": 6,
+        "w": 8,
+        "x": 16,
+        "y": 20
+      },
+      "type": "timeseries",
+      "title": "Retention: rows deleted in last prune",
+      "description": "How many rows each prune removed. A spike catches up the backlog; flat zero with rising oldest_age means the prune stopped deleting.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "targets": [
+        {
+          "expr": "retention_last_prune_rows",
+          "refId": "A",
+          "legendFormat": "{{table}} org={{org_id}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        }
+      }
     }
   ],
   "refresh": "30s",
   "schemaVersion": 39,
-  "tags": ["provenza", "ai-ct"],
-  "templating": { "list": [] },
-  "time": { "from": "now-1h", "to": "now" },
+  "tags": [
+    "provenza",
+    "ai-ct"
+  ],
+  "templating": {
+    "list": []
+  },
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
   "timepicker": {},
   "timezone": "browser",
-  "title": "AI Control Tower — Backend",
+  "title": "AI Control Tower \u2014 Backend",
   "uid": "ai-ct-backend",
-  "version": 1,
+  "version": 2,
   "weekStart": ""
 }

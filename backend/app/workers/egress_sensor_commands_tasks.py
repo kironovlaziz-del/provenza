@@ -7,12 +7,12 @@
 import asyncio
 
 from app.core.celery_app import celery_app
-from app.core.database import AsyncSessionLocal
+from app.core.celery_database import CelerySessionLocal
 
 
 async def _expire() -> int:
     from app.services import egress_sensor_commands as cmd
-    async with AsyncSessionLocal() as db:
+    async with CelerySessionLocal() as db:
         try:
             n = await cmd.expire_old_commands(db)
             await db.commit()
