@@ -54,3 +54,4 @@ backend/celerybeat-schedule.db
 *.save
 *~
 sensor/provenza-sensor
+deploy/observability/alertmanager-secret
