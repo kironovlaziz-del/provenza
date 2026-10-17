@@ -201,6 +201,7 @@ export default function RuntimePage() {
           default_mode: s.default_mode,
           default_dns: s.default_dns,
           activity_retention_days: s.activity_retention_days,
+          violation_retention_days: s.violation_retention_days,
         });
       })
       .catch(err => setError(apiError(err, t, t("rt.load_failed"))));
@@ -437,6 +438,7 @@ export default function RuntimePage() {
         default_mode: settings.default_mode,
         default_dns: settings.default_dns,
         activity_retention_days: settings.activity_retention_days,
+        violation_retention_days: settings.violation_retention_days,
       });
     }
     setSettingsOpen(false);
@@ -668,6 +670,18 @@ export default function RuntimePage() {
                     </select>
                     <p className="hint-text">{t("rt.sensors.set_retention_hint")}</p>
                   </div>
+
+                  <div className="field" style={{ margin: 0, flex: "1 1 200px" }}>
+                    <label htmlFor="rt-set-violation-retention">{t("rt.sensors.set_violation_retention")}</label>
+                    <select id="rt-set-violation-retention"
+                      value={settingsDraft.violation_retention_days ?? 30}
+                      onChange={(e) => setSettingsDraft({ ...settingsDraft, violation_retention_days: Number(e.target.value) })}>
+                      {RETENTION_OPTIONS.map(n => (
+                        <option key={n} value={n}>{retentionLabel(t, n)}</option>
+                      ))}
+                    </select>
+                    <p className="hint-text">{t("rt.sensors.set_violation_retention_hint")}</p>
+                  </div>
                 </div>
 
                 <p className="hint-text" style={{ margin: 0 }}>
@@ -692,6 +706,7 @@ export default function RuntimePage() {
                   <span><em style={{ opacity: 0.6, fontStyle: "normal" }}>{t("rt.sensors.set_default_mode")}:</em> {t(`rt.modes.${settings.default_mode}`)}</span>
                   <span><em style={{ opacity: 0.6, fontStyle: "normal" }}>{t("rt.sensors.set_default_dns")}:</em> {t(`rt.dns.${settings.default_dns}`)}</span>
                   <span><em style={{ opacity: 0.6, fontStyle: "normal" }}>{t("rt.sensors.set_retention")}:</em> {retentionLabel(t, settings.activity_retention_days)}</span>
+                  <span><em style={{ opacity: 0.6, fontStyle: "normal" }}>{t("rt.sensors.set_violation_retention")}:</em> {retentionLabel(t, settings.violation_retention_days)}</span>
                 </div>
               ) : (
                 <span className="hint-text">{t("rt.sensors.loading")}</span>

@@ -102,6 +102,12 @@ celery_app.conf.beat_schedule = {
         "task": "egress_sensor.prune_activity",
         "schedule": crontab(minute=41),
     },
+    # Same shape, for the violations table. Runs six minutes after the
+    # activity task so the two do not contend for the same tables.
+    "egress-sensor-prune-violations": {
+        "task": "egress_sensor.prune_violations",
+        "schedule": crontab(minute=47),
+    },
     # Mark queued commands whose TTL has passed as expired. Runs every
     # minute: the TTL is 5 minutes, so the flag is a few tens of seconds
     # behind, which is exactly what the UI wants to show.

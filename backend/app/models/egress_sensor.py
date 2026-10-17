@@ -174,6 +174,11 @@ class EgressPolicySettings(Base):
     # the egress_sensor.prune_activity task.
     activity_retention_days = Column(Integer, nullable=False, default=30, server_default="30")
 
+    # How long violation rows stay in egress_violations. 0 means keep
+    # forever. Rows older than this are pruned hourly by the
+    # egress_sensor.prune_violations task.
+    violation_retention_days = Column(Integer, nullable=False, default=30, server_default="30")
+
     updated_by = Column(Integer, ForeignKey("users.id"))
     updated_at = Column(DateTime(timezone=True), nullable=False,
                         server_default=func.now(), onupdate=func.now())

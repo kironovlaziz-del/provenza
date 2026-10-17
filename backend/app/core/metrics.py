@@ -63,10 +63,7 @@ sensor_activity_dropped_total = Counter(
     "Sampled allowed connects dropped because their workload_id was not this org's.",
 )
 
-sensor_activity_pruned_total = Counter(
-    "sensor_activity_pruned_total",
-    "Sampled allowed connects removed by the hourly retention task.",
-)
+
 
 
 # State gauges, refreshed on each /metrics scrape. Cheap — one SELECT over
@@ -80,6 +77,22 @@ sensor_last_heartbeat_age_seconds = Gauge(
 sensors_offline = Gauge(
     "sensors_offline",
     "Active sensors whose last heartbeat is older than the offline threshold.",
+)
+
+# Row counts, refreshed on scrape from the DB. Counters on the Celery
+# workers never reach /metrics (separate process); these gauges read the
+# tables directly, so retention actually shows up here. Indexed on
+# (org_id, created_at) makes COUNT cheap even at millions of rows.
+sensor_activity_rows = Gauge(
+    "sensor_activity_rows",
+    "Total rows in sensor_activity, per organization.",
+    ["org_id"],
+)
+
+sensor_violations_rows = Gauge(
+    "sensor_violations_rows",
+    "Total rows in egress_violations, per organization.",
+    ["org_id"],
 )
 
 # Matches egress_sensor.warn_offline's own threshold. Kept separate on
@@ -111,3 +124,24 @@ async def update_db_gauges(db: AsyncSession) -> None:
         if now - last_seen > OFFLINE_AFTER:
             offline += 1
     sensors_offline.set(offline)
+
+    # Row counts for retention monitoring. COUNT(*) on indexed column is
+    # cheap; if it ever becomes slow, switch to pg_class.reltuples.
+    from sqlalchemy import func
+    from app.models.egress_sensor import SensorActivity, EgressViolation
+
+    act_rows = (
+        await db.execute(
+            select(SensorActivity.org_id, func.count()).group_by(SensorActivity.org_id)
+        )
+    ).all()
+    for org_id, n in act_rows:
+        sensor_activity_rows.labels(org_id=str(org_id)).set(n)
+
+    vio_rows = (
+        await db.execute(
+            select(EgressViolation.org_id, func.count()).group_by(EgressViolation.org_id)
+        )
+    ).all()
+    for org_id, n in vio_rows:
+        sensor_violations_rows.labels(org_id=str(org_id)).set(n)

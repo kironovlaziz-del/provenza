@@ -228,6 +228,7 @@ export interface SensorSettingsT {
   default_mode: RuntimeMode;
   default_dns: DNSMode;
   activity_retention_days: number;
+  violation_retention_days: number;
   updated_at: string | null;
 }
 
@@ -237,6 +238,7 @@ export interface SensorSettingsInput {
   default_mode?: RuntimeMode;
   default_dns?: DNSMode;
   activity_retention_days?: number;
+  violation_retention_days?: number;
 }
 
 export const getSensorSettings = async () =>

@@ -30,7 +30,6 @@ from app.models.egress_sensor import (
 from app.core.metrics import (
     sensor_activity_dropped_total,
     sensor_activity_inserted_total,
-    sensor_activity_pruned_total,
     sensor_violations_dropped_total,
     sensor_violations_inserted_total,
 )
@@ -313,9 +312,58 @@ async def prune_sensor_activity(db: AsyncSession, default_days: int = 30) -> int
             if len(ids) < chunk:
                 break
     if total:
-        sensor_activity_pruned_total.inc(total)
+        logger.info("pruned sensor_activity", extra={"rows": total})
     return total
 
+
+
+async def prune_violations(db: AsyncSession, default_days: int = 30) -> int:
+    """Delete egress_violations rows older than each organization's retention.
+
+    Same shape as prune_sensor_activity: retention is per-org, an org without
+    a settings row falls back to default_days, 0 disables pruning. Chunked
+    to avoid a long table lock. Called hourly by
+    egress_sensor.prune_violations.
+    """
+    retentions = {
+        row.org_id: row.violation_retention_days
+        for row in (
+            await db.execute(
+                select(EgressPolicySettings.org_id, EgressPolicySettings.violation_retention_days)
+            )
+        ).all()
+    }
+    org_ids = (
+        await db.execute(select(EgressViolation.org_id).distinct())
+    ).scalars().all()
+
+    total = 0
+    chunk = 5000
+    for org_id in org_ids:
+        days = retentions.get(org_id, default_days)
+        if days <= 0:
+            continue
+        cutoff = now_utc() - timedelta(days=days)
+        while True:
+            ids = (
+                await db.execute(
+                    select(EgressViolation.id)
+                    .where(
+                        EgressViolation.org_id == org_id,
+                        EgressViolation.created_at < cutoff,
+                    )
+                    .limit(chunk)
+                )
+            ).scalars().all()
+            if not ids:
+                break
+            await db.execute(delete(EgressViolation).where(EgressViolation.id.in_(ids)))
+            total += len(ids)
+            if len(ids) < chunk:
+                break
+    if total:
+        logger.info("pruned egress_violations", extra={"rows": total})
+    return total
 
 async def ingest_heartbeat(
     db: AsyncSession, sensor: EgressSensor, data: HeartbeatIn
