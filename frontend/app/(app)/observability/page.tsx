@@ -39,7 +39,7 @@ export default function ObservabilityPage() {
     Promise.all([
       queryInstant("sensors_offline"),
       queryInstant("max(sensor_last_heartbeat_age_seconds)"),
-      queryInstant('sum(rate(http_requests_total{status=~"5.."}[5m]))'),
+      queryInstant('sum(rate(http_requests_total{status=~"5.."}[5m])) or vector(0)'),
       queryInstant("sum(sensor_activity_rows)"),
       queryInstant("sum(sensor_violations_rows)"),
     ])

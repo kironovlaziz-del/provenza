@@ -118,6 +118,11 @@ async def http_metrics_middleware(request: Request, call_next):
     # (/sensors/{sensor_id}/violations), which keeps cardinality bounded.
     route = request.scope.get("route")
     path = getattr(route, "path", "__unmatched__")
+    # Static noise (favicons, robots) is not a route and will not be
+    # acted on; keeping it out of the counter avoids a rising cardinality
+    # series that no one queries.
+    if path == "__unmatched__" and request.url.path in ("/favicon.ico", "/robots.txt"):
+        return response
     status = str(response.status_code)
     http_requests_total.labels(method=method, path=path, status=status).inc()
     http_request_duration_seconds.labels(method=method, path=path).observe(
