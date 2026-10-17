@@ -495,7 +495,7 @@ async def ingest_violations(
             dropped += 1
             continue
         accepted.append(e)
-        db.add(EgressViolation(
+        kwargs = dict(
             org_id=sensor.org_id,
             sensor_id=sensor.id,
             workload_id=e.workload_id,
@@ -509,7 +509,10 @@ async def ingest_violations(
             cgroup=e.cgroup,
             isolated=e.isolated,
             count=e.count,
-        ))
+        )
+        if e.ts is not None:
+            kwargs["created_at"] = e.ts
+        db.add(EgressViolation(**kwargs))
 
     if dropped:
         logger.warning(
@@ -601,7 +604,7 @@ async def ingest_activities(db, sensor, events):
         if e.workload_id not in valid:
             dropped += 1
             continue
-        rows.append(SensorActivity(
+        kwargs = dict(
             org_id=sensor.org_id,
             sensor_id=sensor.id,
             workload_id=e.workload_id,
@@ -615,7 +618,10 @@ async def ingest_activities(db, sensor, events):
             cgroup=e.cgroup,
             isolated=e.isolated,
             count=e.count,
-        ))
+        )
+        if e.ts is not None:
+            kwargs["created_at"] = e.ts
+        rows.append(SensorActivity(**kwargs))
 
     if rows:
         db.add_all(rows)

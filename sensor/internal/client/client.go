@@ -244,6 +244,7 @@ type Violation struct {
 	Cgroup     *string `json:"cgroup,omitempty"`
 	Isolated   bool    `json:"isolated"`
 	Count      uint64  `json:"count"`
+	Ts         *time.Time `json:"ts,omitempty"`
 }
 
 func (c *Client) Violations(ctx context.Context, vs []Violation) error {
@@ -275,6 +276,7 @@ type Activity struct {
 	Cgroup     *string `json:"cgroup,omitempty"`
 	Isolated   bool    `json:"isolated"`
 	Count      uint64  `json:"count"`
+	Ts         *time.Time `json:"ts,omitempty"`
 }
 
 // Activities posts sampled allowed connections. Batches are bounded the same

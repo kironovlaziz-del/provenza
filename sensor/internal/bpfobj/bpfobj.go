@@ -141,6 +141,7 @@ type Event struct {
 	Cgid     uint64
 	Addr     [16]byte
 	Comm     [16]byte
+	TsNs     uint64
 }
 
 type MkdirEvent struct {

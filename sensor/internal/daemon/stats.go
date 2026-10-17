@@ -110,3 +110,17 @@ func (d *Daemon) statsLoop(ctx context.Context) {
 		}
 	}
 }
+
+// eventTime converts a kernel monotonic timestamp (bpf_ktime_get_ns) to
+// wall-clock time. Returns nil if tsNs is zero (event predates the field
+// or came from an older object) or if the offset could not be captured
+// at startup. A nil Ts travels to the backend as an omitted JSON field,
+// and the backend falls back to now() — the same behaviour as before this
+// change, so old sensors keep working.
+func (d *Daemon) eventTime(tsNs uint64) *time.Time {
+	if !d.ktimeOffsetValid || tsNs == 0 {
+		return nil
+	}
+	t := time.Unix(0, int64(tsNs)+int64(d.ktimeOffset)).UTC()
+	return &t
+}

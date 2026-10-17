@@ -163,6 +163,10 @@ struct event {
 	__u64 cgid;
 	__u8 addr[16];
 	char comm[16];
+	/* Kernel monotonic time at the moment of the decision. The daemon
+	 * converts this to a wall-clock time so the UI shows when it
+	 * happened, not when the batch was flushed. */
+	__u64 ts_ns;
 };
 
 struct mkdir_event {
@@ -489,6 +493,7 @@ static __always_inline void emit(struct cls *c, __u8 action, __u8 kind, __u8 pro
 	e->wid = c->wid;
 	e->count = count;
 	e->cgid = c->cgid;
+	e->ts_ns = bpf_ktime_get_ns();
 	__builtin_memcpy(e->addr, k.addr, 16);
 	if (task) {
 		e->pid = bpf_get_current_pid_tgid() >> 32;
@@ -529,6 +534,7 @@ static __always_inline void emit_allowed_sample(struct cls *c, __u8 kind, __u8 p
     e->wid = c->wid;
     e->count = 1;
     e->cgid = c->cgid;
+	e->ts_ns = bpf_ktime_get_ns();
     if (addr)
         __builtin_memcpy(e->addr, addr, 16);
     if (task) {

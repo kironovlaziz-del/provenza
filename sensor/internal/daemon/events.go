@@ -81,6 +81,7 @@ func (d *Daemon) handleViolation(raw []byte) {
 	if comm := strings.TrimRight(string(e.Comm[:]), "\x00"); comm != "" {
 		v.Comm = &comm
 	}
+	v.Ts = d.eventTime(e.TsNs)
 	d.viol.add(v)
 }
 
@@ -110,6 +111,7 @@ func (d *Daemon) handleAllowed(raw []byte) {
 	if comm := strings.TrimRight(string(e.Comm[:]), "\x00"); comm != "" {
 		a.Comm = &comm
 	}
+	a.Ts = d.eventTime(e.TsNs)
 	d.act.add(a)
 }
 

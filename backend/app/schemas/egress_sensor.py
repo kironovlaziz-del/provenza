@@ -410,6 +410,9 @@ class ViolationIn(BaseModel):
 
     isolated: bool = False
     count: int = Field(default=1, ge=1)
+    # Wall-clock timestamp from the sensor's kernel clock. Optional: an
+    # older sensor does not send it, and the handler falls back to now().
+    ts: Optional[datetime] = None
 
 
 class ViolationsBatch(BaseModel):
@@ -454,6 +457,7 @@ class ActivityIn(BaseModel):
 
     isolated: bool = False
     count: int = Field(default=1, ge=1)
+    ts: Optional[datetime] = None
 
 
 class ActivityBatch(BaseModel):

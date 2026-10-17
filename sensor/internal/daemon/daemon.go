@@ -20,6 +20,7 @@ import (
 	"github.com/kironovlaziz-del/provenza/sensor/internal/client"
 	"github.com/kironovlaziz-del/provenza/sensor/internal/config"
 	"github.com/kironovlaziz-del/provenza/sensor/internal/kern"
+	"golang.org/x/sys/unix"
 )
 
 // Daemon is the running sensor.
@@ -49,6 +50,15 @@ type Daemon struct {
 	stats  *statsRing
 	run    *runServer
 	status *statusServer
+
+	// ktimeOffset converts a kernel monotonic timestamp (what
+	// bpf_ktime_get_ns returns) to wall-clock. Computed once at startup
+	// from CLOCK_MONOTONIC and time.Now(); drift over a typical uptime
+	// is in the microsecond range. Valid=false means we could not read
+	// the clock, and every event timestamp falls back to nil (backend
+	// uses now()).
+	ktimeOffset      time.Duration
+	ktimeOffsetValid bool
 
 	// Loaded at start from the files enroll wrote. A nil signingKey or a
 	// zero sensorID only disables command handling; policy enforcement
@@ -125,6 +135,17 @@ func New(cfgPath, version string) (*Daemon, error) {
 		slog.Warn("no sensor id; commands will be refused", "err", err)
 	} else {
 		d.sensorID = id
+	}
+
+	// Capture the wall<->monotonic offset once. unix.ClockGettime is a
+	// cheap syscall; the only reason to catch its error is to keep the
+	// daemon running even when the clock source is unavailable.
+	var mono unix.Timespec
+	if err := unix.ClockGettime(unix.CLOCK_MONOTONIC, &mono); err != nil {
+		slog.Warn("clock_gettime monotonic", "err", err)
+	} else {
+		d.ktimeOffset = time.Duration(time.Now().UnixNano() - mono.Nano())
+		d.ktimeOffsetValid = true
 	}
 
 	return d, nil
