@@ -135,8 +135,8 @@ func TestHandleViolationDecodesAllFields(t *testing.T) {
 		Type:     bpfobj.EvViolation,
 		Action:   bpfobj.ActBlocked,
 		Kind:     bpfobj.KindConnect,
-		Proto:    6,  // tcp
-		Family:   2,  // AF_INET
+		Proto:    6, // tcp
+		Family:   2, // AF_INET
 		Isolated: 1,
 		Port:     443,
 		Wid:      7,
