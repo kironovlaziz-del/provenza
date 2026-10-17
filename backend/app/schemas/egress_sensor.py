@@ -486,3 +486,38 @@ class ActivityOut(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+# ---------------------------------------------------------------- events
+# Unified view over egress_violations and sensor_activity for SIEM/SOAR
+# integrations. The two tables have the same shape (id, sensor_id,
+# workload_id, action, kind, protocol, dst_*, comm, cgroup, isolated,
+# count, created_at); the only extra is event_type, which tells the
+# consumer which table the row came from. "kind" keeps its original
+# meaning (BPF decision kind: connect / send / dns / family).
+
+class EventOut(BaseModel):
+    event_type: Literal["violation", "activity"]
+    id: int
+    sensor_id: Optional[int] = None
+    workload_id: Optional[int] = None
+    action: str
+    kind: str
+    protocol: Optional[str] = None
+    dst_ip: Optional[str] = None
+    dst_port: Optional[int] = None
+    dst_name: Optional[str] = None
+    comm: Optional[str] = None
+    cgroup: Optional[str] = None
+    isolated: bool = False
+    count: int = 1
+    created_at: datetime
+
+
+class EventList(BaseModel):
+    events: list[EventOut]
+    # Cursor for the next page, opaque to the caller. Absent when the
+    # current page is the last one. Format is "<event_type>:<id>"; the
+    # caller passes it back verbatim as ?cursor=... and the server rebuilds
+    # the tuple comparison from it.
+    next_cursor: Optional[str] = None

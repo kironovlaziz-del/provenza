@@ -21,7 +21,7 @@ router, so an admin key cannot accidentally be used from a host.
 
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Header, Query, Request, Response, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, Response, status
 from fastapi.responses import JSONResponse
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -60,7 +60,8 @@ from app.schemas.egress_sensor import (
     WorkloadUpdate,
     ActivityBatch,
     ActivityOut,
-)
+    EventOut,
+    EventList,)
 from app.services import egress_sensor as svc
 from app.services import egress_sensor_commands as cmd_svc
 from app.services.audit_service import AuditService
@@ -292,6 +293,164 @@ async def list_sensor_activity(
     rows = (await db.execute(q)).scalars().all()
     return rows
 
+
+
+# ---------------------------------------------------------------- events
+# Unified stream for SIEM/SOAR integrations. Merges violations and
+# sampled activity into one paginated feed sorted by created_at DESC.
+# The existing per-table endpoints stay as-is for the UI; this is the
+# machine-facing view.
+
+import base64
+import json as _json
+from datetime import datetime, timezone
+
+
+def _encode_cursor(event_type: str, event_id: int, created_at: datetime) -> str:
+    # The cursor packs (event_type, id, created_at) because two rows can
+    # share created_at to the second and the ids are not comparable across
+    # tables. Opaque to the caller, base64-encoded so nothing in it can be
+    # re-ordered or dropped by a client that assumes integer ids.
+    payload = {
+        "t": event_type,
+        "i": event_id,
+        "c": created_at.astimezone(timezone.utc).isoformat(),
+    }
+    return base64.urlsafe_b64encode(
+        _json.dumps(payload, separators=(",", ":")).encode("utf-8")
+    ).decode("ascii")
+
+
+def _decode_cursor(cursor: str) -> tuple[str, int, datetime]:
+    try:
+        raw = base64.urlsafe_b64decode(cursor.encode("ascii"))
+        payload = _json.loads(raw)
+        return (
+            str(payload["t"]),
+            int(payload["i"]),
+            datetime.fromisoformat(payload["c"]),
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=400, detail=f"invalid cursor: {exc}"
+        ) from exc
+
+
+@admin_router.get(
+    "/events",
+    response_model=EventList,
+    summary="Unified violation + activity stream for SIEM/SOAR",
+)
+async def list_events(
+    sensor_id: Optional[int] = Query(default=None, description="Filter by sensor"),
+    event_type: str = Query(
+        default="all",
+        description="all | violation | activity",
+    ),
+    since: Optional[datetime] = Query(default=None, description="Inclusive start"),
+    until: Optional[datetime] = Query(default=None, description="Exclusive end"),
+    limit: int = Query(default=500, ge=1, le=2000),
+    cursor: Optional[str] = Query(default=None, description="Value of next_cursor from a previous page"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role(UserRole.admin)),
+):
+    """Return violations and activity as one chronological feed.
+
+    Sort order is created_at DESC, id DESC so the newest event is always
+    first. Pagination is cursor-based: pass next_cursor back as ?cursor=...
+    and the server continues from exactly that point, without the classic
+    "rows shift when new data arrives" problem of offset pagination.
+
+    Filters:
+      - sensor_id: only events from that sensor
+      - event_type: "all" (default), "violation", or "activity"
+      - since / until: half-open interval [since, until)
+    """
+    if event_type not in ("all", "violation", "activity"):
+        raise HTTPException(
+            status_code=422,
+            detail=f"event_type must be all|violation|activity, got {event_type!r}",
+        )
+
+    # Parse cursor once; it affects both selects the same way.
+    cursor_tuple: Optional[tuple[str, int, datetime]] = None
+    if cursor:
+        cursor_tuple = _decode_cursor(cursor)
+
+    async def fetch(table, et: str) -> list:
+        q = select(table).where(table.org_id == current_user.org_id)
+        if sensor_id is not None:
+            q = q.where(table.sensor_id == sensor_id)
+        if since is not None:
+            q = q.where(table.created_at >= since)
+        if until is not None:
+            q = q.where(table.created_at < until)
+        if cursor_tuple is not None:
+            # Continue strictly after the cursor.
+            cur_et, cur_id, cur_ts = cursor_tuple
+            # We include both tables on "all", so a row in the cursor's
+            # table is only included if (created_at, id) is strictly less
+            # than the cursor's; a row in the *other* table is included
+            # only if its created_at is <= cursor's created_at (it could
+            # be tied). This is the standard keyset pagination trick and
+            # keeps the merge order stable across pages.
+            from sqlalchemy import and_, or_, tuple_
+            if et == cur_et:
+                q = q.where(
+                    or_(
+                        table.created_at < cur_ts,
+                        and_(table.created_at == cur_ts, table.id < cur_id),
+                    )
+                )
+            else:
+                q = q.where(table.created_at <= cur_ts)
+        # Fetch limit+1 so we can detect "there is more".
+        q = q.order_by(table.created_at.desc(), table.id.desc()).limit(limit + 1)
+        rows = (await db.execute(q)).scalars().all()
+        return [(et, r) for r in rows]
+
+    batches: list[tuple[str, any]] = []
+    if event_type in ("all", "violation"):
+        batches.extend(await fetch(EgressViolation, "violation"))
+    if event_type in ("all", "activity"):
+        batches.extend(await fetch(SensorActivity, "activity"))
+
+    # Merge sort by (created_at DESC, id DESC).
+    batches.sort(
+        key=lambda pair: (pair[1].created_at, pair[1].id),
+        reverse=True,
+    )
+
+    has_more = len(batches) > limit
+    page = batches[:limit]
+
+    events = [
+        EventOut(
+            event_type=et,
+            id=r.id,
+            sensor_id=r.sensor_id,
+            workload_id=r.workload_id,
+            action=r.action,
+            kind=r.kind,
+            protocol=r.protocol,
+            dst_ip=r.dst_ip,
+            dst_port=r.dst_port,
+            dst_name=r.dst_name,
+            comm=r.comm,
+            cgroup=r.cgroup,
+            isolated=bool(r.isolated),
+            count=r.count,
+            created_at=r.created_at,
+        )
+        for et, r in page
+    ]
+
+    next_cursor = None
+    if has_more and page:
+        last_et, last_row = page[-1]
+        next_cursor = _encode_cursor(last_et, last_row.id, last_row.created_at)
+
+    return EventList(events=events, next_cursor=next_cursor)
 
 @admin_router.post(
     "/workloads",
