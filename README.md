@@ -111,7 +111,20 @@ guarantee is spelled out in the [security model](docs/security-model.md).
 
 ## 🧩 Features
 
-### 🛡️ Prompts and models — for everyone
+### 🎯 Governance — default
+
+- **Governed access to any LLM** — chat with OpenAI, Anthropic, Groq, Azure OpenAI
+  or a self-hosted model through the same rules; agents use an OpenAI-compatible
+  gateway. Every call is logged. "Self-hosted providers only" is one switch.
+- **Policies and approvals** — versioned policies built visually, a hierarchy
+  (organization → team → agent; lower levels only tighten), and approval workflows
+  ([policy hierarchy](docs/policies.md)).
+
+### 🛡️ Content safety — optional add-on
+
+Off by default. Set `CONTENT_SAFETY_ENABLED=true` to expose these pages. Useful
+for regulated industries (finance, healthcare) where the provider's own content
+filtering is not enough.
 
 - **Prompt Firewall** — secrets and personal data (cards, keys, e-mails, IDs, your
   own patterns such as ПИНФЛ or contract numbers) are masked before a prompt is
@@ -122,12 +135,9 @@ guarantee is spelled out in the [security model](docs/security-model.md).
 - **Intent guardrail** — a classifier model on your own connection (Llama Guard or
   any instruction model with your categories) flags or refuses what a prompt asks
   for, whatever the words ([docs](docs/intent-guardrail.md)).
-- **Governed access to any LLM** — chat with OpenAI, Anthropic, Groq, Azure OpenAI
-  or a self-hosted model through the same rules; agents use an OpenAI-compatible
-  gateway. Every call is logged. "Self-hosted providers only" is one switch.
-- **Policies and approvals** — versioned policies built visually, a hierarchy
-  (organization → team → agent; lower levels only tighten), and approval workflows
-  ([policy hierarchy](docs/policies.md)).
+- **Injection, memory and code-exec guards** — detect prompt injection, control
+  code execution, and check memory / message content ([injection](docs/injection-guard.md),
+  [memory](docs/memory-guard.md), [code exec](docs/code-exec-guard.md)).
 
 ### 👁️ Shadow AI — unsanctioned AI
 
@@ -148,8 +158,9 @@ guarantee is spelled out in the [security model](docs/security-model.md).
   outbound call ([egress lockdown](docs/egress-lockdown.md)), and an eBPF sensor
   daemon that contains each governed workload's network in the kernel: allowed
   destinations only, DNS filtered, blocks reported ([sensor](sensor/README.md)).
-- **Protection** — prompt-injection detection, code-execution control, memory and
-  message checks, behavior baselines and circuit breakers.
+- **Behavior and circuit breakers** — baselines and self-protection
+  (the prompt-injection, memory and code-exec guards are part of the optional
+  content-safety add-on above).
 - **Kill switch** in levels: agent → team → all agents → all AI traffic, with
   exact undo ([docs](docs/kill-switch.md)).
 - **SDKs** for [Python](sdk/python/README.md), [JavaScript](sdk/js/README.md) and
