@@ -125,10 +125,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Each script with the shell it is written for: its shebang, and bash
+      # for deploy/scripts/lib.sh, which is sourced, not run.
       - name: Syntax
         run: |
-          bash -n install.sh upgrade.sh
-          for f in deploy/scripts/*.sh deploy/backend-entrypoint.sh; do sh -n "$f"; done
+          for f in install.sh upgrade.sh deploy/scripts/*.sh deploy/backend-entrypoint.sh; do
+            case "$(head -n1 "$f")" in
+              '#!/bin/sh'*) sh -n "$f" ;;
+              *) bash -n "$f" ;;
+            esac && echo "ok  $f"
+          done
 
       - name: Shellcheck (errors)
         run: shellcheck --severity=error install.sh upgrade.sh deploy/scripts/*.sh deploy/backend-entrypoint.sh
