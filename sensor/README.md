@@ -53,30 +53,21 @@ binary with `//go:embed`, so the deployed binary is self-contained.
 
 ## Install
 
-```bash
-git clone https://github.com/kironovlaziz-del/provenza.git
-cd provenza/sensor
-sudo ./install.sh --url https://provenza.example.com
-```
-
-`install.sh` checks the host (kernel 5.10+, cgroup v2, clang >= 14, go), builds the eBPF object and the daemon, installs the binary, the systemd unit and the config directory, and starts the service.
-
-Without `--key` the sensor starts but is not enrolled. Enroll later with the key from the UI (Runtime -> Register sensor):
-
-```bash
-sudo provenza-sensor enroll --url https://provenza.example.com --key pvz_sensor_...
-sudo systemctl restart provenzasensor
-```
-
-Or pass `--key pvz_sensor_...` to `install.sh` to enroll in one step.
+    sudo install -m 0755 provenza-sensor /usr/local/bin/
+    sudo mkdir -p /etc/provenza-sensor
+    sudo cp packaging/provenzasensor.service /etc/systemd/system/
+    # write /etc/provenza-sensor/sensor.json and /etc/provenza-sensor/key
+    sudo systemctl daemon-reload
+    sudo systemctl enable --now provenzasensor
 
 To remove the sensor's kernel state and cache:
 
-```bash
-sudo provenza-sensor --uninstall
-```
+    sudo provenza-sensor --uninstall
 
-This detaches every pinned link and removes the cached policy. It does not remove the binary or the systemd unit.
+This detaches every pinned link and removes the cached policy. It does
+not remove the binary or the systemd unit — that is the package
+manager's job.
+
 ## Configuration
 
 `/etc/provenza-sensor/sensor.json`:
