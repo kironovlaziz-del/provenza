@@ -161,7 +161,7 @@ func actionName(a uint8) string {
 		case bpfobj.ActAllowed:
 		        return "allowed"
 	}
-	return "observed"
+	return "unknown"
 }
 
 func kindName(k uint8) string {
