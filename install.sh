@@ -237,8 +237,29 @@ SENSOR_INSTALLED=0
 if [ "$SENSOR_MODE" = yes ] || { [ "$SENSOR_MODE" = ask ] && [ "$ASSUME_YES" = 0 ] && confirm "Install the egress sensor on this host as well?" n; }; then
   step "Installing the egress sensor on this host"
   if [ -x "$INSTALL_DIR/sensor/install.sh" ]; then
-    "$INSTALL_DIR/sensor/install.sh" --url "$url" --yes || warn "sensor install returned non-zero - see the output above"
-    SENSOR_INSTALLED=1
+    SENSOR_BIN="$INSTALL_DIR/sensor/provenza-sensor"
+    if [ ! -x "$SENSOR_BIN" ]; then
+      # The BPF object is embedded in the repo; clang is only needed to
+      # rebuild it. Installing go + make lets us build the daemon here.
+      if ! command -v go >/dev/null 2>&1 || ! command -v make >/dev/null 2>&1; then
+        step "Installing sensor build tools (go, make)"
+        sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
+          golang-go make >/dev/null 2>&1 || warn "could not install go/make"
+      fi
+      if command -v go >/dev/null 2>&1 && command -v make >/dev/null 2>&1; then
+        step "Building the sensor binary"
+        ( cd "$INSTALL_DIR/sensor" && make build >/dev/null 2>&1 ) || warn "sensor build failed"
+      fi
+    fi
+    if [ -x "$SENSOR_BIN" ]; then
+      if sudo "$INSTALL_DIR/sensor/install.sh" --binary "$SENSOR_BIN" --url "$url" --yes; then
+        SENSOR_INSTALLED=1
+      else
+        warn "sensor install returned non-zero - see the output above"
+      fi
+    else
+      warn "sensor binary not found and cannot be built (install go + make, then: sudo $INSTALL_DIR/sensor/install.sh --url $url)"
+    fi
   else
     warn "sensor/install.sh not found in $INSTALL_DIR - skipping"
   fi
