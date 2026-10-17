@@ -39,8 +39,16 @@
 		reverse_proxy frontend:3000
 	}
 
+	# Keys travel in request headers; never write them to the access log.
 	log {
 		output stdout
-		format json
+		format filter {
+			wrap json
+			request>headers>X-Agent-Key delete
+			request>headers>X-Ingestion-Key delete
+			request>headers>X-Proxy-Key delete
+			request>headers>X-Sensor-Key delete
+			request>headers>X-Vault-Token delete
+		}
 	}
 }
