@@ -134,19 +134,19 @@ func (c *Client) post(ctx context.Context, path string, body any) error {
 
 // Heartbeat is what the sensor reports about itself.
 type Heartbeat struct {
-	Hostname      string           `json:"hostname"`
-	Version       string           `json:"version"`
-	Kernel        string           `json:"kernel"`
-	ConfigVersion *string          `json:"config_version,omitempty"`
-	Enforcing     bool             `json:"enforcing"`
-	Hooks         []string         `json:"hooks,omitempty"`
-	Workloads     []WorkloadReport `json:"workloads,omitempty"`
-	Warnings      []string         `json:"warnings,omitempty"`
-	Errors        []string         `json:"errors,omitempty"`
-	DroppedEvents uint64           `json:"dropped_events"`
-	AllowedTotal  uint64           `json:"allowed_total,omitempty"`
-	DeniedTotal   uint64           `json:"denied_total,omitempty"`
-	ObservedTotal uint64           `json:"observed_total,omitempty"`
+	Hostname       string           `json:"hostname"`
+	Version        string           `json:"version"`
+	Kernel         string           `json:"kernel"`
+	ConfigVersion  *string          `json:"config_version,omitempty"`
+	Enforcing      bool             `json:"enforcing"`
+	Hooks          []string         `json:"hooks,omitempty"`
+	Workloads      []WorkloadReport `json:"workloads,omitempty"`
+	Warnings       []string         `json:"warnings,omitempty"`
+	Errors         []string         `json:"errors,omitempty"`
+	DroppedEvents  uint64           `json:"dropped_events"`
+	AllowedTotal   uint64           `json:"allowed_total,omitempty"`
+	DeniedTotal    uint64           `json:"denied_total,omitempty"`
+	ObservedTotal  uint64           `json:"observed_total,omitempty"`
 	AllowedPerMin  uint64           `json:"allowed_per_min"`
 	DeniedPerMin   uint64           `json:"denied_per_min"`
 	ObservedPerMin uint64           `json:"observed_per_min"`
@@ -233,17 +233,17 @@ func (c *Client) SigningKey(ctx context.Context) (*SigningKeyResponse, error) {
 
 // Violation as the API takes it.
 type Violation struct {
-	WorkloadID uint32  `json:"workload_id"`
-	Action     string  `json:"action"`
-	Kind       string  `json:"kind"`
-	Protocol   string  `json:"protocol"`
-	DstIP      *string `json:"dst_ip,omitempty"`
-	DstPort    *int    `json:"dst_port,omitempty"`
-	DstName    *string `json:"dst_name,omitempty"`
-	Comm       *string `json:"comm,omitempty"`
-	Cgroup     *string `json:"cgroup,omitempty"`
-	Isolated   bool    `json:"isolated"`
-	Count      uint64  `json:"count"`
+	WorkloadID uint32     `json:"workload_id"`
+	Action     string     `json:"action"`
+	Kind       string     `json:"kind"`
+	Protocol   string     `json:"protocol"`
+	DstIP      *string    `json:"dst_ip,omitempty"`
+	DstPort    *int       `json:"dst_port,omitempty"`
+	DstName    *string    `json:"dst_name,omitempty"`
+	Comm       *string    `json:"comm,omitempty"`
+	Cgroup     *string    `json:"cgroup,omitempty"`
+	Isolated   bool       `json:"isolated"`
+	Count      uint64     `json:"count"`
 	Ts         *time.Time `json:"ts,omitempty"`
 }
 
@@ -265,17 +265,17 @@ func (c *Client) Violations(ctx context.Context, vs []Violation) error {
 // for sampled allowed connections. Kept as a distinct Go type so the two
 // streams cannot be mixed up at compile time.
 type Activity struct {
-	WorkloadID uint32  `json:"workload_id"`
-	Action     string  `json:"action"`
-	Kind       string  `json:"kind"`
-	Protocol   string  `json:"protocol"`
-	DstIP      *string `json:"dst_ip,omitempty"`
-	DstPort    *int    `json:"dst_port,omitempty"`
-	DstName    *string `json:"dst_name,omitempty"`
-	Comm       *string `json:"comm,omitempty"`
-	Cgroup     *string `json:"cgroup,omitempty"`
-	Isolated   bool    `json:"isolated"`
-	Count      uint64  `json:"count"`
+	WorkloadID uint32     `json:"workload_id"`
+	Action     string     `json:"action"`
+	Kind       string     `json:"kind"`
+	Protocol   string     `json:"protocol"`
+	DstIP      *string    `json:"dst_ip,omitempty"`
+	DstPort    *int       `json:"dst_port,omitempty"`
+	DstName    *string    `json:"dst_name,omitempty"`
+	Comm       *string    `json:"comm,omitempty"`
+	Cgroup     *string    `json:"cgroup,omitempty"`
+	Isolated   bool       `json:"isolated"`
+	Count      uint64     `json:"count"`
 	Ts         *time.Time `json:"ts,omitempty"`
 }
 

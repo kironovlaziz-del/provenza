@@ -158,8 +158,8 @@ func actionName(a uint8) string {
 		return "alerted"
 	case bpfobj.ActBlocked:
 		return "blocked"
-		case bpfobj.ActAllowed:
-		        return "allowed"
+	case bpfobj.ActAllowed:
+		return "allowed"
 	}
 	return "unknown"
 }
@@ -309,4 +309,3 @@ func (b *activityBuffer) flush(ctx context.Context) {
 		b.mu.Unlock()
 	}
 }
-

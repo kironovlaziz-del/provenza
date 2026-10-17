@@ -101,10 +101,10 @@ type DNSSection struct {
 }
 
 type StatsSection struct {
-	DroppedEvents uint64 `json:"dropped_events"`
-	Allowed       uint64 `json:"allowed"`
-	Denied        uint64 `json:"denied"`
-	Observed      uint64 `json:"observed"`
+	DroppedEvents  uint64 `json:"dropped_events"`
+	Allowed        uint64 `json:"allowed"`
+	Denied         uint64 `json:"denied"`
+	Observed       uint64 `json:"observed"`
 	AllowedPerMin  uint64 `json:"allowed_per_min"`
 	DeniedPerMin   uint64 `json:"denied_per_min"`
 	ObservedPerMin uint64 `json:"observed_per_min"`
@@ -182,7 +182,7 @@ func (d *Daemon) snapshot() Status {
 		},
 		Warnings: append([]string(nil), d.kernel.Notes...),
 		DNS:      d.dns.stats(cgByWid),
-		Stats: d.statsAndRates(),
+		Stats:    d.statsAndRates(),
 	}
 
 	cgroups := CgroupsSection{RunGroups: runGroups}
