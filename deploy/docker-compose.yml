@@ -173,10 +173,77 @@ services:
       frontend: { condition: service_healthy }
     networks: [web]
 
+  prometheus:
+    <<: *hardening
+    image: prom/prometheus:latest
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=30d'
+      - '--web.listen-address=0.0.0.0:9090'
+      - '--web.enable-lifecycle'
+    volumes:
+      - ./observability/prod/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./observability/prometheus/rules:/etc/prometheus/rules:ro
+      - prom-data:/prometheus
+    ports:
+      - "127.0.0.1:9090:9090"
+    networks: [data, observability]
+    depends_on:
+      backend: { condition: service_healthy }
+    deploy:
+      resources:
+        limits: { memory: "512m" }
+
+  grafana:
+    <<: *hardening
+    image: grafana/grafana-oss:latest
+    environment:
+      GF_SERVER_HTTP_ADDR: 0.0.0.0
+      GF_SERVER_HTTP_PORT: 3000
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:?set GRAFANA_PASSWORD in deploy/.env}
+      GF_USERS_ALLOW_SIGN_UP: 'false'
+      GF_ANALYTICS_REPORTING_ENABLED: 'false'
+      GF_ANALYTICS_CHECK_FOR_UPDATES: 'false'
+    volumes:
+      - ./observability/prod/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./observability/grafana/dashboards:/etc/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    ports:
+      - "127.0.0.1:3001:3000"
+    networks: [observability]
+    depends_on:
+      prometheus: { condition: service_started }
+    deploy:
+      resources:
+        limits: { memory: "256m" }
+
+  alertmanager:
+    <<: *hardening
+    image: prom/alertmanager:latest
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
+      - '--storage.path=/alertmanager'
+      - '--web.listen-address=0.0.0.0:9093'
+    volumes:
+      - ./observability/prod/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - ./observability/prod/alertmanager-secret:/etc/alertmanager/secret:ro
+      - alertmanager-data:/alertmanager
+    ports:
+      - "127.0.0.1:9093:9093"
+    networks: [data, observability]
+    depends_on:
+      backend: { condition: service_healthy }
+    deploy:
+      resources:
+        limits: { memory: "128m" }
+
 networks:
   web: {}
   data:
     internal: true
+  observability: {}
 
 volumes:
   pg-data: {}
@@ -185,3 +252,6 @@ volumes:
   beat-state: {}
   caddy-data: {}
   caddy-config: {}
+  prom-data: {}
+  grafana-data: {}
+  alertmanager-data: {}
