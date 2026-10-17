@@ -52,7 +52,21 @@ services:
       - '--web.enable-lifecycle'
     volumes:
       - ./deploy/observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./deploy/observability/prometheus/rules:/etc/prometheus/rules:ro
       - prometheus_data:/prometheus
+
+  alertmanager:
+    image: prom/alertmanager:latest
+    restart: unless-stopped
+    network_mode: host
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
+      - '--storage.path=/alertmanager'
+      - '--web.listen-address=127.0.0.1:9093'
+    volumes:
+      - ./deploy/observability/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - ./deploy/observability/alertmanager-secret:/etc/alertmanager/secret:ro
+      - alertmanager_data:/alertmanager
 
   grafana:
     image: grafana/grafana-oss:latest
@@ -80,3 +94,4 @@ volumes:
   redis_data:
   prometheus_data:
   grafana_data:
+  alertmanager_data:

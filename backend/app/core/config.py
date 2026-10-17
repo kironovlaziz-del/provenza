@@ -177,6 +177,12 @@ class Settings(BaseSettings):
     SMTP_FROM: str = "ai-control-tower@localhost"
     SMTP_USE_TLS: bool = True
 
+    # Bearer secret Alertmanager presents on /api/v1/observability/alerts.
+    # Empty means the endpoint is disabled (503) - safer than an open
+    # webhook, and the self-hosted default is "the operator sets this in
+    # .env on first install".
+    ALERTMANAGER_SECRET: str = ""
+
     class Config:
         env_file = ".env"
         # Reject unknown variables in .env so a typo like "POSTGRESS_PASSWORD"

@@ -1,0 +1,28 @@
+# Alertmanager receives firing/resolved from Prometheus and posts them to
+# the AI Control Tower backend, which fans them out to each organization's
+# notification channels (email / webhook). The shared Bearer secret is
+# read from /etc/alertmanager/secret and MUST match ALERTMANAGER_SECRET
+# in backend/.env.
+
+global:
+  resolve_timeout: 5m
+
+route:
+  # Group per alertname+org_id: an operator with two sensors seeing the
+  # same "AuditCheckpointsStale" alert gets one grouped notification, and
+  # notifications for the same alert+org repeat at most every 4 hours.
+  receiver: 'ai-ct-backend'
+  group_by: ['alertname', 'org_id']
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+
+receivers:
+  - name: 'ai-ct-backend'
+    webhook_configs:
+      - url: 'http://127.0.0.1:8000/api/v1/metrics/alerts'
+        send_resolved: true
+        http_config:
+          authorization:
+            type: Bearer
+            credentials_file: /etc/alertmanager/secret
