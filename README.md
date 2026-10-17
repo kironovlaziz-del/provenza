@@ -191,3 +191,17 @@ Copyright 2026 Laziz Kironov.
 
 - [![Awesome AI Governance](https://img.shields.io/badge/Awesome-AI%20Governance-blue?logo=github)](https://github.com/agentrust-io/awesome-ai-governance)
 - [![Awesome AI Agent Governance](https://img.shields.io/badge/Awesome-AI%20Agent%20Governance-blue?logo=github)](https://github.com/systempromptio/awesome-ai-agent-governance)
+
+### Govern egress on any Linux host
+
+The sensor is a separate, per-host install. It loads the eBPF programs that watch outbound connections, then reports to this control plane.
+
+    git clone https://github.com/kironovlaziz-del/provenza.git
+    cd provenza/sensor
+    sudo ./install.sh --url https://your-provenza-domain
+
+Then in the UI: Runtime -> Register sensor, copy the pvz_sensor_... key, and on the host run:
+
+    sudo provenza-sensor enroll --url https://your-provenza-domain --key pvz_sensor_...
+    sudo systemctl restart provenzasensor
+
