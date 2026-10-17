@@ -43,6 +43,13 @@ class Settings(BaseSettings):
     # deployment.
     ENVIRONMENT: str = "development"
 
+    # Optional content-safety add-ons: prompt firewall, PII masking,
+    # blocked terms, intent guardrail, injection / memory / code-exec
+    # guards. Off by default so the product reads as AI governance, not
+    # content moderation. Set CONTENT_SAFETY_ENABLED=true to expose
+    # these pages in the UI.
+    CONTENT_SAFETY_ENABLED: bool = False
+
     # When true, SQLAlchemy logs every SQL statement. Off by default;
     # enable for local debugging only.
     DEBUG: bool = False

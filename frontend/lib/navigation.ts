@@ -12,6 +12,8 @@ export interface NavPage {
   labelKey: string;
   adminOnly?: boolean;
   reviewOnly?: boolean;
+  /** Optional feature flag; when the flag is off the page is hidden. */
+  feature?: "content_safety";
 }
 
 export interface NavSection {
@@ -83,16 +85,16 @@ export const NAV: NavGroup[] = [
         P("/policies", "policies"),
         P("/policy-hierarchy", "policy_hierarchy", { reviewOnly: true }),
         P("/agent-policies", "agent_policies", { adminOnly: true }),
-        P("/pii-rules", "pii_rules", { reviewOnly: true }),
-        P("/blocked-terms", "blocked_terms", { reviewOnly: true }),
-        P("/intent-guardrail", "intent_guardrail", { adminOnly: true }),
+        P("/pii-rules", "pii_rules", { reviewOnly: true, feature: "content_safety" }),
+        P("/blocked-terms", "blocked_terms", { reviewOnly: true, feature: "content_safety" }),
+        P("/intent-guardrail", "intent_guardrail", { adminOnly: true, feature: "content_safety" }),
         P("/compliance", "compliance"),
       ] },
       { key: "protection", labelKey: "sidebar.sec.protection", icon: "security", pages: [
-        P("/agent-injection", "agent_injection", { adminOnly: true }),
-        P("/agent-code-exec", "agent_code_exec", { adminOnly: true }),
-        P("/agent-memory", "agent_memory", { adminOnly: true }),
-        P("/agent-messages", "agent_messages", { adminOnly: true }),
+        P("/agent-injection", "agent_injection", { adminOnly: true, feature: "content_safety" }),
+        P("/agent-code-exec", "agent_code_exec", { adminOnly: true, feature: "content_safety" }),
+        P("/agent-memory", "agent_memory", { adminOnly: true, feature: "content_safety" }),
+        P("/agent-messages", "agent_messages", { adminOnly: true, feature: "content_safety" }),
         P("/agent-behavior", "agent_behavior", { adminOnly: true }),
         P("/agent-breaker", "agent_breaker", { adminOnly: true }),
       ] },
@@ -130,7 +132,12 @@ export const NAV: NavGroup[] = [
   },
 ];
 
-export function canSee(page: NavPage, role: Role): boolean {
+export function canSee(
+  page: NavPage,
+  role: Role,
+  features: { content_safety: boolean } = { content_safety: true },
+): boolean {
+  if (page.feature && !features[page.feature]) return false;
   if (page.adminOnly) return role === "admin";
   if (page.reviewOnly) return role === "admin" || role === "approver";
   return true;
@@ -141,17 +148,24 @@ export function pageMatches(href: string, pathname: string | null | undefined): 
 }
 
 /** The groups and sections this role sees, each section with its visible pages only. */
-export function visibleNav(role: Role): NavGroup[] {
+export function visibleNav(
+  role: Role,
+  features: { content_safety: boolean } = { content_safety: true },
+): NavGroup[] {
   return NAV.map((g) => ({
     ...g,
     sections: g.sections
-      .map((s) => ({ ...s, pages: s.pages.filter((p) => canSee(p, role)) }))
+      .map((s) => ({ ...s, pages: s.pages.filter((p) => canSee(p, role, features)) }))
       .filter((s) => s.pages.length > 0),
   })).filter((g) => g.sections.length > 0);
 }
 
-export function sectionOf(pathname: string | null | undefined, role: Role): NavSection | undefined {
-  for (const g of visibleNav(role)) {
+export function sectionOf(
+  pathname: string | null | undefined,
+  role: Role,
+  features: { content_safety: boolean } = { content_safety: true },
+): NavSection | undefined {
+  for (const g of visibleNav(role, features)) {
     for (const s of g.sections) {
       if (s.pages.some((p) => pageMatches(p.href, pathname))) return s;
     }

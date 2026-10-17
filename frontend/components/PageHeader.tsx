@@ -6,6 +6,7 @@ import React from "react";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "@/lib/auth";
 import { pageMatches, sectionOf } from "@/lib/navigation";
+import { useFeatures } from "@/lib/features";
 
 /** The page title, its actions, and - when the page's section has several
  *  pages the user may open - those pages as tabs (lib/navigation.ts). */
@@ -19,7 +20,8 @@ export function PageHeader({
   const { t } = useTranslation();
   const pathname = usePathname();
   const { user } = useAuth();
-  const section = sectionOf(pathname, user?.role);
+  const { features } = useFeatures();
+  const section = sectionOf(pathname, user?.role, features);
   return (
     <>
       <div className="topbar">

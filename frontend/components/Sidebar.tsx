@@ -7,7 +7,8 @@ import { useTranslation } from "react-i18next";
 import { useAuth } from "@/lib/auth";
 import { LanguageSwitcher } from "./LanguageSwitcher";
 import { Logo } from "@/components/Logo";
-import { pageMatches, sectionOf, visibleNav } from "@/lib/navigation";
+import { pageMatches, sectionOf } from "@/lib/navigation";
+import { useVisibleNav } from "@/lib/useNav";
 
 // Stroke icons (24x24, feather-style paths), one per section.
 const ICONS: Record<string, string> = {
@@ -73,7 +74,7 @@ export function Sidebar() {
   const [theme, setTheme] = useState<"dark" | "light">("dark");
   const [query, setQuery] = useState("");
 
-  const groups = useMemo(() => visibleNav(user?.role), [user?.role]);
+  const groups = useVisibleNav(user?.role);
   const active = sectionOf(pathname, user?.role)?.key;
 
   useEffect(() => {

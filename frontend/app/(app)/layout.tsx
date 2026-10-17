@@ -7,6 +7,7 @@ import { useAuth } from "@/lib/auth";
 import { DialogHost } from "@/components/Dialog";
 import { Sidebar } from "@/components/Sidebar";
 import { SystemHealthBanner } from "@/components/SystemHealthBanner";
+import { FeaturesProvider } from "@/lib/features";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -32,10 +33,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="shell">
-      <Sidebar />
-      <div className="main"><SystemHealthBanner />{children}</div>
-      <DialogHost />
-    </div>
+    <FeaturesProvider>
+      <div className="shell">
+        <Sidebar />
+        <div className="main"><SystemHealthBanner />{children}</div>
+        <DialogHost />
+      </div>
+    </FeaturesProvider>
   );
 }

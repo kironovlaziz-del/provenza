@@ -116,8 +116,17 @@ export async function login(orgSlug: string, email: string, password: string) {
 }
 
 /** Public: what the sign-in screens may offer (self-service sign-up is off by default). */
-export async function getAuthConfig(): Promise<{ signup_enabled: boolean }> {
-  const { data } = await api.get<{ signup_enabled: boolean }>("/auth/config");
+export interface AppFeatures {
+  content_safety: boolean;
+}
+
+export interface AppConfig {
+  signup_enabled: boolean;
+  features: AppFeatures;
+}
+
+export async function getAuthConfig(): Promise<AppConfig> {
+  const { data } = await api.get<AppConfig>("/auth/config");
   return data;
 }
 
