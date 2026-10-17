@@ -1,0 +1,3 @@
+# Provenza: the "pg-data" volume. The name matches the former Docker volume.
+[Volume]
+VolumeName=provenza_pg-data

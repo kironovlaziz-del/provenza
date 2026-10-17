@@ -1,6 +1,6 @@
-# Prometheus for the all-in-one prod install (deploy/docker-compose.yml).
-# Everything is in docker, so the scrape target is the compose service
-# name (backend:8000), not 127.0.0.1.
+# Prometheus for the all-in-one prod install (Podman Quadlet, deploy/quadlet/).
+# Everything runs in containers, so the scrape target is the container name
+# (backend:8000), not 127.0.0.1.
 #
 # The hybrid install (backend / worker / beat as systemd services) uses
 # deploy/observability/prometheus.yml with 127.0.0.1:8000 instead.

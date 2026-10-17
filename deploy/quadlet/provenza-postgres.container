@@ -1,0 +1,27 @@
+# Provenza: PostgreSQL 16. Rendered by deploy/scripts/units.sh - edit the
+# template in deploy/quadlet/, not the copy in /etc/containers/systemd.
+[Unit]
+Description=Provenza PostgreSQL
+PartOf=provenza.target
+
+[Container]
+ContainerName=postgres
+Image=docker.io/library/postgres:16-alpine
+Network=provenza-data.network
+Volume=provenza-pg-data.volume:/var/lib/postgresql/data
+# POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB only - not the whole .env
+EnvironmentFile=@DEPLOY@/.runtime/postgres.env
+NoNewPrivileges=true
+PodmanArgs=--shm-size=256m --memory=@POSTGRES_MEMORY@
+HealthCmd=pg_isready -U @PG_USER@ -d @PG_DB@
+HealthInterval=10s
+HealthTimeout=5s
+HealthRetries=10
+LogDriver=journald
+
+[Service]
+Restart=always
+TimeoutStartSec=300
+
+[Install]
+WantedBy=provenza.target

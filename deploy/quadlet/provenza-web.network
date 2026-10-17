@@ -1,0 +1,3 @@
+# Provenza: the "web" container network (rendered into /etc/containers/systemd by deploy/scripts/units.sh).
+[Network]
+NetworkName=provenza_web

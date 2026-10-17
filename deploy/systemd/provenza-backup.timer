@@ -1,0 +1,10 @@
+# Provenza: daily backup at 03:15; a missed run (server off) runs at boot.
+[Unit]
+Description=Daily Provenza backup
+
+[Timer]
+OnCalendar=*-*-* 03:15:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

@@ -46,6 +46,9 @@ frontend/*_patch.py
 frontend/**/*.bak
 *.bak
 
+# Secrets for PostgreSQL, Redis and Grafana, written from deploy/.env
+deploy/.runtime/
+
 # Celery beat scheduler state (runtime, per-server)
 backend/celerybeat-schedule
 backend/celerybeat-schedule.db

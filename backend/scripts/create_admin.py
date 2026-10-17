@@ -5,7 +5,7 @@
 """
 Create the first organization and its administrator on a fresh install.
 
-    docker compose run --rm -it backend create-admin \
+    sudo deploy/scripts/run.sh create-admin \
         --org "Provenza" --email admin@provenza.example.com --name "Jane Admin"
 
 The password is read from PROVENZA_ADMIN_PASSWORD when set, otherwise asked
@@ -32,7 +32,7 @@ def _password() -> str:
     pw = os.environ.get("PROVENZA_ADMIN_PASSWORD")
     if pw is None:
         if not sys.stdin.isatty():
-            sys.exit("No terminal: set PROVENZA_ADMIN_PASSWORD or run with `docker compose run --rm -it`.")
+            sys.exit("No terminal: set PROVENZA_ADMIN_PASSWORD or run it from a terminal (deploy/scripts/run.sh).")
         pw = getpass.getpass("Admin password: ")
         if getpass.getpass("Repeat password: ") != pw:
             sys.exit("Passwords do not match.")

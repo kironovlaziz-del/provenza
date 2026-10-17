@@ -1,0 +1,9 @@
+# Provenza: every service of the stack. Installed by deploy/scripts/units.sh.
+#   systemctl start|stop|restart provenza.target
+[Unit]
+Description=Provenza control plane
+Wants=network-online.target
+After=network-online.target
+
+[Install]
+WantedBy=multi-user.target

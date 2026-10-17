@@ -1,0 +1,28 @@
+# Provenza: Redis 7 (Celery broker). Rendered by deploy/scripts/units.sh.
+[Unit]
+Description=Provenza Redis
+PartOf=provenza.target
+
+[Container]
+ContainerName=redis
+Image=docker.io/library/redis:7-alpine
+Network=provenza-data.network
+Volume=provenza-redis-data.volume:/data
+# REDIS_PASSWORD and REDISCLI_AUTH (the same value, for the health check)
+EnvironmentFile=@DEPLOY@/.runtime/redis.env
+NoNewPrivileges=true
+# AOF keeps queued Celery tasks across restarts; noeviction keeps Redis from
+# silently dropping tasks under memory pressure.
+Exec=sh -c 'exec redis-server --requirepass "$$REDIS_PASSWORD" --appendonly yes --maxmemory @REDIS_MAXMEMORY@ --maxmemory-policy noeviction'
+HealthCmd=redis-cli --no-auth-warning ping | grep -q PONG
+HealthInterval=10s
+HealthTimeout=5s
+HealthRetries=10
+LogDriver=journald
+
+[Service]
+Restart=always
+TimeoutStartSec=300
+
+[Install]
+WantedBy=provenza.target

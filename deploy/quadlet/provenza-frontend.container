@@ -1,0 +1,29 @@
+# Provenza: the web UI (Next.js). Rendered by deploy/scripts/units.sh.
+[Unit]
+Description=Provenza web UI (Next.js)
+PartOf=provenza.target
+
+[Container]
+ContainerName=frontend
+Image=@WEB_IMAGE@
+Network=provenza-web.network
+ReadOnly=true
+Tmpfs=/tmp:size=64m
+# Podman takes no uid=/gid= for a tmpfs; 1777 lets the node user (1000) write
+Tmpfs=/app/.next/cache:size=256m,mode=1777
+DropCapability=ALL
+NoNewPrivileges=true
+PodmanArgs=--memory=@FRONTEND_MEMORY@
+HealthCmd=node -e "fetch('http://127.0.0.1:3000/login').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+HealthInterval=15s
+HealthTimeout=5s
+HealthRetries=5
+HealthStartPeriod=30s
+LogDriver=journald
+
+[Service]
+Restart=always
+TimeoutStartSec=300
+
+[Install]
+WantedBy=provenza.target

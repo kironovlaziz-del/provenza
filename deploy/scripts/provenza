@@ -1,0 +1,163 @@
+#!/usr/bin/env bash
+# provenza - day-to-day control of a Provenza installation (rootful Podman,
+# systemd). Installed as /usr/local/bin/provenza by `deploy/scripts/units.sh install`.
+#
+#   provenza start                 start every service (provenza.target)
+#   provenza stop                  stop every service
+#   provenza restart [service]     restart everything, or one service
+#   provenza status                services, containers, health checks, next backup
+#   provenza logs [service] [-f] [-n N]
+#                                  the journal of one service (backend, caddy, ...)
+#                                  or of all of them; -f follows, -n lines (default 100)
+#   provenza upgrade [--yes] [--version vX]
+#                                  new code: rebuild and restart with backup and
+#                                  rollback (upgrade.sh); no new code: pull fresh
+#                                  third-party images and restart what changed
+#   provenza backup                database and files backup now
+#   provenza run <command...>      one-off backend command (create-admin, alembic, ...)
+#   provenza units                 re-render the units after editing deploy/.env
+#
+# Services: postgres redis migrate backend worker beat frontend caddy
+#           prometheus grafana alertmanager
+
+set -euo pipefail
+
+SELF=$(readlink -f "${BASH_SOURCE[0]}")
+if [ "$(id -u)" != 0 ]; then
+  command -v sudo >/dev/null || { echo "provenza: run as root" >&2; exit 1; }
+  exec sudo "$SELF" "$@"
+fi
+# shellcheck source=deploy/scripts/lib.sh
+. "$(dirname "$SELF")/lib.sh"
+
+SERVICES=(postgres redis migrate backend worker beat frontend caddy prometheus grafana alertmanager)
+
+usage() { sed -n '2,23p' "$SELF" | sed 's/^# \{0,1\}//'; }
+
+unit_of() {  # backend -> provenza-backend.service
+  local s=${1#provenza-}; s=${s%.service}
+  local k
+  for k in "${SERVICES[@]}"; do
+    [ "$k" = "$s" ] && { printf 'provenza-%s.service' "$s"; return 0; }
+  done
+  die "unknown service: $1 (one of: ${SERVICES[*]})"
+}
+
+probe() {  # probe "label" command... -> ok / FAIL line
+  local label=$1; shift
+  if "$@" >/dev/null 2>&1; then printf '  %s✓%s %s\n' "$G" "$N" "$label"
+  else printf '  %s✗%s %s\n' "$R" "$N" "$label"; fi
+}
+
+cmd_status() {
+  local domain https
+  domain=$(env_get PROVENZA_DOMAIN); https=$(env_get HTTPS_PORT); https=${https:-443}
+  local port=""; [ "$https" = 443 ] || port=":$https"
+
+  printf '%sServices%s (provenza.target: %s)\n' "$B" "$N" "$(systemctl is-active provenza.target 2>/dev/null || true)"
+  local s u state
+  for s in "${SERVICES[@]}"; do
+    u="provenza-$s.service"
+    state=$(systemctl show -p ActiveState,SubState --value "$u" 2>/dev/null | paste -sd/ -)
+    printf '  %-14s %-20s %s\n' "$s" "${state:-not installed}" \
+      "$(podman ps -a --filter "name=^$s\$" --format '{{.Status}}' 2>/dev/null | head -n1)"
+  done
+
+  printf '\n%sHealth%s\n' "$B" "$N"
+  probe "https://$domain$port/health (public, through Caddy)" curl -fsS --max-time 10 "https://$domain$port/health"
+  probe "API inside the container network"   container_ready backend
+  probe "worker answers (celery ping)"        container_ready worker
+  probe "PostgreSQL"                          container_ready postgres
+  probe "Redis"                               container_ready redis
+  probe "web UI"                              container_ready frontend
+  probe "Prometheus  http://127.0.0.1:9090"   curl -fsS --max-time 5 http://127.0.0.1:9090/-/ready
+  probe "Grafana     http://127.0.0.1:3001"   curl -fsS --max-time 5 http://127.0.0.1:3001/api/health
+  probe "Alertmanager http://127.0.0.1:9093"  curl -fsS --max-time 5 http://127.0.0.1:9093/-/ready
+
+  printf '\n%sBackups%s\n' "$B" "$N"
+  if systemctl is-enabled --quiet provenza-backup.timer 2>/dev/null; then
+    printf '  next: %s\n' "$(systemctl show -p NextElapseUSecRealtime --value provenza-backup.timer)"
+    local dir last
+    dir=$(env_get BACKUP_DIR); dir=${dir:-./backups}
+    case "$dir" in /*) ;; *) dir="$DEPLOY_DIR/${dir#./}" ;; esac
+    last=$(ls -t "$dir"/provenza-*.dump 2>/dev/null | head -n1 || true)
+    printf '  last: %s\n' "${last:-none yet}"
+  else
+    printf '  %s!%s the daily backup is not scheduled: systemctl enable --now provenza-backup.timer\n' "$Y" "$N"
+  fi
+  printf '\nGrafana and Prometheus listen on this server only; from your machine:\n  ssh -L 3001:127.0.0.1:3001 -L 9090:127.0.0.1:9090 %s\n' "${SUDO_USER:-$(id -un)}@$(hostname -f 2>/dev/null || hostname)"
+}
+
+cmd_logs() {
+  local units=() follow=() lines=100
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      -f|--follow) follow=(-f); shift ;;
+      -n) lines=${2:?}; shift 2 ;;
+      -n*) lines=${1#-n}; shift ;;
+      all) shift ;;
+      *) units+=(-u "$(unit_of "$1")"); shift ;;
+    esac
+  done
+  [ ${#units[@]} -gt 0 ] || units=(-u 'provenza-*')
+  exec journalctl "${units[@]}" -n "$lines" --no-pager -o short-iso "${follow[@]}"
+}
+
+# No new code: refresh the third-party images and restart the services whose
+# image changed (the application images are only rebuilt with new code).
+refresh_images() {
+  local f img name before after changed=()
+  step "Pulling fresh third-party images"
+  for f in "$DEPLOY_DIR"/quadlet/*.container; do
+    img=$(sed -n 's/^Image=//p' "$f"); name=$(sed -n 's/^ContainerName=//p' "$f")
+    case "$img" in @*|'') continue ;; esac
+    before=$(podman image inspect -f '{{.Id}}' "$img" 2>/dev/null || true)
+    podman pull -q "$img" >/dev/null || { warn "could not pull $img"; continue; }
+    after=$(podman image inspect -f '{{.Id}}' "$img")
+    if [ "$before" != "$after" ]; then changed+=("$name"); ok "$img: new image"; else ok "$img: up to date"; fi
+  done
+  if [ ${#changed[@]} -eq 0 ]; then ok "nothing to restart"; return 0; fi
+  if printf '%s\n' "${changed[@]}" | grep -qx postgres; then
+    step "Backing up before restarting PostgreSQL"
+    "$DEPLOY_DIR/scripts/backup.sh" | sed 's/^/    /'
+  fi
+  local s units=()
+  for s in "${changed[@]}"; do units+=("provenza-$s.service"); done
+  step "Restarting: ${changed[*]}"
+  systemctl restart "${units[@]}"
+  wait_ready 300 "${changed[@]}" || die "not healthy after the restart: provenza logs ${changed[0]}"
+  ok "done"
+}
+
+cmd_upgrade() {
+  local out rc=0
+  out=$(mktemp)
+  # upgrade.sh exits 0 with "already at" when there is no new code
+  "$ROOT_DIR/upgrade.sh" "$@" | tee "$out" || rc=$?
+  if [ "$rc" = 0 ] && grep -q "already at" "$out"; then
+    rm -f "$out"
+    refresh_images
+    return
+  fi
+  rm -f "$out"
+  return "$rc"
+}
+
+cmd=${1:-}
+[ $# -gt 0 ] && shift
+case "$cmd" in
+  start)   systemctl start provenza.target; ok "started (provenza status)" ;;
+  stop)    systemctl stop provenza.target; ok "stopped" ;;
+  restart)
+    if [ $# -gt 0 ]; then systemctl restart "$(unit_of "$1")"
+    else systemctl restart provenza.target; fi
+    ok "restarted (provenza status)" ;;
+  status)  cmd_status ;;
+  logs)    cmd_logs "$@" ;;
+  upgrade) cmd_upgrade "$@" ;;
+  backup)  exec "$DEPLOY_DIR/scripts/backup.sh" ;;
+  run)     exec "$DEPLOY_DIR/scripts/run.sh" "$@" ;;
+  units)   exec "$DEPLOY_DIR/scripts/units.sh" install ;;
+  -h|--help|help|"") usage ;;
+  *) usage; die "unknown command: $cmd" ;;
+esac

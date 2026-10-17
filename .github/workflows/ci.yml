@@ -125,13 +125,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Each script with the shell it is written for: its shebang, and bash
+      # for deploy/scripts/lib.sh, which is sourced, not run.
       - name: Syntax
         run: |
-          bash -n install.sh upgrade.sh
-          for f in deploy/scripts/*.sh deploy/backend-entrypoint.sh; do sh -n "$f"; done
+          for f in install.sh upgrade.sh deploy/scripts/*.sh deploy/scripts/provenza deploy/backend-entrypoint.sh; do
+            case "$(head -n1 "$f")" in
+              '#!/bin/sh'*) sh -n "$f" ;;
+              *) bash -n "$f" ;;
+            esac || exit 1   # inside a loop, set -e does not stop on a failed check
+            echo "ok  $f"
+          done
 
       - name: Shellcheck (errors)
-        run: shellcheck --severity=error install.sh upgrade.sh deploy/scripts/*.sh deploy/backend-entrypoint.sh
+        run: shellcheck --severity=error install.sh upgrade.sh deploy/scripts/*.sh deploy/scripts/provenza deploy/backend-entrypoint.sh
 
   dependency-audit:
     name: Dependency audit (known vulnerabilities)
@@ -376,17 +383,32 @@ jobs:
         run: |
           pip-audit -r requirements.txt || true
 
-  docker:
-    name: Docker compose (validate)
-    runs-on: ubuntu-latest
+  quadlet:
+    name: Podman Quadlet units (validate)
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Validate docker-compose.yml
+      - name: Shell scripts parse
         run: |
-          docker compose config -q && echo "docker-compose.yml is valid"
+          for f in install.sh upgrade.sh deploy/scripts/*.sh deploy/scripts/provenza; do bash -n "$f"; done
+
+      # Quadlet silently skips a file it cannot read (an unknown key, a bad
+      # value): every template must come out as a systemd service.
+      - name: Render and generate the units
+        run: |
+          podman --version
+          cp deploy/.env.example deploy/.env
+          deploy/scripts/units.sh render "$RUNNER_TEMP/units"
+          out=$(QUADLET_UNIT_DIRS="$RUNNER_TEMP/units" /usr/libexec/podman/quadlet -dryrun 2>"$RUNNER_TEMP/quadlet.err")
+          cat "$RUNNER_TEMP/quadlet.err"
+          want=$(ls deploy/quadlet | wc -l)
+          got=$(printf '%s\n' "$out" | grep -cE "^---provenza-[a-z-]+\.service---$" || true)
+          echo "generated $got of $want units"
+          [ "$got" = "$want" ]
+          if grep -iE 'unsupported|error' "$RUNNER_TEMP/quadlet.err" | grep -v '/usr/share/containers/systemd'; then exit 1; fi
 
   sensor:
     name: Egress sensor (vet, race tests, BPF build)

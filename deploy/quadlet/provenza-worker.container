@@ -1,0 +1,41 @@
+# Provenza: the Celery worker. Rendered by deploy/scripts/units.sh.
+[Unit]
+Description=Provenza worker (Celery)
+PartOf=provenza.target
+Requires=provenza-migrate.service provenza-redis.service
+After=provenza-migrate.service provenza-redis.service
+
+[Container]
+ContainerName=worker
+Network=provenza-data.network
+# The worker sends e-mail and webhook notifications and fetches RFC 3161
+# time-stamps: it needs a way out, which the internal data network has not
+Network=provenza-web.network
+Volume=provenza-app-data.volume:/app/data
+Exec=worker
+Image=@BACKEND_IMAGE@
+EnvironmentFile=@DEPLOY@/.env
+Environment=ENVIRONMENT=production
+Environment=POSTGRES_HOST=postgres
+Environment=POSTGRES_PORT=5432
+Environment=REDIS_HOST=redis
+Environment=REDIS_PORT=6379
+Environment=CORS_ORIGINS=https://@DOMAIN@
+ReadOnly=true
+Tmpfs=/tmp:size=512m
+DropCapability=ALL
+NoNewPrivileges=true
+LogDriver=journald
+PodmanArgs=--memory=@WORKER_MEMORY@
+HealthCmd=celery -A app.core.celery_app inspect ping -d "celery@$$(hostname)" --timeout 10 | grep -q pong
+HealthInterval=60s
+HealthTimeout=20s
+HealthRetries=3
+HealthStartPeriod=60s
+
+[Service]
+Restart=always
+TimeoutStartSec=300
+
+[Install]
+WantedBy=provenza.target

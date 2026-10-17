@@ -1,0 +1,33 @@
+# Provenza: the Celery scheduler (beat). Rendered by deploy/scripts/units.sh.
+[Unit]
+Description=Provenza scheduler (Celery beat)
+PartOf=provenza.target
+Requires=provenza-migrate.service provenza-redis.service
+After=provenza-migrate.service provenza-redis.service
+
+[Container]
+ContainerName=beat
+Network=provenza-data.network
+Volume=provenza-app-data.volume:/app/data
+Volume=provenza-beat-state.volume:/app/run
+Exec=beat
+Image=@BACKEND_IMAGE@
+EnvironmentFile=@DEPLOY@/.env
+Environment=ENVIRONMENT=production
+Environment=POSTGRES_HOST=postgres
+Environment=POSTGRES_PORT=5432
+Environment=REDIS_HOST=redis
+Environment=REDIS_PORT=6379
+Environment=CORS_ORIGINS=https://@DOMAIN@
+ReadOnly=true
+Tmpfs=/tmp:size=512m
+DropCapability=ALL
+NoNewPrivileges=true
+LogDriver=journald
+
+[Service]
+Restart=always
+TimeoutStartSec=300
+
+[Install]
+WantedBy=provenza.target
