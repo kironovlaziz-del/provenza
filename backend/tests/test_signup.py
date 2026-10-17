@@ -34,10 +34,16 @@ async def test_signup_is_disabled_by_default(client, db_session, monkeypatch):
 
 
 async def test_auth_config_reports_the_flag(client, monkeypatch):
+    # /auth/config also carries `features`; assert the field, not the
+    # whole shape, so adding a feature flag does not break signup.
     monkeypatch.setattr(settings, "ALLOW_PUBLIC_SIGNUP", False)
-    assert (await client.get("/api/v1/auth/config")).json() == {"signup_enabled": False}
+    body = (await client.get("/api/v1/auth/config")).json()
+    assert body["signup_enabled"] is False
+    assert "features" in body
+
     monkeypatch.setattr(settings, "ALLOW_PUBLIC_SIGNUP", True)
-    assert (await client.get("/api/v1/auth/config")).json() == {"signup_enabled": True}
+    body = (await client.get("/api/v1/auth/config")).json()
+    assert body["signup_enabled"] is True
 
 
 async def test_signup_is_throttled_per_ip(client, monkeypatch):
