@@ -74,6 +74,9 @@ class Settings(BaseSettings):
     # Agent cards served by the A2A gateway point there. Empty = taken from the
     # request (fine when the reverse proxy passes the original host and scheme).
     PUBLIC_BASE_URL: str = ""
+    # Prometheus HTTP API, used by /observability/query proxies.
+    # The backend and Prometheus run on the same host, loopback only.
+    PROMETHEUS_URL: str = "http://127.0.0.1:9090"
 
     # Outbound calls to user-configured URLs (AI providers, gateway
     # upstreams, Vault Transit, webhooks) are refused when the target is a

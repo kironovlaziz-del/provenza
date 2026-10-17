@@ -58,6 +58,7 @@ export const NAV: NavGroup[] = [
         P("/agent-observability", "agent_observability"),
         P("/agent-map", "agent_map"),
         P("/agent-chains", "agent_chains"),
+        P("/observability", "observability", { adminOnly: true }),
       ] },
       { key: "inventory", labelKey: "sidebar.sec.inventory", icon: "registry", pages: [
         P("/inventory", "inventory"),

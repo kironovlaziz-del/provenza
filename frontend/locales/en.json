@@ -120,7 +120,8 @@
       "blocked_terms": "Blocked terms",
       "profile": "My profile",
       "runtime": "Runtime",
-      "intent_guardrail": "Intent guardrail"
+      "intent_guardrail": "Intent guardrail",
+      "observability": "Observability"
     },
     "logout": "Sign out",
     "role_admin": "admin",
@@ -3684,5 +3685,20 @@
     "unsafe": "unsafe",
     "unavailable": "classifier unavailable",
     "would_block": "would be refused"
+  },
+  "observability": {
+    "title": "Observability",
+    "open_grafana": "Open in Grafana",
+    "kpi_offline": "Sensors offline",
+    "kpi_offline_hint": "No heartbeat for 5+ minutes",
+    "kpi_heartbeat_age": "Heartbeat age",
+    "kpi_heartbeat_age_hint": "Oldest active sensor",
+    "kpi_error_rate": "HTTP 5xx rate",
+    "kpi_error_rate_hint": "5-minute window",
+    "kpi_rows": "Rows (activity / violations)",
+    "chart_requests": "Requests rate by path",
+    "chart_latency": "Latency p95 by path",
+    "chart_ingestion": "Sensor event ingestion",
+    "grafana_hint": "For drill-downs, histogram breakouts and correlation with logs, open Grafana."
   }
 }

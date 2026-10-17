@@ -120,7 +120,8 @@
       "blocked_terms": "Bloklangan atamalar",
       "profile": "Mening profilim",
       "runtime": "Runtime",
-      "intent_guardrail": "Niyat nazorati"
+      "intent_guardrail": "Niyat nazorati",
+      "observability": "Kuzatuvchanlik"
     },
     "logout": "Chiqish",
     "role_admin": "administrator",
@@ -3684,5 +3685,20 @@
     "unsafe": "xavfli",
     "unavailable": "klassifikator ishlamayapti",
     "would_block": "rad etilardi"
+  },
+  "observability": {
+    "title": "Kuzatuvchanlik",
+    "open_grafana": "Grafanada ochish",
+    "kpi_offline": "Oflayn sensorlar",
+    "kpi_offline_hint": "5+ daqiqa heartbeat yo'q",
+    "kpi_heartbeat_age": "Heartbeat yoshi",
+    "kpi_heartbeat_age_hint": "Eng eski faol sensor",
+    "kpi_error_rate": "HTTP 5xx darajasi",
+    "kpi_error_rate_hint": "5 daqiqalik oyna",
+    "kpi_rows": "Qatorlar (faollik / qoidabuzarlik)",
+    "chart_requests": "So'rovlar darajasi (yo'l bo'yicha)",
+    "chart_latency": "Kechikish p95 (yo'l bo'yicha)",
+    "chart_ingestion": "Sensor hodisalari qabul qilinishi",
+    "grafana_hint": "Chuqur tahlil, gistogramma va loglar bilan bog'lash uchun Grafanani oching."
   }
 }

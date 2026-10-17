@@ -50,6 +50,7 @@ from app.api import queue_ttl
 from app.api import byok
 from app.api import compliance
 from app.api import observability
+from app.api import prometheus as prometheus_api
 from app.api import system
 from app.api import pvp as pvp_api
 from app.api import http_tools as http_tools_api
@@ -174,6 +175,7 @@ app.include_router(queue_ttl.router, prefix=f"{settings.API_V1_STR}/queue", tags
 app.include_router(byok.router, prefix=f"{settings.API_V1_STR}/byok", tags=["security"])
 app.include_router(compliance.router, prefix=f"{settings.API_V1_STR}/compliance", tags=["compliance"])
 app.include_router(observability.router, prefix=f"{settings.API_V1_STR}/observability", tags=["agents"])
+app.include_router(prometheus_api.router, prefix=f"{settings.API_V1_STR}/metrics", tags=["observability"])
 app.include_router(system.router, prefix=f"{settings.API_V1_STR}/system", tags=["system"])
 app.include_router(pvp_api.router, prefix=f"{settings.API_V1_STR}/pvp", tags=["agent-governance"])
 app.include_router(mcp_api.agent_router, prefix=f"{settings.API_V1_STR}/mcp", tags=["mcp"])
