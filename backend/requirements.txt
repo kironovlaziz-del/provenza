@@ -51,3 +51,6 @@ spacy==3.8.2
 
 # Discovery: LDAP/Active Directory connect handlers (pure Python, no C deps)
 ldap3==2.9.1
+
+# Metrics
+prometheus-client==0.21.0

@@ -27,6 +27,13 @@ from app.models.egress_sensor import (
     EgressViolation,
     EgressWorkload,
     SensorActivity,)
+from app.core.metrics import (
+    sensor_activity_dropped_total,
+    sensor_activity_inserted_total,
+    sensor_activity_pruned_total,
+    sensor_violations_dropped_total,
+    sensor_violations_inserted_total,
+)
 from app.schemas.egress_sensor import (HeartbeatIn, PolicyAllow, PolicyOut, PolicySettingsOut,
                                     PolicySettingsUpdate, PolicyWorkload, SensorWorkloadOut,
                                     ViolationIn)
@@ -305,6 +312,8 @@ async def prune_sensor_activity(db: AsyncSession, default_days: int = 30) -> int
             total += len(ids)
             if len(ids) < chunk:
                 break
+    if total:
+        sensor_activity_pruned_total.inc(total)
     return total
 
 
@@ -576,6 +585,11 @@ async def ingest_violations(
         except Exception as exc:  # best-effort, must not lose the record
             logger.warning("egress_sensor %s: notification failed: %s", sensor.id, exc)
 
+    if dropped:
+        sensor_violations_dropped_total.inc(dropped)
+    accepted = len(events) - dropped
+    if accepted:
+        sensor_violations_inserted_total.inc(accepted)
     return dropped
 
 
@@ -625,6 +639,11 @@ async def ingest_activities(db, sensor, events):
 
     if rows:
         db.add_all(rows)
+    if dropped:
+        sensor_activity_dropped_total.inc(dropped)
+    accepted = len(events) - dropped
+    if accepted:
+        sensor_activity_inserted_total.inc(accepted)
     return dropped
 
 async def warn_offline_sensors(db: AsyncSession) -> int:

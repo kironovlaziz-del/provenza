@@ -1,5 +1,16 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+import time
+from fastapi import Depends, Request
+from fastapi.responses import Response
+from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
+from sqlalchemy.ext.asyncio import AsyncSession
+from app.core.database import get_db
+from app.core.metrics import (
+    http_request_duration_seconds,
+    http_requests_total,
+    update_db_gauges,
+)
 from app.core.config import settings
 from app.pvp.guard import BodyLimitMiddleware
 from app.core.security_headers import SecurityHeadersMiddleware
@@ -83,6 +94,46 @@ app.add_middleware(
 )
 
 # Include routers
+@app.middleware("http")
+async def http_metrics_middleware(request: Request, call_next):
+    # Scrape endpoint excluded: its own latency is not interesting to graph
+    # and it would double every scrape into a metric increment.
+    if request.url.path == "/metrics":
+        return await call_next(request)
+
+    method = request.method
+    start = time.monotonic()
+    try:
+        response = await call_next(request)
+    except Exception:
+        # Unhandled exceptions become 500s at the ASGI layer; count them so
+        # an alert on 5xx catches even errors the framework does not turn
+        # into a response.
+        http_requests_total.labels(method=method, path="__error__", status="500").inc()
+        raise
+
+    # After call_next, the router has matched the request and put the
+    # APIRoute on the scope. route.path is the template
+    # (/sensors/{sensor_id}/violations), which keeps cardinality bounded.
+    route = request.scope.get("route")
+    path = getattr(route, "path", "__unmatched__")
+    status = str(response.status_code)
+    http_requests_total.labels(method=method, path=path, status=status).inc()
+    http_request_duration_seconds.labels(method=method, path=path).observe(
+        time.monotonic() - start
+    )
+    return response
+
+
+@app.get("/metrics", include_in_schema=False)
+async def metrics_endpoint(db: AsyncSession = Depends(get_db)) -> Response:
+    # Refresh gauges that need DB state, then serialize the registry.
+    # Prometheus scrapes this from localhost only (nginx proxies /api/v1/*
+    # to the backend, not /metrics).
+    await update_db_gauges(db)
+    return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
+
+
 app.include_router(auth.router, prefix=f"{settings.API_V1_STR}/auth", tags=["auth"])
 app.include_router(users.router, prefix=f"{settings.API_V1_STR}/users", tags=["users"])
 app.include_router(policies.router, prefix=f"{settings.API_V1_STR}/policies", tags=["policies"])
