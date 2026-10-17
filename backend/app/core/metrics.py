@@ -71,12 +71,13 @@ sensor_activity_dropped_total = Counter(
 sensor_last_heartbeat_age_seconds = Gauge(
     "sensor_last_heartbeat_age_seconds",
     "Seconds since each active sensor's last heartbeat.",
-    ["sensor_id"],
+    ["sensor_id", "org_id"],
 )
 
 sensors_offline = Gauge(
     "sensors_offline",
     "Active sensors whose last heartbeat is older than the offline threshold.",
+    ["org_id"],
 )
 
 # Row counts, refreshed on scrape from the DB. Counters on the Celery
@@ -129,6 +130,49 @@ retention_last_prune_rows = Gauge(
     ["table", "org_id"],
 )
 
+# Audit log health. The audit log is append-only and tamper-evident (hash
+# chain + signed Merkle checkpoints, see app/core/audit_chain.py): rows
+# are never deleted, by design. These gauges tell you the log is growing
+# at a sane rate and the checkpoint worker is still sealing it. A rising
+# oldest_age is expected (the first record never goes away); a rising
+# latest_age means the checkpoint worker stopped.
+audit_logs_rows = Gauge(
+    "audit_logs_rows",
+    "Total rows in ai_audit_logs, per organization.",
+    ["org_id"],
+)
+
+audit_logs_oldest_age_seconds = Gauge(
+    "audit_logs_oldest_age_seconds",
+    "Age in seconds of the oldest ai_audit_logs row, per organization.",
+    ["org_id"],
+)
+
+audit_checkpoints_rows = Gauge(
+    "audit_checkpoints_rows",
+    "Total signed checkpoints per organization.",
+    ["org_id"],
+)
+
+audit_checkpoints_latest_age_seconds = Gauge(
+    "audit_checkpoints_latest_age_seconds",
+    "Seconds since the newest audit checkpoint was issued, per organization.",
+    ["org_id"],
+)
+
+# The actionable metric: how many records exist that no signed Merkle
+# root covers yet. Zero means every record is provable against a
+# checkpoint. A non-zero value stuck for more than a few minutes means
+# the audit.checkpoint task is not keeping up (worker down, task failing,
+# or no signing key). The age of the last checkpoint alone is misleading
+# — an inactive organization legitimately has no new checkpoints, so its
+# "age" grows without anything being wrong.
+audit_unsealed_records = Gauge(
+    "audit_unsealed_records",
+    "Audit rows not yet covered by a signed checkpoint, per organization.",
+    ["org_id"],
+)
+
 # Matches egress_sensor.warn_offline's own threshold. Kept separate on
 # purpose: the metric is a monitoring signal, the warn task sends notices.
 OFFLINE_AFTER = timedelta(minutes=5)
@@ -143,21 +187,29 @@ async def update_db_gauges(db: AsyncSession) -> None:
     now = datetime.now(timezone.utc)
     rows = (
         await db.execute(
-            select(EgressSensor.id, EgressSensor.last_seen_at).where(
-                EgressSensor.revoked_at.is_(None)
-            )
+            select(
+                EgressSensor.id,
+                EgressSensor.org_id,
+                EgressSensor.last_seen_at,
+            ).where(EgressSensor.revoked_at.is_(None))
         )
     ).all()
 
-    offline = 0
-    for sensor_id, last_seen in rows:
+    # Pre-seed per-org offline counters with 0 so an organization whose
+    # sensors are all healthy shows "0 offline", not "no series".
+    org_ids = {org_id for _, org_id, _ in rows}
+    offline_by_org: dict[int, int] = {oid: 0 for oid in org_ids}
+    for sensor_id, org_id, last_seen in rows:
         if last_seen is None:
             continue
         age = (now - last_seen).total_seconds()
-        sensor_last_heartbeat_age_seconds.labels(sensor_id=str(sensor_id)).set(age)
+        sensor_last_heartbeat_age_seconds.labels(
+            sensor_id=str(sensor_id), org_id=str(org_id)
+        ).set(age)
         if now - last_seen > OFFLINE_AFTER:
-            offline += 1
-    sensors_offline.set(offline)
+            offline_by_org[org_id] += 1
+    for org_id, n in offline_by_org.items():
+        sensors_offline.labels(org_id=str(org_id)).set(n)
 
     # Row counts for retention monitoring. COUNT(*) on indexed column is
     # cheap; if it ever becomes slow, switch to pg_class.reltuples.
@@ -236,3 +288,69 @@ async def update_db_gauges(db: AsyncSession) -> None:
                 retention_last_pruned_at_seconds_ago.labels(table=table, org_id=org).set(age)
             retention_last_prune_failed.labels(table=table, org_id=org).set(1 if err else 0)
             retention_last_prune_rows.labels(table=table, org_id=org).set(rows or 0)
+
+    # Audit log health. Rows are never deleted (append-only proof), so a
+    # rising count is expected; what matters is that the checkpoint worker
+    # keeps sealing. audit_checkpoints_latest_age_seconds > 2h is the
+    # actionable alert.
+    from app.models.audit_log import AIAuditLog, AuditCheckpoint
+
+    audit_stats = (
+        await db.execute(
+            select(
+                AIAuditLog.org_id,
+                func.count().label("rows"),
+                func.min(AIAuditLog.created_at).label("oldest"),
+            ).group_by(AIAuditLog.org_id)
+        )
+    ).all()
+    for org_id, rows, oldest in audit_stats:
+        org = str(org_id)
+        audit_logs_rows.labels(org_id=org).set(rows or 0)
+        if oldest is not None:
+            audit_logs_oldest_age_seconds.labels(org_id=org).set(
+                (now - oldest).total_seconds()
+            )
+
+    cp_stats = (
+        await db.execute(
+            select(
+                AuditCheckpoint.org_id,
+                func.count().label("rows"),
+                func.max(AuditCheckpoint.issued_at).label("latest"),
+            ).group_by(AuditCheckpoint.org_id)
+        )
+    ).all()
+    for org_id, rows, latest in cp_stats:
+        org = str(org_id)
+        audit_checkpoints_rows.labels(org_id=org).set(rows or 0)
+        if latest is not None:
+            audit_checkpoints_latest_age_seconds.labels(org_id=org).set(
+                (now - latest).total_seconds()
+            )
+
+    # Unsealed = audit head (max seq) minus the largest sealed tree_size.
+    # One query per table, aggregated; both are small (one row per org).
+    unsealed = (
+        await db.execute(
+            select(
+                AIAuditLog.org_id,
+                func.max(AIAuditLog.seq).label("head"),
+            ).group_by(AIAuditLog.org_id)
+        )
+    ).all()
+    sealed = {
+        org_id: (size or 0)
+        for org_id, size in (
+            await db.execute(
+                select(
+                    AuditCheckpoint.org_id,
+                    func.max(AuditCheckpoint.tree_size),
+                ).group_by(AuditCheckpoint.org_id)
+            )
+        ).all()
+    }
+    for org_id, head in unsealed:
+        org = str(org_id)
+        sealed_upto = sealed.get(org_id, 0)
+        audit_unsealed_records.labels(org_id=org).set(max(0, (head or 0) - sealed_upto))

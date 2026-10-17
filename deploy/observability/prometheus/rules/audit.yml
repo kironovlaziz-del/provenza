@@ -1,0 +1,44 @@
+groups:
+  - name: audit
+    interval: 30s
+    rules:
+      - alert: AuditUnsealedRecords
+        expr: audit_unsealed_records > 0
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $value }} audit rows for org {{ $labels.org_id }} are not in a signed checkpoint"
+          description: >-
+            audit.checkpoint runs every 5 minutes and seals any organization
+            whose log grew. If records stay unsealed for more than 15
+            minutes, either the beat scheduler or the worker is down, the
+            task is failing, or no signing key is active for that org. The
+            rows are still in the log, but nothing proves they existed at
+            a point in time until they are under a checkpoint.
+
+      - alert: AuditCheckpointsMissing
+        expr: audit_logs_rows > 0 unless audit_checkpoints_rows > 0
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Org {{ $labels.org_id }} has audit records but no checkpoint"
+          description: >-
+            Audit rows exist but no Merkle root has been signed. Without a
+            checkpoint there is nothing to prove against and nothing to
+            timestamp: the log is currently unusable as evidence.
+
+      - alert: AuditLogGrowingFast
+        expr: increase(audit_logs_rows[24h]) > 100000
+        for: 5m
+        labels:
+          severity: info
+        annotations:
+          summary: "Audit log for org {{ $labels.org_id }} grew by {{ $value }} rows in 24h"
+          description: >-
+            Not a problem by itself: the audit log is append-only on purpose.
+            At this rate it will cross a million rows in ~10 days; plan
+            archival (never deletion) before then. Archiving means keeping
+            the hash chain and the checkpoints, and moving the payload
+            (metadata_json) to cold storage.

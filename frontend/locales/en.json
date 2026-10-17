@@ -3695,10 +3695,17 @@
     "kpi_heartbeat_age_hint": "Oldest active sensor",
     "kpi_error_rate": "HTTP 5xx rate",
     "kpi_error_rate_hint": "5-minute window",
-    "kpi_rows": "Rows (activity / violations)",
+    "kpi_rows": "Activity / violations",
     "chart_requests": "Requests rate by path",
     "chart_latency": "Latency p95 by path",
     "chart_ingestion": "Sensor event ingestion",
-    "grafana_hint": "For drill-downs, histogram breakouts and correlation with logs, open Grafana."
+    "grafana_hint": "For drill-downs, histogram breakouts and correlation with logs, open Grafana.",
+    "kpi_audit": "Audit log",
+    "kpi_audit_hint": "Append-only, never deleted",
+    "kpi_checkpoint_age": "Last audit checkpoint",
+    "kpi_checkpoint_age_hint": "> 2h means the checkpoint worker is down",
+    "admin_only": "This page is available to administrators only.",
+    "kpi_unsealed": "Unsealed audit records",
+    "kpi_unsealed_hint": "Rows not yet in a signed checkpoint. 0 = everything provable."
   }
 }
