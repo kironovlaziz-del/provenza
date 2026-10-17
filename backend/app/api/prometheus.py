@@ -31,7 +31,12 @@ router = APIRouter()
 
 def _fetch_json(url: str, timeout: float = 5.0) -> dict:
     req = urllib.request.Request(url, headers={"Accept": "application/json"})
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
+    # Bandit B310 flags urlopen because it accepts file:// and other schemes.
+    # Here the URL is fully controlled by us: the host comes from
+    # settings.PROMETHEUS_URL (operator-set, loopback by default), the path
+    # is a literal /api/v1/query[_range], and the query string is built by
+    # urllib.parse.urlencode. No user input reaches the scheme or host.
+    with urllib.request.urlopen(req, timeout=timeout) as resp:  # nosec B310
         return json.loads(resp.read().decode("utf-8"))
 
 
