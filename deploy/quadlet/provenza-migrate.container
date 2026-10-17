@@ -1,0 +1,34 @@
+# Provenza: database migrations (alembic upgrade head), run once before the
+# API, worker and scheduler start. Rendered by deploy/scripts/units.sh.
+[Unit]
+Description=Provenza database migrations
+PartOf=provenza.target
+Requires=provenza-postgres.service
+After=provenza-postgres.service
+
+[Container]
+ContainerName=migrate
+Network=provenza-data.network
+Volume=provenza-app-data.volume:/app/data
+Exec=migrate
+Image=@BACKEND_IMAGE@
+EnvironmentFile=@DEPLOY@/.env
+Environment=ENVIRONMENT=production
+Environment=POSTGRES_HOST=postgres
+Environment=POSTGRES_PORT=5432
+Environment=REDIS_HOST=redis
+Environment=REDIS_PORT=6379
+Environment=CORS_ORIGINS=https://@DOMAIN@
+ReadOnly=true
+Tmpfs=/tmp:size=512m
+DropCapability=ALL
+NoNewPrivileges=true
+LogDriver=journald
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+TimeoutStartSec=900
+
+[Install]
+WantedBy=provenza.target

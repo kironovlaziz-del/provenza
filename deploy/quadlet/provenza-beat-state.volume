@@ -1,0 +1,3 @@
+# Provenza: the "beat-state" volume. The name matches the former Docker volume.
+[Volume]
+VolumeName=provenza_beat-state

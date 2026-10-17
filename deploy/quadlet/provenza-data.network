@@ -1,0 +1,5 @@
+# Provenza: the "data" container network (rendered into /etc/containers/systemd by deploy/scripts/units.sh).
+[Network]
+NetworkName=provenza_data
+# No route out and no host access: PostgreSQL and Redis live here.
+Internal=true

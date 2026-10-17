@@ -165,6 +165,23 @@ this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- **The production stack runs on rootful Podman with systemd (Quadlet)
+  instead of Docker compose.** `deploy/quadlet/` holds the unit templates
+  (11 containers, 9 volumes, 3 networks); `deploy/scripts/units.sh install`
+  renders them with the values from `deploy/.env` into
+  `/etc/containers/systemd`. Every container is a systemd service
+  (`provenza-backend`, ...) under `provenza.target`, which starts at boot.
+  `install.sh` (now run as root) installs Podman, netavark and aardvark-dns
+  when missing, builds the images, installs the units and schedules backups
+  with `provenza-backup.timer` instead of cron. `upgrade.sh`, `backup.sh` and
+  `restore.sh` work with Podman; `deploy/scripts/run.sh` runs one-off backend
+  commands such as `create-admin`. PostgreSQL, Redis and Grafana receive only
+  their own password, not the whole `.env`. `deploy/docker-compose.yml` is
+  removed. An existing Docker installation moves with
+  `deploy/scripts/migrate-from-docker.sh`, data and TLS certificates
+  included, and goes back to Docker by itself if the new stack does not come
+  up. Requires Podman 4.4+ (Ubuntu 24.04+, Debian 13+, RHEL 9.3+, Fedora).
+
 - **Navigation follows the lifecycle of an AI system:** Discovery →
   Registry → Policies → Enforcement → Audit (plus Settings), instead of
   grouping by feature type. Pages and URLs are unchanged. A few labels

@@ -1,0 +1,27 @@
+# Provenza: Prometheus (127.0.0.1:9090 only). Rendered by deploy/scripts/units.sh.
+[Unit]
+Description=Provenza Prometheus
+PartOf=provenza.target
+Wants=provenza-backend.service
+After=provenza-backend.service
+
+[Container]
+ContainerName=prometheus
+Image=docker.io/prom/prometheus:latest
+Network=provenza-data.network
+Network=provenza-observability.network
+PublishPort=127.0.0.1:9090:9090
+Volume=@DEPLOY@/observability/prod/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+Volume=@DEPLOY@/observability/prometheus/rules:/etc/prometheus/rules:ro
+Volume=provenza-prom-data.volume:/prometheus
+Exec=--config.file=/etc/prometheus/prometheus.yml --storage.tsdb.path=/prometheus --storage.tsdb.retention.time=30d --web.listen-address=0.0.0.0:9090 --web.enable-lifecycle
+NoNewPrivileges=true
+PodmanArgs=--memory=512m
+LogDriver=journald
+
+[Service]
+Restart=always
+TimeoutStartSec=300
+
+[Install]
+WantedBy=provenza.target

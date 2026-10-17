@@ -1,0 +1,33 @@
+# Provenza: Grafana (127.0.0.1:3001 only). Rendered by deploy/scripts/units.sh.
+[Unit]
+Description=Provenza Grafana
+PartOf=provenza.target
+Wants=provenza-prometheus.service
+After=provenza-prometheus.service
+
+[Container]
+ContainerName=grafana
+Image=docker.io/grafana/grafana-oss:latest
+Network=provenza-observability.network
+PublishPort=127.0.0.1:3001:3000
+Environment=GF_SERVER_HTTP_ADDR=0.0.0.0
+Environment=GF_SERVER_HTTP_PORT=3000
+Environment=GF_SECURITY_ADMIN_USER=admin
+Environment=GF_USERS_ALLOW_SIGN_UP=false
+Environment=GF_ANALYTICS_REPORTING_ENABLED=false
+Environment=GF_ANALYTICS_CHECK_FOR_UPDATES=false
+# GF_SECURITY_ADMIN_PASSWORD (GRAFANA_PASSWORD from deploy/.env)
+EnvironmentFile=@DEPLOY@/.runtime/grafana.env
+Volume=@DEPLOY@/observability/prod/grafana/provisioning:/etc/grafana/provisioning:ro
+Volume=@DEPLOY@/observability/grafana/dashboards:/etc/grafana/dashboards:ro
+Volume=provenza-grafana-data.volume:/var/lib/grafana
+NoNewPrivileges=true
+PodmanArgs=--memory=256m
+LogDriver=journald
+
+[Service]
+Restart=always
+TimeoutStartSec=300
+
+[Install]
+WantedBy=provenza.target

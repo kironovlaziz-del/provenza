@@ -1,0 +1,11 @@
+# Provenza: database and file backup (deploy/scripts/backup.sh), started by
+# provenza-backup.timer. Installed by deploy/scripts/units.sh.
+[Unit]
+Description=Provenza backup
+Requires=provenza-postgres.service
+After=provenza-postgres.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=@DEPLOY@
+ExecStart=@DEPLOY@/scripts/backup.sh

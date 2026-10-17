@@ -40,7 +40,7 @@ What Provenza protects, how, and where its guarantees stop.
   sensitive data was detected (type and label), never any fragment of the
   value, and it does not send full page URLs.
 - **Network isolation.** In the production stack (`deploy/`), Postgres and
-  Redis sit on an internal Docker network and only Caddy publishes ports
+  Redis sit on an internal container network and only Caddy publishes ports
   (80/443). In a manual setup, the backend (8000) and the frontend (3000)
   bind to `127.0.0.1`. Forwarding headers are trusted only from
   `TRUSTED_PROXIES`.

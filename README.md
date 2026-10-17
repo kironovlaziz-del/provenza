@@ -40,18 +40,20 @@
 
 ## 🚀 Deploy on your server
 
-**Requirements:** Linux (Ubuntu 22.04+), 4 GB RAM, Docker with Compose v2, a domain
-pointing at the server.
+**Requirements:** Linux with systemd (Ubuntu 24.04+, Debian 13+, RHEL/Rocky 9.3+
+or Fedora), 4 GB RAM, a domain pointing at the server. The installer sets up
+Podman itself.
 
 ```bash
 git clone https://github.com/kironovlaziz-del/provenza.git /opt/provenza
 cd /opt/provenza
-./install.sh
+sudo ./install.sh
 ```
 
 The installer asks for your domain and the first administrator, generates every
-secret, starts the stack, gets an HTTPS certificate and schedules a daily backup.
-Upgrades are one command, `./upgrade.sh`: it backs up first and rolls back if the
+secret, runs the stack as rootful Podman containers managed by systemd (Quadlet),
+gets an HTTPS certificate and schedules a daily backup.
+Upgrades are one command, `sudo ./upgrade.sh`: it backs up first and rolls back if the
 new version does not come up. Full guide: [docs/self-hosting.md](docs/self-hosting.md).
 
 **Just looking?** `docker compose -f docker-compose.dev.yml up --build`, then
