@@ -129,15 +129,16 @@ jobs:
       # for deploy/scripts/lib.sh, which is sourced, not run.
       - name: Syntax
         run: |
-          for f in install.sh upgrade.sh deploy/scripts/*.sh deploy/backend-entrypoint.sh; do
+          for f in install.sh upgrade.sh deploy/scripts/*.sh deploy/scripts/provenza deploy/backend-entrypoint.sh; do
             case "$(head -n1 "$f")" in
               '#!/bin/sh'*) sh -n "$f" ;;
               *) bash -n "$f" ;;
-            esac && echo "ok  $f"
+            esac || exit 1   # inside a loop, set -e does not stop on a failed check
+            echo "ok  $f"
           done
 
       - name: Shellcheck (errors)
-        run: shellcheck --severity=error install.sh upgrade.sh deploy/scripts/*.sh deploy/backend-entrypoint.sh
+        run: shellcheck --severity=error install.sh upgrade.sh deploy/scripts/*.sh deploy/scripts/provenza deploy/backend-entrypoint.sh
 
   dependency-audit:
     name: Dependency audit (known vulnerabilities)
@@ -392,7 +393,7 @@ jobs:
 
       - name: Shell scripts parse
         run: |
-          for f in install.sh upgrade.sh deploy/scripts/*.sh; do bash -n "$f"; done
+          for f in install.sh upgrade.sh deploy/scripts/*.sh deploy/scripts/provenza; do bash -n "$f"; done
 
       # Quadlet silently skips a file it cannot read (an unknown key, a bad
       # value): every template must come out as a systemd service.

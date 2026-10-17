@@ -12,7 +12,8 @@ Network=provenza-data.network
 Network=provenza-observability.network
 PublishPort=127.0.0.1:9093:9093
 Volume=@DEPLOY@/observability/prod/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
-Volume=@DEPLOY@/observability/prod/alertmanager-secret:/etc/alertmanager/secret:ro
+# ALERTMANAGER_SECRET from deploy/.env, readable by Alertmanager's user (nobody)
+Volume=@DEPLOY@/.runtime/alertmanager-secret:/etc/alertmanager/secret:ro
 Volume=provenza-alertmanager-data.volume:/alertmanager
 Exec=--config.file=/etc/alertmanager/alertmanager.yml --storage.path=/alertmanager --web.listen-address=0.0.0.0:9093
 NoNewPrivileges=true

@@ -55,10 +55,12 @@ service_of() {
 }
 
 write_runtime_env() {
-  local pw redis grafana
+  local pw redis grafana alert
   pw=$(env_get POSTGRES_PASSWORD); redis=$(env_get REDIS_PASSWORD); grafana=$(env_get GRAFANA_PASSWORD)
+  alert=$(env_get ALERTMANAGER_SECRET)
   [ -n "$pw" ] && [ -n "$redis" ] || die "POSTGRES_PASSWORD and REDIS_PASSWORD must be set in deploy/.env"
   [ -n "$grafana" ] || die "GRAFANA_PASSWORD must be set in deploy/.env"
+  [ -n "$alert" ] || die "ALERTMANAGER_SECRET must be set in deploy/.env (./scripts/init-env.sh generates it)"
   ( umask 077
     mkdir -p "$RUNTIME_DIR"; chmod 700 "$RUNTIME_DIR"
     printf 'POSTGRES_USER=%s\nPOSTGRES_PASSWORD=%s\nPOSTGRES_DB=%s\n' \
@@ -66,8 +68,12 @@ write_runtime_env() {
       "$(v=$(env_get POSTGRES_DB); echo "${v:-provenza}")" > "$RUNTIME_DIR/postgres.env"
     printf 'REDIS_PASSWORD=%s\nREDISCLI_AUTH=%s\n' "$redis" "$redis" > "$RUNTIME_DIR/redis.env"
     printf 'GF_SECURITY_ADMIN_PASSWORD=%s\n' "$grafana" > "$RUNTIME_DIR/grafana.env"
+    printf '%s' "$alert" > "$RUNTIME_DIR/alertmanager-secret"
   )
   chmod 600 "$RUNTIME_DIR"/*.env
+  # Alertmanager runs as nobody (65534) and reads it as its Bearer token
+  chown 65534:65534 "$RUNTIME_DIR/alertmanager-secret"
+  chmod 400 "$RUNTIME_DIR/alertmanager-secret"
 }
 
 install_units() {
@@ -110,7 +116,8 @@ install_units() {
     die "Quadlet did not generate: ${missing[*]}"
   fi
   systemctl enable provenza.target >/dev/null 2>&1
-  ok "$(ls "$DEPLOY_DIR"/quadlet | wc -l) Quadlet units in $UNIT_DIR, provenza.target enabled"
+  ln -sfn "$DEPLOY_DIR/scripts/provenza" /usr/local/bin/provenza
+  ok "$(ls "$DEPLOY_DIR"/quadlet | wc -l) Quadlet units in $UNIT_DIR, provenza.target enabled, /usr/local/bin/provenza"
 }
 
 cmd=${1:-}

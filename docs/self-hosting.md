@@ -204,18 +204,27 @@ Options:
 
 ## Operating
 
-All commands run as root in `/opt/provenza/deploy`.
+The installer puts the `provenza` command in `/usr/local/bin`; it asks for
+`sudo` by itself.
 
 | Task | Command |
 |---|---|
-| Status | `./scripts/units.sh status` or `systemctl status provenza.target` |
-| Logs | `journalctl -u provenza-backend -u provenza-worker -f` |
-| Restart | `systemctl restart provenza.target` |
-| Stop / start | `systemctl stop provenza.target` / `systemctl start provenza.target` |
-| One service | `systemctl restart provenza-caddy` (and so on: `provenza-<container>`) |
-| Another administrator | `./scripts/run.sh create-admin --org "Company" --email someone@company.com` |
-| A shell in a container | `podman exec -it backend sh` |
+| Status: services, containers, health checks, next backup | `provenza status` |
+| Logs | `provenza logs backend` (any service; `-f` follows, `-n 500` for more), `provenza logs` for all |
+| Start / stop / restart | `provenza start` · `provenza stop` · `provenza restart` |
+| One service | `provenza restart caddy` |
+| Upgrade | `provenza upgrade` (see Upgrade above; with no new code it refreshes the PostgreSQL, Redis, Caddy and monitoring images) |
+| Backup now | `provenza backup` |
+| Another administrator | `provenza run create-admin --org "Company" --email someone@company.com` |
+| A shell in a container | `sudo podman exec -it backend sh` |
 | Health from the UI | **Settings → System status** |
+
+Services: `postgres`, `redis`, `migrate`, `backend`, `worker`, `beat`,
+`frontend`, `caddy`, `prometheus`, `grafana`, `alertmanager`. Each is the
+systemd unit `provenza-<service>`, so `systemctl` and `journalctl -u` work too.
+Grafana (`127.0.0.1:3001`) and Prometheus (`127.0.0.1:9090`) listen on the
+server only: reach them through an SSH tunnel,
+`ssh -L 3001:127.0.0.1:3001 user@server`.
 
 Do not share the output of `podman inspect` or the files in `deploy/.runtime/`:
 they contain the secrets from `deploy/.env`.
@@ -227,7 +236,7 @@ Every setting is documented in `deploy/.env.example`. The most common:
 - `OUTBOUND_PRIVATE_ALLOWLIST`: internal hosts Provenza may call, such as an in-house Vault or model server;
 - `*_MEMORY`: container memory limits.
 
-After editing `deploy/.env`, run `./scripts/units.sh install && systemctl restart provenza.target`.
+After editing `deploy/.env`, run `provenza units && provenza restart`.
 The domain, ports, memory limits and passwords are written into the units, so
 `units.sh install` is needed for them; other settings only need the restart.
 

@@ -19,7 +19,7 @@ Environment=GF_ANALYTICS_CHECK_FOR_UPDATES=false
 # GF_SECURITY_ADMIN_PASSWORD (GRAFANA_PASSWORD from deploy/.env)
 EnvironmentFile=@DEPLOY@/.runtime/grafana.env
 Volume=@DEPLOY@/observability/prod/grafana/provisioning:/etc/grafana/provisioning:ro
-Volume=@DEPLOY@/observability/grafana/dashboards:/etc/grafana/dashboards:ro
+Volume=@DEPLOY@/observability/grafana/provisioning/dashboards:/etc/grafana/dashboards:ro
 Volume=provenza-grafana-data.volume:/var/lib/grafana
 NoNewPrivileges=true
 PodmanArgs=--memory=256m

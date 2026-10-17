@@ -8,6 +8,9 @@ After=provenza-migrate.service provenza-redis.service
 [Container]
 ContainerName=worker
 Network=provenza-data.network
+# The worker sends e-mail and webhook notifications and fetches RFC 3161
+# time-stamps: it needs a way out, which the internal data network has not
+Network=provenza-web.network
 Volume=provenza-app-data.volume:/app/data
 Exec=worker
 Image=@BACKEND_IMAGE@

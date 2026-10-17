@@ -175,7 +175,9 @@ this project adheres to [Semantic Versioning](https://semver.org/).
   when missing, builds the images, installs the units and schedules backups
   with `provenza-backup.timer` instead of cron. `upgrade.sh`, `backup.sh` and
   `restore.sh` work with Podman; `deploy/scripts/run.sh` runs one-off backend
-  commands such as `create-admin`. PostgreSQL, Redis and Grafana receive only
+  commands such as `create-admin`. The `provenza` command
+  (`/usr/local/bin`) wraps it all: `start`, `stop`, `restart`, `status`,
+  `logs <service>`, `upgrade`, `backup`, `run`. PostgreSQL, Redis and Grafana receive only
   their own password, not the whole `.env`. `deploy/docker-compose.yml` is
   removed. An existing Docker installation moves with
   `deploy/scripts/migrate-from-docker.sh`, data and TLS certificates

@@ -243,7 +243,7 @@ if container_running backend; then
 fi
 systemctl start provenza.target --no-block
 if ! wait_ready "$READY_TIMEOUT" postgres redis backend worker frontend caddy; then
-  die "the services did not become ready in time: journalctl -u provenza-backend -n 50 (and see ./scripts/units.sh status)"
+  die "the services did not become ready in time: provenza status, provenza logs backend"
 fi
 ok "migrations applied; API, workers, web UI and HTTPS proxy are up"
 
@@ -313,7 +313,7 @@ ${G}${B}✓ Provenza is running at $url${N}
 
   Organization: $SLUG
   Administrator: $ADMIN_EMAIL
-  Services: systemctl status provenza.target   (./deploy/scripts/units.sh status)
+  Manage it: provenza status | logs <service> | restart | upgrade   (provenza help)
 EOF
 
 if [ "$SENSOR_INSTALLED" = 1 ]; then
@@ -347,5 +347,5 @@ Next steps
   4. ${B}Back up deploy/.env now${N} (off this server): without its ENCRYPTION_KEY
      no backup can be read.
 
-Upgrade later with sudo ./upgrade.sh - see docs/self-hosting.md.
+Upgrade later with provenza upgrade - see docs/self-hosting.md.
 EOF

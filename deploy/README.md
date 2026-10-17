@@ -124,18 +124,24 @@ modified; the script prints the commands to delete them once you are sure.
 
 ## Operate
 
-All commands run as root in `/opt/provenza/deploy`.
+`units.sh install` puts the `provenza` command in `/usr/local/bin` (it asks
+for `sudo` by itself):
 
 | Task | Command |
 |---|---|
-| Status | `./scripts/units.sh status` or `systemctl status provenza.target` |
-| Logs | `journalctl -u provenza-backend -u provenza-worker -f` |
-| Upgrade | `cd .. && ./upgrade.sh` (backup first, automatic rollback) |
-| Stop / start / restart | `systemctl stop provenza.target` / `start` / `restart` |
-| One service | `systemctl restart provenza-backend` |
-| Another admin | `./scripts/run.sh create-admin --org "Provenza" --email ...` |
-| Shell in the API | `podman exec -it backend sh` |
-| After editing `.env` | `./scripts/units.sh install && systemctl restart provenza.target` |
+| Status: services, containers, health checks, next backup | `provenza status` |
+| Logs of one service / all, follow | `provenza logs backend` · `provenza logs` · `provenza logs caddy -f -n 200` |
+| Start / stop / restart everything | `provenza start` · `provenza stop` · `provenza restart` |
+| Restart one service | `provenza restart worker` |
+| Upgrade | `provenza upgrade` — new code: rebuild, backup, restart, rollback on failure (`upgrade.sh`); no new code: pull fresh PostgreSQL, Redis, Caddy and monitoring images and restart what changed |
+| Backup now | `provenza backup` |
+| Another admin | `provenza run create-admin --org "Provenza" --email ...` |
+| After editing `.env` | `provenza units && provenza restart` |
+| Shell in the API | `sudo podman exec -it backend sh` |
+
+Services: `postgres redis migrate backend worker beat frontend caddy
+prometheus grafana alertmanager`; each is the systemd unit
+`provenza-<service>.service`, so `systemctl` and `journalctl -u` work as well.
 
 Do not paste the output of `podman inspect` or `cat .runtime/*` anywhere: they
 contain the secrets from `.env`.
