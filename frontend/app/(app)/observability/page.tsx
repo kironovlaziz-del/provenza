@@ -27,7 +27,14 @@ import { useAuth } from "@/lib/auth";
 // points at the operator's own machine: it opens through an SSH tunnel
 // (ssh -L 3001:127.0.0.1:3001 user@server), as the hint below says.
 const GRAFANA_URL = "http://localhost:3001/d/ai-ct-backend";
-const REFRESH_MS = 30_000;
+// Prometheus scrapes every 15 s (deploy/observability/prod/prometheus.yml):
+// polling faster only fetches the same samples again.
+const REFRESH_MS = 15_000;
+// Response time leaves out /system/health: it waits 1.5 s for the Celery
+// workers to answer a ping by design, and this page calls it on every
+// refresh, so at low traffic it alone set p95/p99. The endpoints table
+// still lists it.
+const LAT = 'http_request_duration_seconds_bucket{path!="/api/v1/system/health"}';
 
 interface Signals {
   reqRate: number | null;
@@ -71,7 +78,7 @@ export default function ObservabilityPage() {
     Promise.all([
       q("sum(rate(http_requests_total[5m])) or vector(0)"),
       q('sum(rate(http_requests_total{status=~"5.."}[5m])) / sum(rate(http_requests_total[5m])) * 100'),
-      q("histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket[5m])))"),
+      q(`histogram_quantile(0.95, sum by (le) (rate(${LAT}[5m])))`),
       q("count(sensor_last_heartbeat_age_seconds) or vector(0)"),
       q("sum(sensors_offline) or vector(0)"),
       q("max(sensor_last_heartbeat_age_seconds)"),
@@ -94,13 +101,25 @@ export default function ObservabilityPage() {
     getSystemHealth().then(setSystem).catch(() => setSystem(null));
   }, [isOperator]);
 
+  // Poll while the tab is visible; a hidden tab stops, and refreshes at once
+  // when it comes back.
   useEffect(() => {
-    loadSignals();
-    const id = window.setInterval(() => {
+    const tick = () => {
       loadSignals();
       setRefreshKey((k) => k + 1);
+    };
+    loadSignals();
+    const id = window.setInterval(() => {
+      if (document.visibilityState === "visible") tick();
     }, REFRESH_MS);
-    return () => window.clearInterval(id);
+    const onVisible = () => {
+      if (document.visibilityState === "visible") tick();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      window.clearInterval(id);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
   }, [loadSignals]);
 
   const checks = useMemo<HealthCheck[]>(() => {
@@ -236,7 +255,7 @@ export default function ObservabilityPage() {
           </div>
           <span className="mon-updated">
             {updatedAt
-              ? `${t("mon.updated", "Updated")} ${updatedAt.toLocaleTimeString()} · ${t("mon.every_30s", "refreshes every 30 s")}`
+              ? `${t("mon.updated", "Updated")} ${updatedAt.toLocaleTimeString()} · ${t("mon.every_15s", "refreshes every 15 s")}`
               : ""}
           </span>
         </div>
@@ -274,7 +293,7 @@ export default function ObservabilityPage() {
           />
           <TrendChart
             title={t("mon.latency", "API response time")}
-            subtitle={t("mon.latency_sub", "Half of the requests finish within p50, 95 % within p95, 99 % within p99")}
+            subtitle={t("mon.latency_sub", "Half of the requests finish within p50, 95 % within p95, 99 % within p99. Without /system/health, which waits for the workers by design")}
             kind="lines"
             range={range}
             refreshKey={refreshKey}
@@ -285,11 +304,11 @@ export default function ObservabilityPage() {
             onError={setError}
             series={[
               { key: "p50", label: "p50", color: colors.p50,
-                query: "histogram_quantile(0.5, sum by (le) (rate(http_request_duration_seconds_bucket[$w])))" },
+                query: `histogram_quantile(0.5, sum by (le) (rate(${LAT}[$w])))` },
               { key: "p95", label: "p95", color: colors.p95,
-                query: "histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket[$w])))" },
+                query: `histogram_quantile(0.95, sum by (le) (rate(${LAT}[$w])))` },
               { key: "p99", label: "p99", color: colors.p99,
-                query: "histogram_quantile(0.99, sum by (le) (rate(http_request_duration_seconds_bucket[$w])))" },
+                query: `histogram_quantile(0.99, sum by (le) (rate(${LAT}[$w])))` },
             ]}
           />
           <TrendChart
