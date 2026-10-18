@@ -16,7 +16,20 @@ EVENT_TYPES = [
                                # egress sensor replaced the runtime daemon
     "egress_violation",        # a sensor reported alerted/blocked connections
     "egress_sensor_offline",   # a sensor has not sent a heartbeat in a while
+    "alert",                   # a Prometheus alert, through Alertmanager
+                               # (POST /api/v1/metrics/alerts)
 ]
+
+
+def _known_events(v: Optional[List[str]]) -> Optional[List[str]]:
+    """A channel subscribed to an event nothing sends would stay silent
+    without anyone noticing: only the listed event types are accepted."""
+    if v is None:
+        return v
+    unknown = sorted(set(v) - set(EVENT_TYPES))
+    if unknown:
+        raise ValueError(f"unknown event types: {', '.join(unknown)}")
+    return list(dict.fromkeys(v))
 
 
 class NotificationChannelCreate(BaseModel):
@@ -24,6 +37,11 @@ class NotificationChannelCreate(BaseModel):
     target: str
     events: List[str]
     enabled: bool = True
+
+    @field_validator("events")
+    @classmethod
+    def _validate_events(cls, v):
+        return _known_events(v)
 
     @field_validator("target")
     @classmethod
@@ -51,6 +69,11 @@ class NotificationChannelUpdate(BaseModel):
     target: Optional[str] = None
     events: Optional[List[str]] = None
     enabled: Optional[bool] = None
+
+    @field_validator("events")
+    @classmethod
+    def _validate_events(cls, v):
+        return _known_events(v)
 
     @field_validator("target")
     @classmethod

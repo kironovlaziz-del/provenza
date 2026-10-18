@@ -136,3 +136,42 @@ async def test_alerts_multiple_in_one_payload(client, with_secret):
     assert notify.await_count == 3
     orgs = sorted(call.kwargs["org_id"] for call in notify.call_args_list)
     assert orgs == [7, 7, 11]
+
+
+async def test_alert_reaches_a_subscribed_channel(client, org_and_users, admin_token, with_secret, monkeypatch):
+    """End to end: "alert" is an event a channel can subscribe to, and a
+    firing alert for the organization reaches that channel (and not one
+    subscribed to something else)."""
+    from tests.conftest import auth_headers
+
+    types = (await client.get("/api/v1/notification-channels/event-types")).json()["event_types"]
+    assert "alert" in types
+
+    sent = []
+    monkeypatch.setattr(
+        "app.services.notification_service._dispatch",
+        lambda channel, subject, message, metadata: sent.append((channel.target, subject)),
+    )
+    for target, events in (("https://example.com/alerts", ["alert"]),
+                           ("https://example.com/incidents", ["incident_created"])):
+        r = await client.post("/api/v1/notification-channels/",
+                              json={"channel_type": "webhook", "target": target, "events": events},
+                              headers=auth_headers(admin_token))
+        assert r.status_code == 200, r.text
+
+    org_id = org_and_users["org"].id
+    r = await client.post(BASE, json=_payload([_firing(org_id, "AuditUnsealedRecords")]),
+                          headers={"Authorization": f"Bearer {SECRET}"})
+    assert r.status_code == 200, r.text
+    assert sent == [("https://example.com/alerts", "[WARNING] AuditUnsealedRecords")]
+
+
+async def test_channel_rejects_unknown_event_types(client, org_and_users, admin_token):
+    from tests.conftest import auth_headers
+
+    r = await client.post("/api/v1/notification-channels/",
+                          json={"channel_type": "email", "target": "ops@example.com",
+                                "events": ["alert", "no_such_event"]},
+                          headers=auth_headers(admin_token))
+    assert r.status_code == 422
+    assert "no_such_event" in r.text
