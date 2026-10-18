@@ -3700,7 +3700,7 @@
     "chart_requests": "So'rovlar darajasi (yo'l bo'yicha)",
     "chart_latency": "Kechikish p95 (yo'l bo'yicha)",
     "chart_ingestion": "Sensor hodisalari qabul qilinishi",
-    "grafana_hint": "Chuqur tahlil, gistogramma va loglar bilan bog'lash uchun Grafanani oching.",
+    "grafana_hint": "Grafana faqat serverda ishlaydi (127.0.0.1:3001). Avval kompyuteringizdan tunnel oching: ssh -L 3001:127.0.0.1:3001 user@your-server - shundan so'ng \"Grafanada ochish\" ishlaydi, ko'rish uchun kirish talab qilinmaydi.",
     "kpi_audit": "Audit jurnali",
     "kpi_audit_hint": "Faqat qo'shiladi, o'chirilmaydi",
     "kpi_checkpoint_age": "Oxirgi audit checkpoint",

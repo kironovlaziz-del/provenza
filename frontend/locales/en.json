@@ -3700,7 +3700,7 @@
     "chart_requests": "Requests rate by path",
     "chart_latency": "Latency p95 by path",
     "chart_ingestion": "Sensor event ingestion",
-    "grafana_hint": "For drill-downs, histogram breakouts and correlation with logs, open Grafana.",
+    "grafana_hint": "Grafana runs on the server only (127.0.0.1:3001). Open a tunnel from your computer first: ssh -L 3001:127.0.0.1:3001 user@your-server - then \"Open in Grafana\" works, with no login needed to view.",
     "kpi_audit": "Audit log",
     "kpi_audit_hint": "Append-only, never deleted",
     "kpi_checkpoint_age": "Last audit checkpoint",
