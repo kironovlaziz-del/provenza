@@ -156,7 +156,7 @@ see it when it comes back.
 
 Enroll pulls three things and writes three files:
 
-    sudo provenza-sensor enroll --url https://provenza.example.com --key pvz_sensor_...
+    sudo provenza-sensor enroll --url https://provenza.example.com    # asks for the key, input hidden
 
 - `/etc/provenza-sensor/key` — the sensor key (0600).
 - `/etc/provenza-sensor/signing-key.pub` — the organization's public

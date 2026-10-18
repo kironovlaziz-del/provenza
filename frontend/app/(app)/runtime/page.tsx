@@ -527,22 +527,24 @@ export default function RuntimePage() {
    *  pulls install.sh from this control plane, which also serves the sensor
    *  binary built with it (/api/v1/egress-sensor/download/, checked against
    *  SHA256SUMS): the host needs neither Go nor git nor GitHub. It uses the
-   *  origin the admin is already on and passes the one-time key.
+   *  origin the admin is already on. The key is not in it: the script asks
+   *  for it with the input hidden, so it stays out of the shell history and
+   *  the process list.
    *
    *  Prefer the configured control-plane URL (NEXT_PUBLIC_API_URL) so the
    *  command always points at the canonical domain, even when the admin
    *  reached the UI through a mirror or a raw IP. Strip /api/v1 to get the
    *  origin; fall back to window.location.origin if the env is unset. */
-  function installCommand(key: string): string {
+  function installCommand(): string {
     const envURL = process.env.NEXT_PUBLIC_API_URL || "";
     const origin = envURL.replace(/\/api\/v1\/?$/, "") ||
                    (typeof window !== "undefined" ? window.location.origin : "");
     const script = `${origin}/api/v1/egress-sensor/download/install.sh`;
-    return `curl -fsSL ${script} -o /tmp/install-sensor.sh && sudo bash /tmp/install-sensor.sh --url ${origin} --key ${key}`;
+    return `f=$(mktemp) && curl -fsSL ${script} -o "$f" && sudo bash "$f" --url ${origin}`;
   }
 
-  function copyInstallCommand(key: string) {
-    const cmd = installCommand(key);
+  function copyInstallCommand() {
+    const cmd = installCommand();
     if (typeof navigator !== "undefined" && navigator.clipboard) {
       navigator.clipboard.writeText(cmd).then(
         () => setNotice(t("rt.sensors.install_copied")),
@@ -797,11 +799,11 @@ export default function RuntimePage() {
 
               <p className="hint-text" style={{ marginTop: 16, marginBottom: 4 }}>{t("rt.sensors.install_hint")}</p>
               <div style={{ display: "flex", gap: 8, alignItems: "flex-start", flexWrap: "wrap" }}>
-                <textarea readOnly value={installCommand(newKey.api_key)} onFocus={(e) => e.currentTarget.select()}
+                <textarea readOnly value={installCommand()} onFocus={(e) => e.currentTarget.select()}
                   className="mono" rows={2}
                   style={{ flex: "1 1 380px", padding: "8px 12px", resize: "vertical", fontSize: 12 }}
                   aria-label={t("rt.sensors.install_command")} />
-                <button type="button" className="btn btn-sm btn-primary" onClick={() => copyInstallCommand(newKey.api_key)}>
+                <button type="button" className="btn btn-sm btn-primary" onClick={() => copyInstallCommand()}>
                   {t("rt.sensors.copy_install")}
                 </button>
               </div>

@@ -3,25 +3,25 @@
 #
 #   sudo ./sensor/install.sh --url https://provenza.example.com
 #
-# Then register the sensor once:
-#   open https://provenza.example.com/runtime -> Register sensor -> copy the key
-#   sudo provenza-sensor enroll --url https://provenza.example.com --key pvz_sensor_...
-#
-# Or do both in one go, if you already have the key:
-#   sudo ./sensor/install.sh --url https://provenza.example.com --key pvz_sensor_...
+# It asks for the sensor key (Runtime -> Register sensor) with the input
+# hidden, so the key stays out of the shell history and the process list;
+# Enter with no key only prepares the host, and
+#   sudo provenza-sensor enroll --url https://provenza.example.com
+# asks for it later. Unattended: --key-file PATH or PROVENZA_SENSOR_KEY.
 #
 # Without the repository (the command the Runtime page gives you): the
 # control plane serves this script, the binary and the unit, and the script
 # checks them against the control plane's SHA256SUMS:
-#   curl -fsSL https://provenza.example.com/api/v1/egress-sensor/download/install.sh -o install-sensor.sh
-#   sudo bash install-sensor.sh --url https://provenza.example.com --key pvz_sensor_...
+#   f=$(mktemp) && curl -fsSL https://provenza.example.com/api/v1/egress-sensor/download/install.sh -o "$f" \
+#     && sudo bash "$f" --url https://provenza.example.com
 #
 # The sensor needs Linux 5.15+, cgroup v2, BPF and BTF. The BPF object is
 # embedded in the binary, so clang is only needed if you build from source.
 #
 # Flags:
 #   --url URL         control plane URL (required for enroll, optional to just prepare)
-#   --key KEY         sensor key (pvz_sensor_...); if given, enroll and start
+#   --key-file PATH   read the sensor key from this file; enroll and start
+#   --key KEY         the key itself - it stays in the shell history; prefer the prompt
 #   --cgroup-root P   cgroup v2 mount (default /sys/fs/cgroup)
 #   --binary PATH     use this provenza-sensor binary instead of building or downloading
 #   --uninstall       detach the sensor and remove files
@@ -31,6 +31,8 @@ set -euo pipefail
 
 URL=""
 KEY=""
+KEY_FILE=""
+KEY_ON_CMDLINE=0
 CGROUP_ROOT="/sys/fs/cgroup"
 PIN_DIR="/sys/fs/bpf/provenza"
 STATE_DIR="/var/lib/provenza-sensor"
@@ -54,12 +56,13 @@ confirm() {
   ans=${ans:-$def}
   [[ "$ans" =~ ^[YyДд] ]]
 }
-usage() { sed -n '2,30p' "$0" | sed 's/^# \{0,1\}//'; exit 0; }
+usage() { sed -n '2,/^set -e/p' "$0" | grep '^#' | sed 's/^# \{0,1\}//'; exit 0; }
 
 while [ $# -gt 0 ]; do
   case "$1" in
     --url) URL=${2:?}; shift 2 ;;
-    --key) KEY=${2:?}; shift 2 ;;
+    --key) KEY=${2:?}; KEY_ON_CMDLINE=1; shift 2 ;;
+    --key-file) KEY_FILE=${2:?}; shift 2 ;;
     --cgroup-root) CGROUP_ROOT=${2:?}; shift 2 ;;
     --pin-dir) PIN_DIR=${2:?}; shift 2 ;;
     --state-dir) STATE_DIR=${2:?}; shift 2 ;;
@@ -120,6 +123,24 @@ if [ "$UNINSTALL" = 1 ]; then
   ok "removed"
   exit 0
 fi
+
+# ---------------------------------------------------------------- the key
+
+# Never on the command line of a child process: it reaches enroll on stdin.
+if [ -n "$KEY_FILE" ]; then
+  [ -r "$KEY_FILE" ] || die "cannot read $KEY_FILE"
+  KEY=$(head -n1 "$KEY_FILE" | tr -d '[:space:]')
+elif [ -z "$KEY" ] && [ -n "${PROVENZA_SENSOR_KEY:-}" ]; then
+  KEY=$PROVENZA_SENSOR_KEY
+elif [ -z "$KEY" ] && [ -n "$URL" ] && [ "$ASSUME_YES" = 0 ] && [ -r /dev/tty ]; then
+  printf '%s? Sensor key%s (Runtime -> Register sensor; input hidden, Enter to only prepare): ' "$B" "$N" >/dev/tty
+  IFS= read -rs KEY </dev/tty || true
+  printf '\n' >/dev/tty
+  KEY=$(printf '%s' "$KEY" | tr -d '[:space:]')
+fi
+unset PROVENZA_SENSOR_KEY
+[ "$KEY_ON_CMDLINE" = 1 ] && warn "the key given with --key is in this shell's history; next time let the script ask for it"
+[ -z "$KEY" ] || [[ "$KEY" == pvz_sensor_* ]] || die "the key must start with pvz_sensor_ (it is shown once when you register the sensor)"
 
 # ---------------------------------------------------------------- preflight
 
@@ -205,7 +226,7 @@ ok "/etc/systemd/system/provenzasensor.service"
 
 if [ -n "$URL" ] && [ -n "$KEY" ]; then
   step "enrolling with the control plane"
-  provenza-sensor enroll --url "$URL" --key "$KEY" \
+  printf '%s\n' "$KEY" | provenza-sensor enroll --url "$URL" --key - \
     --cgroup-root "$CGROUP_ROOT" --pin-dir "$PIN_DIR" \
     --state-dir "$STATE_DIR" --run-socket "$RUN_SOCKET" --run-group "$RUN_GROUP" \
     --no-restart
@@ -225,9 +246,8 @@ echo "  ${B}One step left:${N} open ${B}${URL:-<your control plane>}/runtime${N}
 echo "  ${B}Register sensor${N}, copy the key, and run on this host:"
 echo
 if [ -n "$URL" ]; then
-  echo "    sudo provenza-sensor enroll --url $URL --key pvz_sensor_..."
+  echo "    sudo provenza-sensor enroll --url $URL        # asks for the key"
 else
-  echo "    sudo provenza-sensor enroll --url https://your-domain --key pvz_sensor_..."
+  echo "    sudo provenza-sensor enroll --url https://your-domain   # asks for the key"
 fi
-echo "    sudo systemctl start provenzasensor"
 echo
