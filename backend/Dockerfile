@@ -1,4 +1,4 @@
-# ---- AI Control Tower — backend (FastAPI + Celery) ----
+# ---- Provenza — backend (FastAPI + Celery) ----
 FROM python:3.12-slim
 
 ENV PYTHONUNBUFFERED=1 \

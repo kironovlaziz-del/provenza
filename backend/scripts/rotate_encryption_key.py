@@ -18,16 +18,19 @@ and are not touched - rotating the master key re-wraps that key instead.
 Forgetting org_keys here would make every BYOK organization on the "local"
 provider unreadable the moment ENCRYPTION_KEY changes.
 
-Usage (from backend/, venv active):
+Usage on a server installed with install.sh (as root):
     1. Generate a new key:
-         python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
-    2. Put it in backend/.env as ENCRYPTION_KEY_NEW, keep ENCRYPTION_KEY as is.
-    3. Stop everything that encrypts:
-         sudo systemctl stop ai-ct-backend ai-ct-celery ai-ct-celery-beat
-    4. python3 scripts/rotate_encryption_key.py --dry-run     # report only
-       python3 scripts/rotate_encryption_key.py               # rotate
+         provenza run python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+    2. Put it in deploy/.env as ENCRYPTION_KEY_NEW, keep ENCRYPTION_KEY as is.
+    3. Stop everything that encrypts (PostgreSQL keeps running):
+         systemctl stop provenza-backend provenza-worker provenza-beat
+    4. provenza run python scripts/rotate_encryption_key.py --dry-run     # report only
+       provenza run python scripts/rotate_encryption_key.py               # rotate
     5. Move the new value into ENCRYPTION_KEY, remove ENCRYPTION_KEY_NEW.
-    6. sudo systemctl start ai-ct-backend ai-ct-celery ai-ct-celery-beat
+    6. provenza units && provenza restart
+
+From source (backend/, venv active): the same steps with backend/.env and
+python3 scripts/rotate_encryption_key.py, stopping your own API and workers.
 
 Idempotent: values already under the new key are skipped, so an interrupted
 run can simply be started again (before step 5).
@@ -172,7 +175,7 @@ def main() -> int:
     if not args.dry_run:
         print()
         print("Next: move ENCRYPTION_KEY_NEW into ENCRYPTION_KEY, remove ENCRYPTION_KEY_NEW,")
-        print("then: sudo systemctl start ai-ct-backend ai-ct-celery ai-ct-celery-beat")
+        print("then: provenza units && provenza restart  (from source: start the API and workers)")
     return 1 if failures else 0
 
 

@@ -236,7 +236,7 @@ class NotificationChannelService:
         channel = await self.get_channel(channel_id, org_id)
         _dispatch(
             channel,
-            "AI Control Tower - test notification",
+            "Provenza - test notification",
             "If you can see this, the notification channel is configured correctly.",
             {"test": True},
         )

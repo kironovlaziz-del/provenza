@@ -26,7 +26,6 @@ frontend/.env.local.*
 backend/data
 frontend/.turbo
 .DS_Store
-ai-control-tower.zip
 all_code.txt
 source_dump.txt
 

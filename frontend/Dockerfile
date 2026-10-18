@@ -1,4 +1,4 @@
-# ---- AI Control Tower — frontend (Next.js 16) ----
+# ---- Provenza — frontend (Next.js 16) ----
 # Multi-stage: install+build, then a lean runtime image.
 
 FROM node:20-slim AS builder

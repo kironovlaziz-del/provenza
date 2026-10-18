@@ -1,10 +1,14 @@
 #!/usr/bin/env bash
-# Provenza hybrid installer: backend / worker / beat as systemd services
-# on the host, data + observability (Postgres, Redis, Prometheus, Grafana,
-# Alertmanager) in docker via the root docker-compose.yml.
+# Provenza hybrid development setup: data + observability (Postgres, Redis,
+# Prometheus, Grafana, Alertmanager) in docker via the root
+# docker-compose.yml, and the env files the backend, worker and beat need
+# when they run on the host (it restarts them if systemd units ai-ct-* of an
+# older hybrid install exist). docs/development.md describes the simpler
+# docker-compose.dev.yml route.
 #
-# For the all-in-one prod install, run ./install.sh instead: that one
-# uses deploy/docker-compose.yml and puts everything behind Caddy.
+# To run Provenza on a server, use ./install.sh instead: one command,
+# Podman Quadlet units under systemd, everything behind Caddy
+# (docs/self-hosting.md).
 #
 # Usage:
 #   ./scripts/init-dev-env.sh                          # interactive
