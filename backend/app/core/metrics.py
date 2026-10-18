@@ -256,9 +256,27 @@ audit_unsealed_records = ScrapeGauge(
     ["org_id"],
 )
 
-# Matches egress_sensor.warn_offline's own threshold. Kept separate on
-# purpose: the metric is a monitoring signal, the warn task sends notices.
-OFFLINE_AFTER = timedelta(minutes=5)
+# A sensor is offline when it has missed three heartbeats in a row, and never
+# sooner than five minutes: a fixed five minutes would call a sensor with a
+# 120 s heartbeat offline after two late beats. The same rule drives this
+# gauge and the warning egress_sensor.warn_offline_sensors sends.
+OFFLINE_FLOOR = timedelta(minutes=5)
+OFFLINE_MISSED_BEATS = 3
+DEFAULT_HEARTBEAT_SECONDS = 30
+
+
+def offline_after(heartbeat_seconds: int | None) -> timedelta:
+    beat = heartbeat_seconds or DEFAULT_HEARTBEAT_SECONDS
+    return max(OFFLINE_FLOOR, timedelta(seconds=OFFLINE_MISSED_BEATS * beat))
+
+
+async def heartbeat_by_org(db: AsyncSession) -> dict[int, int]:
+    """Each organization's configured heartbeat; an organization without a
+    settings row uses the default."""
+    from app.models.egress_sensor import EgressPolicySettings
+
+    rows = await db.execute(select(EgressPolicySettings.org_id, EgressPolicySettings.heartbeat_seconds))
+    return {org_id: beat for org_id, beat in rows.all()}
 
 
 async def update_db_gauges(db: AsyncSession) -> None:
@@ -284,6 +302,7 @@ async def update_db_gauges(db: AsyncSession) -> None:
     # sensors are all healthy shows "0 offline", not "no series".
     org_ids = {org_id for _, org_id, _ in rows}
     offline_by_org: dict[int, int] = {oid: 0 for oid in org_ids}
+    beats = await heartbeat_by_org(db) if rows else {}
     for sensor_id, org_id, last_seen in rows:
         if last_seen is None:
             continue
@@ -291,7 +310,7 @@ async def update_db_gauges(db: AsyncSession) -> None:
         sensor_last_heartbeat_age_seconds.labels(
             sensor_id=str(sensor_id), org_id=str(org_id)
         ).set(age)
-        if now - last_seen > OFFLINE_AFTER:
+        if now - last_seen > offline_after(beats.get(org_id)):
             offline_by_org[org_id] += 1
     for org_id, n in offline_by_org.items():
         sensors_offline.labels(org_id=str(org_id)).set(n)

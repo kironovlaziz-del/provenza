@@ -15,6 +15,12 @@ interface EndpointRow {
 
 const LIMIT = 8;
 
+/** Routes that are slow by design, with why: shown under the path, so a high
+ *  p95 there does not read as a problem. */
+const SLOW_BY_DESIGN: Record<string, [string, string]> = {
+  "/api/v1/system/health": ["mon.ep_health_note", "Waits 1.5 s for the workers to answer a ping - by design, not counted in the response time above"],
+};
+
 /** The busiest API endpoints in the selected range: traffic, server errors
  *  and p95 latency side by side - a table, because these are three measures
  *  of different scale for the same few routes. */
@@ -96,6 +102,9 @@ export function EndpointsTable({ range, refreshKey, onError }: {
                 <tr key={r.path}>
                   <td>
                     <code>{label(r.path)}</code>
+                    {SLOW_BY_DESIGN[r.path] && (
+                      <div className="mon-chart-sub">{t(SLOW_BY_DESIGN[r.path][0], SLOW_BY_DESIGN[r.path][1])}</div>
+                    )}
                     <div className="mon-bar" style={{ width: `${max > 0 ? Math.max(2, (r.rate / max) * 100) : 0}%` }} />
                   </td>
                   <td className="num">{fmtRate(r.rate)}</td>

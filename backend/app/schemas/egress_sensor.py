@@ -344,7 +344,9 @@ class PolicySettingsUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     refresh_seconds: Optional[int] = Field(default=None, ge=10, le=600)
-    heartbeat_seconds: Optional[int] = Field(default=None, ge=10, le=300)
+    # at most 120: commands reach a sensor with its heartbeat and expire in
+    # five minutes (egress_sensor_commands.COMMAND_TTL)
+    heartbeat_seconds: Optional[int] = Field(default=None, ge=10, le=120)
     default_mode: Optional[Literal["observe", "alert", "enforce"]] = None
     default_dns: Optional[Literal["off", "listed", "any"]] = None
     # 0 disables pruning for this organization.

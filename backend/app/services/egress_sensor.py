@@ -28,6 +28,9 @@ from app.models.egress_sensor import (
     EgressWorkload,
     SensorActivity,)
 from app.core.metrics import (
+    OFFLINE_FLOOR,
+    heartbeat_by_org,
+    offline_after,
     sensor_activity_dropped_total,
     sensor_activity_inserted_total,
     sensor_event_time_rejected_total,
@@ -51,9 +54,6 @@ INCIDENT_TYPE = "egress_violation"
 # Only these actions produce an incident or a notification: observe mode is a
 # record, not a signal.
 _LOUD = ("alerted", "blocked")
-
-# How long a sensor may be silent before we warn the organization.
-OFFLINE_AFTER = timedelta(minutes=5)
 
 
 def new_sensor_key() -> Tuple[str, str, str]:
@@ -754,13 +754,15 @@ async def ingest_activities(db, sensor, events):
 
 async def warn_offline_sensors(db: AsyncSession) -> int:
     """Warn once per silent sensor. A sensor counts as silent when it has
-    sent at least one heartbeat and the last one is older than OFFLINE_AFTER.
+    sent at least one heartbeat and has missed three in a row since, never
+    sooner than five minutes (metrics.offline_after, per organization).
     We warn when offline_notified_at is null or older than the last heartbeat
     (meaning: it came back after we warned, then went silent again).
 
     Returns the number of sensors warned.
     """
-    threshold = now_utc() - OFFLINE_AFTER
+    # the floor narrows the query; each organization's heartbeat decides
+    threshold = now_utc() - OFFLINE_FLOOR
     rows = (await db.execute(
         select(EgressSensor).where(
             EgressSensor.enabled.is_(True),
@@ -775,6 +777,8 @@ async def warn_offline_sensors(db: AsyncSession) -> int:
     )).scalars().all()
 
     now = now_utc()
+    beats = await heartbeat_by_org(db) if rows else {}
+    rows = [s for s in rows if now - s.last_seen_at > offline_after(beats.get(s.org_id))]
     warned = 0
     for s in rows:
         try:
