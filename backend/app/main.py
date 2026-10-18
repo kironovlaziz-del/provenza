@@ -3,12 +3,13 @@ from fastapi.middleware.cors import CORSMiddleware
 import time
 from fastapi import Depends, Request
 from fastapi.responses import Response
-from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
+from prometheus_client import CONTENT_TYPE_LATEST
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.metrics import (
     http_request_duration_seconds,
     http_requests_total,
+    render as render_metrics,
     update_db_gauges,
 )
 from app.core.config import settings
@@ -149,11 +150,12 @@ async def http_metrics_middleware(request: Request, call_next):
 
 @app.get("/metrics", include_in_schema=False)
 async def metrics_endpoint(db: AsyncSession = Depends(get_db)) -> Response:
-    # Refresh gauges that need DB state, then serialize the registry.
-    # Prometheus scrapes this from localhost only (nginx proxies /api/v1/*
-    # to the backend, not /metrics).
+    # Refresh the gauges that describe the database, then serialize them with
+    # the counters of every API process (app/core/metrics.py). Prometheus
+    # scrapes backend:8000 on the container network; Caddy does not route
+    # /metrics, so it is not reachable from outside.
     await update_db_gauges(db)
-    return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
+    return Response(content=render_metrics(), media_type=CONTENT_TYPE_LATEST)
 
 
 app.include_router(auth.router, prefix=f"{settings.API_V1_STR}/auth", tags=["auth"])
