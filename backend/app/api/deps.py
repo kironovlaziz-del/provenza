@@ -11,7 +11,7 @@ from app.core import sessions
 from app.core.config import settings
 from app.core.errors import api_error
 from app.core.security import hash_api_key
-from app.models.user import User, UserRole
+from app.models.user import OVERSIGHT_ROLES, User, UserRole
 from app.models.ingestion_source import IngestionSource
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
@@ -22,6 +22,17 @@ oauth2_scheme_optional = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login", aut
 # what a user the organization requires a second factor of may still do before enrolling
 MFA_SETUP_PATHS = ("/users/me", "/users/me/mfa", "/users/me/mfa/setup", "/users/me/mfa/enable",
                    "/users/me/password", "/auth/logout")
+
+# An auditor changes nothing. These requests change no governed data: its
+# own account (/users/me/..., signing out), and what an audit produces - a
+# check of the whole log, a compliance report (both are in the audit log).
+SAFE_METHODS = ("GET", "HEAD", "OPTIONS")
+AUDITOR_WRITES = ("/auth/logout", "/audit-logs/verify", "/compliance/reports")
+
+
+def _auditor_may(path: str) -> bool:
+    path = path.rstrip("/")
+    return "/users/me" in path or path.endswith(AUDITOR_WRITES)
 
 
 async def get_current_user(
@@ -50,6 +61,9 @@ async def get_current_user(
         if await mfa.required_for(db, user):
             raise api_error(status.HTTP_403_FORBIDDEN, "auth.mfa_setup_required")
     await enforce_user_session_policy(request, db, user)
+    if (user.role == UserRole.auditor.value and request.method not in SAFE_METHODS
+            and not _auditor_may(request.url.path)):
+        raise api_error(status.HTTP_403_FORBIDDEN, "rbac.read_only")
     return user
 
 
@@ -104,7 +118,7 @@ async def _user_from_token(token: str, db: AsyncSession) -> User:
     return user
 
 
-def require_role(*allowed: UserRole):
+def require_role(*allowed: UserRole, mints: bool = False):
     """
     Dependency factory for role-based access control.
 
@@ -114,10 +128,16 @@ def require_role(*allowed: UserRole):
             current_user: User = Depends(require_role(UserRole.admin)),
         ): ...
 
+    The oversight roles (auditor, compliance) pass on GET wherever an admin
+    or approver does: they read everything, change nothing through it.
+    mints=True marks a GET that creates something (a download that issues
+    a key) and is closed to them.
+
     The User.role column is a plain VARCHAR (see migration
     c3d5e7f9a1b4) so comparison is done against the .value of each role.
     """
     allowed_values = [r.value for r in allowed]
+    readable = not mints and (UserRole.admin.value in allowed_values or UserRole.approver.value in allowed_values)
 
     async def checker(request: Request, current_user: User = Depends(get_current_user)) -> User:
         # an agent key never carries a human role
@@ -127,7 +147,8 @@ def require_role(*allowed: UserRole):
                 "rbac.insufficient_role",
                 allowed=allowed_values,
             )
-        if current_user.role not in allowed_values:
+        reads = readable and current_user.role in OVERSIGHT_ROLES and request.method in ("GET", "HEAD")
+        if current_user.role not in allowed_values and not reads:
             raise api_error(
                 status.HTTP_403_FORBIDDEN,
                 "rbac.insufficient_role",

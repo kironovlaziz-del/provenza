@@ -16,7 +16,7 @@ export function SystemHealthBanner() {
   const { t } = useTranslation();
   const { user } = useAuth();
   const role = user?.role as string | undefined;
-  const allowed = role === "admin" || role === "approver";
+  const allowed = role === "admin" || role === "approver" || role === "auditor" || role === "compliance";
   const [health, setHealth] = useState<SystemHealth | null>(null);
   const [dismissed, setDismissed] = useState<string | null>(null);
 

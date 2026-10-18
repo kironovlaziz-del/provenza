@@ -36,7 +36,17 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     <FeaturesProvider>
       <div className="shell">
         <Sidebar />
-        <div className="main"><SystemHealthBanner />{children}</div>
+        <div className="main">
+          {user.role === "auditor" && (
+            // one line, every page: why the buttons answer "read-only"
+            <div role="note" style={{ padding: "6px 16px", fontSize: 12, color: "var(--text-muted)",
+              borderBottom: "1px solid var(--border)", background: "var(--bg-panel)" }}>
+              {t("roles.auditor_banner", "Auditor: read-only access. You see everything administrators see and change nothing.")}
+            </div>
+          )}
+          <SystemHealthBanner />
+          {children}
+        </div>
         <DialogHost />
       </div>
     </FeaturesProvider>

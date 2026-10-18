@@ -42,8 +42,9 @@ def policy_name(value: Optional[str]) -> str:
 def policy_applies(policy: Optional[str], role: Optional[str]) -> bool:
     if policy == "all":
         return True
-    if policy == "reviewers":
-        return role in (UserRole.admin.value, UserRole.approver.value)
+    if policy == "reviewers":  # whoever reviews or sees everything
+        return role in (UserRole.admin.value, UserRole.approver.value,
+                        UserRole.auditor.value, UserRole.compliance.value)
     return False
 
 

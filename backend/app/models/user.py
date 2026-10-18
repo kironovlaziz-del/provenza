@@ -24,6 +24,16 @@ class UserRole(str, enum.Enum):
     admin = "admin"
     approver = "approver"
     user = "user"
+    # Oversight roles: they read everything an admin or approver reads
+    # (api/deps.py require_role). An auditor changes nothing; a compliance
+    # officer also confirms compliance requirements (api/compliance.py)
+    # and, like a user, may use the AI it governs.
+    auditor = "auditor"
+    compliance = "compliance"
+
+
+# Read what admins and approvers read, on GET (deps.require_role).
+OVERSIGHT_ROLES = (UserRole.auditor.value, UserRole.compliance.value)
 
 
 class User(Base):

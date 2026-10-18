@@ -28,6 +28,12 @@ development, see [README.md](README.md).
 | **admin** | Everything, including user management, connections, ingestion sources, domain catalog, discovery |
 | **approver** | Review and decide approval requests; everyday operations |
 | **user** | Submit requests, view their own data |
+| **auditor** | Read everything an admin or approver sees - inventory, policies, agents, the audit log, compliance - and change nothing; may verify the audit log and generate compliance reports |
+| **compliance** | Compliance officer (DPO, Chief AI Officer): reads the same as an auditor and confirms compliance requirements |
+
+An admin gives roles on **Settings → Users**. An organization that requires
+two-factor sign-in "for reviewers" requires it for auditors and compliance
+officers too.
 
 ---
 

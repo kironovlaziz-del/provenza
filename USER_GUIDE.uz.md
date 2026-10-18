@@ -29,6 +29,12 @@ joylashtirish va dasturlash uchun [README.md](README.md) ga qarang.
 | **admin** | Hamma narsa: foydalanuvchilar, ulanishlar, telemetriya manbalari, domenlar katalogi, kashfiyot |
 | **approver** | Tasdiqlash so‘rovlarini ko‘rib chiqish va hal qilish; kundalik amallar |
 | **user** | So‘rov yuborish, o‘z ma’lumotlarini ko‘rish |
+| **auditor** | Admin yoki tasdiqlovchi ko‘radigan hamma narsani - inventar, siyosatlar, agentlar, audit jurnali, muvofiqlik - o‘qiydi va hech narsani o‘zgartirmaydi; audit jurnalini tekshirishi va muvofiqlik hisobotini yaratishi mumkin |
+| **compliance** | Muvofiqlik mas’uli (DPO, Chief AI Officer): auditor kabi o‘qiydi va muvofiqlik talablarini tasdiqlaydi |
+
+Rollarni admin **Settings → Users** sahifasida beradi. Agar tashkilot ikki
+bosqichli kirishni "tasdiqlovchilar uchun" talab qilsa, bu auditor va
+muvofiqlik mas’uliga ham tegishli.
 
 ---
 

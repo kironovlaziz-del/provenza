@@ -7,7 +7,9 @@
 // data of every organization. A section is shown when the user may open at
 // least one of its pages; it links to the first of them.
 
-export type Role = "admin" | "approver" | "user" | string | undefined;
+export type Role = "admin" | "approver" | "user" | "auditor" | "compliance" | string | undefined;
+
+const OVERSIGHT = ["auditor", "compliance"];
 
 export interface NavPage {
   href: string;
@@ -144,8 +146,9 @@ export function canSee(
 ): boolean {
   if (page.feature && !features[page.feature]) return false;
   if (page.operatorOnly) return role === "admin" && operator;
-  if (page.adminOnly) return role === "admin";
-  if (page.reviewOnly) return role === "admin" || role === "approver";
+  // the oversight roles (auditor, compliance) read what admins read
+  if (page.adminOnly) return role === "admin" || OVERSIGHT.includes(role as string);
+  if (page.reviewOnly) return role === "admin" || role === "approver" || OVERSIGHT.includes(role as string);
   return true;
 }
 
