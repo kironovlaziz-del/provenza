@@ -10,6 +10,12 @@
 # Or do both in one go, if you already have the key:
 #   sudo ./sensor/install.sh --url https://provenza.example.com --key pvz_sensor_...
 #
+# Without the repository (the command the Runtime page gives you): the
+# control plane serves this script, the binary and the unit, and the script
+# checks them against the control plane's SHA256SUMS:
+#   curl -fsSL https://provenza.example.com/api/v1/egress-sensor/download/install.sh -o install-sensor.sh
+#   sudo bash install-sensor.sh --url https://provenza.example.com --key pvz_sensor_...
+#
 # The sensor needs Linux 5.7+, cgroup v2, BPF and BTF. The BPF object is
 # embedded in the binary, so clang is only needed if you build from source.
 #
@@ -17,6 +23,7 @@
 #   --url URL         control plane URL (required for enroll, optional to just prepare)
 #   --key KEY         sensor key (pvz_sensor_...); if given, enroll and start
 #   --cgroup-root P   cgroup v2 mount (default /sys/fs/cgroup)
+#   --binary PATH     use this provenza-sensor binary instead of building or downloading
 #   --uninstall       detach the sensor and remove files
 #   --yes             non-interactive
 #   --force           continue despite host warnings
@@ -47,7 +54,7 @@ confirm() {
   ans=${ans:-$def}
   [[ "$ans" =~ ^[YyДд] ]]
 }
-usage() { sed -n '2,23p' "$0" | sed 's/^# \{0,1\}//'; exit 0; }
+usage() { sed -n '2,30p' "$0" | sed 's/^# \{0,1\}//'; exit 0; }
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -68,6 +75,33 @@ while [ $# -gt 0 ]; do
 done
 
 SELF_DIR="$(cd "$(dirname "$0")" && pwd)"
+DL_DIR=""
+
+# The binary for this machine and the systemd unit, from the control plane
+# (GET /api/v1/egress-sensor/download/), checked against its SHA256SUMS.
+fetch_from_control_plane() {
+  local arch base f
+  case "$(uname -m)" in
+    x86_64|amd64) arch=amd64 ;;
+    aarch64|arm64) arch=arm64 ;;
+    *) die "no sensor build for $(uname -m) (amd64 and arm64 only)" ;;
+  esac
+  command -v curl >/dev/null || die "curl is required to download the sensor"
+  command -v sha256sum >/dev/null || die "sha256sum is required to check the download"
+  base="${URL%/}/api/v1/egress-sensor/download"
+  DL_DIR=$(mktemp -d)
+  trap 'rm -rf "$DL_DIR"' EXIT
+  step "downloading the sensor from $base"
+  for f in SHA256SUMS "provenza-sensor-linux-$arch" provenzasensor.service; do
+    curl -fsSL --proto '=https,http' --max-time 300 -o "$DL_DIR/$f" "$base/$f" \
+      || die "could not download $base/$f (is the control plane's backend image up to date?)"
+  done
+  ( cd "$DL_DIR" && grep -E " (provenza-sensor-linux-$arch|provenzasensor.service)\$" SHA256SUMS | sha256sum -c --quiet - ) \
+    || die "checksum mismatch: the downloaded files do not match the control plane's SHA256SUMS"
+  mv "$DL_DIR/provenza-sensor-linux-$arch" "$DL_DIR/provenza-sensor"
+  chmod 0755 "$DL_DIR/provenza-sensor"
+  ok "linux/$arch binary and unit, checksums match"
+}
 
 [ "$(id -u)" = 0 ] || die "run as root: sudo $0 ..."
 
@@ -118,14 +152,25 @@ if [ -n "$BIN_SRC" ]; then
   BIN="$BIN_SRC"
 elif [ -x "$SELF_DIR/provenza-sensor" ]; then
   BIN="$SELF_DIR/provenza-sensor"
+elif [ -n "$URL" ]; then
+  # the build that matches the control plane; no Go needed on this host
+  fetch_from_control_plane
+  BIN="$DL_DIR/provenza-sensor"
 elif command -v go >/dev/null 2>&1 && [ -f "$SELF_DIR/cmd/provenza-sensor/main.go" ]; then
   step "building from source (go build)"
   ( cd "$SELF_DIR" && CGO_ENABLED=0 go build -trimpath -ldflags '-s -w -X main.version=dev' -o ./provenza-sensor ./cmd/provenza-sensor )
   BIN="$SELF_DIR/provenza-sensor"
 else
-  die "no binary found: pass --binary PATH, or run 'make build' in this directory, or install go"
+  die "no binary found: pass --url (downloads it from the control plane), --binary PATH, or run 'make build' in this directory"
 fi
 ok "binary: $BIN"
+
+UNIT_SRC="$SELF_DIR/packaging/provenzasensor.service"
+if [ ! -f "$UNIT_SRC" ]; then
+  [ -n "$URL" ] || die "packaging/provenzasensor.service not found next to this script: pass --url to download it"
+  [ -f "$DL_DIR/provenzasensor.service" ] || fetch_from_control_plane
+  UNIT_SRC="$DL_DIR/provenzasensor.service"
+fi
 
 # ---------------------------------------------------------------- install
 
@@ -152,7 +197,7 @@ ok "/etc/tmpfiles.d/provenza-sensor.conf"
 
 step "installing systemd unit"
 install -d -m 0755 /etc/provenza-sensor "$STATE_DIR" /run/provenza-sensor
-install -m 0644 "$SELF_DIR/packaging/provenzasensor.service" /etc/systemd/system/provenzasensor.service
+install -m 0644 "$UNIT_SRC" /etc/systemd/system/provenzasensor.service
 systemctl daemon-reload
 ok "/etc/systemd/system/provenzasensor.service"
 
