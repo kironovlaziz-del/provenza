@@ -17,5 +17,30 @@ class AttestationIn(BaseModel):
         return (v or "").strip() or None
 
 
+def _known_frameworks(v):
+    from app.services.compliance_catalog import FRAMEWORKS
+    if v is None:
+        return v
+    unknown = [f for f in v if f not in FRAMEWORKS]
+    if unknown:
+        raise ValueError(f"unknown framework(s): {', '.join(unknown)}")
+    return [f for f in FRAMEWORKS if f in set(v)]
+
+
 class ReportIn(BaseModel):
-    frameworks: Optional[List[Literal["eu_ai_act", "gdpr", "iso42001", "nist_ai_rmf", "owasp_agentic"]]] = None
+    # None: the organization's chosen frameworks
+    frameworks: Optional[List[str]] = None
+
+    @field_validator("frameworks")
+    @classmethod
+    def _v(cls, v):
+        return _known_frameworks(v)
+
+
+class FrameworksIn(BaseModel):
+    frameworks: List[str] = Field(min_length=1)
+
+    @field_validator("frameworks")
+    @classmethod
+    def _v(cls, v):
+        return _known_frameworks(v)

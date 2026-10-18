@@ -80,6 +80,21 @@ export async function getComplianceStatus() {
   return data;
 }
 
+export interface FrameworkChoice {
+  available: Record<FrameworkId, { name: string; ref: string }>;
+  selected: FrameworkId[];
+}
+
+export async function getFrameworks() {
+  const { data } = await api.get<FrameworkChoice>("/compliance/frameworks");
+  return data;
+}
+
+export async function setFrameworks(frameworks: FrameworkId[]) {
+  const { data } = await api.put<FrameworkChoice>("/compliance/frameworks", { frameworks });
+  return data;
+}
+
 export async function attest(payload: {
   requirement_id: string;
   system_id?: number | null;

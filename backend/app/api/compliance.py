@@ -17,7 +17,8 @@ from app.core.database import get_db
 from app.models.ai_system import AISystem
 from app.models.compliance import ComplianceAttestation, ComplianceReport
 from app.models.user import User, UserRole
-from app.schemas.compliance import AttestationIn, ReportIn
+from app.models.organization import Organization
+from app.schemas.compliance import AttestationIn, FrameworksIn, ReportIn
 from app.services.audit_service import AuditService
 from app.services.compliance_catalog import BY_ID, CATALOG_VERSION, FRAMEWORKS, REQUIREMENTS
 from app.services.compliance_engine import canonical_hash, evaluate
@@ -39,6 +40,30 @@ def _frameworks(param: Optional[str]):
     return [p for p in param.split(",") if p in FRAMEWORKS]
 
 
+async def _chosen(db: AsyncSession, org_id: int) -> Optional[list]:
+    """The frameworks the organization follows; None: all of them."""
+    v = (await db.execute(select(Organization.compliance_frameworks).where(Organization.id == org_id))).scalar()
+    v = [f for f in (v or []) if f in FRAMEWORKS]
+    return v or None
+
+
+@router.get("/frameworks")
+async def get_frameworks(db: AsyncSession = Depends(get_db), current_user: User = Depends(READ)):
+    chosen = await _chosen(db, current_user.org_id)
+    return {"available": FRAMEWORKS, "selected": chosen or list(FRAMEWORKS)}
+
+
+@router.put("/frameworks")
+async def set_frameworks(data: FrameworksIn, db: AsyncSession = Depends(get_db), current_user: User = Depends(ATTEST)):
+    org = (await db.execute(select(Organization).where(Organization.id == current_user.org_id))).scalar_one()
+    previous = org.compliance_frameworks
+    org.compliance_frameworks = None if set(data.frameworks) == set(FRAMEWORKS) else data.frameworks
+    # the audit record commits the change with it
+    await AuditService(db).log(current_user.org_id, current_user.id, "organization", current_user.org_id,
+                               "compliance_frameworks_changed", {"from": previous, "to": data.frameworks})
+    return {"available": FRAMEWORKS, "selected": data.frameworks}
+
+
 @router.get("/catalog")
 async def catalog(current_user: User = Depends(READ)):
     return {"version": CATALOG_VERSION, "frameworks": FRAMEWORKS, "requirements": REQUIREMENTS}
@@ -47,7 +72,7 @@ async def catalog(current_user: User = Depends(READ)):
 @router.get("/status")
 async def status(frameworks: Optional[str] = None, db: AsyncSession = Depends(get_db),
                  current_user: User = Depends(READ)):
-    return await evaluate(db, current_user.org_id, _frameworks(frameworks))
+    return await evaluate(db, current_user.org_id, _frameworks(frameworks) or await _chosen(db, current_user.org_id))
 
 
 @router.get("/systems/{system_id}")
@@ -56,7 +81,7 @@ async def system_status(system_id: int, db: AsyncSession = Depends(get_db), curr
                                                      AISystem.org_id == current_user.org_id))).scalar_one_or_none()
     if not ok:
         raise HTTPException(status_code=404, detail="AI system not found")
-    result = await evaluate(db, current_user.org_id)
+    result = await evaluate(db, current_user.org_id, await _chosen(db, current_user.org_id))
     rows = []
     for r in result["requirements"]:
         for s in r.get("systems") or []:
@@ -113,7 +138,7 @@ async def attest(data: AttestationIn, db: AsyncSession = Depends(get_db), curren
 
 @router.post("/reports")
 async def create_report(data: ReportIn, db: AsyncSession = Depends(get_db), current_user: User = Depends(READ)):
-    content = await evaluate(db, current_user.org_id, data.frameworks)
+    content = await evaluate(db, current_user.org_id, data.frameworks or await _chosen(db, current_user.org_id))
     content["generated_by"] = current_user.id
     # plain JSON (datetimes -> ISO strings) so the stored JSONB hashes the same on read-back
     content = json.loads(json.dumps(content, default=str))

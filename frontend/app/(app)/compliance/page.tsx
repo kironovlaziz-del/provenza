@@ -11,10 +11,13 @@ import {
   complianceError,
   createReport,
   getComplianceStatus,
+  getFrameworks,
   listReports,
+  setFrameworks,
   type CStatus,
   type ComplianceResult,
   type Evidence,
+  type FrameworkChoice,
   type FrameworkId,
   type ReportListItem,
   type RequirementResult,
@@ -101,6 +104,91 @@ function AttestForm({
   );
 }
 
+/** Which frameworks the organization follows: the page, its scores and new
+ *  reports show only those. */
+function FrameworkPicker({ editable, onSaved }: { editable: boolean; onSaved: (err: string | null) => void }) {
+  const { t } = useTranslation();
+  const [choice, setChoice] = useState<FrameworkChoice | null>(null);
+  const [picked, setPicked] = useState<FrameworkId[]>([]);
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    getFrameworks()
+      .then((c) => {
+        setChoice(c);
+        setPicked(c.selected);
+      })
+      .catch(() => undefined);
+  }, []);
+
+  if (!choice) return null;
+  const ids = Object.keys(choice.available) as FrameworkId[];
+  const changed = picked.length !== choice.selected.length || picked.some((f) => !choice.selected.includes(f));
+
+  async function save() {
+    setBusy(true);
+    try {
+      const c = await setFrameworks(picked);
+      setChoice(c);
+      setPicked(c.selected);
+      setOpen(false);
+      onSaved(null);
+    } catch (e) {
+      onSaved(complianceError(e, t("compliance.failed", "Could not save.")));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="panel" style={{ marginBottom: 16 }}>
+      <div className="panel-body" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+        <div>
+          <strong>{t("compliance.fw_title", "Frameworks we follow")}</strong>{" "}
+          <span className="hint-text">· {choice.selected.length} / {ids.length}</span>
+          {!open && (
+            <div className="hint-text" style={{ fontSize: 12 }}>
+              {choice.selected.map((f) => choice.available[f]?.name ?? f).join(" · ")}
+            </div>
+          )}
+        </div>
+        {editable && !open && (
+          <button className="btn btn-sm" onClick={() => setOpen(true)}>{t("compliance.fw_change", "Change")}</button>
+        )}
+      </div>
+      {open && (
+        <div className="panel-body" style={{ borderTop: "1px solid var(--border, #334155)" }}>
+          <p className="hint-text" style={{ marginTop: 0, fontSize: 12 }}>
+            {t("compliance.fw_hint", "Only the chosen frameworks are shown and go into new reports. Nothing is deleted: attestations stay, and a framework can be turned back on at any time.")}
+          </p>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 8 }}>
+            {ids.map((f) => (
+              <label key={f} style={{ display: "flex", gap: 8, alignItems: "flex-start", cursor: "pointer" }}>
+                <input type="checkbox" checked={picked.includes(f)}
+                  onChange={(e) => setPicked(e.target.checked ? ids.filter((x) => x === f || picked.includes(x)) : picked.filter((x) => x !== f))} />
+                <span>
+                  {choice.available[f].name}
+                  <div className="hint-text" style={{ fontSize: 11 }}>{choice.available[f].ref}</div>
+                </span>
+              </label>
+            ))}
+          </div>
+          <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+            <button className="btn btn-primary btn-sm" disabled={busy || picked.length === 0 || !changed} onClick={save}>
+              {t("compliance.fw_save", "Save")}
+            </button>
+            <button className="btn btn-sm" onClick={() => { setPicked(choice.selected); setOpen(false); }}>
+              {t("compliance.fw_cancel", "Cancel")}
+            </button>
+            {picked.length === 0 && <span className="hint-text" style={{ fontSize: 12 }}>{t("compliance.fw_none", "Choose at least one.")}</span>}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function CompliancePage() {
   const { t } = useTranslation();
   const { user } = useAuth();
@@ -180,6 +268,14 @@ export default function CompliancePage() {
         {error && <div className="panel" style={{ marginBottom: 16, borderColor: "#ef4444" }}><div className="panel-body" style={{ color: "#ef4444" }}>{error}</div></div>}
         {notice && <div className="hint-text" style={{ marginBottom: 16 }}>{notice}</div>}
 
+        <FrameworkPicker editable={canAttest} onSaved={(err) => {
+          setError(err);
+          if (!err) {
+            setFw("all");
+            load();
+          }
+        }} />
+
         {/* ---- scores ---- */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: 12, marginBottom: 20 }}>
           {Object.entries(data.summary).map(([id, s]) => (
@@ -203,7 +299,7 @@ export default function CompliancePage() {
         <div className="panel" style={{ marginBottom: 20 }}>
           <div className="panel-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
             <h2>
-              {fw === "all" ? t("compliance.all", "All frameworks") : data.summary[fw]?.name} · {reqs.length}
+              {fw === "all" ? t("compliance.all_chosen", "Our frameworks") : data.summary[fw]?.name} · {reqs.length}
             </h2>
             <select value={filter} onChange={(e) => setFilter(e.target.value as typeof filter)} style={{ width: "auto" }}>
               <option value="open">{t("compliance.filter_open", "Needs attention")}</option>
@@ -284,7 +380,7 @@ export default function CompliancePage() {
           <div className="panel-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
             <h2>{t("compliance.reports", "Reports for auditors")}</h2>
             <button className="btn btn-primary btn-sm" disabled={busy} onClick={report}>
-              {fw === "all" ? t("compliance.report_all", "Create report (all frameworks)") : `${t("compliance.report_one", "Create report")}: ${data.summary[fw]?.name}`}
+              {fw === "all" ? t("compliance.report_chosen", "Create report (our frameworks)") : `${t("compliance.report_one", "Create report")}: ${data.summary[fw]?.name}`}
             </button>
           </div>
           <div className="panel-body" style={{ maxHeight: 320, overflowY: "auto" }}>

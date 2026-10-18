@@ -1,4 +1,5 @@
 from sqlalchemy import Column, Integer, String, DateTime, func
+from sqlalchemy.dialects.postgresql import JSONB
 from app.core.database import Base
 
 
@@ -16,4 +17,7 @@ class Organization(Base):
     mfa_required = Column(String(10), nullable=False, default="none", server_default="none")
     # which AI providers may be called: any | self_hosted (services/provider_policy.py)
     ai_provider_policy = Column(String(20), nullable=False, default="any", server_default="any")
+    # the compliance frameworks the organization follows (compliance_catalog
+    # FRAMEWORKS ids); NULL: all of them
+    compliance_frameworks = Column(JSONB)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
