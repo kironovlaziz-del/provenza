@@ -32,21 +32,24 @@ from app.core.config import settings
 
 router = APIRouter()
 
+# requested name -> (file name, media type). The path is built from the file
+# name stored here, never from the request: nothing else can be reached.
 FILES = {
-    "install.sh": "text/x-shellscript; charset=utf-8",
-    "provenzasensor.service": "text/plain; charset=utf-8",
-    "SHA256SUMS": "text/plain; charset=utf-8",
-    "provenza-sensor-linux-amd64": "application/octet-stream",
-    "provenza-sensor-linux-arm64": "application/octet-stream",
+    "install.sh": ("install.sh", "text/x-shellscript; charset=utf-8"),
+    "provenzasensor.service": ("provenzasensor.service", "text/plain; charset=utf-8"),
+    "SHA256SUMS": ("SHA256SUMS", "text/plain; charset=utf-8"),
+    "provenza-sensor-linux-amd64": ("provenza-sensor-linux-amd64", "application/octet-stream"),
+    "provenza-sensor-linux-arm64": ("provenza-sensor-linux-arm64", "application/octet-stream"),
 }
 
 
 @router.get("/{name}", summary="Egress sensor installer, unit and binaries")
 async def download(name: str):
-    media = FILES.get(name)
-    if media is None:
+    entry = FILES.get(name)
+    if entry is None:
         raise HTTPException(status_code=404, detail="no such file")
-    path = Path(settings.SENSOR_DIST_DIR) / name
+    filename, media = entry
+    path = Path(settings.SENSOR_DIST_DIR) / filename
     if not path.is_file():
         # A development install runs the backend from source: there is no
         # built sensor to hand out. sensor/install.sh from the repository
@@ -59,6 +62,6 @@ async def download(name: str):
     return FileResponse(
         path,
         media_type=media,
-        filename=name if media == "application/octet-stream" else None,
+        filename=filename if media == "application/octet-stream" else None,
         headers={"Cache-Control": "no-cache"},
     )
