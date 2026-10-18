@@ -693,6 +693,37 @@
         }
       }
     },
+    "assurance": {
+      "title": "Sinov va kafolat",
+      "add": "Sinovni qayd etish",
+      "hint": "Bu tizimning baholashlari, bias testlari, red teaming va barqarorlik sinovlari - kim o'tkazgani va dalillari bilan. Sinov bir yil amal qiladi. EU AI Act 15-modda baholash hamda red teaming yoki barqarorlik sinovini, 10-modda esa bias testini talab qiladi.",
+      "kind": "Turi",
+      "test_title": "Nima sinaldi",
+      "title_placeholder": "2026 III chorak nazorat to'plamidagi aniqlik",
+      "performed_on": "Sana",
+      "performed_by": "Kim tomonidan",
+      "by_placeholder": "ML jamoasi, tashqi kompaniya",
+      "result": "Natija",
+      "summary": "Qisqacha",
+      "findings": "Topilgan kamchiliklar va ular bo'yicha choralar",
+      "evidence": "Hisobot havolasi",
+      "next_due": "Qayta sinash muddati",
+      "save": "Saqlash",
+      "save_failed": "Yozuvni saqlab bo'lmadi.",
+      "append_only": "Yozuvni keyin o'zgartirib bo'lmaydi; tuzatish - bu yangi yozuv.",
+      "empty": "Hali sinov qayd etilmagan.",
+      "kinds": {
+        "evaluation": "Baholash",
+        "bias": "Bias testi",
+        "red_team": "Red teaming",
+        "robustness": "Barqarorlik sinovi"
+      },
+      "results": {
+        "passed": "O'tdi",
+        "passed_with_findings": "Kamchiliklar bilan o'tdi",
+        "failed": "O'tmadi"
+      }
+    },
   "export_keys": {
     "title": "SIEM eksporti",
     "new": "Yangi kalit",
@@ -1033,6 +1064,7 @@
     "impact_assessment.no_draft": "Tasdiqlash uchun qoralama yo'q.",
     "impact_assessment.review_in_past": "Qayta ko'rib chiqish sanasi kelajakda bo'lishi kerak.",
     "impact_assessment.system_not_found": "Bunday AI tizimi yo'q.",
+    "assurance.system_not_found": "Bunday AI tizimi yo'q.",
     "rbac.insufficient_role": "Bu amal uchun ruxsatingiz yo'q (kerak: {{allowed}}).",
     "rbac.operator_only": "Buni faqat ushbu Provenza serverini boshqaradigan tashkilot administratorlari qila oladi.",
     "auth.signup_disabled": "Bu serverda mustaqil ro'yxatdan o'tish o'chirilgan.",

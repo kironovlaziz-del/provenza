@@ -160,6 +160,16 @@ async def collect_facts(db: AsyncSession, org_id: int) -> dict:
                 drafts.add(a.system_id)
         return approved, drafts
     f["assessments"], f["assessment_drafts"] = await _safe(assessments(), ({}, set()))
+
+    async def assurance():
+        from app.models.assurance import AssuranceRecord
+        rows = (await db.execute(select(AssuranceRecord).where(AssuranceRecord.org_id == org_id)
+                                 .order_by(AssuranceRecord.performed_on.desc(), AssuranceRecord.id.desc()))).scalars().all()
+        out: Dict[int, list] = {}
+        for r in rows:                       # newest first, per system
+            out.setdefault(r.system_id, []).append(r)
+        return out
+    f["assurance"] = await _safe(assurance(), {})
     return f
 
 
@@ -470,6 +480,73 @@ def s_dpia(f, s: AISystem) -> Result:
     return st, detail, e
 
 
+# A test counts for this long; after it the system needs testing again.
+ASSURANCE_VALID = timedelta(days=365)
+ADVERSARIAL = ("red_team", "robustness")
+
+
+def _recent(f, s: AISystem) -> list:
+    since = (f["now"] - ASSURANCE_VALID).date()
+    return [r for r in f["assurance"].get(s.id, []) if r.performed_on >= since]
+
+
+def _latest(records: list, kinds) -> Optional[Any]:
+    return next((r for r in records if r.kind in kinds), None)   # newest first
+
+
+def s_assurance(f, s: AISystem) -> Result:
+    """EU AI Act Art. 15: the system's quality is evaluated and it was tested
+    against misuse (red teaming or robustness) within the last year, and the
+    latest of each did not fail and is not overdue."""
+    link = f"/inventory/{s.id}"
+    recent = _recent(f, s)
+    ev_ = _latest(recent, ("evaluation",))
+    adv = _latest(recent, ADVERSARIAL)
+    e = [ev("evaluation", f"{ev_.performed_on:%Y-%m-%d} {ev_.result}" if ev_ else "none", link),
+         ev("red teaming / robustness", f"{adv.performed_on:%Y-%m-%d} {adv.result}" if adv else "none", link)]
+    if not ev_ and not adv:
+        return "fail", "No evaluation or adversarial test recorded in the last year", e
+    gaps = []
+    if not ev_:
+        gaps.append("no quality evaluation in the last year")
+    if not adv:
+        gaps.append("no red teaming or robustness test in the last year")
+    today = f["now"].date()
+    for r in (ev_, adv):
+        if r is not None and r.result == "failed":
+            gaps.append(f"the latest {r.kind.replace('_', ' ')} failed")
+        if r is not None and r.next_due is not None and r.next_due < today:
+            gaps.append(f"{r.kind.replace('_', ' ')} due again since {r.next_due:%Y-%m-%d}")
+    if gaps:
+        return "partial", "; ".join(gaps).capitalize(), e
+    return "pass", f"Evaluated {ev_.performed_on:%Y-%m-%d}, tested against misuse {adv.performed_on:%Y-%m-%d}", e
+
+
+def s_data_and_bias(f, s: AISystem) -> Result:
+    """EU AI Act Art. 10: the data is documented, and examined for bias
+    (Art. 10(2)(f)) within the last year."""
+    st, detail, e = s_data_documented(f, s)
+    bias = _latest(_recent(f, s), ("bias",))
+    e = e + [ev("bias test", f"{bias.performed_on:%Y-%m-%d} {bias.result}" if bias else "none", f"/inventory/{s.id}")]
+    if st != "pass":
+        return st, detail, e
+    if bias is None:
+        return "partial", f"{detail}; no bias test in the last year", e
+    if bias.result == "failed":
+        return "partial", f"{detail}; the latest bias test failed", e
+    return "pass", f"{detail}; bias tested {bias.performed_on:%Y-%m-%d}", e
+
+
+def c_assurance_tested(f) -> Result:
+    """Every active system above minimal risk has a test on record from the
+    last year (ISO/IEC 42001 A.6.2.4, NIST MEASURE 1)."""
+    need = [s for s in f["active_systems"] if _tier(s) in ("high", "limited", "unacceptable")]
+    if not need:
+        return "pass", "No active AI system above minimal risk", [ev("systems above minimal risk", 0, "/inventory")]
+    st, detail, e = _share(sum(bool(_recent(f, s)) for s in need), len(need), "test", "/inventory")
+    return st, f"Tested in the last year: {detail} above minimal risk", e
+
+
 def s_data_documented(f, s: AISystem) -> Result:
     n = len(s.data_links or [])
     return ("pass" if n else "fail"), f"{n} data link(s)", [ev("data links", n, f"/inventory/{s.id}")]
@@ -499,6 +576,7 @@ CHECKS: Dict[str, Callable] = {
     "owners_assigned": c_owners_assigned,
     "ai_act_roles_stated": c_ai_act_roles_stated,
     "impact_assessed": c_impact_assessed,
+    "assurance_tested": c_assurance_tested,
     "owners_and_monitoring": c_owners_and_monitoring,
     "monitoring_active": c_monitoring,
     "incidents_handled": c_incidents,
@@ -531,6 +609,8 @@ CHECKS: Dict[str, Callable] = {
 SYSTEM_CHECKS: Dict[str, Callable] = {
     "sys_risk_confirmed": s_risk_confirmed,
     "sys_impact_assessed": s_impact_assessed,
+    "sys_assurance": s_assurance,
+    "sys_data_and_bias": s_data_and_bias,
     "sys_dpia": s_dpia,
     "sys_data_documented": s_data_documented,
     "sys_logged": s_logged,

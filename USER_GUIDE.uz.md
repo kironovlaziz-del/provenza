@@ -176,6 +176,14 @@ Muvofiqlik sahifasi tasdiqlangan versiyani EU AI Act 27-modda, GDPR 35-modda
 va ISO 42001 A.5 uchun o'qiydi va qayta ko'rib chiqish sanasi o'tganda yana
 belgilaydi.
 
+O'sha sahifadagi **Sinov va kafolat** tizim o'tgan sinovlarni - baholash,
+bias testi, red teaming, barqarorlik sinovi - sana, kim o'tkazgani, natija va
+hisobot havolasi bilan qayd etadi (admin, tasdiqlovchi va muvofiqlik
+mas'uli; yozuvlarni keyin o'zgartirib bo'lmaydi). Sinov bir yil amal qiladi:
+EU AI Act 15-modda baholash hamda red teaming yoki barqarorlik sinovini,
+10-modda bias testini, ISO 42001 A.6.2.4 va NIST MEASURE 1 esa minimaldan
+yuqori xavfli har bir tizim uchun sinovni talab qiladi.
+
 ---
 
 ## 6. Foydalanish reyestri va tasdiqlash
