@@ -845,6 +845,7 @@
     "auth.account_disabled": "Hisobingiz {{status}}. Administratorga murojaat qiling.",
     "auth.rate_limited": "Juda ko'p urinish. {{retry_after}} soniyadan keyin qayta urinib ko'ring.",
     "rbac.insufficient_role": "Bu amal uchun ruxsatingiz yo'q (kerak: {{allowed}}).",
+    "rbac.operator_only": "Buni faqat ushbu Provenza serverini boshqaradigan tashkilot administratorlari qila oladi.",
     "auth.signup_disabled": "Bu serverda mustaqil ro'yxatdan o'tish o'chirilgan.",
     "use_case.policy_version_not_found": "Bu siyosat versiyasi tashkilotingizda mavjud emas.",
     "use_case.policy_version_not_approved": "Faqat tasdiqlangan siyosat versiyasini bog'lash mumkin. Avval versiyani tasdiqlang.",
@@ -3705,7 +3706,7 @@
     "kpi_audit_hint": "Faqat qo'shiladi, o'chirilmaydi",
     "kpi_checkpoint_age": "Oxirgi audit checkpoint",
     "kpi_checkpoint_age_hint": "> 2 soat bo'lsa checkpoint ishlamayapti",
-    "admin_only": "Bu sahifa faqat administratorlar uchun.",
+    "operator_only": "Bu sahifa butun o'rnatmani, barcha tashkilotlarni ham ko'rsatadi, shuning uchun u faqat ushbu Provenza serverini boshqaradigan tashkilot administratorlari uchun.",
     "kpi_unsealed": "Muhrlanmagan audit yozuvlari",
     "kpi_unsealed_hint": "Imzolangan checkpointga kirmagan qatorlar. 0 = hammasi isbotlangan."
   },

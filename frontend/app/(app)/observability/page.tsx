@@ -12,12 +12,12 @@ import { firstValue, queryInstant } from "@/lib/prometheus_api";
 import { getSystemHealth, type SystemHealth } from "@/lib/system_api";
 import { useAuth } from "@/lib/auth";
 
-// This page is admin-only. Admins see the whole installation: the
-// platform aggregates metrics across every organization, because in a
-// self-hosted install there is typically exactly one. Approvers and
-// users do not reach here — the nav item is adminOnly, the page has a
-// defensive role check, and /api/v1/metrics/query{,_range} enforces
-// require_role(UserRole.admin) on the backend.
+// This page is for the installation's operator: an administrator of the
+// organization that runs this server (User.is_operator). The metrics cover
+// the whole installation, every organization included, so administrators of
+// organizations created by public sign-up do not reach here - the nav item
+// is operatorOnly, the page checks too, and /api/v1/metrics/query{,_range}
+// enforces require_operator on the backend.
 //
 // Layout: first the verdict - is everything working, and if not, what and
 // what to do - then the trends behind it, then the busiest endpoints.
@@ -61,10 +61,11 @@ export default function ObservabilityPage() {
   const [error, setError] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
-  const isAdmin = !!user && user.role === "admin";
+  // the installation's operator: the metrics cover every organization
+  const isOperator = !!user && user.role === "admin" && !!user.is_operator;
 
   const loadSignals = useCallback(() => {
-    if (!isAdmin) return;
+    if (!isOperator) return;
     // Global queries — no org_id filter: the whole installation.
     const q = (expr: string) => queryInstant(expr).then(firstValue);
     Promise.all([
@@ -91,7 +92,7 @@ export default function ObservabilityPage() {
       .catch((e) => setError(String(e)))
       .finally(() => setLoaded(true));
     getSystemHealth().then(setSystem).catch(() => setSystem(null));
-  }, [isAdmin]);
+  }, [isOperator]);
 
   useEffect(() => {
     loadSignals();
@@ -195,18 +196,17 @@ export default function ObservabilityPage() {
     return out;
   }, [signals, system, t]);
 
-  // Defence in depth: the nav item is adminOnly, the backend enforces
-  // require_role(admin). This branch catches a direct URL visit by a
-  // signed-in non-admin so the page renders a clear message rather than
-  // a stream of 403s from the proxy.
-  if (user && user.role !== "admin") {
+  // Defence in depth: the nav item is operatorOnly, the backend enforces
+  // require_operator. This branch catches a direct URL visit by anyone else
+  // so the page renders a clear message rather than a stream of 403s.
+  if (user && !isOperator) {
     return (
       <>
         <PageHeader title={t("observability.title", "Observability")} />
         <div className="content">
           <div className="panel">
             <div className="panel-body">
-              {t("observability.admin_only", "This page is available to administrators only.")}
+              {t("observability.operator_only", "This page shows the whole installation, every organization included, so it is available to the administrators of the organization that runs this Provenza server only.")}
             </div>
           </div>
         </div>

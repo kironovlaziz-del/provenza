@@ -4,7 +4,7 @@ import { useMemo } from "react";
 import { useFeatures } from "./features";
 import { visibleNav, type NavGroup, type Role } from "./navigation";
 
-export function useVisibleNav(role: Role): NavGroup[] {
+export function useVisibleNav(role: Role, operator = false): NavGroup[] {
   const { features } = useFeatures();
-  return useMemo(() => visibleNav(role, features), [role, features]);
+  return useMemo(() => visibleNav(role, features, operator), [role, features, operator]);
 }

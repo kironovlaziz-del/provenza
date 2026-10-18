@@ -845,6 +845,7 @@
     "auth.account_disabled": "Your account is {{status}}. Contact your administrator.",
     "auth.rate_limited": "Too many attempts. Try again in {{retry_after}} seconds.",
     "rbac.insufficient_role": "You don't have permission for this action (requires: {{allowed}}).",
+    "rbac.operator_only": "Only the administrators of the organization that runs this Provenza server can do this.",
     "auth.signup_disabled": "Self-service registration is disabled on this server.",
     "use_case.policy_version_not_found": "That policy version does not exist in your organization.",
     "use_case.policy_version_not_approved": "Only an approved policy version can be linked. Approve the version first.",
@@ -3705,7 +3706,7 @@
     "kpi_audit_hint": "Append-only, never deleted",
     "kpi_checkpoint_age": "Last audit checkpoint",
     "kpi_checkpoint_age_hint": "> 2h means the checkpoint worker is down",
-    "admin_only": "This page is available to administrators only.",
+    "operator_only": "This page shows the whole installation, every organization included, so it is available to the administrators of the organization that runs this Provenza server only.",
     "kpi_unsealed": "Unsealed audit records",
     "kpi_unsealed_hint": "Rows not yet in a signed checkpoint. 0 = everything provable."
   },

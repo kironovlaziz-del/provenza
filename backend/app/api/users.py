@@ -11,6 +11,7 @@ from app.core.pagination import PaginationParams
 from app.core.security import create_access_token, get_password_hash, verify_password
 from app.schemas.pagination import Page
 from app.schemas.user import (
+    MeOut,
     UserCreate,
     UserInvite,
     UserOut,
@@ -25,7 +26,7 @@ from app.models.user import User, UserRole
 from app.models.organization import Organization
 from app.services import mfa
 from app.services.audit_service import AuditService
-from app.api.deps import get_current_user, require_role
+from app.api.deps import get_current_user, is_operator, require_role
 
 router = APIRouter()
 
@@ -95,9 +96,11 @@ async def register(
     return user
 
 
-@router.get("/me", response_model=UserOut)
-async def get_me(current_user: User = Depends(get_current_user)):
-    return current_user
+@router.get("/me", response_model=MeOut)
+async def get_me(current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    me = MeOut.model_validate(current_user)
+    me.is_operator = await is_operator(db, current_user)
+    return me
 
 
 @router.post("/me/password")

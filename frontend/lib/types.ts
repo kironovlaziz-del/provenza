@@ -13,6 +13,9 @@ export interface User {
   totp_enabled?: boolean;
   /** provisioned by the identity provider (SCIM) */
   scim_managed?: boolean;
+  /** an administrator of the organization that runs the installation
+   *  (only /users/me says): sees installation-wide monitoring */
+  is_operator?: boolean;
 }
 
 export interface Policy {
