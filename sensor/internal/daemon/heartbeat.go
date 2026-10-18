@@ -104,7 +104,7 @@ func (d *Daemon) sendHeartbeat(ctx context.Context) {
 		Hooks:          d.kernel.Hooks,
 		Workloads:      wls,
 		Warnings:       d.kernel.Notes,
-		DroppedEvents:  d.kernel.Stat(bpfobj.StatEventsLost),
+		DroppedEvents:  d.kernel.Stat(bpfobj.StatEventsLost) + d.viol.droppedTotal() + d.act.droppedTotal(),
 		AllowedTotal:   d.kernel.Stat(bpfobj.StatAllowed),
 		DeniedTotal:    d.kernel.Stat(bpfobj.StatDenied),
 		ObservedTotal:  d.kernel.Stat(bpfobj.StatObserved),

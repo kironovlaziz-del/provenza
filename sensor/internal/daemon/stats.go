@@ -83,7 +83,7 @@ func (r *statsRing) rates() (allowed, denied, observed uint64) {
 func (d *Daemon) statsAndRates() StatsSection {
 	a, dn, o := d.stats.rates()
 	return StatsSection{
-		DroppedEvents:  d.kernel.Stat(bpfobj.StatEventsLost),
+		DroppedEvents:  d.kernel.Stat(bpfobj.StatEventsLost) + d.viol.droppedTotal() + d.act.droppedTotal(),
 		Allowed:        d.kernel.Stat(bpfobj.StatAllowed),
 		Denied:         d.kernel.Stat(bpfobj.StatDenied),
 		Observed:       d.kernel.Stat(bpfobj.StatObserved),
