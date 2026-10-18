@@ -3,7 +3,9 @@ import { api } from "./api";
 import { apiErrorText } from "./errors";
 
 export type CStatus = "pass" | "partial" | "fail" | "manual" | "na";
-export type FrameworkId = "eu_ai_act" | "gdpr" | "iso42001" | "nist_ai_rmf" | "owasp_agentic";
+export type FrameworkId =
+  | "eu_ai_act" | "gdpr" | "iso42001" | "nist_ai_rmf" | "owasp_agentic"
+  | "owasp_llm" | "mitre_atlas" | "nis2" | "dora";
 
 export interface Evidence {
   label: string;

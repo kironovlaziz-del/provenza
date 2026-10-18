@@ -2607,7 +2607,7 @@
   },
   "compliance": {
     "title": "Muvofiqlik",
-    "hint": "EU AI Act, GDPR, ISO/IEC 42001, NIST AI RMF va OWASP Agentic Top 10 talablari Provenza aslida biladigan ma'lumotlar bilan tekshiriladi. Faqat inson tasdiqlay oladigan narsalar (hujjatlar, tartiblar) shu yerda dalilga havola bilan tasdiqlanadi. Bu yo'naltiruvchi ko'rsatma, yuridik maslahat emas.",
+    "hint": "EU AI Act, GDPR, ISO/IEC 42001, NIST AI RMF, OWASP Agentic va LLM Top 10, MITRE ATLAS hamda AI tizimlariga taalluqli NIS2 va DORA talablari Provenza aslida biladigan ma'lumotlar bilan tekshiriladi. Faqat inson tasdiqlay oladigan narsalar (hujjatlar, tartiblar) shu yerda dalilga havola bilan tasdiqlanadi. Bu yo'naltiruvchi ko'rsatma, yuridik maslahat emas.",
     "load_failed": "Muvofiqlik holatini yuklab bo'lmadi.",
     "failed": "Saqlab bo'lmadi.",
     "status_pass": "Bajarilgan",

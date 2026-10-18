@@ -170,6 +170,19 @@ async def collect_facts(db: AsyncSession, org_id: int) -> dict:
             out.setdefault(r.system_id, []).append(r)
         return out
     f["assurance"] = await _safe(assurance(), {})
+
+    async def gateway():
+        from app.models.gateway import GatewaySettings
+        g = (await db.execute(select(GatewaySettings).where(GatewaySettings.org_id == org_id))).scalar_one_or_none()
+        # no row: the defaults hold (models/gateway.py)
+        return {"enabled": True, "rpm": 60, "max_tokens": 4096} if g is None else \
+            {"enabled": bool(g.enabled), "rpm": g.rpm_per_agent, "max_tokens": g.max_tokens_cap}
+    f["gateway"] = await _safe(gateway(), None)
+
+    async def mfa():
+        from app.models.organization import Organization
+        return (await db.execute(select(Organization.mfa_required).where(Organization.id == org_id))).scalar() or "none"
+    f["mfa_required"] = await _safe(mfa(), "none")
     return f
 
 
@@ -238,6 +251,38 @@ def c_impact_assessed(f) -> Result:
     ok = sum(s_impact_assessed(f, s)[0] == "pass" for s in need)
     st, detail, e = _share(ok, len(need), "assess", "/inventory")
     return st, f"Impact assessment approved and current: {detail} above minimal risk", e
+
+
+def c_consumption_limits(f) -> Result:
+    """Requests per agent and tokens per call are capped at the AI gateway
+    (OWASP LLM10, MITRE ATLAS AML.M0004)."""
+    g = f["gateway"]
+    if g is None:
+        return "manual", "Gateway settings could not be read", []
+    e = [ev("requests per agent per minute", g["rpm"], "/gateway"), ev("max tokens per call", g["max_tokens"], "/gateway")]
+    if not g["enabled"]:
+        return "fail", "The AI gateway is off: nothing caps consumption", e
+    if g["rpm"] and g["max_tokens"]:
+        return "pass", f"At most {g['rpm']} requests per agent a minute and {g['max_tokens']} tokens a call", e
+    return "partial", "Only part of the consumption is capped", e
+
+
+def c_mfa(f) -> Result:
+    """People who sign in use a second factor (NIS2 Art. 21(2)(j))."""
+    m = f["mfa_required"]
+    e = [ev("two-factor sign-in required for", m, "/users")]
+    if m == "all":
+        return "pass", "Two-factor sign-in is required for everyone", e
+    if m == "reviewers":
+        return "partial", "Two-factor sign-in is required for admins, approvers and oversight roles only", e
+    return "fail", "Two-factor sign-in is not required", e
+
+
+def c_injection_defenses(f) -> Result:
+    """What governance can do about prompt injection (OWASP LLM01): risky
+    actions need a person, and systems are tested against misuse."""
+    parts = [c_asi_approvals(f), c_assurance_tested(f)]
+    return _worst([p[0] for p in parts]), "; ".join(p[1] for p in parts), [x for p in parts for x in p[2]]
 
 
 def c_owners_assigned(f) -> Result:
@@ -577,6 +622,9 @@ CHECKS: Dict[str, Callable] = {
     "ai_act_roles_stated": c_ai_act_roles_stated,
     "impact_assessed": c_impact_assessed,
     "assurance_tested": c_assurance_tested,
+    "consumption_limits": c_consumption_limits,
+    "mfa_enforced": c_mfa,
+    "injection_defenses": c_injection_defenses,
     "owners_and_monitoring": c_owners_and_monitoring,
     "monitoring_active": c_monitoring,
     "incidents_handled": c_incidents,
