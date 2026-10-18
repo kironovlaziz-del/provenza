@@ -73,6 +73,9 @@ cmd_status() {
   probe "Prometheus  http://127.0.0.1:9090"   curl -fsS --max-time 5 http://127.0.0.1:9090/-/ready
   probe "Grafana     http://127.0.0.1:3001"   curl -fsS --max-time 5 http://127.0.0.1:3001/api/health
   probe "Alertmanager http://127.0.0.1:9093"  curl -fsS --max-time 5 http://127.0.0.1:9093/-/ready
+  probe "80/443 open to outside (FORWARD not blocking)" "$DEPLOY_DIR/scripts/forward.sh" check
+  "$DEPLOY_DIR/scripts/forward.sh" check \
+    || printf '    %s!%s the FORWARD policy is DROP (Docker?): the site times out from outside. Fix: provenza units\n' "$Y" "$N"
 
   printf '\n%sBackups%s\n' "$B" "$N"
   if systemctl is-enabled --quiet provenza-backup.timer 2>/dev/null; then

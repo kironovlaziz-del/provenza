@@ -24,7 +24,7 @@ Grafana and Alertmanager on the loopback interface.
 | Path | What it is |
 |---|---|
 | `quadlet/` | Templates of the Quadlet units: 11 `.container`, 9 `.volume`, 3 `.network` |
-| `systemd/` | `provenza.target` (the whole stack) and the daily backup timer |
+| `systemd/` | `provenza.target` (the whole stack), the daily backup timer, and `provenza-forward.service`, which keeps 80/443 reachable when Docker sets the FORWARD policy to DROP (`scripts/forward.sh`) |
 | `scripts/units.sh` | Renders the templates with the values from `.env` into `/etc/containers/systemd` |
 | `scripts/lib.sh` | Helpers shared by the scripts |
 | `scripts/run.sh` | One-off backend commands (`create-admin`, key rotation, `alembic`) |
