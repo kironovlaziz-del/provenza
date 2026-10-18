@@ -27,6 +27,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, require_role
+from app.api.export_keys import export_reader
 from app.core.database import get_db
 from app.core.errors import api_error
 from app.models.egress_sensor import (
@@ -321,10 +322,17 @@ def _encode_cursor(event_type: str, event_id: int, created_at: datetime) -> str:
     ).decode("ascii")
 
 
+# Ties on created_at are broken by table, then id: ids of the two tables
+# are not comparable, the rank makes the order total.
+_EVENT_RANK = {"violation": 1, "activity": 0}
+
+
 def _decode_cursor(cursor: str) -> tuple[str, int, datetime]:
     try:
         raw = base64.urlsafe_b64decode(cursor.encode("ascii"))
         payload = _json.loads(raw)
+        if payload["t"] not in _EVENT_RANK:
+            raise ValueError(f"event type {payload['t']!r}")
         return (
             str(payload["t"]),
             int(payload["i"]),
@@ -352,14 +360,20 @@ async def list_events(
     limit: int = Query(default=500, ge=1, le=2000),
     cursor: Optional[str] = Query(default=None, description="Value of next_cursor from a previous page"),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(UserRole.admin)),
+    org_id: int = Depends(export_reader("egress_events")),
 ):
     """Return violations and activity as one chronological feed.
 
-    Sort order is created_at DESC, id DESC so the newest event is always
-    first. Pagination is cursor-based: pass next_cursor back as ?cursor=...
-    and the server continues from exactly that point, without the classic
-    "rows shift when new data arrives" problem of offset pagination.
+    Read with an export key (X-Export-Key, made on the SIEM export page) or
+    an administrator's session.
+
+    Sort order is created_at DESC, then the table (violations before
+    activity), then id DESC: a total order across both tables, so the
+    newest event is first and ties - a batch the sensor sent without event
+    times shares one created_at - still have one place. Pagination is
+    cursor-based: pass next_cursor back as ?cursor=... and the server
+    continues strictly after that event, with no skips or repeats and
+    without the "rows shift when new data arrives" problem of offsets.
 
     Filters:
       - sensor_id: only events from that sensor
@@ -378,7 +392,7 @@ async def list_events(
         cursor_tuple = _decode_cursor(cursor)
 
     async def fetch(table, et: str) -> list:
-        q = select(table).where(table.org_id == current_user.org_id)
+        q = select(table).where(table.org_id == org_id)
         if sensor_id is not None:
             q = q.where(table.sensor_id == sensor_id)
         if since is not None:
@@ -386,24 +400,19 @@ async def list_events(
         if until is not None:
             q = q.where(table.created_at < until)
         if cursor_tuple is not None:
-            # Continue strictly after the cursor.
+            # Continue strictly after the cursor in the order
+            # (created_at, table rank, id) DESC. At the cursor's time, a
+            # table ranked above the cursor's was already sent in full,
+            # one ranked below is still to come in full, and the cursor's
+            # own table continues below its id.
+            from sqlalchemy import and_, false, or_, true
             cur_et, cur_id, cur_ts = cursor_tuple
-            # We include both tables on "all", so a row in the cursor's
-            # table is only included if (created_at, id) is strictly less
-            # than the cursor's; a row in the *other* table is included
-            # only if its created_at is <= cursor's created_at (it could
-            # be tied). This is the standard keyset pagination trick and
-            # keeps the merge order stable across pages.
-            from sqlalchemy import and_, or_, tuple_
-            if et == cur_et:
-                q = q.where(
-                    or_(
-                        table.created_at < cur_ts,
-                        and_(table.created_at == cur_ts, table.id < cur_id),
-                    )
-                )
+            rank, cur_rank = _EVENT_RANK[et], _EVENT_RANK[cur_et]
+            if rank == cur_rank:
+                tie = table.id < cur_id
             else:
-                q = q.where(table.created_at <= cur_ts)
+                tie = true() if rank < cur_rank else false()
+            q = q.where(or_(table.created_at < cur_ts, and_(table.created_at == cur_ts, tie)))
         # Fetch limit+1 so we can detect "there is more".
         q = q.order_by(table.created_at.desc(), table.id.desc()).limit(limit + 1)
         rows = (await db.execute(q)).scalars().all()
@@ -415,9 +424,9 @@ async def list_events(
     if event_type in ("all", "activity"):
         batches.extend(await fetch(SensorActivity, "activity"))
 
-    # Merge sort by (created_at DESC, id DESC).
+    # Merge in the same order as the cursor: (created_at, table rank, id) DESC.
     batches.sort(
-        key=lambda pair: (pair[1].created_at, pair[1].id),
+        key=lambda pair: (pair[1].created_at, _EVENT_RANK[pair[0]], pair[1].id),
         reverse=True,
     )
 

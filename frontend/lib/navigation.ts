@@ -127,6 +127,7 @@ export const NAV: NavGroup[] = [
         P("/users", "users", { adminOnly: true }),
         P("/notifications", "notifications", { adminOnly: true }),
         P("/ingestion-sources", "ingestion_sources", { adminOnly: true }),
+        P("/export-keys", "export_keys", { adminOnly: true }),
         P("/encryption-keys", "encryption_keys", { adminOnly: true }),
         P("/queue-ttl", "queue_ttl", { adminOnly: true }),
         P("/system-status", "system_status", { adminOnly: true }),
