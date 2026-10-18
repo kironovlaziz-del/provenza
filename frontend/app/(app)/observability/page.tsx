@@ -137,7 +137,7 @@ export default function ObservabilityPage() {
         key: "jobs",
         title: t("mon.jobs", "Background jobs"),
         state: jobsState,
-        value: `${w.count} ${t("mon.workers", "worker(s)")} · ${t("mon.beat", "scheduler")} ${b.last_heartbeat_age_seconds === null ? "—" : `${fmtAge(b.last_heartbeat_age_seconds)} ${t("mon.ago", "ago")}`}`,
+        value: `${t("mon.workers", "Workers")}: ${w.count} · ${t("mon.beat", "scheduler")} ${b.last_heartbeat_age_seconds === null ? "—" : `${fmtAge(b.last_heartbeat_age_seconds)} ${t("mon.ago", "ago")}`}`,
         detail: t("mon.jobs_detail", "The worker sends notifications, seals the audit log and prunes old data; the scheduler starts those jobs on time."),
         action: <><code>provenza logs worker</code> · <code>provenza logs beat</code> · <code>provenza restart worker</code></>,
       });
@@ -175,8 +175,8 @@ export default function ObservabilityPage() {
       title: t("mon.audit", "Audit evidence"),
       state: auditState,
       value: unsealed === 0
-        ? `${fmtNumber(s.auditRows)} ${t("mon.audit_sealed", "records, all sealed")}`
-        : `${fmtNumber(unsealed)} ${t("mon.audit_waiting", "records waiting for a checkpoint")}`,
+        ? `${t("mon.audit_records", "Records")}: ${fmtNumber(s.auditRows)} · ${t("mon.audit_sealed", "all sealed")}`
+        : `${t("mon.audit_waiting", "Waiting for a checkpoint")}: ${fmtNumber(unsealed)}`,
       detail: `${t("mon.audit_detail", "Records are sealed under a signed checkpoint every 5 minutes; only sealed records can be proven.")} ${s.checkpointAge !== null ? `${t("mon.last_checkpoint", "Last checkpoint")}: ${fmtAge(s.checkpointAge)} ${t("mon.ago", "ago")}.` : ""}`,
       action: <>{t("mon.audit_action", "The worker or the scheduler is not sealing:")} <code>provenza logs worker</code></>,
     });

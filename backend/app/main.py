@@ -96,6 +96,21 @@ app.add_middleware(
 )
 
 # Include routers
+def _route_template(request: Request) -> str:
+    """The matched route as a template with its full prefix. route.path alone
+    is relative to the router that holds it ("/config", "/heartbeat"), which
+    tells nothing about which API it is; the URL with each path parameter put
+    back as {name} is the full template."""
+    route = request.scope.get("route")
+    if route is None:
+        return "__unmatched__"
+    params = request.scope.get("path_params") or {}
+    values = {str(v): k for k, v in params.items()}
+    if any("/" in v for v in values):
+        return getattr(route, "path", "__unmatched__")  # a {x:path} parameter
+    return "/".join("{%s}" % values[s] if s in values else s for s in request.url.path.split("/"))
+
+
 @app.middleware("http")
 async def http_metrics_middleware(request: Request, call_next):
     # Scrape endpoint excluded: its own latency is not interesting to graph
@@ -115,10 +130,10 @@ async def http_metrics_middleware(request: Request, call_next):
         raise
 
     # After call_next, the router has matched the request and put the
-    # APIRoute on the scope. route.path is the template
-    # (/sensors/{sensor_id}/violations), which keeps cardinality bounded.
-    route = request.scope.get("route")
-    path = getattr(route, "path", "__unmatched__")
+    # APIRoute on the scope. The label is the full template
+    # (/api/v1/egress-sensor/sensors/{sensor_id}/violations), which keeps
+    # cardinality bounded and says which router a path belongs to.
+    path = _route_template(request)
     # Static noise (favicons, robots) is not a route and will not be
     # acted on; keeping it out of the counter avoids a rising cardinality
     # series that no one queries.

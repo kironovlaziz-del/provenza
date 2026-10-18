@@ -3718,8 +3718,9 @@
     "audit": "Audit dalillari",
     "audit_action": "Worker yoki rejalashtiruvchi muhrlamayapti:",
     "audit_detail": "Yozuvlar har 5 daqiqada imzolangan nazorat nuqtasi ostida muhrlanadi; faqat muhrlangan yozuvlarni isbotlash mumkin.",
-    "audit_sealed": "yozuv, hammasi muhrlangan",
-    "audit_waiting": "yozuv nazorat nuqtasini kutmoqda",
+    "audit_records": "Yozuvlar",
+    "audit_sealed": "hammasi muhrlangan",
+    "audit_waiting": "Nazorat nuqtasini kutmoqda",
     "beat": "rejalashtiruvchi",
     "data": "Ma'lumotlar bazasi va navbat",
     "data_detail": "API'dan PostgreSQL va Redis'gacha borib-kelish vaqti, hozir o'lchangan.",
@@ -3781,6 +3782,6 @@
     "verdict_unknown_sub": "Ba'zi tekshiruvlarda hali o'lchanadigan narsa yo'q - quyida qarang.",
     "verdict_warn": "E'tibor talab qiladi",
     "violations_min": "qoidabuzarlik/daq",
-    "workers": "worker"
+    "workers": "Workerlar"
   }
 }

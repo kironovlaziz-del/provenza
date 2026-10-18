@@ -3718,8 +3718,9 @@
     "audit": "Audit evidence",
     "audit_action": "The worker or the scheduler is not sealing:",
     "audit_detail": "Records are sealed under a signed checkpoint every 5 minutes; only sealed records can be proven.",
-    "audit_sealed": "records, all sealed",
-    "audit_waiting": "records waiting for a checkpoint",
+    "audit_records": "Records",
+    "audit_sealed": "all sealed",
+    "audit_waiting": "Waiting for a checkpoint",
     "beat": "scheduler",
     "data": "Database and queue",
     "data_detail": "The API's round trip to PostgreSQL and Redis, measured now.",
@@ -3781,6 +3782,6 @@
     "verdict_unknown_sub": "Some checks have nothing to measure yet - see below.",
     "verdict_warn": "Needs attention",
     "violations_min": "violations/min",
-    "workers": "worker(s)"
+    "workers": "Workers"
   }
 }
