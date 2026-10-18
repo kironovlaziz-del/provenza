@@ -278,28 +278,22 @@ SENSOR_INSTALLED=0
 if [ "$SENSOR_MODE" = yes ] || { [ "$SENSOR_MODE" = ask ] && [ "$ASSUME_YES" = 0 ] && confirm "Install the egress sensor on this host as well?" n; }; then
   step "Installing the egress sensor on this host"
   if [ -x "$ROOT_DIR/sensor/install.sh" ]; then
-    SENSOR_BIN="$ROOT_DIR/sensor/provenza-sensor"
-    if [ ! -x "$SENSOR_BIN" ]; then
-      # The BPF object is embedded in the repo; clang is only needed to
-      # rebuild it. Installing go + make lets us build the daemon here.
-      if ! command -v go >/dev/null 2>&1 || ! command -v make >/dev/null 2>&1; then
-        step "Installing sensor build tools (go, make)"
-        DEBIAN_FRONTEND=noninteractive apt-get install -y -qq golang-go make >/dev/null 2>&1 || warn "could not install go/make"
-      fi
-      if command -v go >/dev/null 2>&1 && command -v make >/dev/null 2>&1; then
-        step "Building the sensor binary"
-        ( cd "$ROOT_DIR/sensor" && make build >/dev/null 2>&1 ) || warn "sensor build failed"
-      fi
-    fi
-    if [ -x "$SENSOR_BIN" ]; then
+    # The backend image carries the sensor built from this checkout
+    # (deploy/backend.Dockerfile): no Go on this host, and no need for the
+    # domain's DNS or certificate to be ready yet.
+    case "$(uname -m)" in x86_64|amd64) sarch=amd64 ;; aarch64|arm64) sarch=arm64 ;; *) sarch="" ;; esac
+    SENSOR_BIN=$(mktemp -d)/provenza-sensor
+    if [ -n "$sarch" ] && podman cp "backend:/app/sensor-dist/provenza-sensor-linux-$sarch" "$SENSOR_BIN" 2>/dev/null; then
+      chmod 0755 "$SENSOR_BIN"
       if "$ROOT_DIR/sensor/install.sh" --binary "$SENSOR_BIN" --url "$url" --yes; then
         SENSOR_INSTALLED=1
       else
         warn "sensor install returned non-zero - see the output above"
       fi
     else
-      warn "sensor binary not found and cannot be built (install go + make, then: sudo $ROOT_DIR/sensor/install.sh --url $url)"
+      warn "no sensor binary for $(uname -m) in the backend image; later: sudo $ROOT_DIR/sensor/install.sh --url $url"
     fi
+    rm -rf "$(dirname "$SENSOR_BIN")"
   else
     warn "sensor/install.sh not found in $ROOT_DIR - skipping"
   fi
@@ -328,12 +322,9 @@ EOF
 else
   cat <<EOF
 
-To govern egress on any Linux host (this one or another), install the sensor:
-  ${B}git clone https://github.com/kironovlaziz-del/provenza.git /tmp/provenza${N}
-  ${B}cd /tmp/provenza/sensor && sudo ./install.sh --url $url${N}
-then open $url/runtime, click Register sensor, and run:
-  ${B}sudo provenza-sensor enroll --url $url --key pvz_sensor_...${N}
-  ${B}sudo systemctl start provenzasensor${N}
+To govern egress on any Linux host (this one or another): open $url/runtime,
+click ${B}Register sensor${N} and run the one-line command it shows on that host.
+It downloads the sensor from this server (no Go, no git needed there).
 EOF
 fi
 

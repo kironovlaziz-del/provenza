@@ -524,8 +524,10 @@ export default function RuntimePage() {
   }
 
   /** The exact command an admin pastes into the sensor host's shell. It
-   *  pulls install.sh from GitHub, uses the origin the admin is already on
-   *  (so no copy-paste of the URL is needed), and passes the one-time key.
+   *  pulls install.sh from this control plane, which also serves the sensor
+   *  binary built with it (/api/v1/egress-sensor/download/, checked against
+   *  SHA256SUMS): the host needs neither Go nor git nor GitHub. It uses the
+   *  origin the admin is already on and passes the one-time key.
    *
    *  Prefer the configured control-plane URL (NEXT_PUBLIC_API_URL) so the
    *  command always points at the canonical domain, even when the admin
@@ -535,7 +537,7 @@ export default function RuntimePage() {
     const envURL = process.env.NEXT_PUBLIC_API_URL || "";
     const origin = envURL.replace(/\/api\/v1\/?$/, "") ||
                    (typeof window !== "undefined" ? window.location.origin : "");
-    const script = "https://raw.githubusercontent.com/kironovlaziz-del/provenza/main/sensor/install.sh";
+    const script = `${origin}/api/v1/egress-sensor/download/install.sh`;
     return `curl -fsSL ${script} -o /tmp/install-sensor.sh && sudo bash /tmp/install-sensor.sh --url ${origin} --key ${key}`;
   }
 

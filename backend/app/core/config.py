@@ -84,6 +84,10 @@ class Settings(BaseSettings):
     # Prometheus HTTP API, used by /observability/query proxies.
     # The backend and Prometheus run on the same host, loopback only.
     PROMETHEUS_URL: str = "http://127.0.0.1:9090"
+    # The egress sensor's installer, unit and binaries, built into the
+    # production image (deploy/backend.Dockerfile) and served at
+    # /api/v1/egress-sensor/download/ (app/api/sensor_download.py).
+    SENSOR_DIST_DIR: str = "/app/sensor-dist"
 
     # Outbound calls to user-configured URLs (AI providers, gateway
     # upstreams, Vault Transit, webhooks) are refused when the target is a

@@ -62,6 +62,7 @@ from app.api import mcp as mcp_api
 from app.api import a2a_gateway as a2a_gateway_api
 from app.api import egress_proxy as egress_proxy_api
 from app.api import egress_sensor as egress_sensor_api
+from app.api import sensor_download as sensor_download_api
 _is_prod = settings.ENVIRONMENT == "production"
 
 app = FastAPI(
@@ -201,6 +202,7 @@ app.include_router(a2a_gateway_api.agent_router, prefix=f"{settings.API_V1_STR}/
 app.include_router(a2a_gateway_api.admin_router, prefix=f"{settings.API_V1_STR}/a2a-peers", tags=["a2a"])
 app.include_router(egress_proxy_api.admin_router, prefix=f"{settings.API_V1_STR}/egress", tags=["egress"])
 app.include_router(egress_proxy_api.proxy_router, prefix=f"{settings.API_V1_STR}/egress-proxy", tags=["egress"])
+app.include_router(sensor_download_api.router, prefix=f"{settings.API_V1_STR}/egress-sensor/download", tags=["egress"])
 app.include_router(egress_sensor_api.admin_router, prefix=f"{settings.API_V1_STR}/egress-sensor", tags=["egress"])
 app.include_router(egress_sensor_api.sensor_router, prefix=f"{settings.API_V1_STR}/egress-sensor", tags=["egress"])
 

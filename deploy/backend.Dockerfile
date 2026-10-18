@@ -1,9 +1,29 @@
 # syntax=docker/dockerfile:1.7
 # Provenza backend image: FastAPI API, Celery worker, Celery beat and the
 # migration job all run from this one image (the command picks the role).
-# Build context: repository root (see deploy/docker-compose.yml).
+# Build context: repository root (deploy/scripts/lib.sh build_images).
 
 ARG PYTHON_VERSION=3.12
+ARG GO_VERSION=1.26
+
+# ------------------------------------------------------------- sensor stage
+# The egress sensor, served by the API at /api/v1/egress-sensor/download/
+# (app/api/sensor_download.py): a host installs the sensor that matches this
+# control plane. The BPF object is embedded, so this is a plain Go build.
+FROM docker.io/library/golang:${GO_VERSION} AS sensor
+WORKDIR /src
+COPY sensor/go.mod sensor/go.sum ./
+RUN go mod download
+COPY sensor/ ./
+ARG SENSOR_VERSION=control-plane
+RUN set -eu; mkdir -p /dist; \
+    for arch in amd64 arm64; do \
+      CGO_ENABLED=0 GOOS=linux GOARCH=$arch go build -trimpath \
+        -ldflags "-s -w -X main.version=${SENSOR_VERSION}" \
+        -o /dist/provenza-sensor-linux-$arch ./cmd/provenza-sensor; \
+    done; \
+    cp install.sh packaging/provenzasensor.service /dist/; \
+    cd /dist && sha256sum provenza-sensor-linux-* install.sh provenzasensor.service > SHA256SUMS
 
 # ---------------------------------------------------------------- build stage
 FROM python:${PYTHON_VERSION}-slim AS build
@@ -41,6 +61,7 @@ WORKDIR /app
 COPY backend/ /app/
 COPY extension/ /opt/provenza/extension/
 COPY deploy/backend-entrypoint.sh /usr/local/bin/provenza-entrypoint
+COPY --from=sensor /dist/ /app/sensor-dist/
 RUN chmod 0755 /usr/local/bin/provenza-entrypoint \
  && rm -f /app/apply_*.py /app/celerybeat-schedule \
  && mkdir -p /app/data /app/run \
