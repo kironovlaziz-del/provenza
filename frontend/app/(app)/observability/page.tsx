@@ -15,11 +15,11 @@ import { useAuth } from "@/lib/auth";
 // defensive role check, and /api/v1/metrics/query{,_range} enforces
 // require_role(UserRole.admin) on the backend.
 //
-// For deeper drill-downs and log correlation the operator opens Grafana.
-const GRAFANA_URL =
-  typeof window !== "undefined"
-    ? `${window.location.protocol}//${window.location.hostname}:3001/d/ai-ct-backend/ai-control-tower-e28094-backend`
-    : "http://localhost:3001";
+// For deeper drill-downs the operator opens Grafana. It listens on the
+// server's 127.0.0.1:3001 only, never on the public address, so the link
+// points at the operator's own machine: it opens through an SSH tunnel
+// (ssh -L 3001:127.0.0.1:3001 user@server), as the hint below says.
+const GRAFANA_URL = "http://localhost:3001/d/ai-ct-backend";
 
 interface KpiState {
   offline: number | null;
@@ -195,7 +195,7 @@ export default function ObservabilityPage() {
         <p className="hint-text" style={{ marginTop: 16 }}>
           {t(
             "observability.grafana_hint",
-            "For drill-downs, histogram breakouts and correlation with logs, open Grafana.",
+            "Grafana runs on the server only (127.0.0.1:3001). Open a tunnel from your computer first: ssh -L 3001:127.0.0.1:3001 user@your-server - then \"Open in Grafana\" works, with no login needed to view.",
           )}
         </p>
       </div>
