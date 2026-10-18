@@ -109,7 +109,7 @@
       "id": 3,
       "type": "stat",
       "title": "API p95 response time",
-      "description": "95 % of API requests finish within this time.",
+      "description": "95 % of API requests finish within this time (without /system/health, which waits for the workers by design).",
       "datasource": {
         "type": "prometheus",
         "uid": "Prometheus"
@@ -126,7 +126,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket[$__rate_interval])))",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket{path!=\"/api/v1/system/health\"}[$__rate_interval])))",
           "refId": "A",
           "instant": false,
           "range": true
@@ -247,7 +247,7 @@
       "id": 5,
       "type": "stat",
       "title": "Oldest sensor heartbeat",
-      "description": "Seconds since the quietest active sensor last reported.",
+      "description": "Seconds since the quietest active sensor last reported. Heartbeats are 30-120 s apart; a sensor is offline after three missed, and not before 5 minutes.",
       "datasource": {
         "type": "prometheus",
         "uid": "Prometheus"
@@ -296,7 +296,7 @@
               },
               {
                 "color": "#d29922",
-                "value": 90
+                "value": 150
               },
               {
                 "color": "#f85149",
@@ -596,7 +596,7 @@
       "id": 10,
       "type": "timeseries",
       "title": "Response time",
-      "description": "Half of the requests finish within p50, 95 % within p95, 99 % within p99.",
+      "description": "Half of the requests finish within p50, 95 % within p95, 99 % within p99. Without /system/health, which waits 1.5 s for the workers by design.",
       "datasource": {
         "type": "prometheus",
         "uid": "Prometheus"
@@ -613,7 +613,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.5, sum by (le) (rate(http_request_duration_seconds_bucket[$__rate_interval])))",
+          "expr": "histogram_quantile(0.5, sum by (le) (rate(http_request_duration_seconds_bucket{path!=\"/api/v1/system/health\"}[$__rate_interval])))",
           "legendFormat": "p50",
           "refId": "A",
           "range": true
@@ -623,7 +623,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket[$__rate_interval])))",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket{path!=\"/api/v1/system/health\"}[$__rate_interval])))",
           "legendFormat": "p95",
           "refId": "B",
           "range": true
@@ -633,7 +633,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.99, sum by (le) (rate(http_request_duration_seconds_bucket[$__rate_interval])))",
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(http_request_duration_seconds_bucket{path!=\"/api/v1/system/health\"}[$__rate_interval])))",
           "legendFormat": "p99",
           "refId": "C",
           "range": true

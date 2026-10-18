@@ -19,11 +19,14 @@ func (d *Daemon) heartbeatLoop(ctx context.Context) {
 	// Send one immediately so the UI sees us as soon as we are up.
 	d.sendHeartbeat(ctx)
 
-	t := time.NewTicker(d.heartbeatInterval())
-	defer t.Stop()
+	// The interval is read again for every beat: an administrator who
+	// changes heartbeat_seconds reaches a running sensor with its next
+	// policy, not only after a restart.
 	for {
+		t := time.NewTimer(d.heartbeatInterval())
 		select {
 		case <-ctx.Done():
+			t.Stop()
 			return
 		case <-t.C:
 			d.sendHeartbeat(ctx)

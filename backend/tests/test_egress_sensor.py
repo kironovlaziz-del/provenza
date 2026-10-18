@@ -425,10 +425,6 @@ async def test_offline_sensor_warns_once(client, admin_token, db_session, monkey
     await db_session.flush()
     await db_session.refresh(sensor)  # flush alone does not sync the row we later select
 
-    from sqlalchemy import func
-    print('DEBUG row', sensor.id, sensor.enabled, sensor.revoked_at, sensor.last_seen_at, sensor.offline_notified_at)
-    print('DEBUG threshold', svc.now_utc() - svc.OFFLINE_AFTER, svc.now_utc().tzinfo)
-    print('DEBUG db', (await db_session.execute(select(EgressSensor.id, EgressSensor.last_seen_at, EgressSensor.offline_notified_at, func.now()).where(EgressSensor.id == sensor.id))).one())
     warned = await svc.warn_offline_sensors(db_session)
     assert warned == 1
     assert len(calls) == 1
@@ -1223,3 +1219,51 @@ async def test_heartbeat_stores_traffic_counters(client, admin_token):
     assert body["allowed_total"] == 12345
     assert body["denied_total"] == 42
     assert body["observed_total"] == 7
+
+
+def test_offline_after_follows_the_heartbeat():
+    """Three missed heartbeats, never sooner than five minutes."""
+    from datetime import timedelta
+    from app.core.metrics import offline_after
+
+    assert offline_after(None) == timedelta(minutes=5)
+    assert offline_after(30) == timedelta(minutes=5)
+    assert offline_after(120) == timedelta(minutes=6)
+
+
+@pytest.mark.asyncio
+async def test_offline_warning_waits_for_three_missed_heartbeats(client, admin_token, db_session, monkeypatch):
+    """With a 120 s heartbeat a sensor silent for 5.5 minutes has missed two
+    beats, not three: no warning yet. At 6.5 minutes it is offline."""
+    from datetime import datetime, timedelta, timezone
+    from sqlalchemy import select
+    from app.models.egress_sensor import EgressSensor
+    from app.services import egress_sensor as svc
+    from app.services import notification_service
+
+    calls = []
+
+    async def fake_notify(db, org_id, event_type, subject, message, metadata=None):
+        calls.append(event_type)
+
+    monkeypatch.setattr(notification_service, "notify", fake_notify)
+    r = await client.patch(f"{BASE}/settings", json={"heartbeat_seconds": 120}, headers=auth_headers(admin_token))
+    assert r.status_code == 200, r.text
+
+    created = await _register_sensor(client, admin_token, name="slow-beat")
+    sensor = (await db_session.execute(select(EgressSensor).where(EgressSensor.id == created["id"]))).scalar_one()
+    sensor.last_seen_at = datetime.now(timezone.utc) - timedelta(minutes=5, seconds=30)
+    await db_session.flush()
+    assert await svc.warn_offline_sensors(db_session) == 0
+
+    sensor.last_seen_at = datetime.now(timezone.utc) - timedelta(minutes=6, seconds=30)
+    await db_session.flush()
+    assert await svc.warn_offline_sensors(db_session) == 1
+    assert calls == ["egress_sensor_offline"]
+
+
+@pytest.mark.asyncio
+async def test_heartbeat_above_120_seconds_is_refused(client, admin_token):
+    """Commands come with the heartbeat and expire in five minutes."""
+    r = await client.patch(f"{BASE}/settings", json={"heartbeat_seconds": 300}, headers=auth_headers(admin_token))
+    assert r.status_code == 422

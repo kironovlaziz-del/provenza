@@ -224,10 +224,9 @@ reading the policy and posting violations, and is not the signing key.
 
 **Command goes straight to `expired`.**
 
-Five minutes passed between issue and the sensor's next heartbeat. With
-`refresh_seconds` above 300 (not possible through the UI, but possible
-through the API) this would be normal; otherwise the sensor is not
-reaching the control plane.
+Five minutes passed between issue and the sensor's next heartbeat.
+Commands travel with the heartbeat, which is at most 120 seconds apart, so
+the sensor is not reaching the control plane.
 
 **The sensor answers `done` but nothing happens on the host.**
 

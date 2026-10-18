@@ -89,7 +89,7 @@ celery_app.conf.beat_schedule = {
         "schedule": crontab(hour=4, minute=37),
     },
     # Warn once per silent egress sensor: it has sent at least one heartbeat
-    # and the last one is older than OFFLINE_AFTER. Runs every 5 minutes,
+    # and missed three since (at least 5 minutes, metrics.offline_after). Runs every 5 minutes,
     # staggered after the audit checkpoint (minute 2) and timestamp (minute 4).
     "egress-sensor-offline": {
         "task": "egress_sensor.warn_offline",
