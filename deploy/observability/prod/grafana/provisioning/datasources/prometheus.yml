@@ -1,7 +1,14 @@
 apiVersion: 1
 
+# Recreated on every start with a fixed uid: the dashboards refer to it as
+# "Prometheus", so they work without anyone picking a datasource by hand.
+deleteDatasources:
+  - name: Prometheus
+    orgId: 1
+
 datasources:
   - name: Prometheus
+    uid: Prometheus
     type: prometheus
     access: proxy
     url: http://prometheus:9090
