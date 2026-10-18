@@ -551,6 +551,148 @@
     "auditor_banner": "Auditor: read-only access. You see everything administrators see and change nothing.",
     "hint": "Auditor: sees everything, changes nothing. Compliance officer: sees everything and confirms compliance requirements."
   },
+    "ia": {
+      "title": "Impact assessment",
+      "back": "Back to the system",
+      "status": "Status",
+      "approved_v": "Approved",
+      "draft_v": "Draft",
+      "not_approved": "Not approved yet",
+      "approved_on": "Approved on",
+      "review_due": "Review due",
+      "progress": "Required answers",
+      "intro": "One questionnaire serves as the ISO/IEC 42005 impact assessment, the GDPR data protection impact assessment and the EU AI Act fundamental rights impact assessment. The Compliance page reads the approved version.",
+      "save": "Save draft",
+      "approve": "Approve",
+      "revise": "Start a new version",
+      "history": "Approved versions",
+      "version": "Version",
+      "open": "Open",
+      "start": "Start the assessment",
+      "none": "Not assessed yet. One questionnaire covers ISO/IEC 42005, the DPIA and the FRIA.",
+      "saved": "Draft saved.",
+      "approved_notice": "Approved. This version is now the system's impact assessment.",
+      "incomplete": "Answer the highlighted questions first.",
+      "load_failed": "Could not load the assessment.",
+      "save_failed": "Could not save the draft.",
+      "approve_failed": "Could not approve.",
+      "s": {
+        "purpose": "Purpose and context",
+        "rights": "Impact on people",
+        "data": "Personal data (DPIA)",
+        "measures": "Measures",
+        "conclusion": "Conclusion"
+      },
+      "q": {
+        "purpose": "What is the system for, and in which process is it used?",
+        "affected": "Who is affected by its outputs?",
+        "scale": "How many people does it affect in a year?",
+        "period": "When and how often is it used?",
+        "rights": "Which rights or interests could be harmed?",
+        "harm": "What could go wrong for these people, and how?",
+        "severity": "How severe would the harm be?",
+        "likelihood": "How likely is it?",
+        "reversibility": "Can the harm be undone?",
+        "personal_data": "Does the system process personal data?",
+        "categories": "Which kinds?",
+        "lawful_basis": "Lawful basis (GDPR Art. 6)",
+        "necessity": "Why is this data necessary, and what is left out?",
+        "retention": "How long is it kept?",
+        "transfers": "Does it leave the EU/EEA?",
+        "measures": "What reduces these risks? (testing, limits, policies in Provenza, training)",
+        "oversight": "Who oversees the system and can stop or overrule it?",
+        "redress": "How can an affected person complain or contest a decision?",
+        "residual": "Residual risk after the measures",
+        "decision": "Decision",
+        "conditions": "Conditions",
+        "review_date": "Review again by"
+      },
+      "h": {
+        "review_date": "One year from approval when left empty."
+      },
+      "o": {
+        "affected": {
+          "employees": "Employees",
+          "job_applicants": "Job applicants",
+          "customers": "Customers",
+          "patients": "Patients",
+          "students": "Students",
+          "children": "Children",
+          "public": "The public",
+          "other": "Others"
+        },
+        "scale": {
+          "under_100": "Under 100",
+          "100_10k": "100 - 10,000",
+          "10k_1m": "10,000 - 1 million",
+          "over_1m": "Over 1 million"
+        },
+        "rights": {
+          "non_discrimination": "Non-discrimination",
+          "privacy": "Privacy",
+          "expression": "Freedom of expression",
+          "access_services": "Access to services",
+          "employment": "Work and employment",
+          "education": "Education",
+          "health_safety": "Health and safety",
+          "due_process": "Fair procedure",
+          "none": "None"
+        },
+        "severity": {
+          "low": "Low",
+          "medium": "Medium",
+          "high": "High",
+          "critical": "Critical"
+        },
+        "likelihood": {
+          "rare": "Rare",
+          "possible": "Possible",
+          "likely": "Likely"
+        },
+        "reversibility": {
+          "reversible": "Reversible",
+          "hard_to_reverse": "Hard to reverse",
+          "irreversible": "Irreversible"
+        },
+        "personal_data": {
+          "yes": "Yes",
+          "no": "No"
+        },
+        "categories": {
+          "identity": "Identity",
+          "contact": "Contact details",
+          "financial": "Financial",
+          "location": "Location",
+          "behaviour": "Behaviour",
+          "special": "Special categories (health, biometric, beliefs...)",
+          "children": "Children's data",
+          "criminal": "Criminal records"
+        },
+        "lawful_basis": {
+          "consent": "Consent",
+          "contract": "Contract",
+          "legal_obligation": "Legal obligation",
+          "vital_interest": "Vital interest",
+          "public_task": "Public task",
+          "legitimate_interest": "Legitimate interest"
+        },
+        "transfers": {
+          "no": "No",
+          "adequacy": "Yes, to a country with an adequacy decision",
+          "safeguards": "Yes, with safeguards (SCCs, BCRs)"
+        },
+        "residual": {
+          "low": "Low",
+          "medium": "Medium",
+          "high": "High"
+        },
+        "decision": {
+          "proceed": "Proceed",
+          "proceed_with_conditions": "Proceed with conditions",
+          "do_not_proceed": "Do not proceed"
+        }
+      }
+    },
   "export_keys": {
     "title": "SIEM export",
     "new": "New key",
@@ -886,6 +1028,11 @@
     "export_key.invalid": "The export key is not valid or has been revoked.",
     "export_key.not_found": "No such export key.",
     "rbac.read_only": "Read-only access: the auditor role changes nothing.",
+    "impact_assessment.invalid_answer": "The answer to \"{{question}}\" is not valid.",
+    "impact_assessment.incomplete": "Some required questions have no answer yet.",
+    "impact_assessment.no_draft": "There is no draft to approve.",
+    "impact_assessment.review_in_past": "The review date must be in the future.",
+    "impact_assessment.system_not_found": "No such AI system.",
     "rbac.insufficient_role": "You don't have permission for this action (requires: {{allowed}}).",
     "rbac.operator_only": "Only the administrators of the organization that runs this Provenza server can do this.",
     "auth.signup_disabled": "Self-service registration is disabled on this server.",

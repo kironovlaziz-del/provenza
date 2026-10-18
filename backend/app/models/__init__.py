@@ -26,6 +26,7 @@ from app.models.model_deployment import ModelDeployment
 from app.models.prediction_log import PredictionLog
 from app.models.ingestion_source import IngestionSource
 from app.models.export_key import ExportKey
+from app.models.impact_assessment import ImpactAssessment
 from app.models.ai_domain_catalog import AIDomainCatalog
 from app.models.ai_telemetry_event import AITelemetryEvent
 from app.models.document_collection import DocumentCollection

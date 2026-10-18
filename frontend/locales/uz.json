@@ -551,6 +551,148 @@
     "auditor_banner": "Auditor: faqat o'qish. Siz administratorlar ko'rgan hamma narsani ko'rasiz va hech narsani o'zgartirmaysiz.",
     "hint": "Auditor: hammasini ko'radi, hech narsani o'zgartirmaydi. Muvofiqlik mas'uli: hammasini ko'radi va muvofiqlik talablarini tasdiqlaydi."
   },
+    "ia": {
+      "title": "Ta'sirni baholash",
+      "back": "Tizimga qaytish",
+      "status": "Holati",
+      "approved_v": "Tasdiqlangan",
+      "draft_v": "Qoralama",
+      "not_approved": "Hali tasdiqlanmagan",
+      "approved_on": "Tasdiqlangan sana",
+      "review_due": "Qayta ko'rib chiqish",
+      "progress": "Majburiy javoblar",
+      "intro": "Bitta so'rovnoma ISO/IEC 42005 ta'sirni baholashi, GDPR ma'lumotlarni himoya qilishga ta'sirni baholash (DPIA) va EU AI Act asosiy huquqlarga ta'sirni baholash (FRIA) vazifasini bajaradi. Muvofiqlik sahifasi tasdiqlangan versiyani o'qiydi.",
+      "save": "Qoralamani saqlash",
+      "approve": "Tasdiqlash",
+      "revise": "Yangi versiyani boshlash",
+      "history": "Tasdiqlangan versiyalar",
+      "version": "Versiya",
+      "open": "Ochish",
+      "start": "Baholashni boshlash",
+      "none": "Hali baholanmagan. Bitta so'rovnoma ISO/IEC 42005, DPIA va FRIA ni qamraydi.",
+      "saved": "Qoralama saqlandi.",
+      "approved_notice": "Tasdiqlandi. Endi bu versiya tizimning ta'sirni baholashi.",
+      "incomplete": "Avval belgilangan savollarga javob bering.",
+      "load_failed": "Baholashni yuklab bo'lmadi.",
+      "save_failed": "Qoralamani saqlab bo'lmadi.",
+      "approve_failed": "Tasdiqlab bo'lmadi.",
+      "s": {
+        "purpose": "Maqsad va kontekst",
+        "rights": "Odamlarga ta'siri",
+        "data": "Shaxsiy ma'lumotlar (DPIA)",
+        "measures": "Choralar",
+        "conclusion": "Xulosa"
+      },
+      "q": {
+        "purpose": "Tizim nima uchun va qaysi jarayonda ishlatiladi?",
+        "affected": "Uning natijalari kimga ta'sir qiladi?",
+        "scale": "Yiliga qancha odamga ta'sir qiladi?",
+        "period": "Qachon va qanchalik tez-tez ishlatiladi?",
+        "rights": "Qaysi huquq yoki manfaatlarga zarar yetishi mumkin?",
+        "harm": "Bu odamlar uchun nima noto'g'ri ketishi mumkin va qanday?",
+        "severity": "Zarar qanchalik jiddiy bo'ladi?",
+        "likelihood": "Bu qanchalik ehtimol?",
+        "reversibility": "Zararni bartaraf etish mumkinmi?",
+        "personal_data": "Tizim shaxsiy ma'lumotlarni qayta ishlaydimi?",
+        "categories": "Qaysi turlari?",
+        "lawful_basis": "Huquqiy asos (GDPR 6-modda)",
+        "necessity": "Bu ma'lumotlar nega kerak va nimalar chiqarib tashlangan?",
+        "retention": "Qancha vaqt saqlanadi?",
+        "transfers": "EI/EIH dan tashqariga chiqadimi?",
+        "measures": "Bu xavflarni nima kamaytiradi? (testlar, cheklovlar, Provenza siyosatlari, o'qitish)",
+        "oversight": "Tizimni kim nazorat qiladi va uni to'xtatishi yoki qarorini bekor qilishi mumkin?",
+        "redress": "Ta'sirlangan odam qanday shikoyat qilishi yoki qarorga e'tiroz bildirishi mumkin?",
+        "residual": "Choralardan keyingi qoldiq xavf",
+        "decision": "Qaror",
+        "conditions": "Shartlar",
+        "review_date": "Qayta ko'rib chiqish muddati"
+      },
+      "h": {
+        "review_date": "Bo'sh qolsa, tasdiqlangandan bir yil o'tib."
+      },
+      "o": {
+        "affected": {
+          "employees": "Xodimlar",
+          "job_applicants": "Ishga nomzodlar",
+          "customers": "Mijozlar",
+          "patients": "Bemorlar",
+          "students": "Talabalar",
+          "children": "Bolalar",
+          "public": "Jamoatchilik",
+          "other": "Boshqalar"
+        },
+        "scale": {
+          "under_100": "100 dan kam",
+          "100_10k": "100 - 10 000",
+          "10k_1m": "10 000 - 1 million",
+          "over_1m": "1 milliondan ortiq"
+        },
+        "rights": {
+          "non_discrimination": "Kamsitilmaslik",
+          "privacy": "Shaxsiy hayot daxlsizligi",
+          "expression": "So'z erkinligi",
+          "access_services": "Xizmatlardan foydalanish",
+          "employment": "Mehnat va bandlik",
+          "education": "Ta'lim",
+          "health_safety": "Sog'liq va xavfsizlik",
+          "due_process": "Adolatli tartib",
+          "none": "Hech biri"
+        },
+        "severity": {
+          "low": "Past",
+          "medium": "O'rta",
+          "high": "Yuqori",
+          "critical": "Kritik"
+        },
+        "likelihood": {
+          "rare": "Kamdan-kam",
+          "possible": "Ehtimoliy",
+          "likely": "Ehtimoli yuqori"
+        },
+        "reversibility": {
+          "reversible": "Qaytariladigan",
+          "hard_to_reverse": "Qaytarish qiyin",
+          "irreversible": "Qaytarib bo'lmaydigan"
+        },
+        "personal_data": {
+          "yes": "Ha",
+          "no": "Yo'q"
+        },
+        "categories": {
+          "identity": "Shaxsni aniqlovchi",
+          "contact": "Aloqa ma'lumotlari",
+          "financial": "Moliyaviy",
+          "location": "Joylashuv",
+          "behaviour": "Xulq-atvor",
+          "special": "Maxsus toifalar (sog'liq, biometrik, e'tiqod...)",
+          "children": "Bolalar ma'lumotlari",
+          "criminal": "Sudlanganlik"
+        },
+        "lawful_basis": {
+          "consent": "Rozilik",
+          "contract": "Shartnoma",
+          "legal_obligation": "Qonuniy majburiyat",
+          "vital_interest": "Hayotiy manfaat",
+          "public_task": "Ommaviy vazifa",
+          "legitimate_interest": "Qonuniy manfaat"
+        },
+        "transfers": {
+          "no": "Yo'q",
+          "adequacy": "Ha, adekvatlik qarori bor davlatga",
+          "safeguards": "Ha, kafolatlar bilan (SCC, BCR)"
+        },
+        "residual": {
+          "low": "Past",
+          "medium": "O'rta",
+          "high": "Yuqori"
+        },
+        "decision": {
+          "proceed": "Davom etish",
+          "proceed_with_conditions": "Shartlar bilan davom etish",
+          "do_not_proceed": "Davom etmaslik"
+        }
+      }
+    },
   "export_keys": {
     "title": "SIEM eksporti",
     "new": "Yangi kalit",
@@ -886,6 +1028,11 @@
     "export_key.invalid": "Eksport kaliti yaroqsiz yoki bekor qilingan.",
     "export_key.not_found": "Bunday eksport kaliti yo'q.",
     "rbac.read_only": "Faqat o'qish: auditor roli hech narsani o'zgartirmaydi.",
+    "impact_assessment.invalid_answer": "\"{{question}}\" savoliga javob noto'g'ri.",
+    "impact_assessment.incomplete": "Ba'zi majburiy savollarga hali javob berilmagan.",
+    "impact_assessment.no_draft": "Tasdiqlash uchun qoralama yo'q.",
+    "impact_assessment.review_in_past": "Qayta ko'rib chiqish sanasi kelajakda bo'lishi kerak.",
+    "impact_assessment.system_not_found": "Bunday AI tizimi yo'q.",
     "rbac.insufficient_role": "Bu amal uchun ruxsatingiz yo'q (kerak: {{allowed}}).",
     "rbac.operator_only": "Buni faqat ushbu Provenza serverini boshqaradigan tashkilot administratorlari qila oladi.",
     "auth.signup_disabled": "Bu serverda mustaqil ro'yxatdan o'tish o'chirilgan.",

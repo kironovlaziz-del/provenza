@@ -38,6 +38,7 @@ import {
 } from "@/lib/inventory_types";
 import { AttentionList, StagePill, TierPill } from "../InventoryBadges";
 import { confirmDialog } from "@/components/Dialog";
+import { getForSystem, type SystemAssessments } from "@/lib/impact_api";
 
 const SOURCE_PAGE: Record<string, string> = {
   agent: "/agents",
@@ -74,6 +75,7 @@ export default function InventorySystemPage() {
   const [domain, setDomain] = useState("general");
   const [flags, setFlags] = useState<string[]>([]);
   const [actRoles, setActRoles] = useState<AIActRole[]>([]);
+  const [assessment, setAssessment] = useState<SystemAssessments | null>(null);
   const [tier, setTier] = useState<RiskTier>("minimal");
   const [justification, setJustification] = useState("");
   const [link, setLink] = useState({
@@ -103,6 +105,8 @@ export default function InventorySystemPage() {
       .catch((e) => setError(apiErrorMessage(e, t("inventory.load_failed", "Could not load the inventory."))));
     getInventoryMeta().then(setMeta).catch(() => undefined);
     listUseCaseOptions().then(setUseCases).catch(() => undefined);
+    // admins, approvers and the oversight roles see it; for others the panel stays hidden
+    getForSystem(id).then(setAssessment).catch(() => setAssessment(null));
   }, [id, apply, t]);
 
   useEffect(() => {
@@ -447,6 +451,25 @@ export default function InventorySystemPage() {
             )}
           </div>
         </div>
+
+        {/* ---- impact assessment ---- */}
+        {assessment && (
+          <div className="panel" style={{ marginBottom: 20 }}>
+            <div className="panel-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+              <h2>{t("ia.title", "Impact assessment")}</h2>
+              <Link href={`/inventory/${s.id}/assessment`} className="btn btn-sm btn-primary">
+                {assessment.approved || assessment.draft ? t("ia.open", "Open") : t("ia.start", "Start the assessment")}
+              </Link>
+            </div>
+            <div className="panel-body hint-text" style={{ paddingTop: 0 }}>
+              {assessment.approved
+                ? `${t("ia.approved_v", "Approved")} v${assessment.approved.version} · ${t("ia.review_due", "Review due")} ${assessment.approved.review_due ? new Date(assessment.approved.review_due).toLocaleDateString() : "—"}`
+                : assessment.draft
+                  ? `${t("ia.draft_v", "Draft")} v${assessment.draft.version} · ${t("ia.not_approved", "Not approved yet")}`
+                  : t("ia.none", "Not assessed yet. One questionnaire covers ISO/IEC 42005, the DPIA and the FRIA.")}
+            </div>
+          </div>
+        )}
 
         {/* ---- our role under the EU AI Act ---- */}
         <div className="panel" style={{ marginBottom: 20 }}>
