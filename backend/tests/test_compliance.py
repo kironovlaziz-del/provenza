@@ -213,3 +213,49 @@ class TestMoreFrameworks:
         assert r.status_code in (200, 201), r.text
         assert _req(await _status(client, admin_token, "owasp_llm"), "llm05")["status"] == "pass"
 
+
+
+class TestFrameworkSelection:
+    """An organization chooses the frameworks it follows; the status and new
+    reports default to that choice."""
+
+    @pytest.mark.asyncio
+    async def test_choose_frameworks(self, client, admin_token, approver_token):
+        h = auth_headers(admin_token)
+        got = (await client.get(C + "/frameworks", headers=h)).json()
+        assert set(got["selected"]) == set(got["available"]) and "dora" in got["available"]
+
+        r = await client.put(C + "/frameworks", json={"frameworks": ["gdpr", "eu_ai_act"]}, headers=h)
+        assert r.status_code == 200, r.text
+        assert r.json()["selected"] == ["eu_ai_act", "gdpr"]              # catalog order
+        assert (await client.get(C + "/frameworks", headers=h)).json()["selected"] == ["eu_ai_act", "gdpr"]
+
+        assert set((await _status(client, admin_token))["summary"]) == {"eu_ai_act", "gdpr"}
+        # an explicit choice still shows any framework
+        assert set((await _status(client, admin_token, "dora"))["summary"]) == {"dora"}
+        rep = await client.post(C + "/reports", json={}, headers=h)
+        assert rep.status_code == 200, rep.text
+        got = (await client.get(f"{C}/reports/{rep.json()['id']}", headers=h)).json()
+        assert set(got["content"]["summary"]) == {"eu_ai_act", "gdpr"}
+
+        # choosing all of them goes back to "all", including frameworks added later
+        every = list((await client.get(C + "/frameworks", headers=h)).json()["available"])
+        assert (await client.put(C + "/frameworks", json={"frameworks": every}, headers=h)).status_code == 200
+        assert set((await _status(client, admin_token))["summary"]) == set(every)
+
+    @pytest.mark.asyncio
+    async def test_rules(self, client, admin_token, approver_token):
+        h = auth_headers(admin_token)
+        assert (await client.put(C + "/frameworks", json={"frameworks": []}, headers=h)).status_code == 422
+        assert (await client.put(C + "/frameworks", json={"frameworks": ["sox"]}, headers=h)).status_code == 422
+        # approvers read the choice but do not change it
+        assert (await client.get(C + "/frameworks", headers=auth_headers(approver_token))).status_code == 200
+        assert (await client.put(C + "/frameworks", json={"frameworks": ["gdpr"]},
+                                 headers=auth_headers(approver_token))).status_code == 403
+
+    @pytest.mark.asyncio
+    async def test_reports_accept_every_framework(self, client, admin_token):
+        r = await client.post(C + "/reports", json={"frameworks": ["nis2", "dora"]}, headers=auth_headers(admin_token))
+        assert r.status_code == 200, r.text
+        assert (await client.post(C + "/reports", json={"frameworks": ["nope"]},
+                                  headers=auth_headers(admin_token))).status_code == 422
