@@ -22,6 +22,7 @@
 - [Kill switch](kill-switch.md): stopping an agent, a team, all agents or all AI traffic
 - SDKs: [Python](../sdk/python/README.md), [JavaScript](../sdk/js/README.md), [Go](../sdk/go/README.md)
 - [Egress proxy](../proxy/README.md) and [egress sensor](../sensor/README.md)
+- [SIEM export](siem-export.md): a SIEM or SOAR pulling the egress sensor events with a read-only key
 
 ## Shadow AI
 

@@ -232,3 +232,34 @@ async def test_events_rejects_bad_event_type(client, admin_token):
 async def test_events_requires_admin(client, approver_token):
     r = await client.get(f"{BASE}/events", headers=auth_headers(approver_token))
     assert r.status_code == 403
+
+
+async def test_events_cursor_across_both_tables_at_one_time(client, admin_token):
+    """Rows of one test share created_at (the transaction's now()), as a batch
+    a sensor sent without event times does. Paging both tables through such
+    a tie must still return every row once."""
+    sensor = await _register_sensor(client, admin_token, "s-tie")
+    wl = await _make_workload(client, admin_token, "wl-tie")
+    await _seed(client, admin_token, sensor, wl, tag="ev-tie", n_vio=7, n_act=8)
+
+    seen: list[tuple[str, int]] = []
+    cursor: str | None = None
+    for _ in range(20):
+        url = f"{BASE}/events?limit=4" + (f"&cursor={cursor}" if cursor else "")
+        r = await client.get(url, headers=auth_headers(admin_token))
+        assert r.status_code == 200, r.text
+        body = r.json()
+        seen += [(e["event_type"], e["id"]) for e in _filter_tag(body["events"], "ev-tie")]
+        cursor = body["next_cursor"]
+        if not cursor:
+            break
+    assert len(seen) == len(set(seen)), "an event came twice"
+    assert sum(1 for et, _ in seen if et == "violation") == 7
+    assert sum(1 for et, _ in seen if et == "activity") == 8
+
+
+async def test_events_rejects_a_forged_cursor_type(client, admin_token):
+    import base64, json
+    bad = base64.urlsafe_b64encode(json.dumps({"t": "x", "i": 1, "c": "2026-01-01T00:00:00+00:00"}).encode()).decode()
+    r = await client.get(f"{BASE}/events?cursor={bad}", headers=auth_headers(admin_token))
+    assert r.status_code == 400
