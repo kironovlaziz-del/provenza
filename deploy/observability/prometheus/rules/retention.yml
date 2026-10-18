@@ -1,0 +1,31 @@
+groups:
+  - name: retention
+    interval: 30s
+    rules:
+      - alert: RetentionPruneFailed
+        expr: retention_last_prune_failed == 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Pruning {{ $labels.table }} failed for org {{ $labels.org_id }}"
+          description: >-
+            The hourly egress_sensor.prune_{{ $labels.table }} task could not
+            delete this organization's rows past their retention; the error
+            is in the worker log ("prune failed") and in the organization's
+            egress_policy_settings row. Nothing is lost, but the table keeps
+            growing until a prune succeeds; the alert clears on the next
+            good run.
+
+      - alert: RetentionPruneStale
+        expr: retention_last_pruned_at_seconds_ago > 3 * 3600
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "No successful prune of {{ $labels.table }} for org {{ $labels.org_id }} in {{ $value | humanizeDuration }}"
+          description: >-
+            The prune runs every hour. If it has not succeeded for three
+            hours, the beat scheduler or the worker is down, or every run is
+            failing (see RetentionPruneFailed). Check provenza-worker and
+            provenza-beat with "provenza status".

@@ -287,6 +287,90 @@ async def test_prune_activity_uses_activity_retention_independently(db_session, 
     assert deleted_violations == 1
 
 
+async def test_prune_records_each_organizations_own_rows(db_session, org_and_users):
+    """The status row of an organization says what was deleted for it, not the
+    total of the run; an organization with settings but no rows gets a status
+    too. chunk=2 makes the 3 rows of the first organization take two chunks."""
+    from app.models.organization import Organization
+
+    org = org_and_users["org"]
+    other = Organization(name="Other", slug="other-org-prune")
+    quiet = Organization(name="Quiet", slug="quiet-org-prune")
+    db_session.add_all([other, quiet])
+    await db_session.flush()
+    db_session.add(EgressPolicySettings(org_id=quiet.id))
+    old = datetime.now(timezone.utc) - timedelta(days=40)
+    db_session.add_all(
+        [SensorActivity(org_id=org.id, action="allowed", kind="connect", created_at=old) for _ in range(3)]
+        + [SensorActivity(org_id=other.id, action="allowed", kind="connect", created_at=old)]
+    )
+    await db_session.flush()
+
+    assert await prune_sensor_activity(db_session, default_days=30, chunk=2) == 4
+
+    status = {
+        s.org_id: s for s in (await db_session.execute(select(EgressPolicySettings))).scalars()
+    }
+    assert status[org.id].activity_last_prune_rows == 3
+    assert status[other.id].activity_last_prune_rows == 1
+    assert status[quiet.id].activity_last_prune_rows == 0
+    for s in status.values():
+        assert s.activity_last_pruned_at is not None
+        assert s.activity_last_prune_error is None
+        assert s.violation_last_pruned_at is None  # the other table is its own
+
+
+async def test_prune_failure_is_recorded_and_does_not_stop_other_orgs(db_session, org_and_users, monkeypatch):
+    """A failed prune sets the organization's error (the alert's input) and
+    keeps last_pruned_at at the last success; the other organizations are
+    still pruned, and the next good run clears the error."""
+    from app.models.organization import Organization
+
+    org = org_and_users["org"]
+    other = Organization(name="Other", slug="other-org-prune-fail")
+    db_session.add(other)
+    await db_session.flush()
+    last_ok = datetime.now(timezone.utc) - timedelta(hours=3)
+    db_session.add(EgressPolicySettings(org_id=org.id, violation_last_pruned_at=last_ok))
+    old = datetime.now(timezone.utc) - timedelta(days=40)
+    db_session.add_all([
+        EgressViolation(org_id=org.id, action="observed", kind="connect", created_at=old),
+        EgressViolation(org_id=other.id, action="observed", kind="connect", created_at=old),
+    ])
+    await db_session.flush()
+
+    real_execute = db_session.execute
+
+    async def failing_for_org(stmt, *args, **kwargs):
+        if getattr(stmt, "is_select", False) and "egress_violations.created_at <" in str(stmt) \
+                and org.id in stmt.compile().params.values():
+            raise RuntimeError("disk full")
+        return await real_execute(stmt, *args, **kwargs)
+
+    async def no_rollback():  # the injected error never reached the database
+        return None
+
+    monkeypatch.setattr(db_session, "execute", failing_for_org)
+    monkeypatch.setattr(db_session, "rollback", no_rollback)
+    assert await prune_violations(db_session, default_days=30) == 1
+    monkeypatch.setattr(db_session, "execute", real_execute)
+
+    status = {
+        s.org_id: s for s in (await db_session.execute(select(EgressPolicySettings))).scalars()
+    }
+    assert status[org.id].violation_last_prune_error == "RuntimeError: disk full"
+    assert status[org.id].violation_last_pruned_at == last_ok
+    assert status[org.id].violation_last_prune_rows == 0
+    assert status[other.id].violation_last_prune_error is None
+    assert status[other.id].violation_last_prune_rows == 1
+
+    assert await prune_violations(db_session, default_days=30) == 1
+    await db_session.refresh(status[org.id])
+    assert status[org.id].violation_last_prune_error is None
+    assert status[org.id].violation_last_prune_rows == 1
+    assert status[org.id].violation_last_pruned_at > last_ok
+
+
 def test_metrics_module_exports_expected_metrics():
     from app.core import metrics as m
 
