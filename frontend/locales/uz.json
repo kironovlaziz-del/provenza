@@ -128,6 +128,8 @@
     "role_admin": "administrator",
     "role_approver": "tasdiqlovchi",
     "role_user": "foydalanuvchi",
+    "role_auditor": "auditor",
+    "role_compliance": "muvofiqlik",
     "search": "Sahifalarni qidirish…",
     "no_match": "Hech narsa topilmadi",
     "expand_all": "Hammasini ochish",
@@ -545,6 +547,10 @@
     "delete": "O'chirish",
     "import_known": "Ma'lum domenlarni import qilish"
   },
+  "roles": {
+    "auditor_banner": "Auditor: faqat o'qish. Siz administratorlar ko'rgan hamma narsani ko'rasiz va hech narsani o'zgartirmaysiz.",
+    "hint": "Auditor: hammasini ko'radi, hech narsani o'zgartirmaydi. Muvofiqlik mas'uli: hammasini ko'radi va muvofiqlik talablarini tasdiqlaydi."
+  },
   "export_keys": {
     "title": "SIEM eksporti",
     "new": "Yangi kalit",
@@ -840,7 +846,9 @@
     "roles": {
       "admin": "Administrator",
       "approver": "Tasdiqlovchi",
-      "user": "Foydalanuvchi"
+      "user": "Foydalanuvchi",
+      "auditor": "Auditor",
+      "compliance": "Muvofiqlik mas'uli"
     },
     "statuses": {
       "active": "faol",
@@ -877,6 +885,7 @@
     "auth.rate_limited": "Juda ko'p urinish. {{retry_after}} soniyadan keyin qayta urinib ko'ring.",
     "export_key.invalid": "Eksport kaliti yaroqsiz yoki bekor qilingan.",
     "export_key.not_found": "Bunday eksport kaliti yo'q.",
+    "rbac.read_only": "Faqat o'qish: auditor roli hech narsani o'zgartirmaydi.",
     "rbac.insufficient_role": "Bu amal uchun ruxsatingiz yo'q (kerak: {{allowed}}).",
     "rbac.operator_only": "Buni faqat ushbu Provenza serverini boshqaradigan tashkilot administratorlari qila oladi.",
     "auth.signup_disabled": "Bu serverda mustaqil ro'yxatdan o'tish o'chirilgan.",

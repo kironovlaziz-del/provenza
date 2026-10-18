@@ -1,13 +1,17 @@
 export type RiskLevel = "low" | "medium" | "high" | "critical";
 
-export type UserRole = "admin" | "approver" | "user";
+export type UserRole = "admin" | "approver" | "user" | "auditor" | "compliance";
+
+/** Read everything admins and approvers read (backend deps.require_role);
+ *  an auditor changes nothing, a compliance officer confirms compliance. */
+export const OVERSIGHT_ROLES: string[] = ["auditor", "compliance"];
 
 export interface User {
   id: number;
   org_id: number;
   email: string;
   name: string;
-  role: "admin" | "approver" | "user";
+  role: UserRole;
   status: string;
   created_at: string;
   totp_enabled?: boolean;

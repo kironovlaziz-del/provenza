@@ -17,9 +17,9 @@ import {
   updateUserStatus,
   resetUserMfa,
 } from "@/lib/api";
-import type { User, UserRole } from "@/lib/types";
+import { OVERSIGHT_ROLES, type User, type UserRole } from "@/lib/types";
 
-const ROLES: UserRole[] = ["admin", "approver", "user"];
+const ROLES: UserRole[] = ["admin", "approver", "user", "auditor", "compliance"];
 
 export default function UsersPage() {
   const { t, i18n } = useTranslation();
@@ -89,7 +89,9 @@ export default function UsersPage() {
     }
   }
 
-  if (me && me.role !== "admin") {
+  // the oversight roles see the list; only an admin changes it
+  const canEdit = me?.role === "admin";
+  if (me && !canEdit && !OVERSIGHT_ROLES.includes(me.role)) {
     return (
       <>
         <PageHeader title={t("users.title")} />
@@ -104,20 +106,25 @@ export default function UsersPage() {
     <>
       <PageHeader
         title={t("users.title")}
-        actions={
+        actions={canEdit ? (
           <button
             className="btn btn-primary btn-sm"
             onClick={() => setShowForm((s) => !s)}
           >
             {showForm ? t("users.cancel") : t("users.invite")}
           </button>
-        }
+        ) : undefined}
       />
       <div className="content">
-        <MfaPolicyPanel />
-        <SsoPanel />
-        <ScimPanel />
-        {showForm && (
+        <p className="hint-text u-mb-16">{t("roles.hint")}</p>
+        {canEdit && (
+          <>
+            <MfaPolicyPanel />
+            <SsoPanel />
+            <ScimPanel />
+          </>
+        )}
+        {canEdit && showForm && (
           <div className="panel" style={{ marginBottom: 20 }}>
             <div className="panel-header">
               <h2>{t("users.form_title")}</h2>
@@ -239,7 +246,7 @@ export default function UsersPage() {
                       <td>
                         <select
                           value={u.role}
-                          disabled={busyId === u.id}
+                          disabled={!canEdit || busyId === u.id}
                           onChange={(e) =>
                             handleRoleChange(u.id, e.target.value as UserRole)
                           }
@@ -273,7 +280,7 @@ export default function UsersPage() {
                         {new Date(u.created_at).toLocaleString(i18n.language)}
                       </td>
                       <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
-                        {u.totp_enabled && !isMe && (
+                        {canEdit && u.totp_enabled && !isMe && (
                           <button className="btn btn-sm" style={{ marginRight: 6 }} disabled={busyId === u.id}
                             onClick={async () => {
                               if (!(await confirmDialog(t("mfa.reset_confirm", { name: u.name }), { danger: true }))) return;
@@ -288,7 +295,7 @@ export default function UsersPage() {
                             {t("mfa.reset")}
                           </button>
                         )}
-                        {!isMe && (
+                        {canEdit && !isMe && (
                           <button
                             className="btn btn-sm"
                             disabled={busyId === u.id}

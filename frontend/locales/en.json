@@ -128,6 +128,8 @@
     "role_admin": "admin",
     "role_approver": "approver",
     "role_user": "user",
+    "role_auditor": "auditor",
+    "role_compliance": "compliance",
     "search": "Search pages…",
     "no_match": "Nothing found",
     "expand_all": "Expand all",
@@ -545,6 +547,10 @@
     "delete": "Remove",
     "import_known": "Import known domains"
   },
+  "roles": {
+    "auditor_banner": "Auditor: read-only access. You see everything administrators see and change nothing.",
+    "hint": "Auditor: sees everything, changes nothing. Compliance officer: sees everything and confirms compliance requirements."
+  },
   "export_keys": {
     "title": "SIEM export",
     "new": "New key",
@@ -840,7 +846,9 @@
     "roles": {
       "admin": "Admin",
       "approver": "Approver",
-      "user": "User"
+      "user": "User",
+      "auditor": "Auditor",
+      "compliance": "Compliance officer"
     },
     "statuses": {
       "active": "active",
@@ -877,6 +885,7 @@
     "auth.rate_limited": "Too many attempts. Try again in {{retry_after}} seconds.",
     "export_key.invalid": "The export key is not valid or has been revoked.",
     "export_key.not_found": "No such export key.",
+    "rbac.read_only": "Read-only access: the auditor role changes nothing.",
     "rbac.insufficient_role": "You don't have permission for this action (requires: {{allowed}}).",
     "rbac.operator_only": "Only the administrators of the organization that runs this Provenza server can do this.",
     "auth.signup_disabled": "Self-service registration is disabled on this server.",

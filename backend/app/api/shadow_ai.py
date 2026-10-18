@@ -157,7 +157,7 @@ async def register_sighting(
 async def download_extension(
     request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(UserRole.admin)),
+    current_user: User = Depends(require_role(UserRole.admin, mints=True)),  # issues a key
 ):
     """
     Packages the browser extension pre-configured with a freshly minted

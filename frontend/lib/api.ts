@@ -24,6 +24,7 @@ import type {
   SeedDomainHint,
   DiscoveredService,
   ServiceConnection,
+  UserRole,
 } from "./types";
 
 const API_BASE_URL =
@@ -220,14 +221,14 @@ export async function listUsers() {
 export async function inviteUser(payload: {
   email: string;
   name: string;
-  role: "admin" | "approver" | "user";
+  role: UserRole;
   password: string;
 }) {
   const { data } = await api.post<User>("/users/invite", payload);
   return data;
 }
 
-export async function updateUserRole(id: number, role: "admin" | "approver" | "user") {
+export async function updateUserRole(id: number, role: UserRole) {
   const { data } = await api.put<User>(`/users/${id}/role`, { role });
   return data;
 }

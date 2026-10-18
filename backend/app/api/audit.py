@@ -144,7 +144,8 @@ async def consistency(
 
 
 @router.post("/verify")
-async def verify(db: AsyncSession = Depends(get_db), current_user: User = Depends(_admin)):
+async def verify(db: AsyncSession = Depends(get_db),
+                 current_user: User = Depends(require_role(UserRole.admin, UserRole.auditor, UserRole.compliance))):
     report = await audit_proofs.verify_chain(db, current_user.org_id)
     await AuditService(db).log(current_user.org_id, current_user.id, "audit_log", None, "chain_verified",
                                {"ok": report["ok"], "records": report["records"],
