@@ -138,6 +138,33 @@ def require_role(*allowed: UserRole):
     return checker
 
 
+async def operator_org_id(db: AsyncSession) -> Optional[int]:
+    """The organization that runs this installation: the first one, created
+    by create-admin at install time. Organizations made later by public
+    sign-up (ALLOW_PUBLIC_SIGNUP) are tenants of the installation, not its
+    operator."""
+    from sqlalchemy import func
+    from app.models.organization import Organization
+
+    return (await db.execute(select(func.min(Organization.id)))).scalar()
+
+
+async def is_operator(db: AsyncSession, user: User) -> bool:
+    return user.role == UserRole.admin.value and user.org_id == await operator_org_id(db)
+
+
+async def require_operator(
+    current_user: User = Depends(require_role(UserRole.admin)),
+    db: AsyncSession = Depends(get_db),
+) -> User:
+    """An administrator of the operator organization. For data that belongs to
+    the installation rather than to one organization - the Prometheus proxy:
+    HTTP traffic of the whole API, every organization's sensors and tables."""
+    if current_user.org_id != await operator_org_id(db):
+        raise api_error(status.HTTP_403_FORBIDDEN, "rbac.operator_only")
+    return current_user
+
+
 async def get_ingestion_source(
     x_ingestion_key: str = Header(..., alias="X-Ingestion-Key"),
     db: AsyncSession = Depends(get_db),

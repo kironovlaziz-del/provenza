@@ -8,14 +8,14 @@ Registered under /api/v1/metrics (distinct from /api/v1/observability,
 which is the agent-observability event stream — different data source,
 different shape). Thin pass-through to Prometheus on loopback: the browser
 cannot reach 127.0.0.1:9090 directly, and we do not want to expose the
-Prometheus port. Auth reuses the same JWT as the rest of the admin API
-and requires admin.
+Prometheus port. Auth reuses the same JWT as the rest of the admin API.
 
-The endpoint is admin-only on purpose. In a self-hosted install there is
-usually one organization and one operator, and the operator page needs
-the whole-installation view (every sensor, every org) to spot anomalies.
-Tenant-level visibility is handled by the per-tenant UI (/observability
-uses user.org_id when it renders), not by filtering inside this proxy.
+The metrics describe the installation, not one organization: HTTP traffic
+of the whole API, and every organization's sensors, tables and audit log
+(labelled org_id). So the proxy answers only the installation's operator -
+an administrator of the first organization (deps.require_operator).
+Administrators of organizations created later by public sign-up get 403:
+they are tenants and must not see each other's data.
 
 If Prometheus is down, both handlers return 503 with a short message.
 """
@@ -28,12 +28,12 @@ import urllib.request
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
 
-from app.api.deps import require_role
+from app.api.deps import require_operator
 from app.core.database import get_db
 from app.services import notification_service
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
-from app.models.user import User, UserRole
+from app.models.user import User
 
 router = APIRouter()
 
@@ -71,12 +71,10 @@ async def _proxy(path: str, params: dict[str, str]) -> dict:
 def _validate_query(q: str) -> None:
     """Reject only the patterns that quietly change what a query means.
 
-    /api/v1/metrics/query{,_range} is admin-only: the admin sees the whole
-    installation, across every organization, which is what the operator
-    page and Grafana need. There is no tenant isolation to enforce here
-    (that is done at require_role). label_replace / label_join are the
-    only refusals: they rewrite labels and can make a per-org series look
-    like a different org's series without warning.
+    /api/v1/metrics/query{,_range} answers the operator only, who sees the
+    whole installation (require_operator). label_replace / label_join are
+    the only refusals: they rewrite labels and can make a per-org series
+    look like a different org's series without warning.
     """
     for fn in _FORBIDDEN_FUNCS:
         if fn in q:
@@ -90,7 +88,7 @@ def _validate_query(q: str) -> None:
 async def query(
     query: str = Query(..., description="PromQL expression"),
     time: str | None = Query(default=None, description="RFC3339 or unix timestamp"),
-    _: User = Depends(require_role(UserRole.admin)),
+    _: User = Depends(require_operator),
 ) -> dict:
     _validate_query(query)
     params = {"query": query}
@@ -105,7 +103,7 @@ async def query_range(
     start: float = Query(..., description="Start timestamp (unix seconds)"),
     end: float = Query(..., description="End timestamp (unix seconds)"),
     step: str = Query(default="15s", description="Resolution, e.g. 15s, 1m"),
-    _: User = Depends(require_role(UserRole.admin)),
+    _: User = Depends(require_operator),
 ) -> dict:
     _validate_query(query)
     return await _proxy(

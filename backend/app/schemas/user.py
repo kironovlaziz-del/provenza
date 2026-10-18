@@ -69,6 +69,12 @@ class UserOut(UserBase):
         from_attributes = True
 
 
+class MeOut(UserOut):
+    # an administrator of the organization that runs the installation
+    # (deps.require_operator): sees installation-wide monitoring
+    is_operator: bool = False
+
+
 class UserLogin(BaseModel):
     # The slug disambiguates users that share an email across organizations.
     org_slug: str

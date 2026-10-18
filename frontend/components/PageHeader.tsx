@@ -21,7 +21,7 @@ export function PageHeader({
   const pathname = usePathname();
   const { user } = useAuth();
   const { features } = useFeatures();
-  const section = sectionOf(pathname, user?.role, features);
+  const section = sectionOf(pathname, user?.role, features, !!user?.is_operator);
   return (
     <>
       <div className="topbar">

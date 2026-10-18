@@ -2,8 +2,10 @@
 // section with several pages shows them as tabs under the page title
 // (components/PageHeader.tsx). Pages keep their own URLs.
 //
-// adminOnly: admins; reviewOnly: admins and approvers. A section is shown when
-// the user may open at least one of its pages; it links to the first of them.
+// adminOnly: admins; reviewOnly: admins and approvers; operatorOnly: admins of
+// the organization that runs the installation (User.is_operator) - pages with
+// data of every organization. A section is shown when the user may open at
+// least one of its pages; it links to the first of them.
 
 export type Role = "admin" | "approver" | "user" | string | undefined;
 
@@ -12,6 +14,7 @@ export interface NavPage {
   labelKey: string;
   adminOnly?: boolean;
   reviewOnly?: boolean;
+  operatorOnly?: boolean;
   /** Optional feature flag; when the flag is off the page is hidden. */
   feature?: "content_safety";
 }
@@ -60,7 +63,7 @@ export const NAV: NavGroup[] = [
         P("/agent-observability", "agent_observability"),
         P("/agent-map", "agent_map"),
         P("/agent-chains", "agent_chains"),
-        P("/observability", "observability", { adminOnly: true }),
+        P("/observability", "observability", { operatorOnly: true }),
       ] },
       { key: "inventory", labelKey: "sidebar.sec.inventory", icon: "registry", pages: [
         P("/inventory", "inventory"),
@@ -136,8 +139,10 @@ export function canSee(
   page: NavPage,
   role: Role,
   features: { content_safety: boolean } = { content_safety: true },
+  operator = false,
 ): boolean {
   if (page.feature && !features[page.feature]) return false;
+  if (page.operatorOnly) return role === "admin" && operator;
   if (page.adminOnly) return role === "admin";
   if (page.reviewOnly) return role === "admin" || role === "approver";
   return true;
@@ -151,11 +156,12 @@ export function pageMatches(href: string, pathname: string | null | undefined): 
 export function visibleNav(
   role: Role,
   features: { content_safety: boolean } = { content_safety: true },
+  operator = false,
 ): NavGroup[] {
   return NAV.map((g) => ({
     ...g,
     sections: g.sections
-      .map((s) => ({ ...s, pages: s.pages.filter((p) => canSee(p, role, features)) }))
+      .map((s) => ({ ...s, pages: s.pages.filter((p) => canSee(p, role, features, operator)) }))
       .filter((s) => s.pages.length > 0),
   })).filter((g) => g.sections.length > 0);
 }
@@ -164,8 +170,9 @@ export function sectionOf(
   pathname: string | null | undefined,
   role: Role,
   features: { content_safety: boolean } = { content_safety: true },
+  operator = false,
 ): NavSection | undefined {
-  for (const g of visibleNav(role, features)) {
+  for (const g of visibleNav(role, features, operator)) {
     for (const s of g.sections) {
       if (s.pages.some((p) => pageMatches(p.href, pathname))) return s;
     }
