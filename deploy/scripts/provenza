@@ -13,6 +13,9 @@
 #                                  new code: rebuild and restart with backup and
 #                                  rollback (upgrade.sh); no new code: pull fresh
 #                                  third-party images and restart what changed
+#   provenza rebuild               the code already on disk (after git pull or a
+#                                  patch): build the images, back up, restart;
+#                                  no fetch and no rollback - that is upgrade
 #   provenza backup                database and files backup now
 #   provenza run <command...>      one-off backend command (create-admin, alembic, ...)
 #   provenza units                 re-render the units after editing deploy/.env
@@ -32,7 +35,7 @@ fi
 
 SERVICES=(postgres redis migrate backend worker beat frontend caddy prometheus grafana alertmanager)
 
-usage() { sed -n '2,23p' "$SELF" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '2,/^set -e/p' "$SELF" | grep '^#' | sed 's/^# \{0,1\}//'; }
 
 unit_of() {  # backend -> provenza-backend.service
   local s=${1#provenza-}; s=${s%.service}
@@ -132,6 +135,29 @@ refresh_images() {
   ok "done"
 }
 
+# The code already in the checkout: upgrade compares with origin and finds
+# nothing to do after a manual git pull, so this builds what is on disk.
+cmd_rebuild() {
+  local rev
+  rev=$(git_as_owner describe --tags --always --dirty 2>/dev/null || echo unknown)
+  step "Building the images from $ROOT_DIR ($rev); the running version keeps serving"
+  build_images || die "the build failed - nothing was changed, the running version keeps serving"
+  ok "images built"
+  "$DEPLOY_DIR/scripts/units.sh" install >/dev/null  # the unit templates may have changed too
+  step "Backing up before the migrations run"
+  "$DEPLOY_DIR/scripts/backup.sh" | sed 's/^/    /'
+  step "Restarting"
+  # migrate first: restarting it restarts the API, worker and scheduler,
+  # which require it; the monitoring services re-read their mounted config
+  # (alert rules, dashboards)
+  systemctl restart provenza-migrate.service provenza-frontend.service --no-block
+  systemctl restart provenza-prometheus.service provenza-grafana.service provenza-alertmanager.service
+  systemctl start provenza.target --no-block
+  wait_ready 300 backend worker frontend || die "not healthy after the restart: provenza logs backend"
+  podman image prune -f >/dev/null 2>&1 || true  # the previous build's layers
+  ok "running $rev (provenza status)"
+}
+
 cmd_upgrade() {
   local out rc=0
   out=$(mktemp)
@@ -158,6 +184,7 @@ case "$cmd" in
   status)  cmd_status ;;
   logs)    cmd_logs "$@" ;;
   upgrade) cmd_upgrade "$@" ;;
+  rebuild) cmd_rebuild ;;
   backup)  exec "$DEPLOY_DIR/scripts/backup.sh" ;;
   run)     exec "$DEPLOY_DIR/scripts/run.sh" "$@" ;;
   units)   exec "$DEPLOY_DIR/scripts/units.sh" install ;;
