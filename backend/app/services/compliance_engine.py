@@ -147,6 +147,19 @@ async def collect_facts(db: AsyncSession, org_id: int) -> dict:
             OrgKey.org_id == org_id, OrgKey.status == "active"))).scalar_one() > 0
     f["byok"] = await _safe(byok(), False)
     f["encryption_key_set"] = bool((settings.ENCRYPTION_KEY or "").strip())
+
+    async def assessments():
+        from app.models.impact_assessment import ImpactAssessment
+        rows = (await db.execute(select(ImpactAssessment).where(ImpactAssessment.org_id == org_id)
+                                 .order_by(ImpactAssessment.version))).scalars().all()
+        approved, drafts = {}, set()
+        for a in rows:                       # by version: the last approved one wins
+            if a.status == "approved":
+                approved[a.system_id] = a
+            else:
+                drafts.add(a.system_id)
+        return approved, drafts
+    f["assessments"], f["assessment_drafts"] = await _safe(assessments(), ({}, set()))
     return f
 
 
@@ -200,6 +213,21 @@ def c_ai_act_roles_stated(f) -> Result:
     act = f["active_systems"]
     st, detail, e = _share(sum(bool(s.ai_act_roles) for s in act), len(act), "describe", "/inventory")
     return st, f"Role under the AI Act stated: {detail}", e
+
+
+def _tier(s: AISystem) -> Optional[str]:
+    return s.confirmed_risk_tier or s.suggested_risk_tier
+
+
+def c_impact_assessed(f) -> Result:
+    """Every active system above minimal risk has an approved, current
+    impact assessment (ISO/IEC 42001 A.5)."""
+    need = [s for s in f["active_systems"] if _tier(s) in ("high", "limited", "unacceptable")]
+    if not need:
+        return "pass", "No active AI system above minimal risk", [ev("systems above minimal risk", 0, "/inventory")]
+    ok = sum(s_impact_assessed(f, s)[0] == "pass" for s in need)
+    st, detail, e = _share(ok, len(need), "assess", "/inventory")
+    return st, f"Impact assessment approved and current: {detail} above minimal risk", e
 
 
 def c_owners_assigned(f) -> Result:
@@ -415,6 +443,33 @@ def s_risk_confirmed(f, s: AISystem) -> Result:
     return "pass", f"Confirmed {s.confirmed_risk_tier}", [ev("risk tier", s.confirmed_risk_tier, f"/inventory/{s.id}")]
 
 
+def s_impact_assessed(f, s: AISystem) -> Result:
+    link = f"/inventory/{s.id}/assessment"
+    a = f["assessments"].get(s.id)
+    if a is None:
+        if s.id in f["assessment_drafts"]:
+            return "partial", "Impact assessment drafted, not approved", [ev("impact assessment", "draft", link)]
+        return "fail", "No impact assessment", [ev("impact assessment", "none", link)]
+    e = [ev("impact assessment", f"v{a.version}, approved {a.approved_at:%Y-%m-%d}", link)]
+    ans = a.answers or {}
+    if ans.get("decision") == "do_not_proceed" and s.lifecycle_stage == "production":
+        return "fail", "The assessment concluded not to proceed, yet the system is in production", e
+    due = a.review_due
+    if due is not None and due < f["now"]:
+        return "partial", f"Review was due {due:%Y-%m-%d}", e
+    return "pass", f"Approved v{a.version}, residual risk {ans.get('residual', '?')}", e
+
+
+def s_dpia(f, s: AISystem) -> Result:
+    """The impact assessment, read as a DPIA: it must say the system processes
+    personal data when its data links do."""
+    st, detail, e = s_impact_assessed(f, s)
+    a = f["assessments"].get(s.id)
+    if a is not None and st == "pass" and (a.answers or {}).get("personal_data") != "yes":
+        return "partial", "The assessment says no personal data, but the system's data links contain some", e
+    return st, detail, e
+
+
 def s_data_documented(f, s: AISystem) -> Result:
     n = len(s.data_links or [])
     return ("pass" if n else "fail"), f"{n} data link(s)", [ev("data links", n, f"/inventory/{s.id}")]
@@ -443,6 +498,7 @@ CHECKS: Dict[str, Callable] = {
     "inventory_classified": c_inventory_classified,
     "owners_assigned": c_owners_assigned,
     "ai_act_roles_stated": c_ai_act_roles_stated,
+    "impact_assessed": c_impact_assessed,
     "owners_and_monitoring": c_owners_and_monitoring,
     "monitoring_active": c_monitoring,
     "incidents_handled": c_incidents,
@@ -474,6 +530,8 @@ CHECKS: Dict[str, Callable] = {
 }
 SYSTEM_CHECKS: Dict[str, Callable] = {
     "sys_risk_confirmed": s_risk_confirmed,
+    "sys_impact_assessed": s_impact_assessed,
+    "sys_dpia": s_dpia,
     "sys_data_documented": s_data_documented,
     "sys_logged": s_logged,
     "sys_human_oversight": s_oversight,

@@ -149,6 +149,19 @@ version.
 2. Set the name, risk level, and (optionally) the approved policy
    version and owner.
 
+### 5.1 Impact assessment
+
+On an AI system's page (AI inventory → the system) set **Our role under the
+EU AI Act** - provider, deployer, importer, distributor - and open the
+**Impact assessment**. One questionnaire serves as the ISO/IEC 42005 impact
+assessment, the GDPR data protection impact assessment (its personal data
+part appears when the system processes personal data) and the EU AI Act
+fundamental rights impact assessment. Save it as a draft while you work;
+**Approve** freezes that version (admins and compliance officers), and the
+next change starts a new one, so earlier decisions stay. The Compliance page
+reads the approved version for EU AI Act Art. 27, GDPR Art. 35 and ISO 42001
+A.5, and flags it again when its review date passes.
+
 ---
 
 ## 6. Usage Registry & Approvals

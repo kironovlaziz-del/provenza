@@ -162,6 +162,20 @@ versiyasini birlashtiradi.
 2. Nom, xavf darajasi va (ixtiyoriy) tasdiqlangan siyosat versiyasi hamda
    egasini belgilang.
 
+### 5.1 Ta'sirni baholash
+
+AI tizimi sahifasida (AI inventory → tizim) **EU AI Act bo'yicha bizning
+rolimiz**ni belgilang - provider, deployer, importer, distributor - va
+**Ta'sirni baholash**ni oching. Bitta so'rovnoma ISO/IEC 42005 ta'sirni
+baholashi, GDPR DPIA (tizim shaxsiy ma'lumotlarni qayta ishlasa, uning
+shaxsiy ma'lumotlar qismi paydo bo'ladi) va EU AI Act FRIA vazifasini
+bajaradi. Ishlash davomida qoralama sifatida saqlang; **Tasdiqlash** o'sha
+versiyani muzlatadi (admin va muvofiqlik mas'uli), keyingi o'zgarish yangi
+versiyani boshlaydi, shuning uchun avvalgi qarorlar saqlanib qoladi.
+Muvofiqlik sahifasi tasdiqlangan versiyani EU AI Act 27-modda, GDPR 35-modda
+va ISO 42001 A.5 uchun o'qiydi va qayta ko'rib chiqish sanasi o'tganda yana
+belgilaydi.
+
 ---
 
 ## 6. Foydalanish reyestri va tasdiqlash
