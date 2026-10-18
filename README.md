@@ -212,8 +212,8 @@ The sensor is a separate, per-host install. It loads the eBPF programs that watc
     cd provenza/sensor
     sudo ./install.sh --url https://your-provenza-domain
 
-Then in the UI: Runtime -> Register sensor, copy the pvz_sensor_... key, and on the host run:
-
-    sudo provenza-sensor enroll --url https://your-provenza-domain --key pvz_sensor_...
-    sudo systemctl restart provenzasensor
+It asks for the sensor key: in the UI, Runtime -> Register sensor, copy the
+pvz_sensor_... key and paste it (the input is hidden and stays out of the shell
+history). Press Enter instead to only prepare the host and enroll later with
+`sudo provenza-sensor enroll --url https://your-provenza-domain`.
 

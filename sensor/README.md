@@ -58,13 +58,15 @@ The usual way needs neither this repository nor Go: in Provenza, Gateways
 the host. The control plane serves the install script, the binary and the
 systemd unit, and the script checks them against its `SHA256SUMS`:
 
-    curl -fsSL https://provenza.example.com/api/v1/egress-sensor/download/install.sh -o install-sensor.sh
-    sudo bash install-sensor.sh --url https://provenza.example.com --key pvz_sensor_...
+    f=$(mktemp) && curl -fsSL https://provenza.example.com/api/v1/egress-sensor/download/install.sh -o "$f" \
+      && sudo bash "$f" --url https://provenza.example.com
 
-The script checks the host (kernel, cgroup v2, BTF), installs the binary
-and the unit, enrolls the sensor - which writes `sensor.json`, the key, the
+The script asks for the key with the input hidden, so it stays out of the
+shell history and the process list (`--key-file PATH` or
+`PROVENZA_SENSOR_KEY` for unattended installs). It checks the host (kernel,
+cgroup v2, BTF), installs the binary and the unit, enrolls the sensor - which writes `sensor.json`, the key, the
 sensor id and the organization's command-signing key under
-`/etc/provenza-sensor/` - and starts it. From a checkout, `sudo ./sensor/install.sh --url ... --key ...`
+`/etc/provenza-sensor/` - and starts it. From a checkout, `sudo ./sensor/install.sh --url ...`
 does the same with a binary built here; `--help` lists the flags.
 
 By hand, with a binary you built:
@@ -74,7 +76,7 @@ By hand, with a binary you built:
     sudo systemctl daemon-reload
     sudo systemctl enable provenzasensor
     # writes sensor.json, the key, the sensor id and the signing key, then (re)starts the service
-    sudo provenza-sensor enroll --url https://provenza.example.com --key pvz_sensor_...
+    sudo provenza-sensor enroll --url https://provenza.example.com   # asks for the key
 
 To remove the sensor's kernel state and cache:
 

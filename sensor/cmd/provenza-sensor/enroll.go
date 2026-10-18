@@ -47,7 +47,8 @@ func enrollCmd(ctx context.Context, args []string) {
 	fs := flag.NewFlagSet("enroll", flag.ExitOnError)
 	o := enrollOpts{}
 	fs.StringVar(&o.URL, "url", "", "control plane URL, e.g. https://provenza.example.com")
-	fs.StringVar(&o.Key, "key", "", "sensor key from the Register sensor button (pvz_sensor_...)")
+	fs.StringVar(&o.Key, "key", "", "sensor key from the Register sensor button (pvz_sensor_...); "+
+		"- reads it from stdin; without it: $"+keyEnv+", or a hidden prompt")
 	fs.StringVar(&o.KeyFile, "key-file", "/etc/provenza-sensor/key", "where to write the key")
 	fs.StringVar(&o.ConfigPath, "config", "/etc/provenza-sensor/sensor.json", "where to write sensor.json")
 	fs.StringVar(&o.CgroupRoot, "cgroup-root", "/sys/fs/cgroup", "cgroup v2 mount")
@@ -62,10 +63,17 @@ func enrollCmd(ctx context.Context, args []string) {
 		"where to write this sensor's id")
 	fs.BoolVar(&o.NoRestart, "no-restart", false, "do not restart provenzasensor.service after writing the config")
 	fs.Usage = func() {
-		fmt.Fprintln(os.Stderr, "usage: provenza-sensor enroll --url URL --key pvz_sensor_...")
+		fmt.Fprintln(os.Stderr, "usage: provenza-sensor enroll --url URL   (asks for the key)")
 		fs.PrintDefaults()
 	}
 	_ = fs.Parse(args)
+
+	key, err := resolveKey(o.Key, os.Stdin, os.Stderr)
+	if err != nil {
+		slog.Error("enroll", "err", err)
+		os.Exit(1)
+	}
+	o.Key = key
 
 	if err := enroll(ctx, o); err != nil {
 		slog.Error("enroll", "err", err)
@@ -78,7 +86,7 @@ func enroll(ctx context.Context, o enrollOpts) error {
 		return errors.New("--url is required (the address you open in the browser)")
 	}
 	if o.Key == "" {
-		return errors.New("--key is required (from Register sensor on the Runtime page)")
+		return errors.New("no key given (from Register sensor on the Runtime page)")
 	}
 	if !strings.HasPrefix(o.Key, "pvz_sensor_") {
 		return errors.New("the key must start with pvz_sensor_ (it is shown once when you register the sensor)")
