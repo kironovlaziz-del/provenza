@@ -693,6 +693,37 @@
         }
       }
     },
+    "assurance": {
+      "title": "Testing and assurance",
+      "add": "Record a test",
+      "hint": "Evaluations, bias tests, red teaming and robustness tests of this system, with who ran them and the evidence. A test counts for a year. EU AI Act Art. 15 needs an evaluation and a red teaming or robustness test; Art. 10 a bias test.",
+      "kind": "Kind",
+      "test_title": "What was tested",
+      "title_placeholder": "Accuracy on the 2026 Q3 holdout set",
+      "performed_on": "Date",
+      "performed_by": "By",
+      "by_placeholder": "ML team, an outside firm",
+      "result": "Result",
+      "summary": "Summary",
+      "findings": "Findings and what is done about them",
+      "evidence": "Report link",
+      "next_due": "Test again by",
+      "save": "Save",
+      "save_failed": "Could not save the record.",
+      "append_only": "A record cannot be changed later; a correction is a new record.",
+      "empty": "No test recorded yet.",
+      "kinds": {
+        "evaluation": "Evaluation",
+        "bias": "Bias test",
+        "red_team": "Red teaming",
+        "robustness": "Robustness test"
+      },
+      "results": {
+        "passed": "Passed",
+        "passed_with_findings": "Passed with findings",
+        "failed": "Failed"
+      }
+    },
   "export_keys": {
     "title": "SIEM export",
     "new": "New key",
@@ -1033,6 +1064,7 @@
     "impact_assessment.no_draft": "There is no draft to approve.",
     "impact_assessment.review_in_past": "The review date must be in the future.",
     "impact_assessment.system_not_found": "No such AI system.",
+    "assurance.system_not_found": "No such AI system.",
     "rbac.insufficient_role": "You don't have permission for this action (requires: {{allowed}}).",
     "rbac.operator_only": "Only the administrators of the organization that runs this Provenza server can do this.",
     "auth.signup_disabled": "Self-service registration is disabled on this server.",
@@ -2575,7 +2607,7 @@
   },
   "compliance": {
     "title": "Compliance",
-    "hint": "Requirements of the EU AI Act, GDPR, ISO/IEC 42001, NIST AI RMF and the OWASP Agentic Top 10, checked against what Provenza actually knows. What only a person can confirm (documents, procedures) is attested here, with a link to the evidence. A pointer for orientation, not legal advice.",
+    "hint": "Requirements of the EU AI Act, GDPR, ISO/IEC 42001, NIST AI RMF, the OWASP Agentic and LLM Top 10, MITRE ATLAS, and of NIS2 and DORA as they apply to AI systems, checked against what Provenza actually knows. What only a person can confirm (documents, procedures) is attested here, with a link to the evidence. A pointer for orientation, not legal advice.",
     "load_failed": "Could not load compliance status.",
     "failed": "Could not save.",
     "status_pass": "Met",

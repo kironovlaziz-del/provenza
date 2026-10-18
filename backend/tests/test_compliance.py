@@ -49,7 +49,8 @@ class TestStatus:
     @pytest.mark.asyncio
     async def test_catalog_and_all_frameworks(self, client, admin_token):
         cat = (await client.get(C + "/catalog", headers=auth_headers(admin_token))).json()
-        assert set(cat["frameworks"]) == {"eu_ai_act", "gdpr", "iso42001", "nist_ai_rmf", "owasp_agentic"}
+        assert set(cat["frameworks"]) == {"eu_ai_act", "gdpr", "iso42001", "nist_ai_rmf", "owasp_agentic",
+                                          "owasp_llm", "mitre_atlas", "nis2", "dora"}
         res = await _status(client, admin_token)
         assert len(res["requirements"]) == len(cat["requirements"])
         for fw, s in res["summary"].items():
@@ -185,3 +186,30 @@ class TestAIActRoles:
         r = await client.patch(f"/api/v1/inventory/{sid}", json={"ai_act_roles": ["deployer", "provider", "deployer"]},
                                headers=auth_headers(admin_token))
         assert r.json()["ai_act_roles"] == ["provider", "deployer"]
+
+
+class TestMoreFrameworks:
+    """OWASP LLM Top 10, MITRE ATLAS, NIS2 and DORA read the same Provenza
+    evidence; what only a person can confirm is attested."""
+
+    @pytest.mark.asyncio
+    async def test_consumption_caps_and_mfa(self, client, admin_token, db_session, org_and_users):
+        res = await _status(client, admin_token, "owasp_llm,mitre_atlas,nis2,dora")
+        assert set(res["summary"]) == {"owasp_llm", "mitre_atlas", "nis2", "dora"}
+        # the gateway's default caps
+        assert _req(res, "llm10")["status"] == "pass" and _req(res, "atlas.m0004")["status"] == "pass"
+
+        assert _req(res, "nis2.21j")["status"] == "fail"           # no second factor required
+        # require it for everyone (the admin has one, so its session goes on)
+        org_and_users["org"].mfa_required = "all"
+        org_and_users["admin"].totp_enabled = True
+        await db_session.flush()
+        assert _req(await _status(client, admin_token, "nis2"), "nis2.21j")["status"] == "pass"
+
+    @pytest.mark.asyncio
+    async def test_attested_items(self, client, admin_token):
+        r = await client.post(C + "/attestations", json={"requirement_id": "llm05", "status": "met"},
+                              headers=auth_headers(admin_token))
+        assert r.status_code in (200, 201), r.text
+        assert _req(await _status(client, admin_token, "owasp_llm"), "llm05")["status"] == "pass"
+

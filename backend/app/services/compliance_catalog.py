@@ -4,8 +4,10 @@
 
 """
 Compliance catalog: requirements of EU AI Act, GDPR, ISO/IEC 42001, NIST AI
-RMF and OWASP Top 10 for Agentic Applications, each mapped to the Provenza
-evidence that supports it.
+RMF, OWASP Top 10 for Agentic Applications and for LLM Applications, MITRE
+ATLAS mitigations, NIS2 and DORA, each mapped to the Provenza evidence that
+supports it. NIS2 and DORA cover far more than AI; only what applies to AI
+systems is listed, and a person confirms the rest of the organization.
 
   check      name of an automatic check in compliance_engine.CHECKS, or None
   attest     True when a person must state it (documents, procedures...);
@@ -33,6 +35,10 @@ FRAMEWORKS: Dict[str, Dict[str, str]] = {
     "iso42001": {"name": "ISO/IEC 42001", "ref": "ISO/IEC 42001:2023, Annex A"},
     "nist_ai_rmf": {"name": "NIST AI RMF", "ref": "NIST AI 100-1"},
     "owasp_agentic": {"name": "OWASP Agentic Top 10", "ref": "OWASP Top 10 for Agentic Applications"},
+    "owasp_llm": {"name": "OWASP LLM Top 10", "ref": "OWASP Top 10 for LLM Applications 2025"},
+    "mitre_atlas": {"name": "MITRE ATLAS", "ref": "MITRE ATLAS mitigations"},
+    "nis2": {"name": "NIS2", "ref": "Directive (EU) 2022/2555, Art. 21 and 23 - as they apply to AI systems"},
+    "dora": {"name": "DORA", "ref": "Regulation (EU) 2022/2554 - as it applies to AI systems"},
 }
 
 
@@ -58,7 +64,7 @@ REQUIREMENTS: List[dict] = [
     R("euaia.art9", "eu_ai_act", "Art. 9", "Risk management for the high-risk system",
       check="sys_risk_confirmed", scope="system", applies="high_risk", fix="/inventory", roles=PROVIDER),
     R("euaia.art10", "eu_ai_act", "Art. 10", "Data and data governance documented",
-      check="sys_data_documented", scope="system", applies="high_risk", fix="/inventory", roles=PROVIDER),
+      check="sys_data_and_bias", scope="system", applies="high_risk", fix="/inventory", roles=PROVIDER),
     R("euaia.art11", "eu_ai_act", "Art. 11, Annex IV", "Technical documentation",
       attest=True, scope="system", applies="high_risk", roles=PROVIDER),
     R("euaia.art12", "eu_ai_act", "Art. 12", "Automatic recording of events (logs)",
@@ -69,7 +75,7 @@ REQUIREMENTS: List[dict] = [
       check="sys_human_oversight", attest=True, scope="system", applies="high_risk", fix="/agent-approvals",
       roles=BOTH),
     R("euaia.art15", "eu_ai_act", "Art. 15", "Accuracy, robustness and cybersecurity",
-      check="sys_robustness", scope="system", applies="high_risk", fix="/agent-injection", roles=PROVIDER),
+      check="sys_assurance", scope="system", applies="high_risk", fix="/inventory", roles=PROVIDER),
     R("euaia.art17", "eu_ai_act", "Art. 17", "Quality management system", attest=True, roles=PROVIDER),
     R("euaia.art23", "eu_ai_act", "Art. 23", "Importer: conformity assessment, technical documentation and CE marking checked",
       attest=True, scope="system", applies="high_risk", roles=("importer",)),
@@ -112,6 +118,8 @@ REQUIREMENTS: List[dict] = [
       check="resources_documented", fix="/inventory"),
     R("iso.a5", "iso42001", "A.5", "AI system impact assessment", check="impact_assessed", fix="/inventory"),
     R("iso.a6", "iso42001", "A.6", "AI system life cycle managed", check="lifecycle_managed", fix="/inventory"),
+    R("iso.a6_2_4", "iso42001", "A.6.2.4", "Verification and validation: AI systems tested",
+      check="assurance_tested", fix="/inventory"),
     R("iso.a6_2_8", "iso42001", "A.6.2.8", "AI system event logs", check="audit_active", fix="/audit"),
     R("iso.a7", "iso42001", "A.7", "Data for AI systems: provenance and quality",
       check="resources_documented", fix="/inventory"),
@@ -125,6 +133,8 @@ REQUIREMENTS: List[dict] = [
     R("nist.govern2", "nist_ai_rmf", "GOVERN 2", "Accountability: named owners", check="owners_assigned", fix="/inventory"),
     R("nist.map1", "nist_ai_rmf", "MAP 1", "Context and intended use established", check="use_cases_linked", fix="/inventory"),
     R("nist.map4", "nist_ai_rmf", "MAP 2-4", "Systems categorized, risks identified", check="inventory_classified", fix="/inventory"),
+    R("nist.measure1", "nist_ai_rmf", "MEASURE 1", "Methods and metrics: systems tested (evaluation, bias, red teaming)",
+      check="assurance_tested", fix="/inventory"),
     R("nist.measure2", "nist_ai_rmf", "MEASURE 2", "Systems evaluated and monitored in use", check="monitoring_active", fix="/agent-behavior"),
     R("nist.measure3", "nist_ai_rmf", "MEASURE 3", "Risks tracked over time (incidents)", check="incidents_handled", fix="/agent-incidents"),
     R("nist.manage1", "nist_ai_rmf", "MANAGE 1-2", "Risk responses: approval, containment", check="containment", fix="/agent-breaker"),
@@ -141,6 +151,76 @@ REQUIREMENTS: List[dict] = [
     R("asi08", "owasp_agentic", "ASI08", "Cascading failures", check="breaker", fix="/agent-breaker"),
     R("asi09", "owasp_agentic", "ASI09", "Human-agent trust exploitation", check="approvals", fix="/agent-approvals"),
     R("asi10", "owasp_agentic", "ASI10", "Rogue agents", check="mode:behavior", fix="/agent-behavior"),
+
+    # ------------------------------------------------------------------ OWASP LLM Top 10 (2025)
+    R("llm01", "owasp_llm", "LLM01", "Prompt injection: risky actions need a person, systems tested against misuse",
+      check="injection_defenses", fix="/agent-approvals"),
+    R("llm02", "owasp_llm", "LLM02", "Sensitive information disclosure", check="pii_masking"),
+    R("llm03", "owasp_llm", "LLM03", "Supply chain: models, tools and providers governed",
+      check="third_parties_governed", fix="/tool-registry"),
+    R("llm04", "owasp_llm", "LLM04", "Data and model poisoning: data sources documented",
+      check="resources_documented", attest=True, fix="/inventory"),
+    R("llm05", "owasp_llm", "LLM05", "Improper output handling: outputs validated before use", attest=True),
+    R("llm06", "owasp_llm", "LLM06", "Excessive agency: least privilege for agents' tools",
+      check="argument_rules", fix="/agent-policies"),
+    R("llm07", "owasp_llm", "LLM07", "System prompt leakage: no secrets or rules only in the prompt", attest=True),
+    R("llm08", "owasp_llm", "LLM08", "Vector and embedding weaknesses: access to retrieval data controlled", attest=True),
+    R("llm09", "owasp_llm", "LLM09", "Misinformation: outputs evaluated, people oversee",
+      check="assurance_tested", fix="/inventory"),
+    R("llm10", "owasp_llm", "LLM10", "Unbounded consumption: requests and tokens capped",
+      check="consumption_limits", fix="/gateway"),
+
+    # ------------------------------------------------------------------ MITRE ATLAS mitigations
+    R("atlas.m0000", "mitre_atlas", "AML.M0000", "Limit release of public information about the AI systems", attest=True),
+    R("atlas.m0003", "mitre_atlas", "AML.M0003", "Model hardening: tested against adversarial input",
+      check="assurance_tested", fix="/inventory"),
+    R("atlas.m0004", "mitre_atlas", "AML.M0004", "Restrict the number of model queries",
+      check="consumption_limits", fix="/gateway"),
+    R("atlas.m0005", "mitre_atlas", "AML.M0005", "Control access to models and data at rest",
+      check="security_of_processing", fix="/encryption-keys"),
+    R("atlas.m0007", "mitre_atlas", "AML.M0007", "Sanitize training data", attest=True),
+    R("atlas.m0008", "mitre_atlas", "AML.M0008", "Validate the model", check="assurance_tested", fix="/inventory"),
+    R("atlas.m0012", "mitre_atlas", "AML.M0012", "Encrypt sensitive information",
+      check="security_of_processing", fix="/encryption-keys"),
+    R("atlas.m0014", "mitre_atlas", "AML.M0014", "Verify AI artifacts and tools before use",
+      check="tool_registry", fix="/tool-registry"),
+    R("atlas.m0016", "mitre_atlas", "AML.M0016", "Vulnerability scanning of AI artifacts", attest=True),
+    R("atlas.m0018", "mitre_atlas", "AML.M0018", "User training", attest=True),
+
+    # ------------------------------------------------------------------ NIS2 (for AI systems)
+    R("nis2.21a", "nis2", "Art. 21(2)(a)", "Risk analysis and security policies cover AI systems",
+      check="ai_policies", attest=True, fix="/policies"),
+    R("nis2.21b", "nis2", "Art. 21(2)(b)", "Incident handling", check="incidents_handled", fix="/incidents"),
+    R("nis2.21c", "nis2", "Art. 21(2)(c)", "Business continuity: AI systems can be stopped and replaced",
+      check="deactivation", attest=True, fix="/kill-switch"),
+    R("nis2.21d", "nis2", "Art. 21(2)(d)", "Supply chain security: AI providers and tools governed",
+      check="third_parties_governed", fix="/tool-registry"),
+    R("nis2.21e", "nis2", "Art. 21(2)(e)", "Security in development and maintenance: AI systems tested",
+      check="assurance_tested", fix="/inventory"),
+    R("nis2.21g", "nis2", "Art. 21(2)(g)", "Cyber hygiene and training", attest=True),
+    R("nis2.21h", "nis2", "Art. 21(2)(h)", "Cryptography and encryption", check="security_of_processing",
+      fix="/encryption-keys"),
+    R("nis2.21i", "nis2", "Art. 21(2)(i)", "Access control and asset management: AI systems inventoried with owners",
+      check="owners_assigned", fix="/inventory"),
+    R("nis2.21j", "nis2", "Art. 21(2)(j)", "Multi-factor authentication", check="mfa_enforced", fix="/users"),
+    R("nis2.23", "nis2", "Art. 23", "Significant incidents reported: early warning in 24 h, notification in 72 h",
+      check="incidents_handled", attest=True, fix="/incidents"),
+
+    # ------------------------------------------------------------------ DORA (for AI systems)
+    R("dora.6", "dora", "Art. 6", "ICT risk management framework covers AI systems",
+      check="ai_policies", attest=True, fix="/policies"),
+    R("dora.8", "dora", "Art. 8", "Identification: AI systems inventoried and classified",
+      check="inventory_classified", fix="/inventory"),
+    R("dora.9", "dora", "Art. 9", "Protection and prevention", check="security_of_processing", fix="/encryption-keys"),
+    R("dora.10", "dora", "Art. 10", "Detection of anomalous activity", check="monitoring_active", fix="/agent-behavior"),
+    R("dora.11", "dora", "Art. 11", "Response and recovery: AI systems can be contained and stopped",
+      check="deactivation", fix="/kill-switch"),
+    R("dora.17", "dora", "Art. 17", "ICT incident management", check="incidents_handled", fix="/incidents"),
+    R("dora.19", "dora", "Art. 19", "Major ICT incidents reported", attest=True),
+    R("dora.24", "dora", "Art. 24-25", "Digital operational resilience testing of AI systems",
+      check="assurance_tested", fix="/inventory"),
+    R("dora.28", "dora", "Art. 28", "ICT third-party risk: AI providers governed",
+      check="third_parties_governed", fix="/tool-registry"),
 ]
 
 BY_ID = {r["id"]: r for r in REQUIREMENTS}

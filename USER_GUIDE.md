@@ -162,6 +162,14 @@ next change starts a new one, so earlier decisions stay. The Compliance page
 reads the approved version for EU AI Act Art. 27, GDPR Art. 35 and ISO 42001
 A.5, and flags it again when its review date passes.
 
+**Testing and assurance** on the same page records the tests the system went
+through - evaluations, bias tests, red teaming, robustness tests - with the
+date, who ran them, the result and a link to the report (admins, approvers
+and compliance officers; records cannot be changed afterwards). A test counts
+for a year: EU AI Act Art. 15 needs an evaluation and a red teaming or
+robustness test, Art. 10 a bias test, ISO 42001 A.6.2.4 and NIST MEASURE 1 a
+test of every system above minimal risk.
+
 ---
 
 ## 6. Usage Registry & Approvals

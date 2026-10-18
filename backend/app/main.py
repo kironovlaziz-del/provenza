@@ -26,6 +26,7 @@ from app.api import shadow_ai
 from app.api import ingestion_sources
 from app.api import export_keys
 from app.api import impact_assessments
+from app.api import assurance
 from app.api import domain_catalog
 from app.api import discovery
 from app.api import devices
@@ -174,6 +175,7 @@ app.include_router(shadow_ai.router, prefix=f"{settings.API_V1_STR}/shadow-ai", 
 app.include_router(ingestion_sources.router, prefix=f"{settings.API_V1_STR}/ingestion-sources", tags=["shadow-ai"])
 app.include_router(export_keys.router, prefix=f"{settings.API_V1_STR}/export-keys", tags=["export"])
 app.include_router(impact_assessments.router, prefix=f"{settings.API_V1_STR}/impact-assessments", tags=["compliance"])
+app.include_router(assurance.router, prefix=f"{settings.API_V1_STR}/assurance", tags=["compliance"])
 app.include_router(domain_catalog.router, prefix=f"{settings.API_V1_STR}/domain-catalog", tags=["shadow-ai"])
 app.include_router(discovery.router, prefix=f"{settings.API_V1_STR}/discovery", tags=["discovery"])
 app.include_router(devices.devices_router, prefix=f"{settings.API_V1_STR}/devices", tags=["discovery"])

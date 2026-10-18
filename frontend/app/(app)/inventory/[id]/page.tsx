@@ -39,6 +39,7 @@ import {
 import { AttentionList, StagePill, TierPill } from "../InventoryBadges";
 import { confirmDialog } from "@/components/Dialog";
 import { getForSystem, type SystemAssessments } from "@/lib/impact_api";
+import { AssurancePanel } from "@/components/inventory/AssurancePanel";
 
 const SOURCE_PAGE: Record<string, string> = {
   agent: "/agents",
@@ -470,6 +471,9 @@ export default function InventorySystemPage() {
             </div>
           </div>
         )}
+
+        {/* ---- testing and assurance ---- */}
+        <AssurancePanel systemId={s.id} />
 
         {/* ---- our role under the EU AI Act ---- */}
         <div className="panel" style={{ marginBottom: 20 }}>

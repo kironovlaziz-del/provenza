@@ -174,7 +174,7 @@ export default function CompliancePage() {
         <p className="hint-text" style={{ marginTop: 0 }}>
           {t(
             "compliance.hint",
-            "Requirements of the EU AI Act, GDPR, ISO/IEC 42001, NIST AI RMF and the OWASP Agentic Top 10, checked against what Provenza actually knows. What only a person can confirm (documents, procedures) is attested here, with a link to the evidence. A pointer for orientation, not legal advice.",
+            "Requirements of the EU AI Act, GDPR, ISO/IEC 42001, NIST AI RMF, the OWASP Agentic and LLM Top 10, MITRE ATLAS, and of NIS2 and DORA as they apply to AI systems, checked against what Provenza actually knows. What only a person can confirm (documents, procedures) is attested here, with a link to the evidence. A pointer for orientation, not legal advice.",
           )}
         </p>
         {error && <div className="panel" style={{ marginBottom: 16, borderColor: "#ef4444" }}><div className="panel-body" style={{ color: "#ef4444" }}>{error}</div></div>}
