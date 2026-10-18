@@ -14,11 +14,25 @@ URL, so /sensors/3/violations and /sensors/4/violations collapse into one
 series. Unmatched requests collapse into "__unmatched__". Sensor gauges
 are labelled by sensor_id — one series per sensor, which scales to
 hundreds without issue.
+
+Several API processes: uvicorn runs API_WORKERS processes, and a scrape
+reaches one of them. The counters and the histogram are therefore kept in
+prometheus_client's multiprocess mode when PROMETHEUS_MULTIPROC_DIR is set
+(the entrypoint sets it for the API): every process writes its own file and
+/metrics adds them up. Without it each scrape saw one process's numbers, the
+series jumped between them and rate() was meaningless.
+
+The gauges below describe the database, not a process: they are computed
+afresh on every scrape (ScrapeGauge) and only what that scrape found is
+exported - a deleted sensor or organization disappears instead of keeping
+its last value forever.
 """
 
+import os
 from datetime import datetime, timedelta, timezone
 
-from prometheus_client import Counter, Gauge, Histogram
+from prometheus_client import REGISTRY, CollectorRegistry, Counter, Histogram, generate_latest
+from prometheus_client.core import GaugeMetricFamily
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -39,6 +53,70 @@ http_request_duration_seconds = Histogram(
     ["method", "path"],
     buckets=(0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0),
 )
+
+
+# ------------------------------------------------------- scrape gauges
+
+class ScrapeGauge:
+    """A gauge filled by update_db_gauges on each scrape: the same
+    .labels(...).set(v) calls as prometheus_client's Gauge, but the values
+    live only until the next scrape and never go through multiprocess files."""
+
+    def __init__(self, name: str, documentation: str, labelnames=()):
+        self.name, self.documentation, self.labelnames = name, documentation, tuple(labelnames)
+        self._values: dict[tuple, float] = {}
+        _SCRAPE_GAUGES.append(self)
+
+    def labels(self, **labels) -> "_Child":
+        return _Child(self, tuple(str(labels[n]) for n in self.labelnames))
+
+    def set(self, value: float) -> None:  # an unlabelled gauge
+        self._values[()] = float(value)
+
+    def clear(self) -> None:
+        self._values = {}
+
+    def family(self) -> GaugeMetricFamily:
+        fam = GaugeMetricFamily(self.name, self.documentation, labels=self.labelnames)
+        for key, value in sorted(self._values.items()):
+            fam.add_metric(list(key), value)
+        return fam
+
+
+class _Child:
+    def __init__(self, gauge: ScrapeGauge, key: tuple):
+        self._gauge, self._key = gauge, key
+
+    def set(self, value: float) -> None:
+        self._gauge._values[self._key] = float(value)
+
+
+_SCRAPE_GAUGES: list[ScrapeGauge] = []
+
+
+class _ScrapeCollector:
+    def collect(self):
+        for g in _SCRAPE_GAUGES:
+            yield g.family()
+
+
+_scrape_collector = _ScrapeCollector()
+_MULTIPROC_DIR = os.environ.get("PROMETHEUS_MULTIPROC_DIR")
+if not _MULTIPROC_DIR:
+    REGISTRY.register(_scrape_collector)
+
+
+def render() -> bytes:
+    """The /metrics payload: every process's counters, and the gauges this
+    scrape computed."""
+    if _MULTIPROC_DIR:
+        from prometheus_client import multiprocess
+
+        registry = CollectorRegistry()
+        multiprocess.MultiProcessCollector(registry)
+        registry.register(_scrape_collector)
+        return generate_latest(registry)
+    return generate_latest(REGISTRY)
 
 
 # ---------------------------------------------------------------- sensor
@@ -73,13 +151,13 @@ sensor_activity_dropped_total = Counter(
 
 # State gauges, refreshed on each /metrics scrape. Cheap — one SELECT over
 # egress_sensors, which is small (one row per sensor in the org).
-sensor_last_heartbeat_age_seconds = Gauge(
+sensor_last_heartbeat_age_seconds = ScrapeGauge(
     "sensor_last_heartbeat_age_seconds",
     "Seconds since each active sensor's last heartbeat.",
     ["sensor_id", "org_id"],
 )
 
-sensors_offline = Gauge(
+sensors_offline = ScrapeGauge(
     "sensors_offline",
     "Active sensors whose last heartbeat is older than the offline threshold.",
     ["org_id"],
@@ -89,13 +167,13 @@ sensors_offline = Gauge(
 # workers never reach /metrics (separate process); these gauges read the
 # tables directly, so retention actually shows up here. Indexed on
 # (org_id, created_at) makes COUNT cheap even at millions of rows.
-sensor_activity_rows = Gauge(
+sensor_activity_rows = ScrapeGauge(
     "sensor_activity_rows",
     "Total rows in sensor_activity, per organization.",
     ["org_id"],
 )
 
-sensor_violations_rows = Gauge(
+sensor_violations_rows = ScrapeGauge(
     "sensor_violations_rows",
     "Total rows in egress_violations, per organization.",
     ["org_id"],
@@ -105,31 +183,31 @@ sensor_violations_rows = Gauge(
 # prune is keeping up (age should hover just below the configured
 # retention * 86400); the three status series tell you whether the prune
 # ran at all and what it did the last time. Both tables are covered.
-sensor_activity_oldest_age_seconds = Gauge(
+sensor_activity_oldest_age_seconds = ScrapeGauge(
     "sensor_activity_oldest_age_seconds",
     "Age in seconds of the oldest sensor_activity row, per organization.",
     ["org_id"],
 )
 
-sensor_violations_oldest_age_seconds = Gauge(
+sensor_violations_oldest_age_seconds = ScrapeGauge(
     "sensor_violations_oldest_age_seconds",
     "Age in seconds of the oldest egress_violations row, per organization.",
     ["org_id"],
 )
 
-retention_last_pruned_at_seconds_ago = Gauge(
+retention_last_pruned_at_seconds_ago = ScrapeGauge(
     "retention_last_pruned_at_seconds_ago",
     "Seconds since the last successful prune, per table and organization.",
     ["table", "org_id"],
 )
 
-retention_last_prune_failed = Gauge(
+retention_last_prune_failed = ScrapeGauge(
     "retention_last_prune_failed",
     "1 if the last prune failed for this table/organization, else 0.",
     ["table", "org_id"],
 )
 
-retention_last_prune_rows = Gauge(
+retention_last_prune_rows = ScrapeGauge(
     "retention_last_prune_rows",
     "Rows deleted by the last prune, per table and organization.",
     ["table", "org_id"],
@@ -141,25 +219,25 @@ retention_last_prune_rows = Gauge(
 # at a sane rate and the checkpoint worker is still sealing it. A rising
 # oldest_age is expected (the first record never goes away); a rising
 # latest_age means the checkpoint worker stopped.
-audit_logs_rows = Gauge(
+audit_logs_rows = ScrapeGauge(
     "audit_logs_rows",
     "Total rows in ai_audit_logs, per organization.",
     ["org_id"],
 )
 
-audit_logs_oldest_age_seconds = Gauge(
+audit_logs_oldest_age_seconds = ScrapeGauge(
     "audit_logs_oldest_age_seconds",
     "Age in seconds of the oldest ai_audit_logs row, per organization.",
     ["org_id"],
 )
 
-audit_checkpoints_rows = Gauge(
+audit_checkpoints_rows = ScrapeGauge(
     "audit_checkpoints_rows",
     "Total signed checkpoints per organization.",
     ["org_id"],
 )
 
-audit_checkpoints_latest_age_seconds = Gauge(
+audit_checkpoints_latest_age_seconds = ScrapeGauge(
     "audit_checkpoints_latest_age_seconds",
     "Seconds since the newest audit checkpoint was issued, per organization.",
     ["org_id"],
@@ -172,7 +250,7 @@ audit_checkpoints_latest_age_seconds = Gauge(
 # or no signing key). The age of the last checkpoint alone is misleading
 # — an inactive organization legitimately has no new checkpoints, so its
 # "age" grows without anything being wrong.
-audit_unsealed_records = Gauge(
+audit_unsealed_records = ScrapeGauge(
     "audit_unsealed_records",
     "Audit rows not yet covered by a signed checkpoint, per organization.",
     ["org_id"],
@@ -189,6 +267,8 @@ async def update_db_gauges(db: AsyncSession) -> None:
     Revoked sensors are excluded: they are not expected to heartbeat, so
     including them would inflate both series.
     """
+    for g in _SCRAPE_GAUGES:
+        g.clear()
     now = datetime.now(timezone.utc)
     rows = (
         await db.execute(

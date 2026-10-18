@@ -70,6 +70,10 @@ case "$role" in
     ;;
   api)
     log "starting API (${API_WORKERS:-2} workers)"
+    # Counters of every worker process add up at /metrics (app/core/metrics.py);
+    # files from a previous run would be counted again, so the directory starts empty.
+    export PROMETHEUS_MULTIPROC_DIR=/tmp/prometheus-multiproc
+    rm -rf "$PROMETHEUS_MULTIPROC_DIR" && mkdir -p "$PROMETHEUS_MULTIPROC_DIR"
     exec uvicorn app.main:app --host 0.0.0.0 --port 8000 \
       --workers "${API_WORKERS:-2}" --proxy-headers --forwarded-allow-ips '*' \
       --timeout-keep-alive 75 --no-server-header
