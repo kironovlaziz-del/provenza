@@ -119,6 +119,39 @@ func (c *Client) Policy(ctx context.Context, version string) (*config.Policy, er
 	return &p, nil
 }
 
+// HTTPError is a non-2xx answer from the control plane.
+type HTTPError struct {
+	Path   string
+	Status int
+}
+
+func (e *HTTPError) Error() string { return fmt.Sprintf("%s: HTTP %d", e.Path, e.Status) }
+
+// IsPermanent reports whether sending the same request again cannot help:
+// the control plane understood it and refused it (a 4xx other than a
+// timeout or rate limit). A revoked key is not permanent here - it comes
+// back as ErrUnauthorized, and an admin may fix it.
+func IsPermanent(err error) bool {
+	var he *HTTPError
+	if !errors.As(err, &he) {
+		return false
+	}
+	return he.Status/100 == 4 && he.Status != http.StatusRequestTimeout && he.Status != http.StatusTooManyRequests
+}
+
+// MaxBatch is the most events one request carries (the API's limit).
+const MaxBatch = 500
+
+// SendError says how many events of a batch were accepted before a request
+// failed: those must not be sent again.
+type SendError struct {
+	Sent int
+	Err  error
+}
+
+func (e *SendError) Error() string { return fmt.Sprintf("after %d events: %v", e.Sent, e.Err) }
+func (e *SendError) Unwrap() error { return e.Err }
+
 func (c *Client) post(ctx context.Context, path string, body any) error {
 	resp, err := c.do(ctx, http.MethodPost, path, body, nil)
 	if err != nil {
@@ -127,7 +160,7 @@ func (c *Client) post(ctx context.Context, path string, body any) error {
 	defer resp.Body.Close()
 	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<20))
 	if resp.StatusCode/100 != 2 {
-		return fmt.Errorf("%s: HTTP %d", path, resp.StatusCode)
+		return &HTTPError{Path: path, Status: resp.StatusCode}
 	}
 	return nil
 }
@@ -247,16 +280,17 @@ type Violation struct {
 	Ts         *time.Time `json:"ts,omitempty"`
 }
 
+// Violations posts the events in requests of at most MaxBatch. On a failure
+// the error is a *SendError telling how many were already accepted.
 func (c *Client) Violations(ctx context.Context, vs []Violation) error {
+	sent := 0
 	for len(vs) > 0 {
-		n := len(vs)
-		if n > 500 {
-			n = 500
-		}
+		n := min(len(vs), MaxBatch)
 		if err := c.post(ctx, "/violations", map[string]any{"events": vs[:n]}); err != nil {
-			return err
+			return &SendError{Sent: sent, Err: err}
 		}
 		vs = vs[n:]
+		sent += n
 	}
 	return nil
 }
@@ -282,15 +316,14 @@ type Activity struct {
 // Activities posts sampled allowed connections. Batches are bounded the same
 // way Violations are: at most 500 per request.
 func (c *Client) Activities(ctx context.Context, as []Activity) error {
+	sent := 0
 	for len(as) > 0 {
-		n := len(as)
-		if n > 500 {
-			n = 500
-		}
+		n := min(len(as), MaxBatch)
 		if err := c.post(ctx, "/activity", map[string]any{"events": as[:n]}); err != nil {
-			return err
+			return &SendError{Sent: sent, Err: err}
 		}
 		as = as[n:]
+		sent += n
 	}
 	return nil
 }

@@ -208,78 +208,78 @@ func addrOf(family uint8, raw [16]byte) (netip.Addr, bool) {
 
 // ---------------------------------------------------------------- buffer
 
-// violationBuffer batches violations and posts them periodically.
-type violationBuffer struct {
-	cl *client.Client
+// maxBuffered caps what waits for the control plane per stream: about
+// 15 MB of events. Past it the oldest are dropped (and counted), so a long
+// outage cannot grow the daemon's memory without bound.
+const maxBuffered = 50_000
 
-	mu  sync.Mutex
-	buf []client.Violation
+// eventBuffer batches events and posts them every 2 seconds.
+//
+//   - Events the control plane accepted are never sent again (the client
+//     reports how many of a batch went through).
+//   - A network error, a 5xx, a timeout or a rate limit: the rest waits for
+//     the next flush.
+//   - A refusal (4xx): the refused request is split in halves until the
+//     events it cannot take are found; only those are dropped and counted.
+//     One malformed event never blocks the stream behind it.
+type eventBuffer[T any] struct {
+	name string
+	send func(context.Context, []T) error
+
+	mu      sync.Mutex
+	buf     []T
+	dropped uint64
 }
+
+type (
+	violationBuffer = eventBuffer[client.Violation]
+	activityBuffer  = eventBuffer[client.Activity]
+)
 
 func newViolationBuffer(cl *client.Client) *violationBuffer {
-	return &violationBuffer{cl: cl}
-}
-
-func (b *violationBuffer) add(v client.Violation) {
-	b.mu.Lock()
-	b.buf = append(b.buf, v)
-	b.mu.Unlock()
-}
-
-func (b *violationBuffer) run(ctx context.Context) {
-	t := time.NewTicker(2 * time.Second)
-	defer t.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-t.C:
-			b.flush(ctx)
-		}
+	b := &violationBuffer{name: "violations"}
+	if cl != nil {
+		b.send = cl.Violations
 	}
+	return b
 }
 
-func (b *violationBuffer) flush(ctx context.Context) {
-	b.mu.Lock()
-	if len(b.buf) == 0 {
-		b.mu.Unlock()
-		return
-	}
-	batch := b.buf
-	b.buf = nil
-	b.mu.Unlock()
-
-	if err := b.cl.Violations(ctx, batch); err != nil {
-		slog.Warn("post violations", "err", err)
-		b.mu.Lock()
-		b.buf = append(batch, b.buf...)
-		b.mu.Unlock()
-	}
-}
-
-// ---------------------------------------------------------------- activity
-
-// activityBuffer batches sampled allowed connections and posts them
-// periodically. Same cadence as violationBuffer, separate queue so a busy
+// activityBuffer: sampled allowed connections. A separate queue, so a busy
 // violations path cannot starve the activity feed (and vice versa).
-type activityBuffer struct {
-	cl *client.Client
-
-	mu  sync.Mutex
-	buf []client.Activity
-}
-
 func newActivityBuffer(cl *client.Client) *activityBuffer {
-	return &activityBuffer{cl: cl}
+	b := &activityBuffer{name: "activity"}
+	if cl != nil {
+		b.send = cl.Activities
+	}
+	return b
 }
 
-func (b *activityBuffer) add(a client.Activity) {
+func (b *eventBuffer[T]) add(e T) {
 	b.mu.Lock()
-	b.buf = append(b.buf, a)
+	b.buf = append(b.buf, e)
+	b.trimLocked()
 	b.mu.Unlock()
 }
 
-func (b *activityBuffer) run(ctx context.Context) {
+// trimLocked drops the oldest events past maxBuffered.
+func (b *eventBuffer[T]) trimLocked() {
+	if over := len(b.buf) - maxBuffered; over > 0 {
+		b.buf = append(b.buf[:0:0], b.buf[over:]...)
+		b.dropped += uint64(over)
+	}
+}
+
+// droppedTotal: events given up on (buffer full, or refused by the API).
+func (b *eventBuffer[T]) droppedTotal() uint64 {
+	if b == nil {
+		return 0
+	}
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.dropped
+}
+
+func (b *eventBuffer[T]) run(ctx context.Context) {
 	t := time.NewTicker(2 * time.Second)
 	defer t.Stop()
 	for {
@@ -292,7 +292,10 @@ func (b *activityBuffer) run(ctx context.Context) {
 	}
 }
 
-func (b *activityBuffer) flush(ctx context.Context) {
+func (b *eventBuffer[T]) flush(ctx context.Context) {
+	if b.send == nil {
+		return
+	}
 	b.mu.Lock()
 	if len(b.buf) == 0 {
 		b.mu.Unlock()
@@ -302,10 +305,56 @@ func (b *activityBuffer) flush(ctx context.Context) {
 	b.buf = nil
 	b.mu.Unlock()
 
-	if err := b.cl.Activities(ctx, batch); err != nil {
-		slog.Warn("post activity", "err", err)
-		b.mu.Lock()
-		b.buf = append(batch, b.buf...)
-		b.mu.Unlock()
+	rest, refused := b.deliver(ctx, batch)
+	if refused > 0 {
+		slog.Warn("dropped events the control plane refused", "stream", b.name, "events", refused)
 	}
+	b.mu.Lock()
+	b.dropped += uint64(refused)
+	if len(rest) > 0 {
+		b.buf = append(append(make([]T, 0, len(rest)+len(b.buf)), rest...), b.buf...)
+		b.trimLocked()
+	}
+	b.mu.Unlock()
+}
+
+// deliver sends items and returns what must wait for the next flush and
+// how many events were refused for good.
+func (b *eventBuffer[T]) deliver(ctx context.Context, items []T) (rest []T, refused int) {
+	if len(items) == 0 {
+		return nil, 0
+	}
+	err := b.send(ctx, items)
+	if err == nil {
+		return nil, 0
+	}
+	sent := 0
+	var se *client.SendError
+	if errors.As(err, &se) {
+		sent = se.Sent
+	}
+	items = items[sent:]
+	if !client.IsPermanent(err) {
+		slog.Warn("post events", "stream", b.name, "err", err, "waiting", len(items))
+		return items, 0
+	}
+	// The request with items[:n] was refused: find the events it cannot take.
+	n := min(len(items), client.MaxBatch)
+	if n == 1 {
+		r, k := b.deliver(ctx, items[1:])
+		return r, k + 1
+	}
+	half := n / 2
+	if r, k := b.deliver(ctx, items[:half]); len(r) > 0 {
+		return append(append([]T{}, r...), items[half:]...), k
+	} else {
+		refused += k
+	}
+	if r, k := b.deliver(ctx, items[half:n]); len(r) > 0 {
+		return append(append([]T{}, r...), items[n:]...), refused + k
+	} else {
+		refused += k
+	}
+	r, k := b.deliver(ctx, items[n:])
+	return r, refused + k
 }
