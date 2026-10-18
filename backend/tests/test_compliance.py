@@ -144,3 +144,44 @@ class TestReports:
         lst = (await client.get(C + "/reports", headers=auth_headers(admin_token))).json()
         assert lst[0]["id"] == rid and "content" not in lst[0]
         assert (await client.get(f"{C}/reports/99999999", headers=auth_headers(admin_token))).status_code == 404
+
+
+class TestAIActRoles:
+    """The organization's role per AI system (provider, deployer, importer,
+    distributor) decides which EU AI Act obligations apply to it."""
+
+    @pytest.mark.asyncio
+    async def test_a_deployer_gets_deployer_obligations_only(self, client, admin_token):
+        sid = await _high_risk_system(client, admin_token)
+        r = await client.patch(f"/api/v1/inventory/{sid}", json={"ai_act_roles": ["deployer"]},
+                               headers=auth_headers(admin_token))
+        assert r.status_code == 200, r.text
+        assert r.json()["ai_act_roles"] == ["deployer"]
+
+        res = await _status(client, admin_token, "eu_ai_act")
+        on = lambda rid: [s["system_id"] for s in _req(res, rid).get("systems", [])]
+        assert sid not in on("euaia.art9") and sid not in on("euaia.art11")   # provider's
+        assert sid in on("euaia.art27") and sid in on("euaia.art14")          # deployer's, both
+        assert _req(res, "euaia.art17")["status"] == "na"                     # org-wide, provider only
+        assert "provider" in _req(res, "euaia.art17")["detail"]
+        assert _req(res, "euaia.art26")["status"] != "na"
+        assert _req(res, "euaia.art3")["status"] == "pass"
+
+    @pytest.mark.asyncio
+    async def test_unstated_roles_keep_every_obligation(self, client, admin_token):
+        sid = await _high_risk_system(client, admin_token)
+        res = await _status(client, admin_token, "eu_ai_act")
+        for rid in ("euaia.art9", "euaia.art23", "euaia.art24", "euaia.art27"):
+            assert sid in [s["system_id"] for s in _req(res, rid)["systems"]], rid
+        assert _req(res, "euaia.art3")["status"] in ("fail", "partial")
+
+    @pytest.mark.asyncio
+    async def test_roles_are_validated(self, client, admin_token):
+        sid = await _high_risk_system(client, admin_token)
+        for bad in (["manufacturer"], None):
+            r = await client.patch(f"/api/v1/inventory/{sid}", json={"ai_act_roles": bad},
+                                   headers=auth_headers(admin_token))
+            assert r.status_code == 422, bad
+        r = await client.patch(f"/api/v1/inventory/{sid}", json={"ai_act_roles": ["deployer", "provider", "deployer"]},
+                               headers=auth_headers(admin_token))
+        assert r.json()["ai_act_roles"] == ["provider", "deployer"]

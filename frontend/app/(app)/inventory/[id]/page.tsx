@@ -24,8 +24,10 @@ import {
   type Option,
 } from "@/lib/inventory_options";
 import {
+  AI_ACT_ROLES,
   LIFECYCLE_STAGES,
   RISK_TIERS,
+  type AIActRole,
   type AISystemT,
   type DataLinkT,
   type DataRelation,
@@ -71,6 +73,7 @@ export default function InventorySystemPage() {
   const [refs, setRefs] = useState({ owner_user_id: "", use_case_id: "" });
   const [domain, setDomain] = useState("general");
   const [flags, setFlags] = useState<string[]>([]);
+  const [actRoles, setActRoles] = useState<AIActRole[]>([]);
   const [tier, setTier] = useState<RiskTier>("minimal");
   const [justification, setJustification] = useState("");
   const [link, setLink] = useState({
@@ -88,6 +91,7 @@ export default function InventorySystemPage() {
     });
     setDomain(s.domain);
     setFlags(s.risk_flags ?? []);
+    setActRoles(s.ai_act_roles ?? []);
     setTier((s.suggested_risk_tier ?? "minimal") as RiskTier);
     setJustification("");
   }, []);
@@ -143,6 +147,7 @@ export default function InventorySystemPage() {
   const suggested = s.suggested_risk_tier ?? null;
   const needsJustification = tier !== suggested;
   const inputsChanged = domain !== s.domain || !sameSet(flags, s.risk_flags ?? []);
+  const rolesChanged = !sameSet(actRoles, s.ai_act_roles ?? []);
   const refsChanged =
     refs.owner_user_id !== (s.owner_user_id != null ? String(s.owner_user_id) : "") ||
     refs.use_case_id !== (s.use_case_id != null ? String(s.use_case_id) : "");
@@ -439,6 +444,34 @@ export default function InventorySystemPage() {
                   {t("inventory.detail.confirm_submit", "Confirm tier")}
                 </button>
               </div>
+            )}
+          </div>
+        </div>
+
+        {/* ---- our role under the EU AI Act ---- */}
+        <div className="panel" style={{ marginBottom: 20 }}>
+          <div className="panel-header">
+            <h2>{t("inventory.roles.title", "Our role under the EU AI Act")}</h2>
+          </div>
+          <div className="panel-body">
+            <p className="hint-text" style={{ marginTop: 0 }}>
+              {t("inventory.roles.hint", "It decides which obligations apply to this system on the Compliance page. Building a system and using it yourself makes you both provider and deployer. Until a role is chosen, every obligation applies.")}
+            </p>
+            {AI_ACT_ROLES.map((r) => (
+              <label key={r} style={{ display: "flex", gap: 8, alignItems: "flex-start", marginBottom: 6, cursor: isAdmin ? "pointer" : "default" }}>
+                <input type="checkbox" disabled={!isAdmin} checked={actRoles.includes(r)} style={{ marginTop: 3, width: "auto" }}
+                  onChange={(e) => setActRoles((cur) => (e.target.checked ? [...cur, r] : cur.filter((x) => x !== r)))} />
+                <span>
+                  {t(`inventory.roles.${r}`, r)}
+                  <span className="hint-text" style={{ display: "block", fontSize: 12 }}>{t(`inventory.roles.${r}_hint`, "")}</span>
+                </span>
+              </label>
+            ))}
+            {isAdmin && (
+              <button className="btn btn-primary btn-sm" disabled={busy || !rolesChanged}
+                onClick={() => run(() => updateSystem(s.id, { ai_act_roles: actRoles }), t("inventory.detail.saved", "Saved"))}>
+                {t("inventory.roles.save", "Save roles")}
+              </button>
             )}
           </div>
         </div>

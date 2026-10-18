@@ -1557,6 +1557,19 @@
     }
   },
   "inventory": {
+    "roles": {
+      "title": "EU AI Act bo'yicha bizning rolimiz",
+      "hint": "U Muvofiqlik sahifasida bu tizimga qaysi majburiyatlar tegishli ekanini belgilaydi. Tizimni o'zingiz yaratib, o'zingiz foydalansangiz, ham provider, ham deployer bo'lasiz. Rol tanlanmaguncha barcha majburiyatlar qo'llanadi.",
+      "provider": "Provider (yetkazib beruvchi)",
+      "provider_hint": "Biz uni ishlab chiqamiz yoki buyurtma qilamiz va o'z nomimiz bilan bozorga chiqaramiz yoki foydalanishga topshiramiz (16-modda).",
+      "deployer": "Deployer (foydalanuvchi)",
+      "deployer_hint": "Biz undan o'z vakolatimiz ostida, o'z ishimizda foydalanamiz (26-modda).",
+      "importer": "Importer (import qiluvchi)",
+      "importer_hint": "Biz Yevropa Ittifoqiga undan tashqaridagi provayderning tizimini olib kiramiz (23-modda).",
+      "distributor": "Distributor (tarqatuvchi)",
+      "distributor_hint": "Biz boshqaning tizimini EI bozorida taqdim etamiz, uning provayderi ham, importchisi ham bo'lmay (24-modda).",
+      "save": "Rollarni saqlash"
+    },
     "title": "AI reyestri",
     "subtitle": "Tashkilotdagi har bir model, agent va AI xizmati — egasi, hayot sikli bosqichi va EU AI Act bo'yicha xavf darajasi bilan.",
     "sync": "Sinxronlash",

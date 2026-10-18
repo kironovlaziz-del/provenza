@@ -214,7 +214,7 @@ class InventoryService:
     async def update(self, system_id: int, org_id: int, data) -> Tuple[dict, bool]:
         system = await self.get(system_id, org_id)
         changes = data.model_dump(exclude_unset=True)
-        for key in ("name", "domain", "risk_flags"):
+        for key in ("name", "domain", "risk_flags", "ai_act_roles"):
             if key in changes and changes[key] is None:
                 raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                                     detail=f"{key} cannot be null")

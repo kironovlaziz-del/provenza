@@ -25,12 +25,21 @@ def _flags(v):
     return sorted(set(v))
 
 
+AIActRole = Literal["provider", "deployer", "importer", "distributor"]
+AI_ACT_ROLES = ("provider", "deployer", "importer", "distributor")
+
+
+def _roles(v):
+    return None if v is None else [r for r in AI_ACT_ROLES if r in set(v)]
+
+
 class AISystemCreate(BaseModel):
     name: str = Field(min_length=1, max_length=255)
     description: Optional[str] = None
     kind: Kind = "other"
     domain: str = "general"
     risk_flags: List[str] = Field(default_factory=list)
+    ai_act_roles: List[AIActRole] = Field(default_factory=list)
     owner_user_id: Optional[int] = None
     business_owner: Optional[str] = Field(default=None, max_length=255)
     use_case_id: Optional[int] = None
@@ -47,15 +56,26 @@ class AISystemCreate(BaseModel):
     def _v_flags(cls, v):
         return _flags(v)
 
+    @field_validator("ai_act_roles")
+    @classmethod
+    def _v_roles(cls, v):
+        return _roles(v)
+
 
 class AISystemUpdate(BaseModel):
     name: Optional[str] = Field(default=None, min_length=1, max_length=255)
     description: Optional[str] = None
     domain: Optional[str] = None
     risk_flags: Optional[List[str]] = None
+    ai_act_roles: Optional[List[AIActRole]] = None
     owner_user_id: Optional[int] = None
     business_owner: Optional[str] = Field(default=None, max_length=255)
     use_case_id: Optional[int] = None
+
+    @field_validator("ai_act_roles")
+    @classmethod
+    def _v_roles(cls, v):
+        return _roles(v)
 
     @field_validator("domain")
     @classmethod
@@ -131,6 +151,7 @@ class AISystemOut(BaseModel):
     review_status: str
     domain: str
     risk_flags: List[str] = Field(default_factory=list)
+    ai_act_roles: List[str] = Field(default_factory=list)
     suggested_risk_tier: Optional[str] = None
     risk_assessment: Optional[Dict[str, Any]] = None
     confirmed_risk_tier: Optional[str] = None

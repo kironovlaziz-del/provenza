@@ -13,6 +13,10 @@ evidence that supports it.
   scope      "org"     evaluated once for the organization
              "system"  evaluated for every AI system it applies to
   applies    for scope=system: "all", "high_risk", "pii", "agents"
+  roles      EU AI Act only: the operator roles (Art. 3) the obligation is
+             addressed to - provider, deployer, importer, distributor. An AI
+             system takes part only where it is one of them; a system whose
+             roles are not stated takes part everywhere. None: everyone.
   fix        the page where a gap is closed
 
 The references are short pointers for orientation, not legal advice; the
@@ -21,7 +25,7 @@ organization stays responsible for its own interpretation.
 
 from typing import Dict, List
 
-CATALOG_VERSION = "2026.10"
+CATALOG_VERSION = "2026.11"
 
 FRAMEWORKS: Dict[str, Dict[str, str]] = {
     "eu_ai_act": {"name": "EU AI Act", "ref": "Regulation (EU) 2024/1689"},
@@ -32,9 +36,14 @@ FRAMEWORKS: Dict[str, Dict[str, str]] = {
 }
 
 
-def R(id, framework, ref, title, *, check=None, attest=False, scope="org", applies="all", fix=None):
+PROVIDER = ("provider",)
+DEPLOYER = ("deployer",)
+BOTH = ("provider", "deployer")
+
+
+def R(id, framework, ref, title, *, check=None, attest=False, scope="org", applies="all", fix=None, roles=None):
     return {"id": id, "framework": framework, "ref": ref, "title": title, "check": check, "attest": attest,
-            "scope": scope, "applies": applies, "fix": fix}
+            "scope": scope, "applies": applies, "fix": fix, "roles": list(roles) if roles else None}
 
 
 REQUIREMENTS: List[dict] = [
@@ -44,29 +53,38 @@ REQUIREMENTS: List[dict] = [
       check="no_unacceptable_in_production", fix="/inventory"),
     R("euaia.art6", "eu_ai_act", "Art. 6, Annex III", "Every AI system classified, risk tier confirmed by a person",
       check="inventory_classified", fix="/inventory"),
+    R("euaia.art3", "eu_ai_act", "Art. 3, 16, 23-26", "Our role (provider, deployer, importer, distributor) stated for every AI system",
+      check="ai_act_roles_stated", fix="/inventory"),
     R("euaia.art9", "eu_ai_act", "Art. 9", "Risk management for the high-risk system",
-      check="sys_risk_confirmed", scope="system", applies="high_risk", fix="/inventory"),
+      check="sys_risk_confirmed", scope="system", applies="high_risk", fix="/inventory", roles=PROVIDER),
     R("euaia.art10", "eu_ai_act", "Art. 10", "Data and data governance documented",
-      check="sys_data_documented", scope="system", applies="high_risk", fix="/inventory"),
+      check="sys_data_documented", scope="system", applies="high_risk", fix="/inventory", roles=PROVIDER),
     R("euaia.art11", "eu_ai_act", "Art. 11, Annex IV", "Technical documentation",
-      attest=True, scope="system", applies="high_risk"),
+      attest=True, scope="system", applies="high_risk", roles=PROVIDER),
     R("euaia.art12", "eu_ai_act", "Art. 12", "Automatic recording of events (logs)",
-      check="sys_logged", scope="system", applies="high_risk", fix="/audit"),
+      check="sys_logged", scope="system", applies="high_risk", fix="/audit", roles=BOTH),
     R("euaia.art13", "eu_ai_act", "Art. 13", "Instructions for use / transparency to deployers",
-      attest=True, scope="system", applies="high_risk"),
+      attest=True, scope="system", applies="high_risk", roles=PROVIDER),
     R("euaia.art14", "eu_ai_act", "Art. 14", "Human oversight",
-      check="sys_human_oversight", attest=True, scope="system", applies="high_risk", fix="/agent-approvals"),
+      check="sys_human_oversight", attest=True, scope="system", applies="high_risk", fix="/agent-approvals",
+      roles=BOTH),
     R("euaia.art15", "eu_ai_act", "Art. 15", "Accuracy, robustness and cybersecurity",
-      check="sys_robustness", scope="system", applies="high_risk", fix="/agent-injection"),
-    R("euaia.art17", "eu_ai_act", "Art. 17", "Quality management system", attest=True),
+      check="sys_robustness", scope="system", applies="high_risk", fix="/agent-injection", roles=PROVIDER),
+    R("euaia.art17", "eu_ai_act", "Art. 17", "Quality management system", attest=True, roles=PROVIDER),
+    R("euaia.art23", "eu_ai_act", "Art. 23", "Importer: conformity assessment, technical documentation and CE marking checked",
+      attest=True, scope="system", applies="high_risk", roles=("importer",)),
+    R("euaia.art24", "eu_ai_act", "Art. 24", "Distributor: CE marking, declaration and instructions checked",
+      attest=True, scope="system", applies="high_risk", roles=("distributor",)),
     R("euaia.art26", "eu_ai_act", "Art. 26", "Deployer obligations: named owner, monitoring, logs kept",
-      check="owners_and_monitoring", fix="/inventory"),
+      check="owners_and_monitoring", fix="/inventory", roles=DEPLOYER),
+    R("euaia.art27", "eu_ai_act", "Art. 27", "Fundamental rights impact assessment (public bodies, credit scoring, insurance)",
+      attest=True, scope="system", applies="high_risk", roles=DEPLOYER),
     R("euaia.art50", "eu_ai_act", "Art. 50", "Transparency: people know they interact with AI / AI-generated content",
-      attest=True),
+      attest=True, roles=BOTH),
     R("euaia.art72", "eu_ai_act", "Art. 72", "Post-market monitoring",
-      check="monitoring_active", fix="/agent-behavior"),
+      check="monitoring_active", fix="/agent-behavior", roles=PROVIDER),
     R("euaia.art73", "eu_ai_act", "Art. 73", "Serious incidents tracked and reported",
-      check="incidents_handled", attest=True, fix="/agent-incidents"),
+      check="incidents_handled", attest=True, fix="/agent-incidents", roles=BOTH),
 
     # ------------------------------------------------------------------ GDPR
     R("gdpr.art5_1c", "gdpr", "Art. 5(1)(c)", "Data minimisation: personal data masked before it reaches a model",
