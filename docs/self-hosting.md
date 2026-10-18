@@ -269,6 +269,7 @@ routes the check's beacon (`/egress-beacon/`) to the backend.
 
 | Symptom | What to do |
 |---|---|
+| The site works on the server (`provenza status` ✓) but times out from anywhere else | Something sets the firewall's FORWARD policy to DROP, usually Docker, every time it starts; published ports go through that chain. `provenza-forward.service` allows them again at boot and after each start of Docker; `provenza status` shows the check. If it fails, run `provenza units`. If Docker is not needed any more: `sudo systemctl disable --now docker.service docker.socket`. |
 | The browser warns about the certificate | The DNS record does not point at the server yet, or port 80 is blocked. `journalctl -u provenza-caddy` shows the reason; Caddy retries by itself. |
 | The installer says a port is in use | Another web server is running. Stop it, or see "Another web server already on 80/443" above. |
 | `the database migrations failed` | `journalctl -u provenza-migrate`. After an upgrade, `upgrade.sh` has already rolled back. |

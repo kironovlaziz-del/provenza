@@ -116,6 +116,10 @@ install_units() {
     die "Quadlet did not generate: ${missing[*]}"
   fi
   systemctl enable provenza.target >/dev/null 2>&1
+  # Docker's FORWARD DROP would cut the site off from outside (forward.sh)
+  systemctl enable provenza-forward.service >/dev/null 2>&1
+  systemctl restart provenza-forward.service
+  ok "$("$DEPLOY_DIR/scripts/forward.sh" apply)"
   ln -sfn "$DEPLOY_DIR/scripts/provenza" /usr/local/bin/provenza
   ok "$(ls "$DEPLOY_DIR"/quadlet | wc -l) Quadlet units in $UNIT_DIR, provenza.target enabled, /usr/local/bin/provenza"
 }

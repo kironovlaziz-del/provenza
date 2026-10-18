@@ -1,0 +1,17 @@
+# Provenza: let connections from outside reach the published ports (80/443)
+# when Docker - or a hardened firewall - sets the FORWARD policy to DROP.
+# Runs at boot and again after every start of Docker, which resets its
+# chains. See deploy/scripts/forward.sh. Installed by deploy/scripts/units.sh.
+[Unit]
+Description=Provenza: allow inbound connections to the published ports
+Wants=network-online.target
+After=network-online.target docker.service
+PartOf=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=@DEPLOY@/scripts/forward.sh apply
+
+[Install]
+WantedBy=multi-user.target docker.service
