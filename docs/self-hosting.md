@@ -214,6 +214,7 @@ The installer puts the `provenza` command in `/usr/local/bin`; it asks for
 | Start / stop / restart | `provenza start` · `provenza stop` · `provenza restart` |
 | One service | `provenza restart caddy` |
 | Upgrade | `provenza upgrade` (see Upgrade above; with no new code it refreshes the PostgreSQL, Redis, Caddy and monitoring images) |
+| Rebuild the code on disk | `provenza rebuild` - after a manual `git pull` or a patch, which `upgrade` would not see: build, back up, restart; no fetch and no rollback |
 | Backup now | `provenza backup` |
 | Another administrator | `provenza run create-admin --org "Company" --email someone@company.com` |
 | A shell in a container | `sudo podman exec -it backend sh` |

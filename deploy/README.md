@@ -136,6 +136,7 @@ for `sudo` by itself):
 | Upgrade | `provenza upgrade` — new code: rebuild, backup, restart, rollback on failure (`upgrade.sh`); no new code: pull fresh PostgreSQL, Redis, Caddy and monitoring images and restart what changed |
 | Backup now | `provenza backup` |
 | Another admin | `provenza run create-admin --org "Provenza" --email ...` |
+| Rebuild the code on disk | `provenza rebuild` — after a manual `git pull` or a patch: build, back up, restart (no fetch, no rollback) |
 | After editing `.env` | `provenza units && provenza restart` |
 | Shell in the API | `sudo podman exec -it backend sh` |
 
