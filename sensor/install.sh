@@ -16,7 +16,7 @@
 #   curl -fsSL https://provenza.example.com/api/v1/egress-sensor/download/install.sh -o install-sensor.sh
 #   sudo bash install-sensor.sh --url https://provenza.example.com --key pvz_sensor_...
 #
-# The sensor needs Linux 5.7+, cgroup v2, BPF and BTF. The BPF object is
+# The sensor needs Linux 5.15+, cgroup v2, BPF and BTF. The BPF object is
 # embedded in the binary, so clang is only needed if you build from source.
 #
 # Flags:
@@ -131,8 +131,8 @@ ok "os: ${PRETTY_NAME:-unknown}"
 
 kv=$(uname -r | cut -d. -f1-2)
 kmaj=${kv%.*}; kmin=${kv#*.}
-if [ "$kmaj" -lt 5 ] || { [ "$kmaj" -eq 5 ] && [ "$kmin" -lt 7 ]; }; then
-  warn "kernel $kv is older than 5.7; the sensor uses cgroup v2 features that may not be present"
+if [ "$kmaj" -lt 5 ] || { [ "$kmaj" -eq 5 ] && [ "$kmin" -lt 15 ]; }; then
+  warn "kernel $kv is older than 5.15; the sensor's BPF programs (ring buffer, cgroup socket hooks) may not load"
   [ "$FORCE" = 1 ] || confirm "Continue anyway?" n || die "aborted"
 fi
 ok "kernel: $kv"

@@ -4,6 +4,7 @@
 
 - [Self-hosting](self-hosting.md): install, HTTPS, backups, upgrades, troubleshooting
 - [Production stack](../deploy/README.md): the containers `install.sh` runs
+- [Monitoring](monitoring.md): the Observability page, Grafana, alert rules and where alerts go
 - [Development](development.md): running from source, tests, configuration, repository layout
 - [User guide](../USER_GUIDE.md) ([oʻzbekcha](../USER_GUIDE.uz.md)): the UI, page by page
 
@@ -22,6 +23,7 @@
 - [Kill switch](kill-switch.md): stopping an agent, a team, all agents or all AI traffic
 - SDKs: [Python](../sdk/python/README.md), [JavaScript](../sdk/js/README.md), [Go](../sdk/go/README.md)
 - [Egress proxy](../proxy/README.md) and [egress sensor](../sensor/README.md)
+- [Sensor commands](sensor-commands.md): dump state, restart or detach a sensor with a signed command
 - [SIEM export](siem-export.md): a SIEM or SOAR pulling the egress sensor events with a read-only key
 
 ## Shadow AI

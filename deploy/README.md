@@ -175,15 +175,16 @@ contain the `ENCRYPTION_KEY` that was in use when the backup was made.
 
 ### Rotating the encryption key
 
-Put the new key in `ENCRYPTION_KEY_NEW`, then:
+Put the new key in `ENCRYPTION_KEY_NEW`, stop what encrypts, then rotate:
 
 ```bash
-./scripts/run.sh python scripts/rotate_encryption_key.py --dry-run
-./scripts/run.sh python scripts/rotate_encryption_key.py
+systemctl stop provenza-backend provenza-worker provenza-beat
+provenza run python scripts/rotate_encryption_key.py --dry-run
+provenza run python scripts/rotate_encryption_key.py
 ```
 
 Move the new value into `ENCRYPTION_KEY`, clear `ENCRYPTION_KEY_NEW` and run
-`systemctl restart provenza.target`.
+`provenza units && provenza restart`.
 
 ## Configuration
 
@@ -195,7 +196,8 @@ Every setting is described in [`.env.example`](.env.example). The most common:
 | `HTTP_PORT`, `HTTPS_PORT` | 80, 443 | Ports Caddy publishes |
 | `API_WORKERS` | 2 | Uvicorn worker processes |
 | `CELERY_CONCURRENCY` | 2 | Parallel background tasks |
-| `PROMPT_FIREWALL_NER_ENABLED` | true | NER-based PII detection |
+| `CONTENT_SAFETY_ENABLED` | false | Show the content-safety pages (Prompt Firewall, blocked terms, guards); they run either way |
+| `PROMPT_FIREWALL_NER_ENABLED` | true | NER-based PII detection; its model loads in each process at first use |
 | `ALLOW_PUBLIC_SIGNUP` | false | Let anyone create an organization from the sign-up page |
 | `OUTBOUND_PRIVATE_ALLOWLIST` | empty | Internal hosts outbound calls may reach, e.g. an in-house Vault or local model server |
 | `OUTBOUND_PROXY` | empty | Egress proxy for outbound calls, if required |

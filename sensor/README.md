@@ -53,12 +53,28 @@ binary with `//go:embed`, so the deployed binary is self-contained.
 
 ## Install
 
+The usual way needs neither this repository nor Go: in Provenza, Gateways
+→ **Runtime** → **Register sensor** gives a key and the command to run on
+the host. The control plane serves the install script, the binary and the
+systemd unit, and the script checks them against its `SHA256SUMS`:
+
+    curl -fsSL https://provenza.example.com/api/v1/egress-sensor/download/install.sh -o install-sensor.sh
+    sudo bash install-sensor.sh --url https://provenza.example.com --key pvz_sensor_...
+
+The script checks the host (kernel, cgroup v2, BTF), installs the binary
+and the unit, enrolls the sensor - which writes `sensor.json`, the key, the
+sensor id and the organization's command-signing key under
+`/etc/provenza-sensor/` - and starts it. From a checkout, `sudo ./sensor/install.sh --url ... --key ...`
+does the same with a binary built here; `--help` lists the flags.
+
+By hand, with a binary you built:
+
     sudo install -m 0755 provenza-sensor /usr/local/bin/
-    sudo mkdir -p /etc/provenza-sensor
     sudo cp packaging/provenzasensor.service /etc/systemd/system/
-    # write /etc/provenza-sensor/sensor.json and /etc/provenza-sensor/key
     sudo systemctl daemon-reload
-    sudo systemctl enable --now provenzasensor
+    sudo systemctl enable provenzasensor
+    # writes sensor.json, the key, the sensor id and the signing key, then (re)starts the service
+    sudo provenza-sensor enroll --url https://provenza.example.com --key pvz_sensor_...
 
 To remove the sensor's kernel state and cache:
 
@@ -82,7 +98,9 @@ manager's job.
       "state_dir": "/var/lib/provenza-sensor",
       "run_socket": "/run/provenza-sensor/run.sock",
       "run_group": "provenza",
-      "ring_bytes": 262144
+      "ring_bytes": 262144,
+      "signing_key_file": "/etc/provenza-sensor/signing-key.pub",
+      "sensor_id_file": "/etc/provenza-sensor/sensor-id"
     }
 
 All fields have sensible defaults. `PROVENZA_URL` and
@@ -101,17 +119,24 @@ All fields have sensible defaults. `PROVENZA_URL` and
 | `run_socket` | Unix socket for the `run` subcommand. |
 | `run_group` | Group allowed to use the run socket. Empty = root only. |
 | `ring_bytes` | Ring buffer size (power of two). 0 = object's default. |
+| `signing_key_file` | The organization's public key that signs commands (written by `enroll`). |
+| `sensor_id_file` | This sensor's id, which signed commands must name (written by `enroll`). |
 
 ## How it talks to Provenza
 
 - `GET /api/v1/egress-sensor/config` with `If-None-Match: "<version>"`.
   `304 Not Modified` means the current policy is still in force. The
   sensor polls at `refresh_seconds` from the policy it is enforcing.
-- `POST /api/v1/egress-sensor/heartbeat` with `Heartbeat`. Includes the
-  hooks that are actually attached, warnings (e.g. missing LSM), and the
-  per-CPU count of dropped events.
-- `POST /api/v1/egress-sensor/violations` with batches of up to 500
-  events. The client splits larger batches.
+- `POST /api/v1/egress-sensor/heartbeat` with `Heartbeat`, every
+  `heartbeat_seconds` (10-120 s). Includes the hooks that are actually
+  attached, warnings (e.g. missing LSM), and the count of dropped events;
+  the answer carries the pending signed commands. Provenza counts a
+  sensor as offline after three missed heartbeats, and not before 5
+  minutes.
+- `POST /api/v1/egress-sensor/violations` and `.../activity` (the sample
+  of allowed connections) with batches of up to 500 events. The client
+  splits larger batches; events the server refuses as a whole are kept and
+  retried, a bad event is isolated and dropped.
 
 Authentication is `X-Sensor-Key: pvz_sensor_...`. A revoked key yields
 `401` or `403`, which the client reports as `ErrUnauthorized`; the sensor

@@ -124,7 +124,7 @@ guarantee is spelled out in the [security model](docs/security-model.md).
 
 ### 🛡️ Content safety — optional add-on
 
-Off by default. Set `CONTENT_SAFETY_ENABLED=true` to expose these pages. Useful
+Hidden by default. Set `CONTENT_SAFETY_ENABLED=true` in `deploy/.env` to show these pages. Useful
 for regulated industries (finance, healthcare) where the provider's own content
 filtering is not enough.
 
@@ -138,8 +138,7 @@ filtering is not enough.
   any instruction model with your categories) flags or refuses what a prompt asks
   for, whatever the words ([docs](docs/intent-guardrail.md)).
 - **Injection, memory and code-exec guards** — detect prompt injection, control
-  code execution, and check memory / message content ([injection](docs/injection-guard.md),
-  [memory](docs/memory-guard.md), [code exec](docs/code-exec-guard.md)).
+  code execution, and check memory / message content (Control → Protection).
 
 ### 👁️ Shadow AI — unsanctioned AI
 

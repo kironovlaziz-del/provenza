@@ -34,7 +34,7 @@ def secret_key_problems(key: str) -> list[str]:
 
 
 class Settings(BaseSettings):
-    PROJECT_NAME: str = "AI Control Tower"
+    PROJECT_NAME: str = "Provenza"
     API_V1_STR: str = "/api/v1"
 
     # "development" | "production". In production, insecure defaults for
@@ -185,7 +185,7 @@ class Settings(BaseSettings):
     SMTP_PORT: int = 587
     SMTP_USER: str = ""
     SMTP_PASSWORD: str = ""
-    SMTP_FROM: str = "ai-control-tower@localhost"
+    SMTP_FROM: str = "provenza@localhost"
     SMTP_USE_TLS: bool = True
 
     # Bearer secret Alertmanager presents on /api/v1/observability/alerts.

@@ -67,18 +67,18 @@ export default function SystemStatusPage() {
             <div className="panel-body">
               <Row ok={c.database.ok} title={t("health.database", "Database (PostgreSQL)")}
                 detail={c.database.ok ? `${c.database.latency_ms} ms` : c.database.error}
-                fix="docker compose ps        # self-hosted: is postgres healthy?" />
+                fix={"provenza status          # is postgres healthy?\nprovenza logs postgres -n 50"} />
               <Row ok={c.redis.ok} title={t("health.redis", "Redis (task queue and live events)")}
                 detail={c.redis.ok ? `${c.redis.latency_ms} ms · ${t("health.queued", "queued tasks")}: ${c.redis.queued_tasks ?? 0}` : `${c.redis.hint} (${c.redis.error})`}
-                fix={"Check that REDIS_PASSWORD in the backend environment matches the one Redis was started with,\nthen restart the API, worker and beat."} />
+                fix={"REDIS_PASSWORD in deploy/.env must be the one Redis runs with; after changing it:\nprovenza units && provenza restart"} />
               <Row ok={c.workers.ok} title={t("health.workers", "Celery workers")}
                 detail={c.workers.ok ? c.workers.names.join(", ") : t("health.no_workers", "No worker answers.") + (c.workers.error ? ` (${c.workers.error})` : "")}
-                fix={"systemctl status ai-ct-celery          # systemd install\ndocker compose logs --tail 50 worker   # self-hosted"} />
+                fix={"provenza status\nprovenza logs worker -n 50"} />
               <Row ok={c.beat.ok} title={t("health.beat", "Celery beat (scheduled jobs)")}
                 detail={c.beat.last_heartbeat_age_seconds == null
                   ? t("health.beat_never", "No heartbeat recorded yet.")
                   : `${t("health.beat_last", "last heartbeat")} ${Math.round(c.beat.last_heartbeat_age_seconds)} s ${t("health.ago", "ago")} (${t("health.expected", "expected every")} ${c.beat.expected_every_seconds} s)`}
-                fix={"systemctl status ai-ct-celery-beat     # systemd install\ndocker compose logs --tail 50 beat     # self-hosted"} />
+                fix={"provenza logs beat -n 50"} />
             </div>
           </div>
         )}

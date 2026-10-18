@@ -11,9 +11,12 @@ joylashtirish va dasturlash uchun [README.md](README.md) ga qarang.
 ## 1. Birinchi kirish
 
 1. Brauzeringizda platforma manzilini oching.
-2. Agar tashkilotingiz hali mavjud bo‘lmasa, **Register organization**
-   tugmasini bosib uni yarating — birinchi foydalanuvchi **admin**
-   bo‘ladi.
+2. Birinchi tashkilot va uning admini o‘rnatish vaqtida serverda
+   yaratiladi (`sudo provenza run create-admin --org "Company" --email
+   ...`, qarang: [self-hosting](docs/self-hosting.md)); boshqa
+   foydalanuvchilar **Settings → Users** orqali taklif qilinadi. Kirish
+   sahifasidagi **Register organization** faqat server ommaviy ro‘yxatdan
+   o‘tishga ruxsat berganda ko‘rinadi.
 3. Kirish uchun tashkilotingizning qisqa identifikatorini (masalan,
    `corp`), **elektron pochta** va **parol**ingizni kiriting.
 4. Kirish sahifasi yuqorisidagi **Language** tanlagichi orqali istalgan
@@ -34,22 +37,31 @@ joylashtirish va dasturlash uchun [README.md](README.md) ga qarang.
 Kirgandan so‘ng siz **Dashboard**ga tushasiz — bu so‘rovlar, hodisalar
 va kutilayotgan tasdiqlarning qisqacha ko‘rinishi.
 
-Chapdagi yon menyu tashkilotingizdagi AI tizimining hayot yo‘liga mos
-tuzilgan:
+Chapdagi yon menyuda beshta guruh bor; har bir band o‘ziga tegishli
+sahifalar yorliqlari bilan ochiladi:
 
-- **Aniqlash (Discovery)** — Provenza o‘zi topgan narsalar: agentlarning
-  jonli xaritasi, shadow AI topilmalari, tarmoq kashfiyoti va ularni
-  yig‘uvchi kollektorlar.
-- **Reyestr (Registry)** — ishlatilayotgan AI ning yagona ro‘yxati:
-  inventar, agentlar, provayder ulanishlari, agent identifikatorlari va
-  vositalar reyestri.
-- **Siyosatlar (Policies)** — qoidalar: siyosat versiyalari, agent
-  siyosatlari, foydalanish holatlari va muvofiqlik.
-- **Nazorat (Enforcement)** — ish vaqtidagi nazorat: AI shlyuzi,
-  tasdiqlar, circuit breaker, agent himoyalari va boshqariladigan sinov
-  maydoni.
-- **Audit** — dalillar: foydalanish reyestri, audit jurnali, hodisalar va
-  imzolangan vakolat zanjirlari.
+- **Overview** — Dashboard, Incidents, Approvals va Kill switch.
+- **Visibility** — **Discovery** (topilgan agentlar, shadow AI
+  topilmalari, qurilmalar, tarmoq kashfiyoti, AI domenlar katalogi),
+  **Monitoring** (agentlar kuzatuvi, jonli xarita, vakolat zanjirlari va
+  server operatori uchun o‘rnatmaning holati), **AI inventory**
+  (inventar, foydalanish holatlari, AI provayderlar, ulanishlar) va
+  **Agents** (agentlar, jamoalar va rollar, agent identifikatori,
+  attestatsiya, vositalar reyestri).
+- **Control** — **Policies** (Policy Center, siyosatlar ierarxiyasi,
+  agent siyosatlari, muvofiqlik), **Protection** (xulq-atvor monitori,
+  circuit breaker) va **Gateways** (AI shlyuzi, egress sensorlari bilan
+  Runtime, sinov maydoni).
+- **Evidence** — **Audit & evidence**: audit jurnali va foydalanish
+  jurnali.
+- **Settings** — profilingiz, foydalanuvchilar, bildirishnomalar,
+  telemetriya manbalari, SIEM eksporti, shifrlash kalitlari, navbat va
+  saqlash muddati, tizim holati.
+
+Ixtiyoriy kontent xavfsizligi qo‘shimchasining sahifalari (PII qoidalari,
+bloklangan atamalar, niyat filtri, injection / code-exec / memory /
+xabar himoyalari) faqat serverda `CONTENT_SAFETY_ENABLED=true` bo‘lganda
+ko‘rinadi.
 
 ---
 
@@ -57,7 +69,7 @@ tuzilgan:
 
 Platforma promptlarni AI provayderga yuborishidan oldin ulanish qo‘shing.
 
-1. Yon menyu → **Registry → Connections**.
+1. Yon menyu → **AI inventory → Connections**.
 2. **New provider** → turini tanlang (OpenAI, Anthropic, Azure OpenAI
    yoki Shaxsiy), nom bering va API kalitni joylashtiring.
 3. Kalit **shifrlangan holda saqlanadi** va boshqa hech qachon
@@ -83,7 +95,7 @@ filtrlanishini belgilaydi.
    uni tasdiqlang.
 4. Faol versiyani **foydalanish holati (use case)** ga bog‘lang.
 
-**Prompt Firewall:** so‘rov siyosat asosida ishlaganda, PII (elektron
+**Prompt Firewall** (kontent xavfsizligi qo‘shimchasi, 2-bo‘limga qarang): so‘rov siyosat asosida ishlaganda, PII (elektron
 pochta, karta raqamlari, SSN, telefon raqamlari, IP manzillar, API
 kalitlar) saqlashdan va provayderga yuborishdan oldin maskalanadi.
 Bloklangan atamani o‘z ichiga olgan prompt rad etiladi va yuborilmaydi
@@ -105,7 +117,7 @@ bir saqlash audit jurnalida. Batafsil: docs/policies.md.
 
 ### 4.2 Shaxsiy ma'lumot qoidalari
 
-Policies → **PII rules**: har bir o'rnatilgan turni (email, telefon, karta,
+Kontent xavfsizligi qo‘shimchasi (2-bo‘lim). Policies → **PII rules**: har bir o'rnatilgan turni (email, telefon, karta,
 SSN, IP manzil, API kalit, ismlar, tashkilotlar, joylar) yoqing yoki
 o'chiring va **Mask** (qiymat `[MASKED:TYPE]` bo'ladi) yoki **Block**
 (prompt rad etiladi) ni tanlang. *Your rules* bo'limida o'z
@@ -118,7 +130,7 @@ ogohlantirish chiqadi. Batafsil: docs/pii-rules.md.
 
 ### 4.3 Bloklangan atamalar
 
-Policies → **Blocked terms** - promptda bo'lmasligi kerak bo'lgan so'zlar
+Kontent xavfsizligi qo‘shimchasi (2-bo‘lim). Policies → **Blocked terms** - promptda bo'lmasligi kerak bo'lgan so'zlar
 uchun yagona joy. Har bir atama uchun qayerda amal qilishini (butun
 tashkilot, barcha agentlar, quyi jamoalari bilan jamoa, bitta agent yoki
 siyosatning use case'lari), qanday topilishini (**butun so'z** - ajratib,
@@ -140,7 +152,7 @@ docs/blocked-terms.md.
 Foydalanish holati maqsad, xavf darajasi va tasdiqlangan siyosat
 versiyasini birlashtiradi.
 
-1. Yon menyu → **Policies → Use Cases** → **New use case**.
+1. Yon menyu → **AI inventory → Use Cases** → **New use case**.
 2. Nom, xavf darajasi va (ixtiyoriy) tasdiqlangan siyosat versiyasi hamda
    egasini belgilang.
 
@@ -148,19 +160,20 @@ versiyasini birlashtiradi.
 
 ## 6. Foydalanish reyestri va tasdiqlash
 
-- **Usage Registry** har bir AI so‘rovini maqsadi, holati va to‘liq
-  so‘rov → javob izi bilan ko‘rsatadi.
-- Agar so‘rov tasdiqlashni talab qilsa, u **Approval Workflow**da
+- **Audit & evidence → Usage log** har bir AI so‘rovini maqsadi, holati
+  va to‘liq so‘rov → javob izi bilan ko‘rsatadi.
+- Agar so‘rov tasdiqlashni talab qilsa, u **Overview → Approvals**da
   paydo bo‘ladi. Tasdiqlovchilar uni ochib, sabab bilan **Approve** yoki
   **Reject** qiladi. Barcha qarorlar auditga yoziladi.
-- **Overrides** administratorga zarur bo‘lganda so‘rovni qo‘lda
-  to‘xtatish, tahrirlash yoki orqaga qaytarish imkonini beradi.
+- So‘rov sahifasidagi **Overrides** administratorga zarur bo‘lganda
+  o‘sha so‘rovni qo‘lda to‘xtatish, tahrirlash yoki orqaga qaytarish
+  imkonini beradi.
 
 ---
 
 ## 7. Hodisalar kuzatuvchisi (Incident Tracker)
 
-1. Yon menyu → **Audit → Incident Tracker**.
+1. Yon menyu → **Overview → Incidents**.
 2. Hodisalar qo‘lda yoki avtomatik yaratilishi mumkin (masalan,
    bloklangan AI domeni aniqlanganda — Shadow AI Monitorga qarang).
 3. Hodisani **Open → Investigating → Resolved** bosqichlaridan o‘tkazing
@@ -180,7 +193,7 @@ yagona **Sightings** ro‘yxatini to‘ldiradi.
 Kollektorlar foydalanuvchi hisobi bilan emas, mashina kaliti bilan
 autentifikatsiya qiladi.
 
-1. Yon menyu → **Discovery → Ingestion Sources** (faqat admin).
+1. Yon menyu → **Settings → Ingestion Sources** (faqat admin).
 2. **New source** → turini tanlang (Gateway, Endpoint agent, Browser
    extension) va nom bering.
 3. **Telemetriya kaliti faqat bir marta ko‘rsatiladi** — uni hozir
@@ -225,7 +238,7 @@ fayllari) aniqlaydi va yoqilgan bo‘lsa, tarmoq xizmatlarini kashf qiladi.
    nusxalang.
 2. Kalit va server manzilini agentning `config.json` fayliga kiriting
    (`agent/config.example.json` ga qarang), so‘ng uni yig‘ing va ishga
-   tushiring — to‘liq bosqichlar [README](README.md#7-endpoint-agent-optional)
+   tushiring — to‘liq bosqichlar [Shadow AI kollektorlari](docs/shadow-ai.md)
    da.
 3. Yangi topilmalar bir daqiqa ichida paydo bo‘ladi: lokal AI vositalari
    **Discovery → Shadow AI Sightings**da, AI agentlar **Discovery →
@@ -277,7 +290,7 @@ faqat adminlar ro‘yxatdan o‘tkazadi yoki e’tiborsiz qoldiradi.
 
 ### 8.4.2 Agentni ro'yxatga olish
 
-Registry → Agents → **New agent**: agent nima qila olishini kiriting
+Agents → **New agent**: agent nima qila olishini kiriting
 (imkoniyatlar, vositalar, modellar, delegatsiya chuqurligi, jamoa) va
 **Issue enrollment token** tugmasini bosing. Tokenni agentni ishga
 tushiradigan odamga bering; u o'sha kompyuterda ko'rsatilgan buyruqni
@@ -302,7 +315,7 @@ sahifasida bekor qiling va **Issue re-key token** tugmasini bosing.
 
 ### 8.4.3 Jamoalar va rol shablonlari
 
-Registry → **Teams & Roles**. Jamoalar daraxt hosil qiladi (tashkilot →
+Agents → **Teams & Roles**. Jamoalar daraxt hosil qiladi (tashkilot →
 jamoa → kichik jamoa → agent); agent jamoaga uning id si orqali tegishli,
 shuning uchun jamoa nomini o'zgartirsangiz, u hamma joyda o'zgaradi.
 
@@ -324,7 +337,7 @@ aylanadi.
 
 ### 8.4.4 Ish yuklamasi attestatsiyasi
 
-Registry → **Attestation**. Siyosat agentlar qayerda ishlayotganini
+Agents → **Attestation**. Siyosat agentlar qayerda ishlayotganini
 isbotlashi kerakligini belgilaydi: Kubernetes klasteringiz (emitenti va imzo
 kalitlari - `kubectl get --raw /openid/v1/jwks`), token audience'i (xuddi
 shu qiymat pod spetsifikatsiyasiga yoziladi), ruxsat etilgan namespace /
@@ -344,7 +357,7 @@ to'xtatish hali ushlab turmasa: unda o'sha to'xtatishni bekor qiling (8.4.5).
 
 ### 8.4.5 Favqulodda to'xtatish (Kill switch)
 
-Enforcement → **Kill switch** AI'ni to'rt bosqichda to'xtatadi: bitta
+Overview → **Kill switch** AI'ni to'rt bosqichda to'xtatadi: bitta
 **agent**, **jamoa** (quyi jamoalari bilan), **barcha agentlar** yoki **butun
 AI trafigi** (barcha agentlar, shuningdek gateway, AI so'rovlari va
 playground). Har bir to'xtatish sababni talab qiladi; tashkilot
@@ -407,7 +420,9 @@ xizmatlarni **Ignore** qilishingiz ham mumkin.
 Yon menyu → **Settings → Notifications**. **Email** yoki **webhook**
 kanallarini qo‘shing va har birini o‘zingizga kerakli hodisalarga obuna
 qiling (`incident_created`, `approval_pending`, `request_blocked`,
-`shadow_ai_reported`, `shadow_ai_blocked_domain` va boshqalar). Agar
+`shadow_ai_reported`, `shadow_ai_blocked_domain`, `kill_switch`,
+`egress_sensor_offline`, `alert` - server monitoringi ogohlantirishlari -
+va boshqalar). Agar
 serverda email (SMTP) sozlanmagan bo‘lsa, email kanallari jimgina
 o‘tkazib yuboriladi; webhooklar doim ishlaydi.
 
@@ -415,7 +430,7 @@ o‘tkazib yuboriladi; webhooklar doim ishlaydi.
 
 ## 11. Audit va hisobot
 
-Yon menyu → **Audit → Audit Log**. Platforma orqali qilingan har bir
+Yon menyu → **Audit & evidence → Audit Log**. Platforma orqali qilingan har bir
 o‘zgarish — kim, nimani, qaysi obyektga, qachon qilgani — filtrlash va
 ko‘rib chiqish mumkin bo‘lgan faqat qo‘shiladigan jurnalga yoziladi.
 
@@ -441,7 +456,54 @@ Jurnalni sezdirmasdan o‘zgartirib bo‘lmaydi (batafsil: `docs/audit-proofs.md
 
 ---
 
-## 12. Maslahatlar
+## 12. Runtime: egress sensorlari
+
+Gateways → **Runtime** (faqat admin). Egress sensori Linux xostida
+ishlaydi va har bir ish yuklamasi (cgroup bo‘yicha tanlangan agent
+jarayonlari) qayerga ulana olishini yadro darajasida belgilaydi.
+
+1. **Register sensor** kalit va xost uchun bir qatorli o‘rnatish
+   buyrug‘ini beradi; sensorning o‘zini server tarqatadi, shuning uchun
+   xostga yig‘ish vositalari kerak emas.
+2. **Ish yuklamalarini** belgilang: qaysi jarayonlar, ruxsat etilgan
+   manzillar va rejim - **observe** (faqat yozish), **alert** yoki
+   **enforce** (bloklash).
+3. Sensor qatorida oxirgi heartbeat, ulangan hooklar va ogohlantirishlar
+   ko‘rinadi; qatorni ochib, imzolangan buyruq bilan **Dump state**,
+   **Restart** yoki **Detach** qilish mumkin
+   ([batafsil](docs/sensor-commands.md)).
+
+Sozlamalar sensorlar siyosatni qanchalik tez-tez olishini (30-300 s) va
+heartbeat yuborishini (30-120 s) belgilaydi. Ketma-ket uchta heartbeatni
+o‘tkazib yuborgan sensor oflayn hisoblanadi, lekin 5 daqiqadan oldin
+emas; bundan xabar topish uchun kanalni `egress_sensor_offline`ga obuna
+qiling.
+
+---
+
+## 13. O‘rnatmani kuzatish
+
+Monitoring → **Observability** server operatori - uni boshqaradigan
+tashkilot administratorlari uchun. U "hammasi ishlayaptimi" degan
+savolga javob beradi: API, ma’lumotlar bazasi va navbat, fon vazifalari,
+egress sensorlari, audit dalillari va saqlash muddati - har biri joyida
+bo‘lmasa nima qilish kerakligi bilan, so‘ng trendlar va eng band
+endpointlar. Grafana va uning ortidagi ogohlantirish qoidalari
+[monitoring](docs/monitoring.md) hujjatida tasvirlangan.
+
+---
+
+## 14. SIEM eksporti
+
+Settings → **SIEM export** (faqat admin) SIEM yoki SOAR egress sensori
+hodisalarini (qoidabuzarliklar va ruxsat etilgan ulanishlar) olishi uchun
+faqat o‘qish kalitlarini yaratadi. Kalit bir marta ko‘rsatiladi; kerak
+bo‘lmay qolganda o‘sha yerda bekor qiling. Sahifa yuboriladigan so‘rovni
+ko‘rsatadi; qarang: [SIEM eksporti](docs/siem-export.md).
+
+---
+
+## 15. Maslahatlar
 
 - **Domenlar katalogini dolzarb saqlang** — aynan u xom telemetriyani
   mazmunli "allowed / blocked / unknown" signallariga aylantiradi.

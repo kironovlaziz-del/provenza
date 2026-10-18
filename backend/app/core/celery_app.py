@@ -35,8 +35,9 @@ celery_app.conf.update(
     worker_prefetch_multiplier=1,
 )
 
-# Scheduled (beat) tasks. Requires a running `celery beat` process
-# (systemd unit ai-ct-celery-beat) in addition to the worker.
+# Scheduled (beat) tasks. Requires a running `celery beat` process (the
+# beat service: provenza-beat, or `beat` in docker-compose.dev.yml) in
+# addition to the worker.
 from celery.schedules import crontab  # noqa: E402
 
 celery_app.conf.beat_schedule = {

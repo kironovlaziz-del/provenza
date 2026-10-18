@@ -11,8 +11,11 @@ development, see [README.md](README.md).
 ## 1. First sign-in
 
 1. Open the platform URL in your browser.
-2. If your organization does not exist yet, click **Register
-   organization** and create it — the first user becomes the **admin**.
+2. The first organization and its admin are created on the server during
+   installation (`sudo provenza run create-admin --org "Company" --email
+   ...`, see [self-hosting](docs/self-hosting.md)); further users are
+   invited from **Settings → Users**. **Register organization** on the
+   login page appears only when the server allows public sign-up.
 3. To sign in, enter your **Organization** short identifier (e.g.
    `acme`), your **email**, and your **password**.
 4. Use the **Language** selector (top of the login page) to switch
@@ -33,18 +36,27 @@ development, see [README.md](README.md).
 After sign-in you land on the **Dashboard** — a summary of requests,
 incidents and pending approvals over a recent window.
 
-The left sidebar follows the life of an AI system in your organization:
+The left sidebar has five groups; each item opens a page with tabs for
+its related pages:
 
-- **Discovery** — what Provenza found on its own: the live agent map,
-  shadow-AI sightings, network discovery and the collectors that feed it.
-- **Registry** — the single list of AI in use: inventory, agents,
-  provider connections, agent identities and the tool registry.
-- **Policies** — the rules: policy versions, agent policies, use cases
-  and compliance mapping.
-- **Enforcement** — control at runtime: the AI gateway, approvals,
-  circuit breaker, the agent guards and the governed playground.
-- **Audit** — the evidence: usage registry, audit log, incidents and
-  signed delegation chains.
+- **Overview** — Dashboard, Incidents, Approvals and the Kill switch.
+- **Visibility** — **Discovery** (agents found, shadow-AI sightings,
+  devices, network discovery, AI domain catalog), **Monitoring** (agent
+  observability, the live map, delegation chains and, for the server's
+  operator, the installation's health), **AI inventory** (inventory, use
+  cases, AI providers, connections) and **Agents** (agents, teams & roles,
+  agent identity, attestation, tool registry).
+- **Control** — **Policies** (Policy Center, policy hierarchy, agent
+  policies, compliance), **Protection** (behavior monitor, circuit
+  breaker) and **Gateways** (the AI gateway, Runtime with the egress
+  sensors, the playground).
+- **Evidence** — **Audit & evidence**: the audit log and the usage log.
+- **Settings** — your profile, users, notifications, ingestion sources,
+  SIEM export, encryption keys, queue & retention and system status.
+
+Pages of the optional content-safety add-on (PII rules, blocked terms,
+intent guardrail, injection / code-exec / memory / message guards) appear
+only when the server sets `CONTENT_SAFETY_ENABLED=true`.
 
 ---
 
@@ -53,7 +65,7 @@ The left sidebar follows the life of an AI system in your organization:
 Before the platform can send prompts to an AI provider, add a
 connection.
 
-1. Sidebar → **Registry → Connections**.
+1. Sidebar → **AI inventory → Connections**.
 2. **New provider** → choose type (OpenAI, Anthropic, Azure OpenAI, or
    Custom), give it a name, and paste the API key.
 3. The key is **encrypted at rest** and never shown again — the UI only
@@ -75,7 +87,7 @@ Policies define what is allowed and how prompts are filtered.
    to change rules, create and approve a new version.
 4. Bind the active version to a **use case** (see below).
 
-**Prompt Firewall:** when a request runs under a policy, PII (emails,
+**Prompt Firewall** (content-safety add-on, see section 2): when a request runs under a policy, PII (emails,
 credit cards, SSNs, phone numbers, IP addresses, API keys) is masked
 before storage and before the provider ever sees it (4.2). A prompt
 containing a blocked term is rejected and never sent (4.3).
@@ -95,7 +107,7 @@ Details: docs/policies.md.
 
 ### 4.2 PII rules
 
-Policies → **PII rules**: switch each built-in type (email, phone, card,
+Content-safety add-on (section 2). Policies → **PII rules**: switch each built-in type (email, phone, card,
 SSN, IP address, API key, names, organizations, places) on or off and choose
 **Mask** (the value becomes `[MASKED:TYPE]`) or **Block** (the prompt is
 refused). Under *Your rules* add patterns for your own identifiers - start
@@ -107,7 +119,7 @@ shows a warning. Details: docs/pii-rules.md.
 
 ### 4.3 Blocked terms
 
-Policies → **Blocked terms** is the one place for words a prompt must not
+Content-safety add-on (section 2). Policies → **Blocked terms** is the one place for words a prompt must not
 contain. For each term choose where it applies (the whole organization,
 all agents, a team with its sub-teams, one agent, or a policy's use cases),
 how it is found (**whole word** - also spelt apart, joined, with digits for
@@ -127,7 +139,7 @@ when upgrading. Details: docs/blocked-terms.md.
 A use case ties together a purpose, a risk level, and an approved policy
 version.
 
-1. Sidebar → **Policies → Use Cases** → **New use case**.
+1. Sidebar → **AI inventory → Use Cases** → **New use case**.
 2. Set the name, risk level, and (optionally) the approved policy
    version and owner.
 
@@ -135,19 +147,19 @@ version.
 
 ## 6. Usage Registry & Approvals
 
-- **Usage Registry** lists every AI request with its purpose, status,
-  and full request → response trace.
-- If a request requires sign-off, it appears under **Approval
-  Workflow**. Approvers open it and **Approve** or **Reject** with a
+- **Audit & evidence → Usage log** lists every AI request with its
+  purpose, status, and full request → response trace.
+- If a request requires sign-off, it appears under **Overview →
+  Approvals**. Approvers open it and **Approve** or **Reject** with a
   reason. All decisions are audit-logged.
-- **Overrides** let an admin manually stop, edit, or roll back a
-  request when needed.
+- **Overrides** on a request's page let an admin manually stop, edit, or
+  roll back that request when needed.
 
 ---
 
 ## 7. Incident Tracker
 
-1. Sidebar → **Audit → Incident Tracker**.
+1. Sidebar → **Overview → Incidents**.
 2. Incidents can be created manually or automatically (e.g. when a
    blocked AI domain is detected — see Shadow AI Monitor).
 3. Move an incident through **Open → Investigating → Resolved**, and
@@ -166,7 +178,7 @@ of them feed one **Sightings** list.
 
 Collectors authenticate with a machine key, not a user login.
 
-1. Sidebar → **Discovery → Ingestion Sources** (admin only).
+1. Sidebar → **Settings → Ingestion Sources** (admin only).
 2. **New source** → choose type (Gateway, Endpoint agent, Browser
    extension) and name it.
 3. The **ingestion key is shown once** — copy it now. It is stored
@@ -210,7 +222,7 @@ enabled, discovers network services.
    key.
 2. Put the key and your server URL into the agent's `config.json`
    (see `agent/config.example.json`), then build and run it — full steps
-   are in the [README](README.md#7-endpoint-agent-optional).
+   are in [Shadow AI collectors](docs/shadow-ai.md).
 3. New findings appear within a minute: local AI tools under
    **Discovery → Shadow AI Sightings**, AI agents under **Discovery →
    Agents Found**, and the machine itself under **Discovery → Devices**.
@@ -257,7 +269,7 @@ ignore findings.
 
 ### 8.4.2 Enrolling an agent
 
-Registry → Agents → **New agent**: fill in what the agent may do
+Agents → **New agent**: fill in what the agent may do
 (capabilities, tools, models, delegation depth, team) and **Issue
 enrollment token**. Give the token to whoever runs the agent; on that
 machine they run the command shown, e.g.
@@ -280,7 +292,7 @@ agent's page and **Issue re-key token**.
 
 ### 8.4.3 Teams and role templates
 
-Registry → **Teams & Roles**. Teams form a tree (organization → team →
+Agents → **Teams & Roles**. Teams form a tree (organization → team →
 sub-team → agent); an agent belongs to a team by its id, so renaming a team
 renames it everywhere.
 
@@ -300,7 +312,7 @@ upgrade.
 
 ### 8.4.4 Workload attestation
 
-Registry → **Attestation**. A policy says where agents must prove they run:
+Agents → **Attestation**. A policy says where agents must prove they run:
 your Kubernetes cluster (its issuer and signing keys - `kubectl get --raw
 /openid/v1/jwks`), the token audience (the same value goes into the pod
 spec), the allowed namespaces / service accounts, and how long a proof lasts.
@@ -319,7 +331,7 @@ it: then lift that stop (8.4.5).
 
 ### 8.4.5 Kill switch
 
-Enforcement → **Kill switch** stops AI in four steps: one **agent**, a
+Overview → **Kill switch** stops AI in four steps: one **agent**, a
 **team** (with its sub-teams), **all agents**, or **all AI traffic** (every
 agent plus the gateway, AI requests and the playground). Each stop needs a
 reason; the two organization-wide levels also ask you to type `STOP`.
@@ -377,7 +389,9 @@ about.
 Sidebar → **Settings → Notifications**. Add **email** or **webhook**
 channels and subscribe each to the events you care about
 (`incident_created`, `approval_pending`, `request_blocked`,
-`shadow_ai_reported`, `shadow_ai_blocked_domain`, and more). If email
+`shadow_ai_reported`, `shadow_ai_blocked_domain`, `kill_switch`,
+`egress_sensor_offline`, `alert` - the server's monitoring alerts - and
+more). If email
 (SMTP) is not configured on the server, email channels are skipped
 silently; webhooks always work.
 
@@ -385,7 +399,7 @@ silently; webhooks always work.
 
 ## 11. Audit & Reporting
 
-Sidebar → **Audit → Audit Log**. Every change made through the platform
+Sidebar → **Audit & evidence → Audit Log**. Every change made through the platform
 — who did what, to which entity, when — is recorded in an append-only
 log you can filter and review.
 
@@ -411,7 +425,51 @@ The log is tamper-evident (details in `docs/audit-proofs.md`):
 
 ---
 
-## 12. Tips
+## 12. Runtime: egress sensors
+
+Gateways → **Runtime** (admin only). The egress sensor runs on a Linux
+host and enforces, in the kernel, where each workload (an agent's
+processes, matched by cgroup) may connect.
+
+1. **Register sensor** gives a key and the one-line install command for
+   the host; the server hands out the sensor itself, so the host needs no
+   build tools.
+2. Define **workloads**: which processes, the allowed destinations, and
+   the mode - **observe** (record only), **alert** or **enforce** (block).
+3. The sensor's row shows its last heartbeat, attached hooks and
+   warnings; expand it to **Dump state**, **Restart** or **Detach** the
+   sensor with a signed command ([details](docs/sensor-commands.md)).
+
+The settings set how often sensors fetch the policy (30-300 s) and send a
+heartbeat (30-120 s). A sensor counts as offline after three missed heartbeats, and
+not before 5 minutes; subscribe a channel to `egress_sensor_offline` to
+hear about it.
+
+---
+
+## 13. Monitoring the installation
+
+Monitoring → **Observability** is for the server's operator: the
+administrators of the organization that runs it. It answers "is
+everything working": the API, the database and queue, background jobs,
+egress sensors, audit evidence and data retention, each with what to do
+when it is not ok, then the trends and the busiest endpoints. Grafana and
+the alert rules behind it are described in
+[monitoring](docs/monitoring.md).
+
+---
+
+## 14. SIEM export
+
+Settings → **SIEM export** (admin only) makes read-only keys a SIEM or
+SOAR uses to pull the egress sensor events (violations and allowed
+connections). The key is shown once; revoke it there when it is no longer
+needed. The page shows the request to make; see
+[SIEM export](docs/siem-export.md).
+
+---
+
+## 15. Tips
 
 - **Keep the domain catalog current** — it is what turns raw telemetry
   into meaningful "allowed / blocked / unknown" signals.

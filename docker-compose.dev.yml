@@ -2,7 +2,7 @@
 # it seeds a demo organization and admin user into the shared database volume
 # and starts Redis without the production password. Production uses docker-compose.yml.
 
-# ---- AI Control Tower — full stack, one command ----
+# ---- Provenza — full stack, one command ----
 # Usage:  docker compose -f docker-compose.dev.yml up --build
 # Then open http://localhost:3000  ·  org: demo  ·  login: admin@demo.com / demo12345
 #
