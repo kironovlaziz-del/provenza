@@ -30,6 +30,7 @@ from app.models.egress_sensor import (
 from app.core.metrics import (
     sensor_activity_dropped_total,
     sensor_activity_inserted_total,
+    sensor_event_time_rejected_total,
     sensor_violations_dropped_total,
     sensor_violations_inserted_total,
 )
@@ -581,6 +582,38 @@ def now_utc() -> datetime:
     return datetime.now(timezone.utc)
 
 
+# Event times come from the sensor's clock (the kernel's, converted on the
+# host). Inside this window they are kept: a sensor posts what it buffered
+# while the control plane was unreachable. Outside it - a host with a wrong
+# clock, or a sensor key used to date events into the past (so retention
+# deletes them at once) or into the future (so they never age out and stay
+# at the top of every feed) - the server's own time is used instead.
+EVENT_TIME_PAST = timedelta(days=7)
+EVENT_TIME_FUTURE = timedelta(minutes=5)
+
+
+def event_time(ts: Optional[datetime], now: datetime) -> Optional[datetime]:
+    """The time to store for an event, or None for "now" (the column
+    default). A time without a zone is taken as UTC."""
+    if ts is None:
+        return None
+    if ts.tzinfo is None:
+        ts = ts.replace(tzinfo=timezone.utc)
+    if now - EVENT_TIME_PAST <= ts <= now + EVENT_TIME_FUTURE:
+        return ts
+    return None
+
+
+def _note_rejected_times(sensor: EgressSensor, n: int, stream: str) -> None:
+    if n:
+        sensor_event_time_rejected_total.inc(n)
+        logger.warning(
+            "egress_sensor %s: %d %s events dated outside [-%s, +%s] of the server's "
+            "clock; stored with the server's time (is the host's clock right?)",
+            sensor.id, n, stream, EVENT_TIME_PAST, EVENT_TIME_FUTURE,
+        )
+
+
 # ---------------------------------------------------------------- violations
 
 async def ingest_violations(
@@ -612,6 +645,8 @@ async def ingest_violations(
 
     accepted: list[ViolationIn] = []
     dropped = 0
+    bad_times = 0
+    now = now_utc()
     for e in events:
         if e.workload_id not in by_id:
             dropped += 1
@@ -632,9 +667,13 @@ async def ingest_violations(
             isolated=e.isolated,
             count=e.count,
         )
-        if e.ts is not None:
-            kwargs["created_at"] = e.ts
+        when = event_time(e.ts, now)
+        if when is not None:
+            kwargs["created_at"] = when
+        elif e.ts is not None:
+            bad_times += 1
         db.add(EgressViolation(**kwargs))
+    _note_rejected_times(sensor, bad_times, "violation")
 
     if dropped:
         logger.warning(
@@ -726,6 +765,8 @@ async def ingest_activities(db, sensor, events):
     valid = {row[0] for row in (await db.execute(q)).all()}
 
     dropped = 0
+    bad_times = 0
+    now = now_utc()
     rows = []
     for e in events:
         if e.workload_id not in valid:
@@ -746,9 +787,13 @@ async def ingest_activities(db, sensor, events):
             isolated=e.isolated,
             count=e.count,
         )
-        if e.ts is not None:
-            kwargs["created_at"] = e.ts
+        when = event_time(e.ts, now)
+        if when is not None:
+            kwargs["created_at"] = when
+        elif e.ts is not None:
+            bad_times += 1
         rows.append(SensorActivity(**kwargs))
+    _note_rejected_times(sensor, bad_times, "activity")
 
     if rows:
         db.add_all(rows)

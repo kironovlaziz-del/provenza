@@ -90,7 +90,8 @@ def test_policy_settings_update_rejects_out_of_range_retention():
 async def test_ingest_violations_honours_ts(client, admin_token):
     w = await _make_workload(client, admin_token, "wl-ts-v")
     sensor = await _register_sensor(client, admin_token, "host-ts-v")
-    when = "2026-10-17T03:15:51.189642+00:00"
+    # within the accepted window (services/egress_sensor.event_time)
+    when = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
 
     r = await client.post(
         f"{BASE}/violations",
@@ -115,7 +116,8 @@ async def test_ingest_violations_honours_ts(client, admin_token):
 async def test_ingest_activities_honours_ts(client, admin_token):
     w = await _make_workload(client, admin_token, "wl-ts-a")
     sensor = await _register_sensor(client, admin_token, "host-ts-a")
-    when = "2026-10-17T03:15:51.189642+00:00"
+    # within the accepted window (services/egress_sensor.event_time)
+    when = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
 
     r = await client.post(
         f"{BASE}/activity",
@@ -165,6 +167,46 @@ async def test_ingest_violations_falls_back_to_now_when_ts_missing(client, admin
     assert abs((now - created_at).total_seconds()) < 300, (
         f"fallback timestamp should be recent, got {created_at} (now={now})"
     )
+
+
+async def test_ingest_ignores_event_times_far_from_the_server_clock(client, admin_token):
+    """A sensor cannot date events into the past (retention would delete them
+    at once) or the future (they would never age out): outside the window the
+    server's time is stored instead."""
+    w = await _make_workload(client, admin_token, "wl-ts-bad")
+    sensor = await _register_sensor(client, admin_token, "host-ts-bad")
+    now = datetime.now(timezone.utc)
+    for path, action in (("violations", "blocked"), ("activity", "allowed")):
+        r = await client.post(
+            f"{BASE}/{path}",
+            json={"events": [
+                {"workload_id": w["id"], "action": action, "kind": "connect",
+                 "comm": "past", "ts": (now - timedelta(days=400)).isoformat()},
+                {"workload_id": w["id"], "action": action, "kind": "connect",
+                 "comm": "future", "ts": (now + timedelta(days=30)).isoformat()},
+            ]},
+            headers={"X-Sensor-Key": sensor["api_key"]},
+        )
+        assert r.status_code == 200, r.text
+        r = await client.get(f"{BASE}/sensors/{sensor['id']}/{path}", headers=auth_headers(admin_token))
+        rows = r.json()
+        assert {e["comm"] for e in rows} == {"past", "future"}
+        for e in rows:
+            assert abs((_parse_iso(e["created_at"]) - now).total_seconds()) < 300, e
+
+
+def test_event_time_window():
+    from app.services.egress_sensor import EVENT_TIME_FUTURE, EVENT_TIME_PAST, event_time
+
+    now = datetime(2026, 10, 18, 12, 0, tzinfo=timezone.utc)
+    assert event_time(None, now) is None
+    assert event_time(now - timedelta(hours=3), now) == now - timedelta(hours=3)
+    assert event_time(now - EVENT_TIME_PAST, now) == now - EVENT_TIME_PAST
+    assert event_time(now - EVENT_TIME_PAST - timedelta(seconds=1), now) is None
+    assert event_time(now + EVENT_TIME_FUTURE, now) == now + EVENT_TIME_FUTURE
+    assert event_time(now + EVENT_TIME_FUTURE + timedelta(seconds=1), now) is None
+    # no zone: taken as UTC
+    assert event_time(datetime(2026, 10, 18, 11, 0), now) == datetime(2026, 10, 18, 11, 0, tzinfo=timezone.utc)
 
 
 async def test_prune_violations_removes_rows_past_retention(db_session, org_and_users):

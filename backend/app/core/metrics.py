@@ -58,6 +58,11 @@ sensor_activity_inserted_total = Counter(
     "Sampled allowed connects accepted from sensors and written to sensor_activity.",
 )
 
+sensor_event_time_rejected_total = Counter(
+    "sensor_event_time_rejected_total",
+    "Sensor events whose own time was too far from the server's; stored with the server's time.",
+)
+
 sensor_activity_dropped_total = Counter(
     "sensor_activity_dropped_total",
     "Sampled allowed connects dropped because their workload_id was not this org's.",
