@@ -776,7 +776,8 @@
       "kill_switch": "Favqulodda to'xtatish: yoqildi yoki bekor qilindi",
       "runtime_violation": "Runtime: boshqariladigan ish yuki o'z siyosatidan tashqariga ulandi",
       "egress_violation": "Chiquvchi qoidabuzarlik (sensor)",
-      "egress_sensor_offline": "Chiquvchi sensor oflayn"
+      "egress_sensor_offline": "Chiquvchi sensor oflayn",
+      "alert": "Monitoring ogohlantirishi (Prometheus, Alertmanager orqali)"
     }
   },
   "users": {

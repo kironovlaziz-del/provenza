@@ -776,7 +776,8 @@
       "kill_switch": "Kill switch: a stop engaged or lifted",
       "runtime_violation": "Runtime: a governed workload connected outside its policy",
       "egress_violation": "Egress violation (sensor)",
-      "egress_sensor_offline": "Egress sensor offline"
+      "egress_sensor_offline": "Egress sensor offline",
+      "alert": "Monitoring alert (Prometheus, through Alertmanager)"
     }
   },
   "users": {
