@@ -9,6 +9,10 @@ export const RISK_TIERS: RiskTier[] = ["unacceptable", "high", "limited", "minim
 export const LIFECYCLE_STAGES: LifecycleStage[] = ["idea", "development", "validation", "production", "retired"];
 export const SYSTEM_KINDS: SystemKind[] = ["agent", "llm_provider", "model", "rag_app", "shadow", "other"];
 
+/** The organization's role for an AI system under the EU AI Act (Art. 3). */
+export const AI_ACT_ROLES = ["provider", "deployer", "importer", "distributor"] as const;
+export type AIActRole = (typeof AI_ACT_ROLES)[number];
+
 export interface DataLinkT {
   id: number;
   relation: DataRelation;
@@ -50,6 +54,8 @@ export interface AISystemT {
   review_status: "unreviewed" | "reviewed";
   domain: string;
   risk_flags: string[];
+  /** the organization's role(s) under the EU AI Act; empty: not stated */
+  ai_act_roles: AIActRole[];
   suggested_risk_tier?: RiskTier | null;
   risk_assessment?: RiskAssessment | null;
   confirmed_risk_tier?: RiskTier | null;

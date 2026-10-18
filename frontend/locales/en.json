@@ -1557,6 +1557,19 @@
     }
   },
   "inventory": {
+    "roles": {
+      "title": "Our role under the EU AI Act",
+      "hint": "It decides which obligations apply to this system on the Compliance page. Building a system and using it yourself makes you both provider and deployer. Until a role is chosen, every obligation applies.",
+      "provider": "Provider",
+      "provider_hint": "We develop it, or have it developed, and place it on the market or put it into service under our name (Art. 16).",
+      "deployer": "Deployer",
+      "deployer_hint": "We use it under our authority, in our own work (Art. 26).",
+      "importer": "Importer",
+      "importer_hint": "We bring into the EU a system of a provider established outside it (Art. 23).",
+      "distributor": "Distributor",
+      "distributor_hint": "We make another's system available on the EU market, neither as its provider nor importer (Art. 24).",
+      "save": "Save roles"
+    },
     "title": "AI Inventory",
     "subtitle": "Every model, agent and AI service in the organization — with owner, lifecycle stage and EU AI Act risk tier.",
     "sync": "Sync now",

@@ -196,6 +196,12 @@ def c_inventory_classified(f) -> Result:
     return st, f"Risk tier confirmed: {detail}", e
 
 
+def c_ai_act_roles_stated(f) -> Result:
+    act = f["active_systems"]
+    st, detail, e = _share(sum(bool(s.ai_act_roles) for s in act), len(act), "describe", "/inventory")
+    return st, f"Role under the AI Act stated: {detail}", e
+
+
 def c_owners_assigned(f) -> Result:
     act = f["active_systems"]
     st, detail, e = _share(sum(_owner(s) for s in act), len(act), "assign", "/inventory")
@@ -436,6 +442,7 @@ CHECKS: Dict[str, Callable] = {
     "no_unacceptable_in_production": c_no_unacceptable,
     "inventory_classified": c_inventory_classified,
     "owners_assigned": c_owners_assigned,
+    "ai_act_roles_stated": c_ai_act_roles_stated,
     "owners_and_monitoring": c_owners_and_monitoring,
     "monitoring_active": c_monitoring,
     "incidents_handled": c_incidents,
@@ -474,8 +481,27 @@ SYSTEM_CHECKS: Dict[str, Callable] = {
 }
 
 
+def _has_role(req: dict, s: AISystem) -> bool:
+    """The system is one of the operators the obligation is addressed to; a
+    system whose roles are not stated counts as every one of them."""
+    roles = req.get("roles")
+    return not roles or not s.ai_act_roles or bool(set(roles) & set(s.ai_act_roles))
+
+
+def _org_role_gap(req: dict, facts: dict) -> Optional[str]:
+    """For an organization-wide obligation of some roles only: why it does not
+    apply - every active system states its roles and none is one of them."""
+    roles = req.get("roles")
+    act = facts["active_systems"]
+    if not roles or not act or any(_has_role(req, s) for s in act):
+        return None
+    return "No AI system where the organization is " + " or ".join(roles)
+
+
 def _applies(req: dict, s: AISystem) -> bool:
     if s.lifecycle_stage == "retired":
+        return False
+    if not _has_role(req, s):
         return False
     a = req["applies"]
     if a == "high_risk":
@@ -537,8 +563,11 @@ async def evaluate(db: AsyncSession, org_id: int, frameworks: Optional[List[str]
     for req in REQUIREMENTS:
         if req["framework"] not in frameworks:
             continue
-        item = {k: req[k] for k in ("id", "framework", "ref", "title", "scope", "applies", "attest", "fix")}
-        if req["scope"] == "org":
+        item = {k: req.get(k) for k in ("id", "framework", "ref", "title", "scope", "applies", "attest", "fix", "roles")}
+        gap = _org_role_gap(req, facts) if req["scope"] == "org" else None
+        if gap:
+            item.update(status="na", detail=gap, evidence=[], attestation=None)
+        elif req["scope"] == "org":
             check = CHECKS[req["check"]](facts) if req["check"] else None
             status, detail, evidence, att = _combine(req, check, atts.get((req["id"], None)))
             item.update(status=status, detail=detail, evidence=evidence, attestation=att)
@@ -551,7 +580,8 @@ async def evaluate(db: AsyncSession, org_id: int, frameworks: Optional[List[str]
                 rows.append({"system_id": s.id, "system": s.name, "status": st, "detail": detail,
                              "evidence": evidence, "attestation": att})
             if not rows:
-                item.update(status="na", detail=f"No applicable AI system ({req['applies'].replace('_', '-')})",
+                who = f"; organization as {' or '.join(req['roles'])}" if req.get("roles") else ""
+                item.update(status="na", detail=f"No applicable AI system ({req['applies'].replace('_', '-')}{who})",
                             evidence=[], attestation=None)
             else:
                 st = _worst([r["status"] for r in rows])

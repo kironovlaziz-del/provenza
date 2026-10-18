@@ -55,6 +55,7 @@ export async function updateSystem(
     business_owner: string | null;
     domain: string;
     risk_flags: string[];
+    ai_act_roles: string[];
   }>,
 ) {
   const { data } = await api.patch<AISystemT>(`/inventory/${id}`, payload);

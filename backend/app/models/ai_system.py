@@ -52,6 +52,11 @@ class AISystem(Base):
     risk_justification = Column(Text)
     risk_confirmed_by = Column(Integer, ForeignKey("users.id"))
     risk_confirmed_at = Column(DateTime(timezone=True))
+    # What the organization is for this system under the EU AI Act (Art. 3):
+    # provider, deployer, importer, distributor - often provider and deployer
+    # at once. Decides which obligations of the compliance catalog apply;
+    # empty means not stated yet, and then all of them do.
+    ai_act_roles = Column(JSONB, nullable=False, default=list, server_default="[]")
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
