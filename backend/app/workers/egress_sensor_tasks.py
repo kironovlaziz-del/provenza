@@ -25,11 +25,9 @@ def warn_offline_task() -> int:
 
 async def _prune_activity() -> int:
     from app.services import egress_sensor as svc
+    # commits per chunk and records each organization's outcome itself
     async with CelerySessionLocal() as db:
-        try:
-            return await svc.prune_sensor_activity(db)
-        finally:
-            await db.commit()
+        return await svc.prune_sensor_activity(db)
 
 
 @celery_app.task(name="egress_sensor.prune_activity", ignore_result=True, expires=3500)
@@ -38,11 +36,9 @@ def prune_activity_task() -> int:
 
 async def _prune_violations() -> int:
     from app.services import egress_sensor as svc
+    # commits per chunk and records each organization's outcome itself
     async with CelerySessionLocal() as db:
-        try:
-            return await svc.prune_violations(db)
-        finally:
-            await db.commit()
+        return await svc.prune_violations(db)
 
 
 @celery_app.task(name="egress_sensor.prune_violations", ignore_result=True, expires=3500)

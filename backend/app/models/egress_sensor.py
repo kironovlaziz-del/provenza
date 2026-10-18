@@ -182,8 +182,9 @@ class EgressPolicySettings(Base):
     # Last prune result, one pair per table. The Celery tasks run in their
     # own process, so their counters never reach /metrics; the tasks
     # instead write the outcome here and update_db_gauges reads it on each
-    # scrape. If last_pruned_at stops moving, or last_prune_error is set,
-    # the alert fires. Retention values are already covered above.
+    # scrape. last_pruned_at is the last successful prune and rows what it
+    # deleted for this organization; a failed run sets last_prune_error and
+    # leaves the time alone. Alerts: observability/prometheus/rules/retention.yml.
     activity_last_pruned_at = Column(DateTime(timezone=True))
     activity_last_prune_rows = Column(Integer, nullable=False, default=0, server_default="0")
     activity_last_prune_error = Column(String(500))

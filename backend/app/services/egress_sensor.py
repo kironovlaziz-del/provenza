@@ -266,170 +266,118 @@ async def build_policy(db: AsyncSession, org_id: int) -> PolicyOut:
     )
 
 
+PRUNE_CHUNK = 5000
+
+
 async def _record_prune_status(
-    db: AsyncSession, *, table: str, rows: int, error: str | None,
+    db: AsyncSession, *, org_id: int, table: str, rows: int, error: str | None,
 ) -> None:
-    """Persist the outcome of the last prune so /metrics can surface it.
+    """Persist one organization's outcome of the last prune so /metrics can
+    surface it (update_db_gauges reads it on each scrape; a counter in the
+    Celery worker process would never reach the API's /metrics).
 
-    The Celery worker runs in its own process; a counter incremented there
-    would never reach the uvicorn /metrics endpoint. Writing to the
-    EgressPolicySettings row keeps the status visible to update_db_gauges,
-    which reads it on each scrape.
-
-    table is "activity" or "violations". Missing settings rows are created
-    with defaults so a first prune on a fresh org still records status.
+    rows is what this organization's prune deleted. last_pruned_at is the
+    last *successful* prune: a failed one sets the error and leaves the time
+    alone, so both the failure flag and the growing age show it.
     """
-    from datetime import datetime, timezone
-
-    # Determine which orgs to update: those whose settings row already
-    # exists are updated; those without a row are created with defaults.
-    existing = {
-        s.org_id: s
-        for s in (
-            await db.execute(select(EgressPolicySettings))
-        ).scalars().all()
-    }
-
-    now = datetime.now(timezone.utc)
-
-    # For every org that had rows touched in this run (or every org with a
-    # settings row), write the status. Practically: upsert on all orgs
-    # that have a settings row AND insert for any org without one, so the
-    # next prune on that org has a place to write.
-    all_org_ids = set(existing.keys())
-    # Also include orgs known from tables we just pruned.
-    from app.models.egress_sensor import SensorActivity, EgressViolation
+    s = await settings_for(db, org_id)
     if table == "activity":
-        all_org_ids.update(
-            (await db.execute(select(SensorActivity.org_id).distinct())).scalars().all()
-        )
+        s.activity_last_prune_rows = rows
+        s.activity_last_prune_error = error[:500] if error else None
+        if error is None:
+            s.activity_last_pruned_at = now_utc()
     else:
-        all_org_ids.update(
-            (await db.execute(select(EgressViolation.org_id).distinct())).scalars().all()
-        )
-
-    for org_id in all_org_ids:
-        s = existing.get(org_id)
-        if s is None:
-            s = EgressPolicySettings(org_id=org_id)
-            db.add(s)
-        if table == "activity":
-            s.activity_last_pruned_at = now
-            s.activity_last_prune_rows = rows
-            s.activity_last_prune_error = (error or "")[:500] if error else None
-        else:
-            s.violation_last_pruned_at = now
-            s.violation_last_prune_rows = rows
-            s.violation_last_prune_error = (error or "")[:500] if error else None
-
+        s.violation_last_prune_rows = rows
+        s.violation_last_prune_error = error[:500] if error else None
+        if error is None:
+            s.violation_last_pruned_at = now_utc()
     await db.flush()
 
 
-async def prune_sensor_activity(db: AsyncSession, default_days: int = 30) -> int:
-    """Delete sensor_activity rows older than each organization's retention.
+async def _prune_table(
+    db: AsyncSession, *, table: str, model, retention_column, default_days: int, chunk: int,
+) -> int:
+    """Delete rows of model older than each organization's retention.
 
-    Retention is per-org (EgressPolicySettings.activity_retention_days); an
-    organization without a settings row falls back to default_days. A value
-    of 0 disables pruning for that organization entirely.
+    Retention is per organization (retention_column of EgressPolicySettings);
+    an organization without a settings row falls back to default_days, and
+    0 keeps its rows forever. Each chunk is its own transaction, so a large
+    backlog (a long outage, a shortened retention) neither holds one long
+    lock nor loses the chunks already deleted when a later one fails.
 
-    Deletion is chunked so a large backlog does not hold a long lock on the
-    table. Called hourly by the egress_sensor.prune_activity task.
+    One organization's failure is recorded as its error and does not stop
+    the others. Every organization with rows or settings gets a status.
     """
     retentions = {
-        row.org_id: row.activity_retention_days
-        for row in (
-            await db.execute(
-                select(EgressPolicySettings.org_id, EgressPolicySettings.activity_retention_days)
-            )
+        org_id: days
+        for org_id, days in (
+            await db.execute(select(EgressPolicySettings.org_id, retention_column))
         ).all()
     }
-    org_ids = (
-        await db.execute(select(SensorActivity.org_id).distinct())
-    ).scalars().all()
+    org_ids = set(retentions) | set(
+        (await db.execute(select(model.org_id).distinct())).scalars().all()
+    )
 
     total = 0
-    chunk = 5000
-    for org_id in org_ids:
+    for org_id in sorted(org_ids):
         days = retentions.get(org_id, default_days)
-        if days <= 0:
-            continue
-        cutoff = now_utc() - timedelta(days=days)
-        while True:
-            ids = (
-                await db.execute(
-                    select(SensorActivity.id)
-                    .where(
-                        SensorActivity.org_id == org_id,
-                        SensorActivity.created_at < cutoff,
-                    )
-                    .limit(chunk)
-                )
-            ).scalars().all()
-            if not ids:
-                break
-            await db.execute(delete(SensorActivity).where(SensorActivity.id.in_(ids)))
-            total += len(ids)
-            if len(ids) < chunk:
-                break
-    await _record_prune_status(
-        db, table="activity", rows=total, error=None,
-    )
-    if total:
-        logger.info("pruned sensor_activity", extra={"rows": total})
+        rows = 0
+        error = None
+        if days > 0:
+            cutoff = now_utc() - timedelta(days=days)
+            try:
+                while True:
+                    ids = (
+                        await db.execute(
+                            select(model.id)
+                            .where(model.org_id == org_id, model.created_at < cutoff)
+                            .limit(chunk)
+                        )
+                    ).scalars().all()
+                    if not ids:
+                        break
+                    await db.execute(delete(model).where(model.id.in_(ids)))
+                    await db.commit()
+                    rows += len(ids)
+                    if len(ids) < chunk:
+                        break
+            except Exception as exc:
+                await db.rollback()
+                error = f"{type(exc).__name__}: {exc}"
+                logger.exception("prune failed", extra={"table": table, "org_id": org_id})
+        await _record_prune_status(db, org_id=org_id, table=table, rows=rows, error=error)
+        await db.commit()
+        total += rows
+        if rows:
+            logger.info("pruned %s", table, extra={"org_id": org_id, "rows": rows})
     return total
 
 
-
-async def prune_violations(db: AsyncSession, default_days: int = 30) -> int:
-    """Delete egress_violations rows older than each organization's retention.
-
-    Same shape as prune_sensor_activity: retention is per-org, an org without
-    a settings row falls back to default_days, 0 disables pruning. Chunked
-    to avoid a long table lock. Called hourly by
-    egress_sensor.prune_violations.
-    """
-    retentions = {
-        row.org_id: row.violation_retention_days
-        for row in (
-            await db.execute(
-                select(EgressPolicySettings.org_id, EgressPolicySettings.violation_retention_days)
-            )
-        ).all()
-    }
-    org_ids = (
-        await db.execute(select(EgressViolation.org_id).distinct())
-    ).scalars().all()
-
-    total = 0
-    chunk = 5000
-    for org_id in org_ids:
-        days = retentions.get(org_id, default_days)
-        if days <= 0:
-            continue
-        cutoff = now_utc() - timedelta(days=days)
-        while True:
-            ids = (
-                await db.execute(
-                    select(EgressViolation.id)
-                    .where(
-                        EgressViolation.org_id == org_id,
-                        EgressViolation.created_at < cutoff,
-                    )
-                    .limit(chunk)
-                )
-            ).scalars().all()
-            if not ids:
-                break
-            await db.execute(delete(EgressViolation).where(EgressViolation.id.in_(ids)))
-            total += len(ids)
-            if len(ids) < chunk:
-                break
-    await _record_prune_status(
-        db, table="violations", rows=total, error=None,
+async def prune_sensor_activity(
+    db: AsyncSession, default_days: int = 30, chunk: int = PRUNE_CHUNK,
+) -> int:
+    """Delete sensor_activity rows past each organization's retention
+    (EgressPolicySettings.activity_retention_days). Called hourly by the
+    egress_sensor.prune_activity task; see _prune_table."""
+    return await _prune_table(
+        db, table="activity", model=SensorActivity,
+        retention_column=EgressPolicySettings.activity_retention_days,
+        default_days=default_days, chunk=chunk,
     )
-    if total:
-        logger.info("pruned egress_violations", extra={"rows": total})
-    return total
+
+
+async def prune_violations(
+    db: AsyncSession, default_days: int = 30, chunk: int = PRUNE_CHUNK,
+) -> int:
+    """Delete egress_violations rows past each organization's retention
+    (EgressPolicySettings.violation_retention_days). Called hourly by the
+    egress_sensor.prune_violations task; see _prune_table."""
+    return await _prune_table(
+        db, table="violations", model=EgressViolation,
+        retention_column=EgressPolicySettings.violation_retention_days,
+        default_days=default_days, chunk=chunk,
+    )
+
 
 async def ingest_heartbeat(
     db: AsyncSession, sensor: EgressSensor, data: HeartbeatIn
