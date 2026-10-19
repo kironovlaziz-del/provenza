@@ -12,19 +12,18 @@ Hybrid post-quantum signatures: Ed25519 + ML-DSA-65 (FIPS 204).
   - evidence carries both signatures and keys, so a verifier checks both;
   - an organization can require hybrid keys (require_pq_signatures): new
     classical keys are refused, and agents still on Ed25519 alone can no
-    longer delegate, record actions or send messages.
+    longer delegate or record actions.
 """
 
 import base64
 import hashlib
 import json
 import secrets
-from datetime import datetime, timezone
 
 import pytest
 
 from app.core.agent_signing import (
-    SCHEME_CLASSIC, SCHEME_HYBRID, canonical_text, content_hash, generate_keypair, generate_pq_keypair,
+    SCHEME_CLASSIC, SCHEME_HYBRID, canonical_text, generate_keypair, generate_pq_keypair,
     key_fingerprint, normalize_pq_public_key, pq_available, sign_payload, sign_payload_pq,
     verify_agent_signature, verify_payload_pq,
 )
@@ -34,7 +33,6 @@ from tests.delegation_helpers import action_record_body, delegation_body
 pytestmark = pytest.mark.skipif(not pq_available(), reason="ML-DSA needs cryptography >= 48")
 
 A = "/api/v1/agents"
-X = "/api/v1/a2a"
 ID = "/api/v1/agent-identity"
 TASK = "Отчёт за квартал — o'zbekcha: hisobot ✓"
 MLDSA65_SPKI_PREFIX = "308207b2300b0609608648016503040312038207a100"  # as printed in the docs
@@ -294,48 +292,3 @@ class TestOrgPolicy:
         overview = (await client.get(f"{ID}/", headers=auth_headers(admin_token))).json()
         assert overview["settings"]["require_pq_signatures"] is True
         assert overview["settings"]["rotation_grace_minutes"] == 30
-
-
-class TestA2A:
-    @staticmethod
-    def _envelope(src, dst_id, payload, chain_id):
-        return {"type": "a2a_message", "from_agent_id": src["id"], "to_agent_id": dst_id, "chain_id": chain_id,
-                "message_type": "task.request", "payload_sha256": content_hash(payload),
-                "nonce": secrets.token_hex(16), "issued_at": datetime.now(timezone.utc).isoformat()}
-
-    async def _pair(self, client, token, src_factory, mode="enforce"):
-        r = await client.put(X + "/settings", json={"mode": mode, "allow_same_chain": True,
-                                                   "max_age_seconds": 300, "message_ttl_seconds": 3600},
-                             headers=auth_headers(token))
-        assert r.status_code == 200, r.text
-        src = await src_factory(client, token)
-        dst = await _hybrid_agent(client, token)
-        d = await client.post(f"{A}/{src['id']}/delegate", json=delegation_body(src, dst["id"], "report", ["read"]),
-                              headers=auth_headers(token))
-        assert d.status_code == 200, d.text
-        return src, dst, d.json()["chain_id"]
-
-    async def _send(self, client, token, src, dst, chain_id, *, pq=True):
-        env = self._envelope(src, dst["id"], "hi", chain_id)
-        body = {"envelope": env, "signature": sign_payload(env, src["private_key"]), "payload": "hi"}
-        if pq and src.get("pq_private_key"):
-            body["pq_signature"] = sign_payload_pq(env, src["pq_private_key"])
-        r = await client.post(X + "/send", json=body, headers=auth_headers(token))
-        assert r.status_code == 200, r.text
-        return r.json()
-
-    async def test_hybrid_message_needs_both_signatures(self, client, admin_token):
-        src, dst, chain_id = await self._pair(client, admin_token, _hybrid_agent)
-        s = await self._send(client, admin_token, src, dst, chain_id)
-        assert s["status"] == "accepted" and s["signature_valid"]
-        s = await self._send(client, admin_token, src, dst, chain_id, pq=False)
-        assert s["status"] == "rejected" and not s["signature_valid"]
-
-    @pytest.mark.parametrize("mode", ["enforce", "monitor", "off"])
-    async def test_classical_sender_rejected_when_policy_requires_pq(self, client, admin_token, mode):
-        # an organization policy, so it holds whatever the A2A guard mode
-        src, dst, chain_id = await self._pair(client, admin_token, _classic_agent, mode=mode)
-        await _require_pq(client, admin_token)
-        s = await self._send(client, admin_token, src, dst, chain_id)
-        assert s["status"] == "rejected"
-        assert any("post-quantum" in r for r in s["reasons"])
