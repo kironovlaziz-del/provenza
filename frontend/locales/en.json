@@ -3964,6 +3964,8 @@
     "audit_records": "Records",
     "audit_sealed": "all sealed",
     "audit_waiting": "Waiting for a checkpoint",
+    "audit_next": "in the next checkpoint",
+    "audit_oldest": "the oldest",
     "beat": "scheduler",
     "data": "Database and queue",
     "data_detail": "The API's round trip to PostgreSQL and Redis, measured now.",

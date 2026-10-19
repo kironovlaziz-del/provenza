@@ -51,7 +51,7 @@ Prometheus (`127.0.0.1:9090`, 30 days of data) evaluates the rules in
 
 | Alert | Fires when |
 |---|---|
-| `AuditUnsealedRecords` | audit records stay outside a signed checkpoint for 15 minutes |
+| `AuditUnsealedRecords` | the oldest audit record outside a signed checkpoint has waited over 15 minutes (a few minutes between two checkpoints is normal) |
 | `AuditCheckpointsMissing` | an organization has audit records and no checkpoint for 30 minutes |
 | `AuditLogGrowingFast` | the audit log grew by over 100 000 records in 24 hours (info) |
 | `RetentionPruneFailed` | the last prune of sensor activity or violations failed |

@@ -315,8 +315,8 @@
     {
       "id": 6,
       "type": "stat",
-      "title": "Audit records not sealed",
-      "description": "Audit rows no signed checkpoint covers yet; only sealed rows can be proven. Above 0 for long: the worker or beat is down, or no signing key is active.",
+      "title": "Oldest unsealed audit record",
+      "description": "How long the oldest audit row no signed checkpoint covers yet has waited; only sealed rows can be proven. A checkpoint is signed every 5 minutes, so a few minutes is normal; over 10 minutes the worker or beat is down, or no signing key is active.",
       "datasource": {
         "type": "prometheus",
         "uid": "Prometheus"
@@ -333,7 +333,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "sum(audit_unsealed_records) or vector(0)",
+          "expr": "max(audit_oldest_unsealed_age_seconds) or vector(0)",
           "refId": "A",
           "instant": false,
           "range": true
@@ -355,7 +355,7 @@
       },
       "fieldConfig": {
         "defaults": {
-          "unit": "short",
+          "unit": "s",
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -365,11 +365,11 @@
               },
               {
                 "color": "#d29922",
-                "value": 1
+                "value": 600
               },
               {
                 "color": "#f85149",
-                "value": 1000
+                "value": 3600
               }
             ]
           },

@@ -3964,6 +3964,8 @@
     "audit_records": "Yozuvlar",
     "audit_sealed": "hammasi muhrlangan",
     "audit_waiting": "Nazorat nuqtasini kutmoqda",
+    "audit_next": "keyingi nazorat nuqtasida",
+    "audit_oldest": "eng eskisi",
     "beat": "rejalashtiruvchi",
     "data": "Ma'lumotlar bazasi va navbat",
     "data_detail": "API'dan PostgreSQL va Redis'gacha borib-kelish vaqti, hozir o'lchangan.",
