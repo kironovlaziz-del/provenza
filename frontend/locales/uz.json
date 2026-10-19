@@ -60,6 +60,7 @@
     "sso_signing_in": "Kirilmoqda…"
   },
   "sidebar": {
+    "more": "Yana",
     "sections": {
       "overview": "Umumiy ko'rinish",
       "settings": "Sozlamalar",
@@ -139,10 +140,13 @@
     "expand": "Panelni kengaytirish",
     "collapse": "Panelni yig'ish",
     "sec": {
+      "shadow_ai": "Shadow AI",
+      "compliance": "Muvofiqlik",
+      "users": "Foydalanuvchilar",
       "incidents": "Hodisalar",
       "approvals": "Tasdiqlashlar",
       "discovery": "Aniqlash",
-      "monitoring": "Monitoring",
+      "monitoring": "Agentlar faoliyati",
       "inventory": "AI inventar",
       "agents": "Agentlar",
       "policies": "Siyosatlar",

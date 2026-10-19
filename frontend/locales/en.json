@@ -60,6 +60,7 @@
     "sso_signing_in": "Signing you in…"
   },
   "sidebar": {
+    "more": "More",
     "sections": {
       "overview": "Overview",
       "settings": "Settings",
@@ -139,10 +140,13 @@
     "expand": "Expand sidebar",
     "collapse": "Collapse sidebar",
     "sec": {
+      "shadow_ai": "Shadow AI",
+      "compliance": "Compliance",
+      "users": "Users",
       "incidents": "Incidents",
       "approvals": "Approvals",
       "discovery": "Discovery",
-      "monitoring": "Monitoring",
+      "monitoring": "Agent activity",
       "inventory": "AI inventory",
       "agents": "Agents",
       "policies": "Policies",

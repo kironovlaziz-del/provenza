@@ -1597,6 +1597,24 @@ button.sidebar-section:hover { background: var(--bg-sidebar-hover); color: var(-
   border-bottom-color: var(--accent);
   font-weight: 600;
 }
+button.section-tab {
+  background: none;
+  border-top: 0;
+  border-left: 0;
+  border-right: 0;
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+}
+.section-more {
+  margin-left: auto;
+}
+.section-tabs-more {
+  background: var(--bg-app);
+}
+.section-tabs-more .section-tab {
+  font-size: 12px;
+}
 
 /* Activity window on the expanded sensor row. Fixed height so a busy host
    does not push the rest of the page; monospace; own scroll. */
