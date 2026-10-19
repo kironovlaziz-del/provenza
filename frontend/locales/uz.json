@@ -179,10 +179,7 @@
     "col_name": "Nom",
     "col_risk": "Xavf",
     "col_status": "Holat",
-    "col_policy": "Siyosat",
     "empty": "Hozircha foydalanish holatlari yo'q",
-    "policy_not_linked": "bog'lanmagan",
-    "policy_version": "versiya",
     "detail": {
       "breadcrumb": "Foydalanish holatlari",
       "current_risk": "Joriy xavf",

@@ -114,18 +114,17 @@ export default function UseCasesPage() {
                 <th>{t("use_cases.col_name")}</th>
                 <th>{t("use_cases.col_risk")}</th>
                 <th>{t("use_cases.col_status")}</th>
-                <th>{t("use_cases.col_policy")}</th>
               </tr>
             </thead>
             <tbody>
               {loading && (
                 <tr className="empty-row">
-                  <td colSpan={5}>{t("common.loading")}</td>
+                  <td colSpan={4}>{t("common.loading")}</td>
                 </tr>
               )}
               {!loading && useCases.length === 0 && (
                 <tr className="empty-row">
-                  <td colSpan={5}>{t("use_cases.empty")}</td>
+                  <td colSpan={4}>{t("use_cases.empty")}</td>
                 </tr>
               )}
               {useCases.map((uc) => (
@@ -141,11 +140,6 @@ export default function UseCasesPage() {
                   </td>
                   <td>
                     <StatusPill status={uc.status} />
-                  </td>
-                  <td className="mono">
-                    {uc.approved_policy_version_id
-                      ? `${t("use_cases.policy_version")} #${uc.approved_policy_version_id}`
-                      : t("use_cases.policy_not_linked")}
                   </td>
                 </tr>
               ))}

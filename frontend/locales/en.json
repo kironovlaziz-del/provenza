@@ -179,10 +179,7 @@
     "col_name": "Name",
     "col_risk": "Risk",
     "col_status": "Status",
-    "col_policy": "Policy",
     "empty": "No use cases yet",
-    "policy_not_linked": "not linked",
-    "policy_version": "version",
     "detail": {
       "breadcrumb": "Use Cases",
       "current_risk": "Current risk",
