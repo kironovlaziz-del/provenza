@@ -30,7 +30,7 @@ key can only act as its own agent (services/agent_identity.py).
 
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
-from typing import List, Optional, Tuple
+from typing import List, Optional
 
 from fastapi import HTTPException, status
 from sqlalchemy import select
@@ -226,11 +226,6 @@ class PVPOrchestrator:
             signer_pq_public_key=agent.pq_public_key if verified else None,
             check_token=rec.check_id if check else None,
         )
-        # ASI01: an instruction hidden in the tool output (indirect injection);
-        # before the breaker, so it already counts the new incident
-        from app.services.injection_guard import InjectionGuard
-        await InjectionGuard(self.db).scan_output(org_id, rec.agent_id, rec.chain_id,
-                                                  getattr(action, "id", None), rec.tool_name, rec.output)
         if rec.chain_id is not None:
             from app.services.circuit_breaker import CircuitBreaker
             await CircuitBreaker(self.db).evaluate(org_id, rec.chain_id)
@@ -238,15 +233,13 @@ class PVPOrchestrator:
 
     async def record_executed(self, org_id: int, check: PVPCheck, *, input_data: dict,
                               output: Optional[dict], duration_ms: Optional[int], executed_by: str,
-                              refusal: Optional[str] = None) -> Tuple[AgentAction, Optional[dict]]:
+                              refusal: Optional[str] = None) -> AgentAction:
         """Record an action Provenza performed itself (the MCP gateway): the
         check is consumed exactly as for an agent's record - same action
         only, once - and the row says who executed it. There is no agent
         signature; the gateway is the witness. `refusal` records a call the
         executor refused after the check (e.g. the tool changed upstream) as
-        denied with that reason. Returns the action and the ASI01 output
-        report (None when clean), so the executor can withhold a poisoned
-        output."""
+        denied with that reason."""
         audit = AgentAudit(self.db)
         chk, decision = await audit.consume_check(
             org_id, check.check_id, agent_id=check.agent_id, chain_id=check.chain_id,
@@ -260,15 +253,10 @@ class PVPOrchestrator:
             duration_ms=duration_ms, decision=decision, check_id=chk.id, executed_by=executed_by,
             check_token=check.check_id,
         )
-        report = None
-        if output is not None:
-            from app.services.injection_guard import InjectionGuard
-            report = await InjectionGuard(self.db).scan_output(org_id, check.agent_id, check.chain_id,
-                                                               action.id, check.tool_name, output)
         if check.chain_id is not None:
             from app.services.circuit_breaker import CircuitBreaker
             await CircuitBreaker(self.db).evaluate(org_id, check.chain_id)
-        return action, report
+        return action
 
     # --------------------------------------------------------- delegation
 

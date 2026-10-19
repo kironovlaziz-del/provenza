@@ -41,7 +41,7 @@ Each container is a systemd service named after it: `provenza-postgres`,
   `aardvark-dns`: Ubuntu 24.04+, Debian 13+, RHEL/Rocky/Alma 9.3+, Fedora.
   The installer installs them from the distribution's packages.
   Ubuntu 22.04 and Debian 12 ship an older Podman without Quadlet.
-- 2 vCPU / 4 GB RAM minimum (4 GB+ recommended with NER-based PII detection)
+- 2 vCPU / 4 GB RAM minimum
 - A DNS record for your domain pointing at the host, ports 80 and 443 open
 
 ## Install
@@ -196,8 +196,6 @@ Every setting is described in [`.env.example`](.env.example). The most common:
 | `HTTP_PORT`, `HTTPS_PORT` | 80, 443 | Ports Caddy publishes |
 | `API_WORKERS` | 2 | Uvicorn worker processes |
 | `CELERY_CONCURRENCY` | 2 | Parallel background tasks |
-| `CONTENT_SAFETY_ENABLED` | false | Show the content-safety pages (Prompt Firewall, blocked terms, guards); they run either way |
-| `PROMPT_FIREWALL_NER_ENABLED` | true | NER-based PII detection; its model loads in each process at first use |
 | `ALLOW_PUBLIC_SIGNUP` | false | Let anyone create an organization from the sign-up page |
 | `OUTBOUND_PRIVATE_ALLOWLIST` | empty | Internal hosts outbound calls may reach, e.g. an in-house Vault or local model server |
 | `OUTBOUND_PROXY` | empty | Egress proxy for outbound calls, if required |

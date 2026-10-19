@@ -1,6 +1,6 @@
 """
 Trust metrics on inventory systems: computed on the fly from the events other
-modules record (agent actions, AI requests, shadow-AI sightings).
+modules record (agent actions, LLM gateway calls, shadow-AI sightings).
 """
 
 import secrets
@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 
 import pytest
 
-from app.models.ai_request import AIRequest
+from app.models.gateway import GatewayCall
 from app.models.shadow_ai_sighting import ShadowAISighting
 from tests.conftest import _create_org_with_admin_and_approver, _login, auth_headers
 from tests.delegation_helpers import action_record_body
@@ -83,7 +83,7 @@ class TestAgentMetrics:
 
 class TestProviderMetrics:
     @pytest.mark.asyncio
-    async def test_block_rate_and_pending_requests(self, client, admin_token, db_session):
+    async def test_denial_rate_of_gateway_calls(self, client, admin_token, db_session):
         prov = await client.post(
             "/api/v1/providers/",
             json={"name": "Metrics LLM", "type": "openai", "api_key": "sk-metrics"},
@@ -91,19 +91,17 @@ class TestProviderMetrics:
         )
         assert prov.status_code in (200, 201), prov.text
         system = await _system_for(client, admin_token, f"provider:{prov.json()['id']}")
-        for status, n in (("completed", 8), ("blocked", 3), ("pending_approval", 1)):
+        for status, n in (("completed", 8), ("denied", 2), ("rate_limited", 1), ("failed", 1)):
             for _ in range(n):
-                db_session.add(AIRequest(org_id=system["org_id"], provider_id=prov.json()["id"],
-                                         status=status, purpose="metrics_test"))
+                db_session.add(GatewayCall(org_id=system["org_id"], provider_id=prov.json()["id"],
+                                           model="gpt-4o-mini", status=status, flags=[]))
         await db_session.commit()
 
         m = await _metrics(client, admin_token, system["id"])
-        assert m["source"] == "ai_requests"
-        assert m["counts"]["requests"] == 12
-        assert m["counts"]["blocked"] == 3
-        assert m["rates"]["block_rate"] == pytest.approx(0.25)
-        assert "high_block_rate" in m["signals"]
-        assert "requests_awaiting_approval" in m["signals"]
+        assert m["source"] == "gateway_calls"
+        assert m["counts"] == {"calls": 12, "completed": 8, "denied": 3, "failed": 1}
+        assert m["rates"]["denial_rate"] == pytest.approx(0.25)
+        assert m["signals"] == ["high_call_denial_rate"]
 
 
 class TestShadowMetrics:

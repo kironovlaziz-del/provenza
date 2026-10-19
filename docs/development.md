@@ -142,7 +142,7 @@ proxy and sensor tests, a dependency audit and CodeQL.
 ```
 backend/     FastAPI + SQLAlchemy 2 (async) + Alembic + Celery
   app/api/        routers, one per feature area
-  app/services/   business logic (policy engine, Prompt Firewall, gateway, ...)
+  app/services/   business logic (agent policy engine, policy hierarchy, gateway, ...)
   app/models/     SQLAlchemy models
   app/schemas/    Pydantic v2 schemas
   app/workers/    Celery tasks
@@ -168,8 +168,7 @@ docs/        documentation
 | Tasks | Celery 5 + Redis 7 |
 | Database | PostgreSQL 16 |
 | Auth | JWT (PyJWT), bcrypt, OpenID Connect, SCIM 2.0 |
-| Encryption | Fernet (provider keys, raw prompts), Ed25519 + ML-DSA-65 (signatures) |
-| PII detection | regex detectors + spaCy NER |
+| Encryption | Fernet (provider keys, directory passwords), Ed25519 + ML-DSA-65 (signatures) |
 | Frontend | Next.js 16, React 19, TypeScript, i18next (en/uz) |
 | Endpoint agent | Go, `golang.org/x/net` |
 | Egress proxy | Go, standard library only |
@@ -197,7 +196,6 @@ docs/        documentation
 | `OUTBOUND_PROXY` | proxy for those calls, when the network requires one (`HTTP(S)_PROXY` is ignored for them) |
 | `SMTP_*` | e-mail notifications; without `SMTP_HOST`, e-mail is skipped and webhooks still work |
 | `EXTENSION_TEMPLATE_DIR` | the `extension/` template that the download endpoint packages |
-| `PROMPT_FIREWALL_NER_*` | NER-based PII detection |
 
 The production stack reads its own settings, written by the installer: see
 [deploy/README.md](../deploy/README.md).
@@ -234,7 +232,7 @@ and restart the backend and Celery.
 
 ## API
 
-Every endpoint is under `/api/v1`, grouped by feature (`/policies`,
-`/requests`, `/gateway`, `/agents`, `/shadow-ai`, `/audit-logs`, ...). The
+Every endpoint is under `/api/v1`, grouped by feature (`/policy-layers`,
+`/gateway`, `/agents`, `/shadow-ai`, `/audit-logs`, ...). The
 full, current list is the interactive documentation at `/docs` while the
 backend runs in development.

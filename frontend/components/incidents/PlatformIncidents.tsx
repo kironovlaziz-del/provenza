@@ -173,11 +173,6 @@ export function PlatformIncidents() {
                   <td>
                     <Link href={`/incidents/${i.id}`}><strong>{i.summary}</strong></Link>
                     {i.impact && <div className="hint-text">{i.impact}</div>}
-                    {i.request_id && (
-                      <div className="hint-text">
-                        <Link href={`/requests/${i.request_id}`}>{t("incidents.detail.linked_request")} #{i.request_id}</Link>
-                      </div>
-                    )}
                   </td>
                   <td className="u-mono">{i.category}</td>
                   <td><StatusPill status={i.status} /></td>

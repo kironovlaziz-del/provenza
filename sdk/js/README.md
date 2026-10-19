@@ -27,7 +27,7 @@ check this against the real server.
 In **connected** mode (when `PROVENZA_URL` is set):
 
 1. The server checks the call: the agent's rights, policies, the Tool
-   Registry, injection, behaviour, and the breaker.
+   Registry, behaviour, and the breaker.
 2. The tool runs only if the call is allowed. Otherwise:
    - a denied call rejects with `ProvenzaDenied`;
    - a call that needs a human decision rejects with `ProvenzaApprovalRequired`.

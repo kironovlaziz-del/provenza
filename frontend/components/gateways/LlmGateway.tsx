@@ -2,7 +2,6 @@
 
 // The LLM gateway: agents call AI providers through Provenza with their own key.
 
-import Link from "next/link";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "@/lib/auth";
@@ -90,7 +89,7 @@ export function LlmGateway() {
         <p className="hint-text" style={{ marginTop: 0 }}>
           {t(
             "gateway.hint",
-            "An OpenAI-compatible endpoint for agents. Point an agent's base URL here and use its own key: every call is checked against its allowed models, the Prompt Firewall (PII masked before it leaves), prompt-injection in tool messages, rate limits, and the answer is checked for injected instructions and dangerous code.",
+            "An OpenAI-compatible endpoint for agents. Point an agent's base URL here and use its own key: every call is checked against the agent's allowed models, the policy hierarchy and the rate limits, and recorded - who, which model, the verdict, tokens - without what was sent or answered.",
           )}
         </p>
         {error && <div className="panel" style={{ marginBottom: 16, borderColor: "#ef4444" }}><div className="panel-body" style={{ color: "#ef4444" }}>{error}</div></div>}
@@ -160,7 +159,6 @@ export function LlmGateway() {
                           {x.prompt_tokens != null ? ` · ${x.prompt_tokens}/${x.completion_tokens ?? 0} tok` : ""}
                           {x.flags.length ? ` · ${x.flags.join(", ")}` : ""}
                         </div>
-                        {x.ai_request_id && <a href={`/requests/${x.ai_request_id}`} style={{ fontSize: 11 }}>{t("gateway.open_request", "request")} #{x.ai_request_id}</a>}
                       </td>
                     </tr>
                   ))}
@@ -236,7 +234,7 @@ export function LlmGateway() {
         <div className="panel">
           <div className="panel-header"><h2>{t("gateway.settings_title", "Settings")}</h2></div>
           <div className="panel-body">
-            {(["enabled", "scan_output"] as const).map((k) => (
+            {(["enabled"] as const).map((k) => (
               <label key={k} style={{ display: "flex", gap: 10, alignItems: "flex-start", marginBottom: 10 }}>
                 <input type="checkbox" checked={form[k]} disabled={!isAdmin}
                   onChange={(e) => setForm({ ...form, [k]: e.target.checked })} style={{ width: "auto", marginTop: 3 }} />
@@ -256,12 +254,6 @@ export function LlmGateway() {
                 <label htmlFor="gw-max">{t("gateway.max_tokens", "Max tokens per answer")}</label>
                 <input id="gw-max" type="number" min={16} max={200000} disabled={!isAdmin} value={form.max_tokens_cap}
                   onChange={(e) => setForm({ ...form, max_tokens_cap: Number(e.target.value) })} />
-              </div>
-              <div className="field" style={{ margin: 0 }}>
-                <label>{t("gateway.blocked_terms", "Blocked terms")}</label>
-                <p className="hint-text" style={{ margin: 0 }}>
-                  {t("gateway.blocked_terms_moved")} <Link href="/blocked-terms">{t("sidebar.nav.blocked_terms")}</Link>
-                </p>
               </div>
             </div>
             {isAdmin && (

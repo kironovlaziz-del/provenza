@@ -4,9 +4,9 @@
 
 """
 "Self-hosted AI providers only" (app/services/provider_policy.py): the
-setting, the early refusal of obvious cloud connections in the playground,
-the gateway and the Usage Registry, the connect-time check that a host name
-cannot talk around, and agents' direct calls to cloud AI services.
+setting, the early refusal of obvious cloud connections by the gateway and
+the connection pages, the connect-time check that a host name cannot talk
+around, and agents' direct calls to cloud AI services.
 """
 
 import ipaddress
@@ -22,7 +22,6 @@ from sqlalchemy import select
 
 from app.core import outbound
 from app.core.config import settings
-from app.core.crypto import encrypt_secret
 from app.models.agent import Agent
 from app.models.agent_action import AgentIncident
 from app.models.ai_provider import AIProvider
@@ -162,61 +161,17 @@ async def test_policy_setting_is_admin_only_and_audited(client, admin_token, app
     assert (await _policy(client, admin_token, "any"))["policy"] == "any"
 
 
-# --------------------------------------------------------------- playground
+# ------------------------------------------------------------- connections
 
 @pytest.mark.asyncio
-async def test_playground_refuses_a_cloud_connection_before_anything_is_sent(client, admin_token):
+async def test_listing_a_cloud_connections_models_is_refused(client, admin_token):
     cloud = await _provider(client, admin_token)
     await _policy(client, admin_token, "self_hosted")
     try:
-        r = await client.post(f"{P}/{cloud['id']}/chat", json={"message": "hello"}, headers=auth_headers(admin_token))
-        assert r.status_code == 403, r.text
-        assert r.json()["detail"]["code"] == "provider.self_hosted_only"
         r = await client.get(f"{P}/{cloud['id']}/models", headers=auth_headers(admin_token))
         assert r.status_code == 403
     finally:
         await _policy(client, admin_token, "any")
-
-
-@pytest.mark.asyncio
-async def test_playground_reaches_a_self_hosted_model_server(client, admin_token, allow):
-    allow("127.0.0.1")
-    server = _ModelServer()
-    try:
-        local = await _provider(client, admin_token, base_url=server.url)
-        await _policy(client, admin_token, "self_hosted")
-        r = await client.post(f"{P}/{local['id']}/chat", json={"message": "summarize the plan"},
-                              headers=auth_headers(admin_token))
-        assert r.status_code == 200, r.text
-        assert r.json()["answer"] == "local answer" and server.prompts == ["summarize the plan"]
-    finally:
-        await _policy(client, admin_token, "any")
-        server.close()
-
-
-@pytest.mark.asyncio
-async def test_a_host_name_cannot_talk_around_the_policy(client, admin_token, allow, monkeypatch):
-    # looks internal, resolves to the internet: refused at connect time, nothing sent
-    fake_dns(monkeypatch, {"llm.corp.example": ["93.184.216.34"]})
-    sneaky = await _provider(client, admin_token, base_url="https://llm.corp.example/v1")
-    await _policy(client, admin_token, "self_hosted")
-    try:
-        r = await client.post(f"{P}/{sneaky['id']}/chat", json={"message": "hello"},
-                              headers=auth_headers(admin_token))
-        assert r.status_code == 403 and r.json()["detail"]["code"] == "provider.self_hosted_only", r.text
-    finally:
-        await _policy(client, admin_token, "any")
-
-
-@pytest.mark.asyncio
-async def test_a_failing_provider_is_a_502_not_a_server_error(client, admin_token, monkeypatch):
-    async def down(*args):
-        raise provider_adapters.ProviderCallError("Provider returned 503: overloaded")
-
-    monkeypatch.setattr(provider_adapters, "call_provider", down)
-    conn = await _provider(client, admin_token)
-    r = await client.post(f"{P}/{conn['id']}/chat", json={"message": "hello"}, headers=auth_headers(admin_token))
-    assert r.status_code == 502 and r.json()["detail"]["code"] == "provider.call_failed", r.text
 
 
 # ------------------------------------------------------------------ gateway
@@ -257,34 +212,37 @@ async def test_gateway_calls_a_self_hosted_route_through_the_internal_client(cli
         await _policy(client, admin_token, "any")
 
 
-# ------------------------------------------------------------ Usage Registry
-
 @pytest.mark.asyncio
-async def test_usage_registry_request_to_a_cloud_connection_fails_unsent(client, admin_token, db_session,
-                                                                        monkeypatch):
-    from app.models.ai_request import AIRequest
-    from app.services.request_service import RequestService
-
-    sent = []
-
-    async def call(*args):
-        sent.append(args)
-        return "x", {}
-
-    monkeypatch.setattr(provider_adapters, "call_provider", call)
-    cloud = await _provider(client, admin_token)
+async def test_gateway_reaches_a_self_hosted_model_server(client, admin_token, db_session, allow):
+    allow("127.0.0.1")
+    server = _ModelServer()
+    agent, provider_id, _route = await _setup(client, admin_token, db_session)
+    p = await db_session.get(AIProvider, provider_id)
+    p.base_url = server.url
+    await db_session.commit()
     await _policy(client, admin_token, "self_hosted")
     try:
-        org_id = (await db_session.get(AIProvider, cloud["id"])).org_id
-        req = AIRequest(org_id=org_id, provider_id=cloud["id"], masked_input_text="hello", status="approved",
-                        input_text_encrypted=encrypt_secret("hello", org_id=org_id))
-        db_session.add(req)
-        await db_session.commit()
-        response = await RequestService(db_session).process_request(req.id, org_id)
-        assert sent == []
-        assert response.provider_response_json == {"error": "provider.self_hosted_only"}
-        await db_session.refresh(req)
-        assert req.status == "failed"
+        r = await _chat(client, agent, msgs(("user", "summarize the plan")))
+        assert r.status_code == 200, r.text
+        assert r.json()["choices"][0]["message"]["content"] == "local answer"
+        assert server.prompts == ["summarize the plan"]
+    finally:
+        await _policy(client, admin_token, "any")
+        server.close()
+
+
+@pytest.mark.asyncio
+async def test_a_host_name_cannot_talk_around_the_policy(client, admin_token, db_session, allow, monkeypatch):
+    # looks internal, resolves to the internet: refused at connect time, nothing sent
+    fake_dns(monkeypatch, {"llm.corp.example": ["93.184.216.34"]})
+    agent, provider_id, _route = await _setup(client, admin_token, db_session)
+    p = await db_session.get(AIProvider, provider_id)
+    p.base_url = "https://llm.corp.example/v1"
+    await db_session.commit()
+    await _policy(client, admin_token, "self_hosted")
+    try:
+        r = await _chat(client, agent, msgs(("user", "hello")))
+        assert r.status_code == 502 and "self-hosted" in r.json()["error"]["message"], r.text
     finally:
         await _policy(client, admin_token, "any")
 

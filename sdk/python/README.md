@@ -24,7 +24,7 @@ In **connected** mode (when `PROVENZA_URL` is set):
 
 1. The SDK asks the server whether this call may run. The server checks
    the agent's rights, your organization's policies, the Tool Registry,
-   prompt injection in the arguments, behaviour, and the circuit breaker.
+   behaviour, and the circuit breaker.
 2. The tool runs only if the call is allowed. Otherwise:
    - a denied call raises `ProvenzaDenied` (a `PermissionError`);
    - a call that needs a human decision raises `ProvenzaApprovalRequired`.
@@ -244,8 +244,8 @@ from provenza.integrations.mcp import connection, client_config
 conn = connection(agent)                    # {"url": ".../api/v1/mcp", "headers": {...}}
 ```
 
-Through the LLM gateway, the server checks allowed models and limits. PII
-is masked and blocked terms are refused. Every model the organization has
+Through the LLM gateway, the server checks allowed models and providers,
+policies and limits; it stores no prompt or answer. Every model the organization has
 routed (OpenAI, Anthropic, Azure, …) is reached through this one
 OpenAI-compatible endpoint. Streaming is not supported yet.
 

@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import Link from "next/link";
 import { useTranslation } from "react-i18next";
 import {
   LineChart,
@@ -20,9 +19,7 @@ import {
 } from "recharts";
 import { PageHeader } from "@/components/PageHeader";
 import { SetupChecklist } from "@/components/SetupChecklist";
-import { RiskPill, StatusPill } from "@/components/Pill";
-import { listRequests, fetchDashboardStats, type DashboardStats } from "@/lib/api";
-import type { AIRequest } from "@/lib/types";
+import { fetchDashboardStats, type DashboardStats } from "@/lib/api";
 
 // Palette shared across charts - enough distinct colours for typical
 // status/severity distributions without dragging in a full theme.
@@ -38,19 +35,15 @@ const PALETTE = [
 ];
 
 export default function DashboardPage() {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const [stats, setStats] = useState<DashboardStats | null>(null);
-  const [requests, setRequests] = useState<AIRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [windowDays, setWindowDays] = useState(7);
 
   useEffect(() => {
     setLoading(true);
-    Promise.all([fetchDashboardStats(windowDays), listRequests()])
-      .then(([s, r]) => {
-        setStats(s);
-        setRequests(r);
-      })
+    fetchDashboardStats(windowDays)
+      .then(setStats)
       .finally(() => setLoading(false));
   }, [windowDays]);
 
@@ -65,14 +58,8 @@ export default function DashboardPage() {
     );
   }
 
-  const recentRequests = requests.slice(0, 6);
-  const openIncidents =
-    Object.entries(stats.incidents_by_severity)
-      .filter(([sev]) => sev !== "resolved")
-      .reduce((acc, [, n]) => acc + n, 0);
-
   // Pie/bar data shape: {name, value}
-  const requestsByStatusData = Object.entries(stats.requests_by_status).map(
+  const callsByStatusData = Object.entries(stats.calls_by_status).map(
     ([name, value]) => ({ name, value }),
   );
   const incidentsBySeverityData = Object.entries(
@@ -106,8 +93,8 @@ export default function DashboardPage() {
         <SetupChecklist />
         <div className="stat-grid">
           <div className="stat">
-            <div className="stat-label">{t("dashboard.stat_requests")}</div>
-            <div className="stat-value">{stats.total_requests}</div>
+            <div className="stat-label">{t("dashboard.stat_calls", "LLM calls (gateway)")}</div>
+            <div className="stat-value">{stats.total_calls}</div>
           </div>
           <div className="stat">
             <div className="stat-label">{t("dashboard.stat_pending")}</div>
@@ -123,17 +110,17 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Line chart: requests per day */}
+        {/* Line chart: LLM calls through the gateway per day */}
         <div className="panel u-mb-20">
           <div className="panel-header">
-            <h2>{t("dashboard.requests_trend")}</h2>
+            <h2>{t("dashboard.calls_trend", "LLM calls per day")}</h2>
             <span className="hint-text">
               {t("dashboard.window", { days: windowDays })}
             </span>
           </div>
           <div className="panel-body">
             <ResponsiveContainer width="100%" height={260}>
-              <LineChart data={stats.requests_by_day}>
+              <LineChart data={stats.calls_by_day}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e2e4e9" />
                 <XAxis dataKey="date" fontSize={11} />
                 <YAxis fontSize={11} allowDecimals={false} />
@@ -144,28 +131,28 @@ export default function DashboardPage() {
                   dataKey="total"
                   stroke="#2451d9"
                   strokeWidth={2}
-                  name="Total"
+                  name={t("dashboard.line_total", "Total")}
                 />
                 <Line
                   type="monotone"
                   dataKey="completed"
                   stroke="#2f9e63"
                   strokeWidth={2}
-                  name="Completed"
+                  name={t("dashboard.line_completed", "Completed")}
                 />
                 <Line
                   type="monotone"
-                  dataKey="blocked"
+                  dataKey="denied"
                   stroke="#c1352f"
                   strokeWidth={2}
-                  name="Blocked"
+                  name={t("dashboard.line_denied", "Denied")}
                 />
                 <Line
                   type="monotone"
                   dataKey="failed"
                   stroke="#a9760a"
                   strokeWidth={2}
-                  name="Failed"
+                  name={t("dashboard.line_failed", "Failed")}
                 />
               </LineChart>
             </ResponsiveContainer>
@@ -176,20 +163,20 @@ export default function DashboardPage() {
         <div className="dashboard-grid-3">
           <div className="panel">
             <div className="panel-header">
-              <h2>{t("dashboard.requests_by_status")}</h2>
+              <h2>{t("dashboard.calls_by_status", "LLM calls by outcome")}</h2>
             </div>
             <div className="panel-body">
               <ResponsiveContainer width="100%" height={220}>
                 <PieChart>
                   <Pie
-                    data={requestsByStatusData}
+                    data={callsByStatusData}
                     dataKey="value"
                     nameKey="name"
                     innerRadius={40}
                     outerRadius={80}
                     paddingAngle={2}
                   >
-                    {requestsByStatusData.map((_, i) => (
+                    {callsByStatusData.map((_, i) => (
                       <Cell key={i} fill={PALETTE[i % PALETTE.length]} />
                     ))}
                   </Pie>
@@ -226,51 +213,6 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        <div className="panel">
-          <div className="panel-header">
-            <h2>{t("dashboard.recent_requests")}</h2>
-            <Link href="/requests" className="btn btn-sm">
-              {t("dashboard.view_all")}
-            </Link>
-          </div>
-          <table>
-            <thead>
-              <tr>
-                <th>{t("dashboard.col_id")}</th>
-                <th>{t("dashboard.col_purpose")}</th>
-                <th>{t("dashboard.col_risk")}</th>
-                <th>{t("dashboard.col_status")}</th>
-                <th>{t("dashboard.col_created")}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {recentRequests.length === 0 && (
-                <tr className="empty-row">
-                  <td colSpan={5}>{t("dashboard.empty_requests")}</td>
-                </tr>
-              )}
-              {recentRequests.map((r) => (
-                <tr
-                  key={r.id}
-                  className="clickable"
-                  onClick={() => (window.location.href = `/requests/${r.id}`)}
-                >
-                  <td className="mono">#{r.id}</td>
-                  <td>{r.purpose}</td>
-                  <td>
-                    <RiskPill level={r.risk_level} />
-                  </td>
-                  <td>
-                    <StatusPill status={r.status} />
-                  </td>
-                  <td className="mono">
-                    {new Date(r.created_at).toLocaleString(i18n.language)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
       </div>
     </>
   );

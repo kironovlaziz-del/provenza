@@ -35,10 +35,6 @@ RUN python -m venv /opt/venv
 ENV PATH=/opt/venv/bin:$PATH
 COPY backend/requirements.txt /tmp/requirements.txt
 RUN pip install -r /tmp/requirements.txt
-# English NER model for the Prompt Firewall (PII masking of names,
-# organizations, places). Pinned to the spaCy 3.8 series.
-ARG SPACY_EN_MODEL_URL=https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl
-RUN pip install "${SPACY_EN_MODEL_URL}"
 
 # -------------------------------------------------------------- runtime stage
 FROM python:${PYTHON_VERSION}-slim AS runtime

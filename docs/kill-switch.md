@@ -8,11 +8,10 @@ stop exactly.
 | `agent` | one agent | the agent cannot be switched back on by hand |
 | `team` | every agent of the team and of its sub-teams | an agent created in or moved into the team or a team below it - including sub-teams created or moved there later - starts suspended; an agent it stopped stays held even if moved out |
 | `all_agents` | every agent of the organization | every new agent starts suspended |
-| `org_traffic` | every agent, **and** the gateway, AI requests (new and queued) and the provider playground | as `all_agents`; gateway calls answer `503 kill_switch`, requests `503 kill_switch.traffic_stopped` |
+| `org_traffic` | every agent, **and** every call through the LLM gateway | as `all_agents`; gateway calls answer `503 kill_switch` |
 
 Agents are stopped by suspending them, so every place an agent acts refuses
-it already: agent keys, the policy engine, the gateway, delegation, and A2A
-messages (refused in enforce mode, flagged in monitor mode).
+it already: agent keys, the policy engine, the gateways and delegation.
 Agents already suspended or quarantined are left out - they were not stopped
 by this decision. With *End their delegation chains* (default) the active
 and tripped chains the stopped agents root are terminated.

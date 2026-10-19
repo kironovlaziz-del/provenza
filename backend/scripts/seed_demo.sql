@@ -9,16 +9,12 @@ DECLARE
     v_p_azure INTEGER;
     v_p_groq INTEGER;
     v_p_ollama INTEGER;
-    v_pol1 INTEGER;
-    v_pol2 INTEGER;
-    v_pol3 INTEGER;
     v_ing INTEGER;
     v_ag1 INTEGER;
     v_ag2 INTEGER;
     v_ag3 INTEGER;
     v_chain1 INTEGER;
     v_chain2 INTEGER;
-    v_req_id INTEGER;
     i INTEGER;
 BEGIN
     SELECT id INTO v_org_id FROM organizations WHERE slug='demo';
@@ -86,52 +82,17 @@ BEGIN
       (v_org_id,'mistral.ai','Mistral','llm','unknown','builtin'),
       (v_org_id,'cohere.com','Cohere','llm','unknown','builtin');
 
-    -- === POLICIES ===
-    INSERT INTO ai_policies (org_id,name,description,status)
-      VALUES (v_org_id,'PII Protection','Blocks prompts with unmasked PII from reaching external providers','active')
-      RETURNING id INTO v_pol1;
-    INSERT INTO ai_policy_versions (policy_id,version,rules_json,created_by,approved_by,approved_at)
-      VALUES (v_pol1,1,'{"rules":[{"type":"mask","targets":["EMAIL","PHONE","CARD","SSN","APIKEY"]},{"type":"block","terms":["password","secret"]}]}'::jsonb,
-              v_admin_id,v_admin_id,now()-interval '30 days');
-
-    INSERT INTO ai_policies (org_id,name,description,status)
-      VALUES (v_org_id,'Shadow AI Detection','Detects unsanctioned AI tools on endpoints and network','active')
-      RETURNING id INTO v_pol2;
-    INSERT INTO ai_policy_versions (policy_id,version,rules_json,created_by,approved_by,approved_at)
-      VALUES (v_pol2,1,'{"rules":[{"type":"alert","tools":["chatgpt","claude","midjourney","elevenlabs"]},{"type":"block","domains":["midjourney.com","runwayml.com"]}]}'::jsonb,
-              v_admin_id,v_admin_id,now()-interval '20 days');
-
-    INSERT INTO ai_policies (org_id,name,description,status)
-      VALUES (v_org_id,'Agent Delegation Controls','Enforces monotonic TTL and capability subsetting for AI agents','active')
-      RETURNING id INTO v_pol3;
-    INSERT INTO ai_policy_versions (policy_id,version,rules_json,created_by,approved_by,approved_at)
-      VALUES (v_pol3,1,'{"rules":[{"type":"ttl_monotonic","max_depth":3},{"type":"capability_subset","enforce":true}]}'::jsonb,
-              v_admin_id,v_admin_id,now()-interval '10 days');
+    -- === POLICY (organization level of the policy hierarchy) ===
+    INSERT INTO policy_layers (org_id,scope,document,updated_by)
+      VALUES (v_org_id,'org',
+              '{"description":"Demo organization policy","limits":{"requests_per_minute":30,"max_delegation_depth":3},"tools":{"deny":["shell.*"],"require_approval":["stripe.*","email.send"]}}'::jsonb,
+              v_admin_id)
+      ON CONFLICT DO NOTHING;
 
     -- === INGESTION SOURCE ===
     INSERT INTO ingestion_sources (org_id,name,source_type,api_key_hash,enabled,created_by)
       VALUES (v_org_id,'Endpoint Agent — Demo','agent','demo-hash',true,v_admin_id)
       RETURNING id INTO v_ing;
-
-    -- === AI REQUESTS (30) ===
-    FOR i IN 1..30 LOOP
-      INSERT INTO ai_requests (org_id,user_id,provider_id,input_text_encrypted,masked_input_text,purpose,risk_level,status,created_at,firewall_flags)
-      VALUES (
-        v_org_id,
-        (SELECT id FROM users WHERE org_id=v_org_id AND email LIKE '%@demo.com' ORDER BY random() LIMIT 1),
-        (ARRAY[v_p_openai,v_p_anthropic,v_p_azure,v_p_groq,v_p_ollama])[1+floor(random()*5)],
-        'encrypted-input-'||i,
-        'Please summarize the quarterly report for ' || (ARRAY['marketing','sales','engineering','hr','finance'])[1+floor(random()*5)],
-        (ARRAY['summarization','code-review','translation','drafting','analysis'])[1+floor(random()*5)],
-        (ARRAY['low','low','medium','medium','high','critical'])[1+floor(random()*6)],
-        (ARRAY['completed','completed','completed','completed','blocked','pending_approval'])[1+floor(random()*6)],
-        now() - (random()*interval '30 days'),
-        (CASE WHEN random()<0.4 THEN '{"pii":["EMAIL","PHONE"]}'::jsonb WHEN random()<0.7 THEN '{"pii":["CARD"]}'::jsonb ELSE '{}'::jsonb END)
-      ) RETURNING id INTO v_req_id;
-
-      INSERT INTO ai_responses (request_id,response_text,confidence_score,created_at)
-      VALUES (v_req_id,'Generated response #'||i, 0.7+random()*0.29, now()-(random()*interval '29 days'));
-    END LOOP;
 
     -- === SHADOW AI SIGHTINGS (15) ===
     INSERT INTO shadow_ai_sightings (org_id,tool_name,domain,detected_via,user_hint,notes,status,seen_count,last_seen_at,created_at) VALUES
@@ -199,6 +160,21 @@ BEGIN
     INSERT INTO agent_incidents (org_id,chain_id,agent_id,incident_type,severity,details,resolved,created_at) VALUES
       (v_org_id,v_chain1,v_ag3,'capability_escalation','high','{"attempted":"stripe.charge","reason":"not in allowed_tools"}'::jsonb,true,now()-interval '85 minutes'),
       (v_org_id,v_chain2,v_ag3,'ttl_escalation','high','{"requested_ttl":400,"parent_ttl":600,"decision":"rejected"}'::jsonb,false,now()-interval '10 minutes');
+
+    -- === LLM CALLS THROUGH THE GATEWAY (30) ===
+    FOR i IN 1..30 LOOP
+      INSERT INTO gateway_calls (org_id,agent_id,provider_id,model,status,reason,flags,latency_ms,prompt_tokens,completion_tokens,created_at)
+      VALUES (
+        v_org_id,
+        (ARRAY[v_ag1,v_ag2,v_ag3])[1+floor(random()*3)],
+        (ARRAY[v_p_openai,v_p_anthropic,v_p_groq])[1+floor(random()*3)],
+        (ARRAY['gpt-4o-mini','gpt-4o','gpt-4o-mini'])[1+floor(random()*3)],
+        (ARRAY['completed','completed','completed','completed','denied','failed'])[1+floor(random()*6)],
+        NULL, '[]'::jsonb,
+        200 + floor(random()*1800)::int, 100 + floor(random()*900)::int, 50 + floor(random()*400)::int,
+        now() - (random()*interval '7 days')
+      );
+    END LOOP;
 
     -- === TELEMETRY (network sightings) ===
     FOR i IN 1..20 LOOP

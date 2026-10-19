@@ -5,7 +5,6 @@ import { usePathname } from "next/navigation";
 import React, { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "@/lib/auth";
-import { useFeatures } from "@/lib/features";
 import { LanguageSwitcher } from "./LanguageSwitcher";
 import { Logo } from "@/components/Logo";
 import { pageMatches, sectionOf } from "@/lib/navigation";
@@ -77,9 +76,8 @@ export function Sidebar() {
   const [theme, setTheme] = useState<"dark" | "light">("dark");
   const [query, setQuery] = useState("");
 
-  const { features } = useFeatures();
   const groups = useVisibleNav(user?.role, !!user?.is_operator);
-  const active = sectionOf(pathname, user?.role, features, !!user?.is_operator)?.key;
+  const active = sectionOf(pathname, user?.role, !!user?.is_operator)?.key;
 
   useEffect(() => {
     setNarrow(load<boolean>(NARROW_KEY, false));

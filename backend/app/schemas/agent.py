@@ -198,8 +198,6 @@ class ChainOut(BaseModel):
     breaker_tripped_at: Optional[datetime] = None
     breaker_reset_at: Optional[datetime] = None
     breaker_details: Optional[Dict[str, Any]] = None
-    tainted_at: Optional[datetime] = None  # ASI01: injected tool output in this chain
-    taint_details: Optional[Dict[str, Any]] = None
 
     class Config:
         from_attributes = True

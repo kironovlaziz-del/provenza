@@ -12,8 +12,8 @@ OpenAI-compatible clients through Provenza's LLM gateway (pip install 'provenza[
     client = wrap(existing_client, agent)                # the same, from a client you already configured
 
 Not a monkeypatch: the client's base URL becomes the gateway's and its key the
-agent's own, so every call is checked by the server - allowed models, limits,
-the Prompt Firewall (PII masked, blocked terms), injection in and out - and
+agent's own, so every call is checked by the server - allowed models and
+providers, policies, limits - and
 the provider key never reaches the agent. Models of any provider the
 organization routed (OpenAI, Anthropic, Azure, ...) are reached through this
 one OpenAI-compatible endpoint. The gateway does not stream yet (stream=False).

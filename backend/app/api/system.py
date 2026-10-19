@@ -30,15 +30,15 @@ async def setup_checklist(db: AsyncSession = Depends(get_db),
                           current_user: User = Depends(require_role(*_roles("admin")))):
     """What a new installation still needs, for the dashboard's setup checklist.
     `optional` items do not count against `complete`."""
-    from sqlalchemy import func, select
+    from sqlalchemy import func, select, text
 
     from app.models.agent import Agent
-    from app.models.ai_policy import AIPolicy
     from app.models.ai_provider import AIProvider
     from app.models.enrollment import AgentEnrollment
     from app.models.ingestion_source import IngestionSource
     from app.models.notification_channel import NotificationChannel
     from app.models.organization import Organization
+    from app.models.policy_layer import PolicyLayer
 
     org_id = current_user.org_id
 
@@ -49,7 +49,8 @@ async def setup_checklist(db: AsyncSession = Depends(get_db),
     items = [
         {"key": "provider", "done": await count(AIProvider, AIProvider.api_key_encrypted.isnot(None)) > 0,
          "href": "/providers"},
-        {"key": "policy", "done": await count(AIPolicy, AIPolicy.status == "active") > 0, "href": "/policies"},
+        {"key": "policy", "done": await count(PolicyLayer, PolicyLayer.document != text("'{}'::jsonb")) > 0,
+         "href": "/policy-hierarchy"},
         {"key": "agent", "done": await count(Agent) + await count(AgentEnrollment) > 0, "href": "/agents"},
         {"key": "notifications", "done": await count(NotificationChannel, NotificationChannel.enabled.is_(True)) > 0,
          "href": "/notifications"},

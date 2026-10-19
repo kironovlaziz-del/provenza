@@ -72,8 +72,6 @@ export interface DelegationChainT {
   breaker_tripped_at?: string | null;
   breaker_reset_at?: string | null;
   breaker_details?: Record<string, unknown> | null;
-  tainted_at?: string | null;
-  taint_details?: Record<string, unknown> | null;
   id: number;
   org_id: number;
   root_agent_id: number;

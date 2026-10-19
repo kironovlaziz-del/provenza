@@ -55,11 +55,6 @@ def _body(key: str) -> Callable[[Request, Any], Any]:
     return lambda req, body: body.get(key) if isinstance(body, dict) else None
 
 
-def _envelope_from(req: Request, body: Any) -> Any:
-    env = body.get("envelope") if isinstance(body, dict) else None
-    return env.get("from_agent_id") if isinstance(env, dict) else None
-
-
 def _path_id(req: Request, body: Any) -> Any:
     m = re.match(_P + r"/agents/(\d+)/(?:delegate|signing-key/challenge|signing-key/rotate"
                       r"|attestation/challenge|attestation)/?$", req.url.path)
@@ -77,12 +72,6 @@ AGENT_ROUTES = [
     ("POST", _P + r"/agents/\d+/signing-key/(?:challenge|rotate)/?$", _path_id, True),
     # an agent proving where it runs (services/attestation.py)
     ("POST", _P + r"/agents/\d+/attestation(?:/challenge)?/?$", _path_id, True),
-    ("POST", _P + r"/a2a/send/?$", _envelope_from, True),
-    ("POST", _P + r"/a2a/receive/?$", _body("agent_id"), True),
-    ("POST", _P + r"/memory/write/?$", _body("agent_id"), True),
-    ("POST", _P + r"/memory/verify/?$", _body("agent_id"), True),
-    ("POST", _P + r"/injection/scan/?$", None, False),
-    ("POST", _P + r"/code-exec/scan/?$", None, False),
     ("GET", _P + r"/agent-identity/me/?$", None, False),
     ("POST", _P + r"/gateway/v1/.*$", None, True),
     ("GET", _P + r"/gateway/v1/.*$", None, True),

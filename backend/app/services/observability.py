@@ -7,9 +7,9 @@ Agent observability: history, aggregates and time series read from the
 agent_events_v view, in the same event shape the live stream uses.
 
 The view unions everything an agent does - policy checks, recorded actions,
-LLM calls through the gateway, A2A messages, delegation hops, incidents -
-with metadata columns only (no arguments, prompts, outputs, reasons or
-details). Content is attached separately, masked (obs_content).
+LLM calls through the gateway, delegation hops, incidents - with metadata
+columns only (no arguments, outputs, reasons or details). One event's
+content is read separately, on an admin's audited request (obs_content).
 
 A "decision" is one verdict on one action: every check, plus recorded
 actions that were not checked first (legacy /actions/record without a
@@ -24,7 +24,6 @@ from sqlalchemy import DDL, event, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import Base
-from app.models.a2a import A2AMessage
 from app.models.agent import Agent
 from app.models.agent_action import ActionCheck, AgentAction, AgentIncident
 from app.models.delegation import DelegationHop
@@ -79,13 +78,6 @@ SELECT 'llm.call', l.id, l.org_id, l.agent_id, NULL,
        NULL, NULL, l.model, l.status, l.prompt_tokens, l.completion_tokens, NULL
   FROM {GatewayCall.__tablename__} l
 UNION ALL
-SELECT 'a2a.message', m.id, m.org_id, m.from_agent_id, m.chain_id,
-       m.created_at, m.message_type, NULL,
-       NULL, CASE WHEN m.status <> 'accepted' THEN ARRAY['ASI07']::text[] ELSE ARRAY[]::text[] END,
-       NULL, NULL, NULL, NULL,
-       NULL, NULL, NULL, m.status, NULL, NULL, m.to_agent_id
-  FROM {A2AMessage.__tablename__} m
-UNION ALL
 SELECT 'delegation.hop', h.id, h.org_id, h.from_agent_id, h.chain_id,
        h.created_at, 'delegate', NULL,
        NULL, ARRAY[]::text[],
@@ -118,8 +110,6 @@ def _row_event(r) -> dict:
     elif t == "llm.call":
         ev.update(model=r["model"], status=r["status"], duration_ms=r["duration_ms"],
                   prompt_tokens=r["prompt_tokens"], completion_tokens=r["completion_tokens"])
-    elif t == "a2a.message":
-        ev.update(to_agent_id=r["to_agent_id"], message_type=r["action_type"], status=r["status"])
     elif t == "delegation.hop":
         ev.update(to_agent_id=r["to_agent_id"], verified=r["status"] == "verified")
     else:
@@ -186,7 +176,6 @@ async def summary(db: AsyncSession, org_id: int, *, minutes: int, agent_ids=None
             FILTER (WHERE event_type = 'llm.call'), 0) AS llm_tokens,
           percentile_cont(0.95) WITHIN GROUP (ORDER BY duration_ms)
             FILTER (WHERE event_type = 'llm.call' AND duration_ms IS NOT NULL) AS llm_p95_ms,
-          count(*) FILTER (WHERE event_type = 'a2a.message') AS a2a_messages,
           count(*) FILTER (WHERE event_type = 'delegation.hop') AS delegations,
           count(DISTINCT agent_id) AS active_agents
         FROM ev"""), params)).mappings().one()  # nosec B608
@@ -230,7 +219,7 @@ async def summary(db: AsyncSession, org_id: int, *, minutes: int, agent_ids=None
     decisions = tot["decisions"] or 0
     totals = {k: (int(tot[k]) if tot[k] is not None else 0) for k in (
         "events", "decisions", "allowed", "denied", "pending", "incidents", "recorded", "llm_calls", "llm_errors",
-        "llm_tokens", "a2a_messages", "delegations", "active_agents")}
+        "llm_tokens", "delegations", "active_agents")}
     totals.update(deny_rate=round(100.0 * tot["denied"] / decisions, 1) if decisions else None,
                   p50_ms=_num(tot["p50_ms"]), p95_ms=_num(tot["p95_ms"]), llm_p95_ms=_num(tot["llm_p95_ms"]),
                   open_incidents=open_incidents)
@@ -250,7 +239,6 @@ DIMS: Dict[str, Tuple[str, str, bool]] = {
     "tool": ("tool_name", f"{DECISION} AND tool_name IS NOT NULL", False),
     "guard": ("g", "TRUE", True),
     "incident": ("incident_type", "event_type = 'incident.created'", False),
-    "a2a_status": ("status", "event_type = 'a2a.message'", False),
 }
 METRICS = {
     "count": ("count(*)", True),

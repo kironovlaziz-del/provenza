@@ -238,7 +238,7 @@ class A2AGateway:
         elif live != pinned:
             refusal = "A2A gateway: the remote agent's card changed since it was approved (ASI04)"
         if check.decision != ALLOWED or refusal:
-            action, _ = await orc.record_executed(org_id, check, input_data=params, output=None, duration_ms=None,
+            action = await orc.record_executed(org_id, check, input_data=params, output=None, duration_ms=None,
                                                   executed_by=EXECUTOR, refusal=refusal)
             if check.decision == PENDING_APPROVAL and not refusal:
                 raise w.A2AError(REFUSED, "This call needs a human approval and was not sent",
@@ -279,16 +279,10 @@ class A2AGateway:
             # the peer answered with another caller's task: never hand it over
             output, obj = {"withheld": ["a2a.foreign_task"]}, None
             peer_error = w.A2AError(w.INVALID_AGENT_RESPONSE, "The remote agent returned a task of another caller")
-        action, report = await orc.record_executed(org_id, check, input_data=params, output=output,
+        action = await orc.record_executed(org_id, check, input_data=params, output=output,
                                                    duration_ms=duration, executed_by=EXECUTOR)
         if peer_error is not None:
             data = dict(peer_error.data or {})
             data["action_id"] = action.id
             raise w.A2AError(peer_error.code, peer_error.message, data)
-        if report and report.get("verdict") == "injection":
-            from app.services.injection_guard import InjectionGuard
-            if (await InjectionGuard(self.db).settings(org_id))["mode"] == "enforce":
-                raise w.A2AError(REFUSED, "The remote agent's answer was withheld by Provenza: it carries "
-                                          "instructions aimed at the agent (indirect prompt injection, ASI01)",
-                                 {"action_id": action.id})
         return kind, obj

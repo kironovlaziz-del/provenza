@@ -10,8 +10,8 @@
  *   import { gatewayOptions } from "provenza/integrations/openai";
  *   const client = new OpenAI(gatewayOptions(agent));
  *
- * Every call is then checked by the server (allowed models, limits, the
- * Prompt Firewall, injection in and out), and the provider key never reaches
+ * Every call is then checked by the server (allowed models and providers,
+ * policies, limits), and the provider key never reaches
  * the agent. Any provider the organization routed is reached through this
  * one endpoint. The gateway does not stream yet.
  */

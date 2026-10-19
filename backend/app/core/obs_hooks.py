@@ -8,16 +8,15 @@ Agent events for the live view, taken from the database itself.
 One SQLAlchemy session hook instead of a publish() call in every guard: an
 AgentAction, ActionCheck or AgentIncident that is flushed is noted, and
 published only after the transaction commits (a rolled back verdict never
-reaches the screen). Every guard that writes an incident - injection,
-breaker, supply chain, behaviour, A2A, memory, identity, approvals - is
-covered without touching it, including future ones.
+reaches the screen). Every guard that writes an incident - breaker,
+supply chain, behaviour, identity, approvals - is covered without
+touching it, including future ones.
 
 What goes out (to_event) is metadata only: ids, tool or model name,
 verdict or status, the OWASP codes found in the reason, flag labels,
 tokens, duration. Never arguments, prompts, outputs, the free-text reason
-or incident details - those can carry personal data. Content is attached
-later, per reader, masked (app.services.obs_content); raw text only on an
-admin's explicit, audited request.
+or incident details - those can carry personal data. Content is read only
+on an admin's explicit, audited request (app.services.obs_content).
 """
 
 import logging
@@ -32,9 +31,9 @@ from app.core import obs_bus
 
 log = logging.getLogger(__name__)
 
-EVENT_TYPES = ("action.checked", "action.recorded", "llm.call", "a2a.message", "delegation.hop", "incident.created")
+EVENT_TYPES = ("action.checked", "action.recorded", "llm.call", "delegation.hop", "incident.created")
 KINDS = {"ActionCheck": "action.checked", "AgentAction": "action.recorded", "AgentIncident": "incident.created",
-         "GatewayCall": "llm.call", "A2AMessage": "a2a.message", "DelegationHop": "delegation.hop"}
+         "GatewayCall": "llm.call", "DelegationHop": "delegation.hop"}
 GUARD_RE = re.compile(r"\bASI(?:0[1-9]|10)\b")
 _KEY = "obs_pending"
 
@@ -84,10 +83,6 @@ def to_event(obj) -> Optional[Tuple[int, dict]]:
         ev.update(model=_short(d.get("model")), status=d.get("status"), duration_ms=d.get("latency_ms"),
                   prompt_tokens=d.get("prompt_tokens"), completion_tokens=d.get("completion_tokens"),
                   provider_id=d.get("provider_id"), flags=flags, guards=guards_in(d.get("reason"), " ".join(flags)))
-    elif kind == "a2a.message":
-        ev.update(agent_id=d.get("from_agent_id"), to_agent_id=d.get("to_agent_id"),
-                  message_type=_short(d.get("message_type"), 50), status=d.get("status"),
-                  signature_valid=d.get("signature_valid"), guards=["ASI07"] if d.get("status") != "accepted" else [])
     elif kind == "delegation.hop":
         ev.update(agent_id=d.get("from_agent_id"), to_agent_id=d.get("to_agent_id"), depth=d.get("depth"),
                   capabilities=_labels(d.get("delegated_capabilities")), verified=d.get("verified"))

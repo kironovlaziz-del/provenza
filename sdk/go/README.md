@@ -28,7 +28,7 @@ the real server.
 In **connected** mode (when `PROVENZA_URL` is set):
 
 1. The server checks the call: the agent's rights, policies, the Tool
-   Registry, injection, behaviour, and the breaker.
+   Registry, behaviour, and the breaker.
 2. The function runs only if the call is allowed. Otherwise:
    - a refusal returns a `*provenza.DeniedError`;
    - `err.ApprovalRequired()` tells you a human decision is pending.

@@ -6,7 +6,6 @@ export interface GatewaySettings {
   enabled: boolean;
   rpm_per_agent: number;
   max_tokens_cap: number;
-  scan_output: boolean;
   source?: "default" | "org";
 }
 
@@ -36,13 +35,13 @@ export interface GatewayCallT {
   agent_name: string | null;
   model: string | null;
   provider: string | null;
+  // "filtered" and "blocked": older calls, from content checks that no longer exist
   status: "completed" | "filtered" | "blocked" | "failed" | "rate_limited" | "denied";
   reason: string | null;
   flags: string[];
   latency_ms: number | null;
   prompt_tokens: number | null;
   completion_tokens: number | null;
-  ai_request_id: number | null;
 }
 
 export interface GatewayOverview {
@@ -64,7 +63,6 @@ export async function saveGatewaySettings(s: GatewaySettings) {
     enabled: s.enabled,
     rpm_per_agent: s.rpm_per_agent,
     max_tokens_cap: s.max_tokens_cap,
-    scan_output: s.scan_output,
   });
   return data;
 }

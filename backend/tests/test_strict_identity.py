@@ -56,8 +56,6 @@ async def test_defaults_are_strict(client, strict):
     ov = (await client.get(f"{ID}/", headers=auth_headers(strict["token"]))).json()
     assert ov["settings"]["require_agent_key"] is True
     assert "allow_keyless_agents" not in ov["settings"]      # there is no keyless mode at all
-    a2a = (await client.get("/api/v1/a2a/", headers=auth_headers(strict["token"]))).json()
-    assert a2a["settings"]["mode"] == "enforce"
     registry = (await client.get("/api/v1/tool-registry/settings", headers=auth_headers(strict["token"]))).json()
     assert registry["mode"] == "enforce"                       # an unregistered tool is refused
 

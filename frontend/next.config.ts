@@ -42,11 +42,20 @@ const securityHeaders = [
 const nextConfig: NextConfig = {
   agentRules: false,
   poweredByHeader: false,
-  // pages merged into tabbed ones: old links land on the right tab
+  // pages merged into tabbed ones land on the right tab; removed pages land
+  // where what is left of them lives
   async redirects() {
     return [
       { source: "/agent-incidents", destination: "/incidents?tab=agents", permanent: false },
-      { source: "/agent-approvals", destination: "/approvals?tab=agents", permanent: false },
+      { source: "/agent-approvals", destination: "/approvals", permanent: false },
+      { source: "/queue-ttl", destination: "/retention", permanent: true },
+      { source: "/policies/:path*", destination: "/policy-hierarchy", permanent: true },
+      { source: "/requests/:path*", destination: "/gateway", permanent: true },
+      { source: "/provider-chat", destination: "/gateway", permanent: true },
+      ...["/pii-rules", "/blocked-terms", "/intent-guardrail"].map((source) => (
+        { source, destination: "/policy-hierarchy", permanent: true })),
+      ...["/agent-injection", "/agent-code-exec", "/agent-memory", "/agent-messages"].map((source) => (
+        { source, destination: "/agents", permanent: true })),
     ];
   },
   async headers() {

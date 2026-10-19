@@ -34,7 +34,8 @@ In scope:
 - SQL injection, XSS, CSRF, SSRF.
 - Credential leakage (API keys, tokens, passwords).
 - Container escape.
-- Prompt Firewall evasion that leaks raw PII to a provider.
+- Bypassing a policy decision: an agent action, gateway call or egress
+  connection that should have been denied or held for approval but was not.
 
 Out of scope:
 
@@ -56,7 +57,6 @@ If you run Provenza in production:
 - Back up the Postgres volume regularly.
 - Rotate `ENCRYPTION_KEY` using `scripts/rotate_encryption_key.py` if it
   ever leaks.
-- Enable `PROMPT_FIREWALL_NER_ENABLED` for stronger PII detection.
 - Allow SSH with keys only (`PasswordAuthentication no`), and expose only
   ports 80 and 443; Postgres, Redis, the API (8000) and the web UI (3000)
   listen on localhost.

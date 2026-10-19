@@ -2,7 +2,7 @@
 A SEPARATE async engine/sessionmaker for use inside Celery tasks only.
 
 Celery's prefork worker processes call asyncio.run() once per task
-invocation (see workers/request_tasks.py, workers/telemetry_tasks.py),
+invocation (see workers/telemetry_tasks.py, workers/retention_tasks.py),
 and each call creates and tears down its own event loop. The main
 `engine`/AsyncSessionLocal in database.py is a single long-lived object
 shared across the whole FastAPI process, which works fine there because

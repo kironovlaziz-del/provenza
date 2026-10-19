@@ -4,20 +4,12 @@ What Provenza protects, how, and where its guarantees stop.
 
 ## Data and access
 
-- **Prompt Firewall.** Before a prompt is stored or sent to a provider,
-  e-mails, card numbers, SSNs, IP addresses, API keys and phone numbers
-  are replaced with `[MASKED:TYPE]`, along with your own patterns
-  ([PII rules](pii-rules.md)). Disguised values are found too: invisible
-  characters, full-width forms, look-alike letters, spaced-out text,
-  base64 and hex. The raw prompt is kept only encrypted and is never
-  returned by the API.
-- **Blocked terms.** They are kept on one page with scopes. A prompt
-  containing a blocking term is refused before it reaches a provider; a
-  monitored term lets the prompt through and is counted
-  ([blocked terms](blocked-terms.md)).
-- **Intent guardrail.** A classifier model on your own connection reads
-  the already-masked prompt and flags or refuses forbidden intents
-  ([intent guardrail](intent-guardrail.md)).
+- **No prompt stored.** The LLM gateway records metadata only (agent,
+  model, outcome, tokens, time); the prompt and the answer are passed
+  through and never stored. What agents send with their actions (tool
+  arguments and outputs) is erased after the retention period set under
+  Settings → Data retention, and only an admin sees it, on an explicit
+  request that is written to the audit log.
 - **Provider credentials.** They are encrypted at rest with Fernet. The
   API never returns a key, only `has_credentials: true/false`.
 - **Machine vs. user auth.** Collectors (the endpoint agent and the

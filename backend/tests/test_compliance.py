@@ -61,26 +61,31 @@ class TestStatus:
         assert set(only["summary"]) == {"gdpr"} and all(r["framework"] == "gdpr" for r in only["requirements"])
 
     @pytest.mark.asyncio
-    async def test_owasp_items_follow_guard_modes(self, client, admin_token):
+    async def test_content_guards_are_attested_not_checked(self, client, admin_token):
+        """Provenza no longer scans content: ASI01/05/06/07 and LLM02 are
+        confirmed by a person, not measured."""
         await _agent(client, admin_token)
-        await client.put("/api/v1/injection/settings", json={"mode": "enforce", "threshold": 60}, headers=auth_headers(admin_token))
+        res = await _status(client, admin_token, "owasp_agentic,owasp_llm")
+        for rid in ("asi01", "asi05", "asi06", "asi07", "llm02"):
+            r = _req(res, rid)
+            assert r["attest"] is True and r["status"] == "manual" and r["fix"] is None, (rid, r)
+        r = await client.post(C + "/attestations", json={"requirement_id": "asi01", "status": "met"},
+                              headers=auth_headers(admin_token))
+        assert r.status_code in (200, 201), r.text
         assert _req(await _status(client, admin_token, "owasp_agentic"), "asi01")["status"] == "pass"
-        await client.put("/api/v1/injection/settings", json={"mode": "monitor", "threshold": 60}, headers=auth_headers(admin_token))
-        assert _req(await _status(client, admin_token, "owasp_agentic"), "asi01")["status"] == "partial"
-        await client.put("/api/v1/injection/settings", json={"mode": "off", "threshold": 60}, headers=auth_headers(admin_token))
-        r = _req(await _status(client, admin_token, "owasp_agentic"), "asi01")
-        assert r["status"] == "fail" and r["fix"] == "/agent-injection"
-        await client.put("/api/v1/injection/settings", json={"mode": "monitor", "threshold": 60}, headers=auth_headers(admin_token))
 
     @pytest.mark.asyncio
     async def test_retention_drives_gdpr_storage_limitation(self, client, admin_token):
-        base = {"queue_ttl_seconds": 900, "approval_ttl_hours": 72}
-        await client.put("/api/v1/queue/settings", json={**base, "raw_prompt_retention_days": None}, headers=auth_headers(admin_token))
-        assert _req(await _status(client, admin_token, "gdpr"), "gdpr.art5_1e")["status"] == "fail"
-        await client.put("/api/v1/queue/settings", json={**base, "raw_prompt_retention_days": 90}, headers=auth_headers(admin_token))
+        R = "/api/v1/retention/settings"
+        await client.put(R, json={"agent_content_retention_days": None}, headers=auth_headers(admin_token))
         r = _req(await _status(client, admin_token, "gdpr"), "gdpr.art5_1e")
+        assert r["status"] == "fail" and r["fix"] == "/retention"
+        assert _req(await _status(client, admin_token, "gdpr"), "gdpr.art25")["status"] == "partial"
+        await client.put(R, json={"agent_content_retention_days": 90}, headers=auth_headers(admin_token))
+        res = await _status(client, admin_token, "gdpr")
+        r = _req(res, "gdpr.art5_1e")
         assert r["status"] == "pass" and any(e["value"] == 90 for e in r["evidence"])
-        await client.put("/api/v1/queue/settings", json={**base, "raw_prompt_retention_days": None}, headers=auth_headers(admin_token))
+        assert _req(res, "gdpr.art25")["status"] == "pass"
 
 
 class TestHighRiskSystem:

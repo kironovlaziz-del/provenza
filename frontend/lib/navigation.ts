@@ -21,8 +21,6 @@ export interface NavPage {
   adminOnly?: boolean;
   reviewOnly?: boolean;
   operatorOnly?: boolean;
-  /** Optional feature flag; when the flag is off the page is hidden. */
-  feature?: "content_safety";
   /** Behind the section's "More" link instead of a tab of its own. */
   more?: boolean;
 }
@@ -51,7 +49,8 @@ export const NAV: NavGroup[] = [
     sections: [
       { key: "dashboard", labelKey: "sidebar.nav.dashboard", icon: "overview", pages: [P("/dashboard", "dashboard")] },
       { key: "incidents", labelKey: "sidebar.sec.incidents", icon: "alert", pages: [P("/incidents", "incidents")] },
-      { key: "approvals", labelKey: "sidebar.sec.approvals", icon: "check", pages: [P("/approvals", "approvals")] },
+      { key: "approvals", labelKey: "sidebar.sec.approvals", icon: "check",
+        pages: [P("/approvals", "approvals", { reviewOnly: true })] },
       { key: "kill_switch", labelKey: "sidebar.nav.kill_switch", icon: "stop",
         pages: [P("/kill-switch", "kill_switch", { reviewOnly: true })] },
     ],
@@ -74,10 +73,6 @@ export const NAV: NavGroup[] = [
         P("/attestation", "attestation", { adminOnly: true, more: true }),
         P("/agent-behavior", "agent_behavior", { adminOnly: true, more: true }),
         P("/agent-breaker", "agent_breaker", { adminOnly: true, more: true }),
-        P("/agent-injection", "agent_injection", { adminOnly: true, more: true, feature: "content_safety" }),
-        P("/agent-code-exec", "agent_code_exec", { adminOnly: true, more: true, feature: "content_safety" }),
-        P("/agent-memory", "agent_memory", { adminOnly: true, more: true, feature: "content_safety" }),
-        P("/agent-messages", "agent_messages", { adminOnly: true, more: true, feature: "content_safety" }),
       ] },
       { key: "discovery", labelKey: "sidebar.sec.discovery", icon: "discovery", pages: [
         P("/agents-found", "agents_found", { reviewOnly: true }),
@@ -100,18 +95,13 @@ export const NAV: NavGroup[] = [
     labelKey: "sidebar.sections.control",
     sections: [
       { key: "policies", labelKey: "sidebar.sec.policies", icon: "policies", pages: [
-        P("/policies", "policies"),
         P("/policy-hierarchy", "policy_hierarchy", { reviewOnly: true }),
         P("/agent-policies", "agent_policies", { adminOnly: true }),
-        P("/pii-rules", "pii_rules", { reviewOnly: true, more: true, feature: "content_safety" }),
-        P("/blocked-terms", "blocked_terms", { reviewOnly: true, more: true, feature: "content_safety" }),
-        P("/intent-guardrail", "intent_guardrail", { adminOnly: true, more: true, feature: "content_safety" }),
       ] },
       { key: "compliance", labelKey: "sidebar.sec.compliance", icon: "compliance", pages: [P("/compliance", "compliance")] },
       { key: "gateways", labelKey: "sidebar.sec.gateways", icon: "gateway", pages: [
         P("/gateway", "gateway", { adminOnly: true }),
         P("/runtime", "runtime", { adminOnly: true }),
-        P("/provider-chat", "provider_chat", { more: true }),
       ] },
     ],
   },
@@ -119,10 +109,7 @@ export const NAV: NavGroup[] = [
     key: "evidence",
     labelKey: "sidebar.sections.evidence",
     sections: [
-      { key: "audit", labelKey: "sidebar.sec.audit", icon: "audit", pages: [
-        P("/audit", "audit"),
-        P("/requests", "requests", { more: true }),
-      ] },
+      { key: "audit", labelKey: "sidebar.sec.audit", icon: "audit", pages: [P("/audit", "audit")] },
     ],
   },
   {
@@ -137,20 +124,14 @@ export const NAV: NavGroup[] = [
         P("/observability", "observability", { operatorOnly: true }),
         P("/export-keys", "export_keys", { adminOnly: true, more: true }),
         P("/encryption-keys", "encryption_keys", { adminOnly: true, more: true }),
-        P("/queue-ttl", "queue_ttl", { adminOnly: true, more: true }),
+        P("/retention", "retention", { adminOnly: true, more: true }),
         P("/ingestion-sources", "ingestion_sources", { adminOnly: true, more: true }),
       ] },
     ],
   },
 ];
 
-export function canSee(
-  page: NavPage,
-  role: Role,
-  features: { content_safety: boolean } = { content_safety: true },
-  operator = false,
-): boolean {
-  if (page.feature && !features[page.feature]) return false;
+export function canSee(page: NavPage, role: Role, operator = false): boolean {
   if (page.operatorOnly) return role === "admin" && operator;
   // the oversight roles (auditor, compliance) read what admins read
   if (page.adminOnly) return role === "admin" || OVERSIGHT.includes(role as string);
@@ -165,16 +146,12 @@ export function pageMatches(href: string, pathname: string | null | undefined): 
 /** The groups and sections this role sees, each section with its visible
  *  pages only (its "more" pages after its main ones). A section is shown when
  *  one of its main pages is visible. */
-export function visibleNav(
-  role: Role,
-  features: { content_safety: boolean } = { content_safety: true },
-  operator = false,
-): NavGroup[] {
+export function visibleNav(role: Role, operator = false): NavGroup[] {
   return NAV.map((g) => ({
     ...g,
     sections: g.sections
       .map((s) => {
-        const pages = s.pages.filter((p) => canSee(p, role, features, operator));
+        const pages = s.pages.filter((p) => canSee(p, role, operator));
         return { ...s, pages: [...pages.filter((p) => !p.more), ...pages.filter((p) => p.more)] };
       })
       .filter((s) => s.pages.some((p) => !p.more)),
@@ -184,10 +161,9 @@ export function visibleNav(
 export function sectionOf(
   pathname: string | null | undefined,
   role: Role,
-  features: { content_safety: boolean } = { content_safety: true },
   operator = false,
 ): NavSection | undefined {
-  for (const g of visibleNav(role, features, operator)) {
+  for (const g of visibleNav(role, operator)) {
     for (const s of g.sections) {
       if (s.pages.some((p) => pageMatches(p.href, pathname))) return s;
     }

@@ -6,7 +6,7 @@
 Per-organization envelope encryption (BYOK).
 
 Each organization may have a data-encryption key (DEK, a Fernet key) that
-encrypts its secrets: connection API keys, raw prompts, directory
+encrypts its secrets: connection API keys, tool credentials, directory
 passwords. The DEK is stored only wrapped by a key-encryption key (KEK):
 
   local          the server master key (ENCRYPTION_KEY) - per-organization

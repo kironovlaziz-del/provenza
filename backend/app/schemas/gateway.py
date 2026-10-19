@@ -1,22 +1,12 @@
 from typing import Any, Dict, List, Optional, Union
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class GatewaySettingsIn(BaseModel):
     enabled: bool
     rpm_per_agent: int = Field(ge=1, le=6000)
     max_tokens_cap: int = Field(ge=16, le=200_000)
-    scan_output: bool
-    # moved to the Blocked terms page; refused rather than silently dropped
-    blocked_terms: Optional[List[str]] = None
-
-    @field_validator("blocked_terms")
-    @classmethod
-    def _terms(cls, v: Optional[List[str]]) -> None:
-        if v and any((t or "").strip() for t in v):
-            raise ValueError("blocked terms are kept on the Blocked terms page (/blocked-terms)")
-        return None
 
 
 class GatewayRouteIn(BaseModel):

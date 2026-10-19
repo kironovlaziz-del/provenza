@@ -7,7 +7,6 @@ IncidentStatus = Literal["open", "investigating", "resolved"]
 
 
 class IncidentCreate(BaseModel):
-    request_id: Optional[int] = None
     severity: Severity = "low"
     category: str = Field(min_length=1, max_length=100)
     summary: str = Field(min_length=1, max_length=10000)
@@ -27,7 +26,6 @@ class IncidentUpdate(BaseModel):
 class IncidentOut(BaseModel):
     id: int
     org_id: int
-    request_id: Optional[int]
     severity: str
     category: str
     summary: str

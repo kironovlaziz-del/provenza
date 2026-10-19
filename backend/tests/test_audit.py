@@ -8,24 +8,24 @@ from tests.conftest import auth_headers
 pytestmark = pytest.mark.asyncio
 
 
-async def test_creating_a_policy_writes_an_audit_entry(client, org_and_users, admin_token):
-    resp = await client.post(
-        "/api/v1/policies/",
-        json={"name": "Audited Policy"},
+async def test_changing_the_policy_writes_an_audit_entry(client, org_and_users, admin_token):
+    resp = await client.put(
+        "/api/v1/policy-layers",
+        json={"scope": "org", "yaml": "limits:\n  max_tokens: 100\n"},
         headers=auth_headers(admin_token),
     )
-    policy_id = resp.json()["id"]
+    assert resp.status_code == 200, resp.text
 
     logs_resp = await client.get(
         "/api/v1/audit-logs/",
-        params={"entity_type": "policy", "entity_id": policy_id},
+        params={"entity_type": "policy_layer_org"},
         headers=auth_headers(admin_token),
     )
     assert logs_resp.status_code == 200
     items = logs_resp.json()["items"]
     assert len(items) == 1
     assert items[0]["action"] == "created"
-    assert items[0]["entity_type"] == "policy"
+    assert items[0]["entity_type"] == "policy_layer_org"
 
 
 async def test_list_audit_logs_with_pagination_does_not_error(client, org_and_users, admin_token):

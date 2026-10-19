@@ -3,7 +3,7 @@
 # Part of Provenza — https://github.com/kironovlaziz-del/provenza
 
 """
-Retention of agent telemetry, run by the request sweep (queue_ttl.sweep_org).
+Retention of agent telemetry, run by services/retention.py.
 
   checks    policy verdicts (agent_action_checks) older than the check
             retention are deleted - except checks another row still points
@@ -13,8 +13,8 @@ Retention of agent telemetry, run by the request sweep (queue_ttl.sweep_org).
 
   content   past the content retention, what agents sent and got back is
             erased while the row stays for the audit trail and the charts:
-            agent_actions.input_data / output_data / signed_payload, and for
-            LLM calls through the gateway the masked prompt and the answer.
+            agent_actions.input_data / output_data / signed_payload. LLM
+            calls through the gateway keep no content to erase.
             Old signatures can no longer be re-verified after that - the
             verdict, time, agent and tool remain.
 
@@ -29,11 +29,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import Base
 from app.models.agent_action import ActionCheck, AgentAction
-from app.models.ai_request import AIRequest
-from app.models.ai_response import AIResponse
 
 BATCH = 5000
-GATEWAY_PURPOSE = "gateway:%"
 
 
 def _blank(attr):
@@ -85,21 +82,6 @@ async def purge(db: AsyncSession, org_id: int, now: datetime, check_days: Option
             .values(input_data=_blank(AgentAction.input_data), output_data=_blank(AgentAction.output_data),
                     signed_payload=_blank(AgentAction.signed_payload))
             .execution_options(synchronize_session=False))
-        old_llm = (select(AIRequest.id)
-                   .where(AIRequest.org_id == org_id, AIRequest.created_at < cutoff,
-                          AIRequest.purpose.like(GATEWAY_PURPOSE)))
-        r2 = await db.execute(
-            update(AIRequest)
-            .where(AIRequest.id.in_(old_llm), _filled(AIRequest.masked_input_text))
-            .values(masked_input_text=_blank(AIRequest.masked_input_text))
-            .execution_options(synchronize_session=False))
-        r3 = await db.execute(
-            update(AIResponse)
-            .where(AIResponse.request_id.in_(old_llm),
-                   or_(_filled(AIResponse.response_text), _filled(AIResponse.provider_response_json)))
-            .values(response_text=_blank(AIResponse.response_text),
-                    provider_response_json=_blank(AIResponse.provider_response_json))
-            .execution_options(synchronize_session=False))
-        counts["scrubbed_content"] = (r1.rowcount or 0) + (r2.rowcount or 0) + (r3.rowcount or 0)
+        counts["scrubbed_content"] = r1.rowcount or 0
 
     return counts

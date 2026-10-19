@@ -4,7 +4,7 @@
 
 """
 Hierarchical policies: organization -> team -> agent, lower levels can only
-tighten, applied in the gateway, to agent actions and to user requests.
+tighten, applied in the gateway and to agent actions.
 """
 
 import pytest
@@ -50,28 +50,34 @@ async def team_with(client, token, agent_id, name="ml"):
 
 
 def test_levels_only_tighten():
-    g = policy_doc.from_yaml("limits: {max_tokens: 4000}\nmodels: {allow: ['gpt-*']}\ncontent: {scan_output: true}")
-    t = policy_doc.validate({"limits": {"max_tokens": 9000}, "models": {"allow": ["gpt-4o-mini", "llama-3"]},
-                             "content": {"scan_output": False}})
+    g = policy_doc.from_yaml("limits: {max_tokens: 4000}\nmodels: {allow: ['gpt-*']}")
+    t = policy_doc.validate({"limits": {"max_tokens": 9000}, "models": {"allow": ["gpt-4o-mini", "llama-3"]}})
     r = policy_doc.resolve([("organization", g), ("team ml", t)])
     e = policy_doc.Effective(r)
     assert e.limit("limits.max_tokens") == 4000 and e.source("limits.max_tokens") == "organization"
-    assert e.switch("content.scan_output")
     assert e.refusing("models.allow", "gpt-4o-mini") is None
     assert e.refusing("models.allow", "gpt-4o") == "team ml"
     assert e.refusing("models.allow", "llama-3") == "organization"
     ignored = {(i["field"], i["value"]) for i in r["ignored"]}
-    assert {("limits.max_tokens", 9000), ("content.scan_output", False), ("models.allow", "llama-3")} <= ignored
+    assert {("limits.max_tokens", 9000), ("models.allow", "llama-3")} <= ignored
+
+
+def test_removed_sections_are_unknown():
+    """content (output scanning, blocked terms) and requests (the removed
+    user request pipeline) are no longer part of a policy."""
+    for text in ("content: {scan_output: true}", "requests: {require_approval: true}"):
+        with pytest.raises(policy_doc.PolicyDocError) as e:
+            policy_doc.from_yaml(text)
+        assert e.value.code == "policy.unknown_key"
 
 
 async def test_write_read_and_concurrent_edits(client, admin_token, approver_token, db_session):
-    # blocked terms have their own page now
-    r = await put(client, admin_token, "org", "content:\n  blocked_terms: [Project Titan]\n", revision=0)
-    assert r.status_code == 422 and _code(r) == "policy.blocked_terms_moved"
-    yaml_text = "# company-wide\nlimits:\n  max_tokens: 2000\ncontent:\n  scan_output: true\n"
+    r = await put(client, admin_token, "org", "content:\n  scan_output: true\n", revision=0)
+    assert r.status_code == 422 and _code(r) == "policy.unknown_key"
+    yaml_text = "# company-wide\nlimits:\n  max_tokens: 2000\n"
     r = await put(client, admin_token, "org", yaml_text, revision=0)
     assert r.status_code == 200, r.text
-    assert r.json()["revision"] == 1 and r.json()["document"]["content"]["scan_output"] is True
+    assert r.json()["revision"] == 1 and r.json()["document"] == {"limits": {"max_tokens": 2000}}
     got = (await client.get(f"{L}?scope=org", headers=auth_headers(admin_token))).json()
     assert got["yaml"] == yaml_text  # what the admin wrote, comments included
 
@@ -135,15 +141,11 @@ async def test_gateway_follows_the_hierarchy(client, admin_token, db_session, fa
     assert r.status_code == 403 and "team gw-team" in r.json()["error"]["message"]
     await put(client, admin_token, "team", "", target_id=t["id"])  # cleared
 
-    # organization: a smaller token cap, the provider type allowed; a blocked term (its own page)
+    # organization: a smaller token cap, the provider type allowed
     await put(client, admin_token, "org", "limits: {max_tokens: 100}\nproviders: {allow: [openai]}")
-    r = await client.post("/api/v1/blocked-terms", json={"term": "titan"}, headers=auth_headers(admin_token))
-    assert r.status_code == 201, r.text
     r = await _chat(client, a, msgs(("user", "hello")), max_tokens=5000)
     assert r.status_code == 200, r.text
     assert fake.calls[-1]["params"]["max_tokens"] == 100
-    r = await _chat(client, a, msgs(("user", "about TITAN")))
-    assert r.status_code == 403 and r.json()["error"]["code"] == "blocked_by_firewall"
 
     # an agent level cannot raise the cap or allow another provider type
     await put(client, admin_token, "agent", "limits: {max_tokens: 9000}\nproviders: {allow: [anthropic]}",
@@ -187,29 +189,6 @@ async def test_agent_actions_follow_the_hierarchy(client, admin_token):
     assert eff["effective"]["fields"]["limits.max_delegation_depth"] == {"value": 0, "source": "organization"}
 
 
-async def test_user_requests_follow_the_organization_level(client, admin_token):
-    provider = (await client.post("/api/v1/providers/", json={"name": "Test", "type": "openai"},
-                                  headers=auth_headers(admin_token))).json()["id"]
-    uc = (await client.post("/api/v1/use-cases/", json={"name": "UC", "risk_level": "low"},
-                            headers=auth_headers(admin_token))).json()["id"]
-
-    async def ask(text):
-        return await client.post("/api/v1/requests/", headers=auth_headers(admin_token), json={
-            "use_case_id": uc, "provider_id": provider, "input_text": text, "purpose": "test"})
-
-    await put(client, admin_token, "org", "requests: {require_approval: true}")
-    r = await client.post("/api/v1/blocked-terms", json={"term": "titan"}, headers=auth_headers(admin_token))
-    assert r.status_code == 201, r.text
-    r = await ask("about Titan")
-    assert r.status_code == 200 and r.json()["status"] == "blocked"
-    r = await ask("about the weather")
-    assert r.status_code == 200 and r.json()["status"] == "pending_approval"
-
-    await put(client, admin_token, "org", "providers: {allow: [anthropic]}")
-    r = await ask("hello")
-    assert r.status_code == 403 and _code(r) == "policy.provider_not_allowed"
-
-
 async def test_overview_lists_levels_with_rules(client, admin_token):
     agent = await enroll(client, admin_token, "ov-bot", capabilities=["read"], allowed_tools=["kb.search"])
     t = await team_with(client, admin_token, agent["id"], name="ov-team")
@@ -224,13 +203,10 @@ async def test_overview_lists_levels_with_rules(client, admin_token):
 
 async def test_rules_that_only_fit_one_place(client, admin_token, approver_token):
     agent = await enroll(client, admin_token, "fit-bot", capabilities=["read"], allowed_tools=["kb.search"])
-    t = await team_with(client, admin_token, agent["id"], name="fit")
-    # user requests are governed by the organization level only
-    r = await put(client, admin_token, "team", "requests: {require_approval: true}", target_id=t["id"])
-    assert r.status_code == 422 and _code(r) == "policy.org_only"
+    # a removed section is refused in the preview too
     r = await client.post(f"{L}/preview", headers=auth_headers(admin_token),
                           json={"scope": "agent", "target_id": agent["id"], "yaml": "requests: {require_approval: true}"})
-    assert r.json()["ok"] is False and r.json()["error"]["code"] == "policy.org_only"
+    assert r.json()["ok"] is False and r.json()["error"]["code"] == "policy.unknown_key"
     # deeply nested brackets are refused, not a crash
     r = await put(client, admin_token, "org", "limits: " + "[" * 3000 + "]" * 3000)
     assert r.status_code == 422 and _code(r) == "policy.too_deep"

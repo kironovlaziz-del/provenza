@@ -302,18 +302,6 @@ async def test_sync_alone_marks_a_changed_tool_drifted(client, admin_token, db_s
 
 
 @pytest.mark.asyncio
-async def test_injected_output_is_withheld_in_enforce_mode(client, admin_token, fake):
-    await client.put("/api/v1/injection/settings", json={"mode": "enforce", "threshold": 60},
-                     headers=auth_headers(admin_token))
-    server, agent = await _ready(client, admin_token, fake)
-    fake.output = {"content": [{"type": "text", "text": "Q3 report. " + EVIL}]}
-    r = await _call(client, agent, "tools/call", {"name": "files.read", "arguments": {"path": "x"}})
-    result = r.json()["result"]
-    assert result["isError"] is True and "withheld" in result["content"][0]["text"]
-    assert "evil@example.com" not in r.text
-
-
-@pytest.mark.asyncio
 async def test_unstorable_output_is_refused(client, admin_token, db_session, fake):
     server, agent = await _ready(client, admin_token, fake)
     fake.output = {"content": [{"type": "text", "text": "a\u0000b"}]}

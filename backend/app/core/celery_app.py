@@ -54,10 +54,10 @@ celery_app.conf.beat_schedule = {
         "task": "discovery.reverify_connections",
         "schedule": crontab(minute=17, hour="*/6"),  # 00:17, 06:17, 12:17, 18:17 UTC
     },
-    # Request pipeline time limits: expire queued / unanswered requests, fail
-    # requests whose worker was lost, wipe raw prompts past retention.
-    "sweep-request-queue": {
-        "task": "requests.sweep",
+    # Retention of agent telemetry: old policy checks deleted, old agent
+    # content erased (app/services/retention.py).
+    "retention-run": {
+        "task": "retention.run",
         "schedule": crontab(minute="*/5"),
     },
     # Sign a checkpoint (Merkle root) of every audit log that grew since its
@@ -119,10 +119,9 @@ celery_app.conf.beat_schedule = {
 }
 
 from app.workers import (  # noqa: E402,F401
-    request_tasks,
     telemetry_tasks,
     discovery_tasks,
-    queue_tasks,
+    retention_tasks,
     byok_tasks,
     system_tasks,
     audit_tasks,

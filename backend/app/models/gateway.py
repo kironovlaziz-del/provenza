@@ -18,8 +18,6 @@ class GatewaySettings(Base):
     enabled = Column(Boolean, nullable=False, default=True)
     rpm_per_agent = Column(Integer, nullable=False, default=60)
     max_tokens_cap = Column(Integer, nullable=False, default=4096)
-    blocked_terms = Column(JSONB, nullable=False)
-    scan_output = Column(Boolean, nullable=False, default=True)
     updated_by = Column(Integer, ForeignKey("users.id"))
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
@@ -40,17 +38,17 @@ class GatewayRoute(Base):
 
 
 class GatewayCall(Base):
-    """One call through the gateway (the prompt itself lives encrypted in ai_requests)."""
+    """One call through the gateway: who, which model, the verdict, tokens and
+    latency. What was sent and answered is not kept."""
 
     __tablename__ = "gateway_calls"
 
     id = Column(Integer, primary_key=True, index=True)
     org_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
     agent_id = Column(Integer, ForeignKey("agents.id", ondelete="CASCADE"), index=True)
-    ai_request_id = Column(Integer, ForeignKey("ai_requests.id", ondelete="SET NULL"))
     provider_id = Column(Integer, ForeignKey("ai_providers.id", ondelete="SET NULL"))
     model = Column(String(200))
-    status = Column(String(20), nullable=False)   # completed, filtered, blocked, failed, rate_limited, denied
+    status = Column(String(20), nullable=False)   # completed, failed, rate_limited, denied
     reason = Column(String(500))
     flags = Column(JSONB, nullable=False)
     latency_ms = Column(Integer)

@@ -22,26 +22,6 @@ export interface User {
   is_operator?: boolean;
 }
 
-export interface Policy {
-  id: number;
-  org_id: number;
-  name: string;
-  description?: string | null;
-  status: string;
-  created_at: string;
-}
-
-export interface PolicyVersion {
-  id: number;
-  policy_id: number;
-  version: number;
-  rules_json: Record<string, unknown>;
-  created_by?: number | null;
-  created_at: string;
-  approved_by?: number | null;
-  approved_at?: string | null;
-}
-
 export interface Provider {
   id: number;
   org_id: number;
@@ -64,49 +44,13 @@ export interface UseCase {
   owner_user_id?: number | null;
   risk_level: RiskLevel;
   allowed_providers_json?: Record<string, unknown> | null;
-  approved_policy_version_id?: number | null;
   status: string;
-  created_at: string;
-}
-
-export interface AIRequest {
-  id: number;
-  org_id: number;
-  use_case_id?: number | null;
-  user_id?: number | null;
-  provider_id?: number | null;
-  // Raw prompt is not exposed - the backend only returns the masked
-  // version produced by the Prompt Firewall.
-  masked_input_text?: string | null;
-  purpose?: string | null;
-  risk_level: RiskLevel;
-  status: string;
-  firewall_flags?: string[] | null;
-  created_at: string;
-}
-
-export interface AIResponse {
-  id: number;
-  request_id: number;
-  provider_response_json?: Record<string, unknown> | null;
-  response_text?: string | null;
-  confidence_score?: number | null;
-  created_at: string;
-}
-
-export interface Approval {
-  id: number;
-  request_id: number;
-  approver_user_id?: number | null;
-  decision?: string | null;
-  reason?: string | null;
   created_at: string;
 }
 
 export interface Incident {
   id: number;
   org_id: number;
-  request_id?: number | null;
   severity: RiskLevel;
   category: string;
   summary: string;
@@ -130,17 +74,6 @@ export interface AuditLog {
   seq?: number | null;
   prev_hash?: string | null;
   record_hash?: string | null;
-}
-
-export type OverrideType = "stop" | "edit" | "rollback";
-
-export interface Override {
-  id: number;
-  request_id: number;
-  override_type: OverrideType;
-  override_payload_json?: Record<string, unknown> | null;
-  operator_user_id?: number | null;
-  created_at: string;
 }
 
 export type ShadowSightingStatus =
