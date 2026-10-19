@@ -9,7 +9,7 @@ asyncpg==0.32.0
 alembic==1.14.0
 
 # Config & validation
-pydantic==2.10.4
+pydantic==2.14.1
 pydantic-settings==2.7.0
 
 # Auth
