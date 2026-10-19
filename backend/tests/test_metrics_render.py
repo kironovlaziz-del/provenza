@@ -24,3 +24,4 @@ async def test_metrics_endpoint_serves_counters_and_gauges(client):
     assert r.status_code == 200, r.text
     assert "http_requests_total" in r.text
     assert "# TYPE audit_unsealed_records gauge" in r.text
+    assert "# TYPE audit_oldest_unsealed_age_seconds gauge" in r.text

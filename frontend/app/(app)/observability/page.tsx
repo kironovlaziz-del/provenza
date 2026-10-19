@@ -45,6 +45,7 @@ interface Signals {
   heartbeatAge: number | null;
   auditRows: number | null;
   unsealed: number | null;
+  unsealedAge: number | null;
   checkpointAge: number | null;
   pruneFailed: number | null;
   prunedAgo: number | null;
@@ -53,7 +54,7 @@ interface Signals {
 
 const EMPTY: Signals = {
   reqRate: null, errorPct: null, p95: null, sensors: null, offline: null, heartbeatAge: null,
-  auditRows: null, unsealed: null, checkpointAge: null, pruneFailed: null, prunedAgo: null,
+  auditRows: null, unsealed: null, unsealedAge: null, checkpointAge: null, pruneFailed: null, prunedAgo: null,
   violationsPerMin: null,
 };
 
@@ -84,14 +85,15 @@ export default function ObservabilityPage() {
       q("max(sensor_last_heartbeat_age_seconds)"),
       q("sum(audit_logs_rows) or vector(0)"),
       q("sum(audit_unsealed_records) or vector(0)"),
+      q("max(audit_oldest_unsealed_age_seconds) or vector(0)"),
       q("max(audit_checkpoints_latest_age_seconds)"),
       q("max(retention_last_prune_failed) or vector(0)"),
       q("max(retention_last_pruned_at_seconds_ago)"),
       q("sum(rate(sensor_violations_inserted_total[15m])) * 60 or vector(0)"),
     ])
-      .then(([reqRate, errorPct, p95, sensors, offline, heartbeatAge, auditRows, unsealed,
+      .then(([reqRate, errorPct, p95, sensors, offline, heartbeatAge, auditRows, unsealed, unsealedAge,
         checkpointAge, pruneFailed, prunedAgo, violationsPerMin]) => {
-        setSignals({ reqRate, errorPct, p95, sensors, offline, heartbeatAge, auditRows, unsealed,
+        setSignals({ reqRate, errorPct, p95, sensors, offline, heartbeatAge, auditRows, unsealed, unsealedAge,
           checkpointAge, pruneFailed, prunedAgo, violationsPerMin });
         setError(null);
         setUpdatedAt(new Date());
@@ -187,16 +189,22 @@ export default function ObservabilityPage() {
     });
 
     // Audit evidence: every record under a signed checkpoint
+    // Between two runs (every 5 minutes) an active installation always has a
+    // few records waiting, so what counts is how long the oldest one waits:
+    // over two runs (10 min) sealing has stopped, over an hour it is serious.
     const unsealed = s.unsealed ?? 0;
+    const waited = unsealed === 0 ? 0 : s.unsealedAge ?? 0;
     const auditState: CheckState = s.unsealed === null ? "unknown"
-      : unsealed === 0 ? "ok" : unsealed > 1000 ? "critical" : "warn";
+      : waited <= 600 ? "ok" : waited <= 3600 ? "warn" : "critical";
     out.push({
       key: "audit",
       title: t("mon.audit", "Audit evidence"),
       state: auditState,
       value: unsealed === 0
         ? `${t("mon.audit_records", "Records")}: ${fmtNumber(s.auditRows)} · ${t("mon.audit_sealed", "all sealed")}`
-        : `${t("mon.audit_waiting", "Waiting for a checkpoint")}: ${fmtNumber(unsealed)}`,
+        : auditState === "ok"
+          ? `${t("mon.audit_records", "Records")}: ${fmtNumber(s.auditRows)} · ${fmtNumber(unsealed)} ${t("mon.audit_next", "in the next checkpoint")}`
+          : `${t("mon.audit_waiting", "Waiting for a checkpoint")}: ${fmtNumber(unsealed)} · ${t("mon.audit_oldest", "the oldest")} ${fmtAge(waited)}`,
       detail: `${t("mon.audit_detail", "Records are sealed under a signed checkpoint every 5 minutes; only sealed records can be proven.")} ${s.checkpointAge !== null ? `${t("mon.last_checkpoint", "Last checkpoint")}: ${fmtAge(s.checkpointAge)} ${t("mon.ago", "ago")}.` : ""}`,
       action: <>{t("mon.audit_action", "The worker or the scheduler is not sealing:")} <code>provenza logs worker</code></>,
     });

@@ -3,15 +3,17 @@ groups:
     interval: 30s
     rules:
       - alert: AuditUnsealedRecords
-        expr: audit_unsealed_records > 0
-        for: 15m
+        # the age of the oldest waiting row, not their number: an active
+        # organization always has a few rows waiting for the next run
+        expr: audit_oldest_unsealed_age_seconds > 900
+        for: 2m
         labels:
           severity: warning
         annotations:
-          summary: "{{ $value }} audit rows for org {{ $labels.org_id }} are not in a signed checkpoint"
+          summary: "An audit row of org {{ $labels.org_id }} has waited {{ $value | humanizeDuration }} for a signed checkpoint"
           description: >-
             audit.checkpoint runs every 5 minutes and seals any organization
-            whose log grew. If records stay unsealed for more than 15
+            whose log grew. If a record stays unsealed for more than 15
             minutes, either the beat scheduler or the worker is down, the
             task is failing, or no signing key is active for that org. The
             rows are still in the log, but nothing proves they existed at

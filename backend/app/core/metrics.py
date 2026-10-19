@@ -256,6 +256,16 @@ audit_unsealed_records = ScrapeGauge(
     ["org_id"],
 )
 
+# How long the oldest of those rows has been waiting; 0 when none waits.
+# Between two runs of audit.checkpoint (every 5 minutes) an active
+# organization always has a few rows waiting, so their number alone says
+# nothing; a row waiting longer than two runs means sealing has stopped.
+audit_oldest_unsealed_age_seconds = ScrapeGauge(
+    "audit_oldest_unsealed_age_seconds",
+    "Seconds the oldest audit row not yet in a signed checkpoint has waited, per organization (0: none).",
+    ["org_id"],
+)
+
 # A sensor is offline when it has missed three heartbeats in a row, and never
 # sooner than five minutes: a fixed five minutes would call a sensor with a
 # 120 s heartbeat offline after two late beats. The same rule drives this
@@ -457,4 +467,15 @@ async def update_db_gauges(db: AsyncSession) -> None:
     for org_id, head in unsealed:
         org = str(org_id)
         sealed_upto = sealed.get(org_id, 0)
-        audit_unsealed_records.labels(org_id=org).set(max(0, (head or 0) - sealed_upto))
+        waiting = max(0, (head or 0) - sealed_upto)
+        audit_unsealed_records.labels(org_id=org).set(waiting)
+        age = 0.0
+        if waiting:
+            # the first row after the newest checkpoint (unique (org_id, seq))
+            first = (await db.execute(
+                select(AIAuditLog.created_at).where(AIAuditLog.org_id == org_id,
+                                                    AIAuditLog.seq == sealed_upto + 1)
+            )).scalar()
+            if first is not None:
+                age = max(0.0, (now - first).total_seconds())
+        audit_oldest_unsealed_age_seconds.labels(org_id=org).set(age)
