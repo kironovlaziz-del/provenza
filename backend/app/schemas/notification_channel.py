@@ -5,10 +5,8 @@ from typing import List, Optional, Literal
 
 EVENT_TYPES = [
     "incident_created",
-    "approval_pending",
     "shadow_ai_reported",
     "shadow_ai_blocked_domain",
-    "request_blocked",
     "agent_discovered",
     "audit_key_rotation",
     "kill_switch",

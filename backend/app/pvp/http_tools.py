@@ -246,7 +246,7 @@ class HttpToolGateway:
             except ValueError as exc:
                 refusal = f"HTTP tool gateway: arguments refused: {exc}"
         if check.decision != ALLOWED or refusal:
-            action, _ = await orc.record_executed(org_id, check, input_data=arguments, output=None,
+            action = await orc.record_executed(org_id, check, input_data=arguments, output=None,
                                                   duration_ms=None, executed_by=EXECUTOR, refusal=refusal)
             decision = "pending_approval" if check.decision == PENDING_APPROVAL and not refusal else "denied"
             return {"decision": decision, "reason": refusal or check.reason, "action_id": action.id,
@@ -258,7 +258,7 @@ class HttpToolGateway:
         if structure_findings(output, "$.output"):
             output = {"status": output.get("status"),
                       "withheld": sorted({f.code for f in structure_findings(output, "$.output")})}
-        action, report = await orc.record_executed(org_id, check, input_data=arguments, output=output,
+        action = await orc.record_executed(org_id, check, input_data=arguments, output=output,
                                                    duration_ms=duration, executed_by=EXECUTOR)
         out: Dict[str, Any] = {"decision": "allowed", "reason": check.reason, "action_id": action.id,
                                "status": output.get("status")}
@@ -266,15 +266,7 @@ class HttpToolGateway:
             out["error"] = output["upstream_error"]
         elif "withheld" in output:
             out["withheld"] = output["withheld"]
-        elif report and report.get("verdict") == "injection" and \
-                (await _injection_mode(self.db, org_id)) == "enforce":
-            out["withheld"] = ["indirect_prompt_injection"]
         else:
             out["body"] = output.get("body")
         return out
 
-
-async def _injection_mode(db: AsyncSession, org_id: int) -> str:
-    from app.services.injection_guard import InjectionGuard
-
-    return (await InjectionGuard(db).settings(org_id))["mode"]

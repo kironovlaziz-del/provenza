@@ -14,7 +14,7 @@ Agent - the SDK's entry point.
 
 Every call of a tool becomes a PVP action (docs/pvp/spec.md):
 
-  connected   check on the server (rights, policies, Tool Registry, injection,
+  connected   check on the server (rights, policies, Tool Registry,
               behaviour, breaker) -> the tool runs only if allowed -> the
               result is recorded, signed with the agent's key under the
               single-use check_id. Denied and pending calls raise and are

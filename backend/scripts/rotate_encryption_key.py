@@ -3,7 +3,6 @@ Rotate the server master key (ENCRYPTION_KEY).
 
 The master key encrypts, directly:
   - ai_providers.api_key_encrypted          connection API keys
-  - ai_requests.input_text_encrypted        raw prompts
   - service_connections.bind_password_encrypted   directory passwords
   - org_keys.config_secret_encrypted        BYOK: Vault token / AWS secret
   - org_keys.wrapped_dek  (provider=local)  BYOK: the organizations' data keys
@@ -72,9 +71,8 @@ def rotate_value(old: Fernet, new: Fernet, value: str):
 def targets():
     """(model, column, extra where-clause or None) for every column under the master key."""
     from app.models.ai_provider import AIProvider
-    from app.models.ai_request import AIRequest
 
-    out = [(AIProvider, "api_key_encrypted", None), (AIRequest, "input_text_encrypted", None)]
+    out = [(AIProvider, "api_key_encrypted", None)]
     from app.models.user import User
 
     out += [(User, "totp_secret_encrypted", None), (User, "totp_pending_encrypted", None)]

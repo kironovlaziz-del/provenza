@@ -2,7 +2,7 @@
 Real-time agent observability: events built from rows carry no personal
 data, the after-commit hook publishes what agents do, server-side filters,
 history from agent_events_v, aggregates and time series, the SSE stream with
-100 ms batches, masked content, unmasked content only for admins.
+100 ms batches, and content only on an admin's audited request.
 """
 
 import json
@@ -11,7 +11,6 @@ import secrets
 import pytest
 
 from app.core import obs_bus, obs_hooks
-from app.models.a2a import A2AMessage
 from app.models.agent import Agent
 from app.models.agent_action import ActionCheck, AgentAction, AgentIncident
 from app.models.delegation import DelegationHop
@@ -70,16 +69,12 @@ class TestEventShape:
         assert obs_hooks.to_event(c)[1]["decision"] == "denied"
         assert obs_hooks.to_event(object()) is None
 
-    def test_llm_a2a_delegation_events(self):
+    def test_llm_and_delegation_events(self):
         g = GatewayCall(id=4, org_id=7, agent_id=3, model="gpt-4o", status="completed", reason=None,
                         flags=["masked:email", "output:asi01"], latency_ms=812, prompt_tokens=345, completion_tokens=120)
         ev = obs_hooks.to_event(g)[1]
         assert ev["type"] == "llm.call" and ev["model"] == "gpt-4o" and ev["duration_ms"] == 812
         assert ev["prompt_tokens"] == 345 and ev["guards"] == ["ASI01"] and "masked:email" in ev["flags"]
-        m = A2AMessage(id=5, org_id=7, from_agent_id=3, to_agent_id=4, message_type="task", status="quarantined",
-                       reasons=[SECRET], findings=[])
-        ev = obs_hooks.to_event(m)[1]
-        assert ev["agent_id"] == 3 and ev["to_agent_id"] == 4 and ev["guards"] == ["ASI07"] and SECRET not in json.dumps(ev)
         h = DelegationHop(id=6, org_id=7, chain_id=1, from_agent_id=3, to_agent_id=4, depth=1,
                           delegated_capabilities=["read"], task_description=f"mail {SECRET}", verified=True)
         ev = obs_hooks.to_event(h)[1]
@@ -91,7 +86,7 @@ class TestEventShape:
         assert obs_hooks.matches(ev, {3}, {"action.checked"})
         assert not obs_hooks.matches(ev, {4}, None)
         assert not obs_hooks.matches(ev, None, {"incident.created"})
-        assert obs_hooks.matches({"type": "a2a.message", "agent_id": 3, "to_agent_id": 4}, {4}, None)
+        assert obs_hooks.matches({"type": "delegation.hop", "agent_id": 3, "to_agent_id": 4}, {4}, None)
 
 
 class TestPublishing:
@@ -156,7 +151,7 @@ class TestHistoryAndSummary:
 
 class TestContent:
     @pytest.mark.asyncio
-    async def test_masked_by_default_raw_only_for_admin(self, client, admin_token, approver_token, db_session):
+    async def test_feed_has_no_content_admin_reveals_it(self, client, admin_token, approver_token, db_session):
         agent = await _agent(client, admin_token)
         org_id = (await db_session.get(Agent, agent["id"])).org_id
         row = AgentAction(org_id=org_id, agent_id=agent["id"], action_type="tool_call", tool_name="crm.lookup",
@@ -171,14 +166,13 @@ class TestContent:
         r = await client.get(O + "/events", params=params, headers=auth_headers(approver_token))
         assert r.status_code == 200, r.text
         ev = next(e for e in r.json() if e["id"] == action_id)
-        assert ev["masked"] is True and SECRET not in r.text
-        assert any(c["label"] == "input" and "orders" in c["text"] for c in ev["content"])
+        assert "content" not in ev and SECRET not in r.text      # metadata only, whatever is asked
 
         body = {"type": "action.recorded", "id": action_id, "reason": "incident review"}
         assert (await client.post(O + "/reveal", json=body, headers=auth_headers(approver_token))).status_code == 403
         r = await client.post(O + "/reveal", json=body, headers=auth_headers(admin_token))
         assert r.status_code == 200, r.text
-        assert r.json()["masked"] is False and SECRET in r.text
+        assert SECRET in r.text and any(c["label"] == "input" for c in r.json()["content"])
         assert (await client.post(O + "/reveal", json={**body, "id": 99999999},
                                   headers=auth_headers(admin_token))).status_code == 404
         assert (await client.post(O + "/reveal", json={**body, "type": "nope"},

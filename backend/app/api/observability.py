@@ -7,18 +7,16 @@ Real-time agent observability.
 
   GET  /stream      SSE: live agent events of the caller's organization,
                     filtered on the server (?agent_id=1,2&event_types=...),
-                    sent in batches every 100 ms at most, keepalive every 15 s;
-                    ?detail=1 adds the content, PII masked
+                    sent in batches every 100 ms at most, keepalive every 15 s
   GET  /events      the same events from history (agent_events_v), for backfill
   GET  /summary     totals and per-agent figures for a window
   GET  /timeseries  stacked series by type, decision, agent, model, tool, guard...
   GET  /breakdown   totals of one dimension split by another (tools by decision)
-  POST /reveal      one event's content WITHOUT masking - admins only, audited
+  POST /reveal      one event's content - admins only, audited
   GET  /health      Redis reachable, open streams
 
-The bus carries metadata only (app.core.obs_hooks). Content is read from the
-database per reader and masked by the Prompt Firewall (app.services.obs_content);
-unmasked text only through /reveal.
+The bus and the history carry metadata only (app.core.obs_hooks). Content is
+read only through /reveal (app.services.obs_content).
 """
 
 import asyncio
@@ -89,8 +87,6 @@ async def stream(
     request: Request,
     agent_id: Optional[str] = Query(None, description="comma-separated agent ids"),
     event_types: Optional[str] = Query(None, description=f"comma-separated: {', '.join(EVENT_TYPES)}"),
-    detail: bool = Query(False, description="attach content, PII masked"),
-    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(READ),
 ):
     agents, types = parse_filters(agent_id, event_types)
@@ -128,7 +124,6 @@ async def stream(
                 "batch_ms": int(BATCH_SECONDS * 1000),
                 "agent_id": sorted(agents) if agents else None,
                 "event_types": sorted(types) if types else None,
-                "detail": detail,
             })
             while True:
                 try:
@@ -157,8 +152,6 @@ async def stream(
                         stop = ev
                         break
                     batch.append(ev)
-                if detail:
-                    await _attach(db, org_id, batch)
                 payload = {"events": batch}
                 if dropped:
                     payload["dropped"], dropped = dropped, 0
@@ -179,21 +172,6 @@ async def stream(
                              headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no", "Connection": "keep-alive"})
 
 
-async def _attach(db: AsyncSession, org_id: int, batch: list) -> None:
-    """Masked content for a batch; the read transaction is ended at once so a
-    long-lived stream never holds a pooled connection between batches."""
-    try:
-        await obs_content.attach(db, org_id, batch)
-    except Exception:  # noqa: BLE001 - the live view must keep going
-        for ev in batch:
-            ev.setdefault("content_error", True)
-    finally:
-        try:
-            await db.rollback()
-        except Exception:  # noqa: BLE001
-            pass
-
-
 @router.get("/events")
 async def events_history(
     agent_id: Optional[str] = Query(None),
@@ -201,18 +179,12 @@ async def events_history(
     minutes: int = Query(15, ge=1, le=43200),
     limit: int = Query(500, ge=1, le=2000),
     before: Optional[datetime] = Query(None, description="older than this time (paging)"),
-    detail: bool = Query(False, description="attach content, PII masked"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(READ),
 ):
     agents, types = parse_filters(agent_id, event_types)
-    if detail and limit > 500:
-        raise HTTPException(status_code=422, detail="limit: at most 500 with detail=1")
-    rows = await obs.history(db, current_user.org_id, minutes=minutes, agent_ids=agents, types=types, limit=limit,
+    return await obs.history(db, current_user.org_id, minutes=minutes, agent_ids=agents, types=types, limit=limit,
                              before_ts=before)
-    if detail:
-        await obs_content.attach(db, current_user.org_id, rows)
-    return rows
 
 
 def _window(minutes: int) -> int:
@@ -262,7 +234,7 @@ class RevealIn(BaseModel):
 
 @router.post("/reveal")
 async def reveal(data: RevealIn, db: AsyncSession = Depends(get_db), current_user: User = Depends(ADMIN)):
-    """Content of one event without PII masking. Every call is audited."""
+    """Content of one event. Every call is audited."""
     if data.type not in EVENT_TYPES:
         raise HTTPException(status_code=422, detail=f"type: one of {list(EVENT_TYPES)}")
     exists = (await db.execute(text(
@@ -274,7 +246,7 @@ async def reveal(data: RevealIn, db: AsyncSession = Depends(get_db), current_use
     await AuditService(db).log(current_user.org_id, current_user.id, "agent_event", data.id, "observability.reveal_raw",
                                {"event_type": data.type, "reason": data.reason, "sections": [c["label"] for c in content]})
     await db.commit()
-    return {"type": data.type, "id": data.id, "masked": False, "content": content}
+    return {"type": data.type, "id": data.id, "content": content}
 
 
 @router.get("/summary")

@@ -6,7 +6,6 @@ import React, { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "@/lib/auth";
 import { pageMatches, sectionOf } from "@/lib/navigation";
-import { useFeatures } from "@/lib/features";
 
 /** The page title, its actions, and - when the page's section has several
  *  pages the user may open - those pages as tabs (lib/navigation.ts). Pages
@@ -21,8 +20,7 @@ export function PageHeader({
   const { t } = useTranslation();
   const pathname = usePathname();
   const { user } = useAuth();
-  const { features } = useFeatures();
-  const section = sectionOf(pathname, user?.role, features, !!user?.is_operator);
+  const section = sectionOf(pathname, user?.role, !!user?.is_operator);
   const [showMore, setShowMore] = useState(false);
   const pages = section?.pages ?? [];
   const main = pages.filter((p) => !p.more || pageMatches(p.href, pathname));

@@ -16,20 +16,14 @@ sub-teams), agent - written as YAML or through the forms:
     models:     {allow: ["gpt-4o-mini", "claude-*"]}
     providers:  {allow: ["openai"]}
     tools:      {allow: ["kb.*"], deny: ["shell.*"], require_approval: ["email.send"]}
-    content:    {scan_output: true}
-    requests:   {require_approval: true}
-
-Blocked terms are not part of a policy document: they are kept on the
-Blocked terms page (services/blocked_terms.py), with their own scopes.
 
 Levels combine so that a lower one can only TIGHTEN what is above it:
   * limits                 the smallest wins
   * allow lists            every level's list must allow the value
                            (a level without one does not restrict)
   * deny / approval lists  all of them apply
-  * switches               on anywhere = on
-A lower level trying to loosen (a higher limit, a switch turned off, a
-model the level above does not allow) has no effect; resolve() reports it
+A lower level trying to loosen (a higher limit, a model the level above
+does not allow) has no effect; resolve() reports it
 under "ignored" so the editor can say so. Every effective value carries the
 level it came from.
 """
@@ -63,10 +57,8 @@ FIELDS: Dict[Tuple[str, str], Tuple[str, str, Any]] = {
     ("tools", "allow"): ("allow", "patterns", None),
     ("tools", "deny"): ("union", "patterns", None),
     ("tools", "require_approval"): ("union", "patterns", None),
-    ("content", "scan_output"): ("or", "bool", None),
-    ("requests", "require_approval"): ("or", "bool", None),
 }
-SECTIONS = ["limits", "models", "providers", "tools", "content", "requests"]
+SECTIONS = ["limits", "models", "providers", "tools"]
 assert set(SECTIONS) == {s for s, _ in FIELDS}
 TOP_LEVEL = set(SECTIONS) | {"version", "description"}
 
@@ -144,8 +136,6 @@ def _patterns(value: Any, path: str, kind: str) -> List[str]:
         item = item.strip()
         if len(item) > MAX_ITEM:
             raise PolicyDocError("policy.text_too_long", f"{path}[{i}]", f"at most {MAX_ITEM} characters")
-        if kind == "terms":
-            item = item.lower()  # the firewall matches terms case-insensitively
         if item not in out:
             out.append(item)
     return out
@@ -182,9 +172,6 @@ def validate(doc: Any) -> Dict[str, Any]:
             spec = FIELDS.get((key, sub))
             path = f"{key}.{sub}"
             if spec is None:
-                if path == "content.blocked_terms":
-                    raise PolicyDocError("policy.blocked_terms_moved", path,
-                                         "blocked terms are kept on the Blocked terms page")
                 raise PolicyDocError("policy.unknown_key", path)
             if v is None:
                 continue

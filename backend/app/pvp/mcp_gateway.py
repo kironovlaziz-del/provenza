@@ -270,7 +270,7 @@ class MCPGateway:
         elif live_digest != pinned:
             refusal = "MCP gateway: the tool's definition changed upstream since it was approved (ASI04)"
         if check.decision != ALLOWED or refusal:
-            action, _ = await orc.record_executed(org_id, check, input_data=arguments, output=None,
+            action = await orc.record_executed(org_id, check, input_data=arguments, output=None,
                                                   duration_ms=None, executed_by=EXECUTOR, refusal=refusal)
             if check.decision == PENDING_APPROVAL and not refusal:
                 return _text_result(f"This call needs a human approval and was not executed "
@@ -288,17 +288,12 @@ class MCPGateway:
         bad = structure_findings(output, "$.output")
         if bad:
             output = {"withheld": sorted({f.code for f in bad})}
-        action, report = await orc.record_executed(org_id, check, input_data=arguments, output=output,
+        action = await orc.record_executed(org_id, check, input_data=arguments, output=output,
                                                    duration_ms=duration, executed_by=EXECUTOR)
         if "upstream_error" in output:
             return _text_result(f"The tool could not be reached (action #{action.id}): {output['upstream_error']}")
         if "withheld" in output:
             return _text_result(f"The tool's output was refused by Provenza (action #{action.id}): "
                                 f"{', '.join(output['withheld'])}")
-        if report and report.get("verdict") == "injection":
-            from app.services.injection_guard import InjectionGuard
-            if (await InjectionGuard(self.db).settings(org_id))["mode"] == "enforce":
-                return _text_result(f"The tool's output was withheld by Provenza (action #{action.id}): it "
-                                    f"carries instructions aimed at the agent (indirect prompt injection, ASI01)")
         return {"content": output.get("content") or [], **{k: output[k] for k in ("structuredContent", "isError")
                                                            if k in output}}

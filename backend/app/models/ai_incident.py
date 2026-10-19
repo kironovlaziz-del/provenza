@@ -6,7 +6,6 @@ class AIIncident(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     org_id = Column(Integer, ForeignKey("organizations.id"), nullable=False)
-    request_id = Column(Integer, ForeignKey("ai_requests.id"))
     severity = Column(String(20), default="low")  # low, medium, high, critical
     category = Column(String(100))
     summary = Column(Text)

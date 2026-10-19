@@ -8,11 +8,8 @@
 - [Development](development.md): running from source, tests, configuration, repository layout
 - [User guide](../USER_GUIDE.md) ([oʻzbekcha](../USER_GUIDE.uz.md)): the UI, page by page
 
-## Prompts and models
+## Policies and models
 
-- [PII rules](pii-rules.md): what the Prompt Firewall masks or blocks, and your own patterns
-- [Blocked terms](blocked-terms.md): one list with scopes, matching that sees through disguises
-- [Intent guardrail](intent-guardrail.md): a classifier model that flags or refuses forbidden intents
 - [Policy hierarchy](policies.md): organization → team → agent; lower levels only tighten
 
 ## Agents

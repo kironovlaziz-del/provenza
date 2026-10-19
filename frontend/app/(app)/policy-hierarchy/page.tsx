@@ -5,7 +5,6 @@
 // where every value comes from and what a lower level tried but could not
 // loosen.
 
-import Link from "next/link";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { PageHeader } from "@/components/PageHeader";
@@ -20,22 +19,19 @@ import {
 import { confirmDialog } from "@/components/Dialog";
 
 type Sel = { scope: Scope; id: number | null; label: string };
-type Tri = "" | "on" | "off";
 type FormState = {
   description: string; rpm: string; maxTokens: string; depth: string; models: string; providers: string;
-  toolsAllow: string; toolsDeny: string; toolsApproval: string; scanOutput: Tri; reqApproval: Tri;
+  toolsAllow: string; toolsDeny: string; toolsApproval: string;
 };
 
 const EMPTY_FORM: FormState = {
   description: "", rpm: "", maxTokens: "", depth: "", models: "", providers: "", toolsAllow: "", toolsDeny: "",
-  toolsApproval: "", scanOutput: "", reqApproval: "",
+  toolsApproval: "",
 };
 
 const split = (s: string) => Array.from(new Set(s.split(/[,\n]/).map((x) => x.trim()).filter(Boolean)));
 const join = (v?: string[]) => (v ?? []).join(", ");
 const num = (s: string) => (s.trim() === "" ? undefined : Number(s));
-const tri = (v?: boolean): Tri => (v === undefined ? "" : v ? "on" : "off");
-const fromTri = (v: Tri) => (v === "" ? undefined : v === "on");
 
 function docFromForm(f: FormState): PolicyDocument {
   const d: PolicyDocument = {};
@@ -54,8 +50,6 @@ function docFromForm(f: FormState): PolicyDocument {
   put("tools", "allow", split(f.toolsAllow));
   put("tools", "deny", split(f.toolsDeny));
   put("tools", "require_approval", split(f.toolsApproval));
-  put("content", "scan_output", fromTri(f.scanOutput));
-  put("requests", "require_approval", fromTri(f.reqApproval));
   return d;
 }
 
@@ -66,7 +60,6 @@ function formFromDoc(d: PolicyDocument): FormState {
     depth: d.limits?.max_delegation_depth?.toString() ?? "", models: join(d.models?.allow),
     providers: join(d.providers?.allow), toolsAllow: join(d.tools?.allow), toolsDeny: join(d.tools?.deny),
     toolsApproval: join(d.tools?.require_approval),
-    scanOutput: tri(d.content?.scan_output), reqApproval: tri(d.requests?.require_approval),
   };
 }
 
@@ -244,13 +237,6 @@ export default function PolicyHierarchyPage() {
   const agentLevels = ov?.agents ?? [];
   const isSel = (s: Scope, id: number | null) => sel.scope === s && sel.id === id;
   const title = sel.scope === "org" ? t("ph.org") : sel.label;
-  const triOptions = (
-    <>
-      <option value="">{t("ph.not_set")}</option>
-      <option value="on">{t("ph.on")}</option>
-      <option value="off">{t("ph.off")}</option>
-    </>
-  );
 
   return (
     <>
@@ -326,13 +312,6 @@ export default function PolicyHierarchyPage() {
                       <div className="field"><label>{t("ph.f.tools_allow")}</label><input className="mono" placeholder="kb.*, openai.chat" {...f("toolsAllow")} /></div>
                       <div className="field"><label>{t("ph.f.tools_deny")}</label><input className="mono" placeholder="shell.*" {...f("toolsDeny")} /></div>
                       <div className="field"><label>{t("ph.f.tools_require_approval")}</label><input className="mono" placeholder="email.send" {...f("toolsApproval")} /></div>
-                    </div>
-                    <p className="hint-text ag-small">{t("ph.terms_moved")} <Link href="/blocked-terms">{t("sidebar.nav.blocked_terms")}</Link></p>
-                    <div className="ph-fields">
-                      <div className="field"><label>{t("ph.f.scan_output")}</label><select {...f("scanOutput")}>{triOptions}</select></div>
-                      {sel.scope === "org" && (
-                        <div className="field"><label>{t("ph.f.requests_require_approval")}</label><select {...f("reqApproval")}>{triOptions}</select></div>
-                      )}
                     </div>
                     <p className="hint-text ag-small">{t("ph.form_hint")}</p>
                   </>

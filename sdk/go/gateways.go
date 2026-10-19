@@ -16,8 +16,8 @@ const MCPPath = "/api/v1/mcp"
 
 // LLMGateway returns the base URL and API key for any OpenAI-compatible client,
 // e.g. openai-go: openai.NewClient(option.WithBaseURL(base), option.WithAPIKey(key)).
-// Every call is then checked by the server (models, limits, the Prompt Firewall,
-// injection in and out). The gateway does not stream yet.
+// Every call is then checked by the server (allowed models and providers,
+// policies, limits). The gateway does not stream yet.
 func LLMGateway(a *Agent) (baseURL, apiKey string, err error) {
 	server, key, err := a.Credentials()
 	if err != nil {

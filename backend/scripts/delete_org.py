@@ -17,7 +17,7 @@ transaction only, by setting provenza.allow_purge.
 How it finds the data - from the live database schema, not a hand-kept list:
   1. every table with an org_id column: rows of this organization;
   2. every table with a foreign key to a table already in the set: rows that
-     point at those rows (e.g. ai_responses -> ai_requests); repeated until
+     point at those rows (e.g. agent_actions -> agents); repeated until
      nothing new is found;
   3. it refuses if rows of OTHER organizations point at rows it would delete,
      or if the organization is still active (use --allow-active to override);

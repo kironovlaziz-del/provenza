@@ -19,17 +19,12 @@ tools:
   allow: ["kb.*", "email.*"]
   deny: ["shell.*"]
   require_approval: ["email.send"]
-content:
-  scan_output: true
-requests:
-  require_approval: true       # user requests (organization level)
 ```
 
 Every key is optional; an unknown key is an error (a misspelt rule that
 silently applied nothing would be worse). Lists take `*` patterns. YAML
 anchors and aliases are refused, a level is at most 32 KiB and 10 levels of
-brackets deep. The `requests` section belongs to the organization level only
-(user requests are not tied to a team or agent).
+brackets deep.
 
 ## A lower level can only tighten
 
@@ -38,10 +33,9 @@ brackets deep. The `requests` section belongs to the organization level only
 | limits (`requests_per_minute`, `max_tokens`, `max_delegation_depth`) | the smallest wins |
 | allow lists (`models`, `providers`, `tools.allow`) | every level that has one must allow the value; a level without one does not restrict; `allow: []` allows nothing |
 | deny / approval lists | all of them apply |
-| switches (`scan_output`, `requests.require_approval`) | on at any level = on |
 
-A team or agent level that tries to loosen — a higher limit, a switch turned
-off, a model the organization does not allow — has no effect. The editor
+A team or agent level that tries to loosen — a higher limit, a model the
+organization does not allow — has no effect. The editor
 lists such entries under *No effect* and names the stricter level. Every
 value of the effective policy shows the level it comes from.
 
@@ -49,14 +43,13 @@ value of the effective policy shows the level it comes from.
 
 | | levels | fields |
 |---|---|---|
-| **Gateway** (agents' LLM calls) | gateway settings → organization → teams → agent | limits, models, providers, output scanning |
+| **Gateway** (agents' LLM calls) | gateway settings → organization → teams → agent | limits, models, providers |
 | **Agent actions** (`/agents/actions/check`, delegation) | organization → teams → agent | tools allow / deny / approval, models of model-invoking tools, delegation depth |
-| **User requests** (Policy Center) | organization | providers, approval required — on top of the use case's policy |
 
 The gateway settings take part as the topmost level, so nothing changes on
 upgrade: until an admin writes a level, the effective policy is exactly the
-gateway settings. Agent policies (Agent Policies page) and use-case policies
-keep applying as before; the hierarchy only adds restrictions to them.
+gateway settings. Agent policies (Agent Policies page) keep applying as
+before; the hierarchy only adds restrictions to them.
 
 A refusal names the level: `Blocked by policy 'team support policy'`,
 `Model 'gpt-4o' is not allowed by the team ml policy`.
@@ -76,9 +69,6 @@ A refusal names the level: `Blocked by policy 'team support policy'`,
   not deleted; once its level is cleared, deleting the team removes the empty
   level with it.
 * **Who** — admins edit; admins and approvers read.
-* **Blocked terms** are not part of a level: they are kept on the Blocked
-  terms page with the same levels and more ([blocked-terms.md](blocked-terms.md));
-  `content.blocked_terms` in a document is refused (`policy.blocked_terms_moved`).
 * **Form or YAML** — an empty allow list (`allow: []`, "allow nothing") can
   only be written and edited as YAML.
 

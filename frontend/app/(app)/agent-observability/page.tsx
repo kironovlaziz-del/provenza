@@ -37,7 +37,7 @@ const FIXED: Record<string, string> = {
   pending_approval: "#c98500", quarantined: "#c98500", rate_limited: "#c98500",
   filtered: "#d95926", failed: "#d55181", other: OTHER,
   "action.checked": "#3987e5", "action.recorded": "#9085e9", "llm.call": "#199e70",
-  "a2a.message": "#c98500", "delegation.hop": "#d55181", "incident.created": "#e66767",
+  "delegation.hop": "#d55181", "incident.created": "#e66767",
 };
 const slotOf = new Map<string, string>();
 function colorFor(dim: string, key: string): string {
@@ -96,7 +96,6 @@ const CSS = `
   font-size:12px; line-height:1.5; color:#cccccc; height:560px; overflow:auto; padding:8px 10px; }
 .obsk .term .ln { white-space:pre-wrap; word-break:break-word; }
 .obsk .term .ln:hover { background:#1a1a1a; }
-.obsk .term .c { color:#8b949e; padding-left:22px; white-space:pre-wrap; word-break:break-word; }
 .obsk .term .raw { color:#ffcf70; padding-left:12px; white-space:pre-wrap; word-break:break-word; border-left:2px solid #c98500; margin:2px 0 4px 22px; }
 .obsk .term .lk { color:#58a6ff; cursor:pointer; margin-left:8px; }
 @media (max-width: 900px) { .obsk .grid > * { grid-column: span 12 !important; } }
@@ -298,7 +297,6 @@ const TAG: Record<ObsEventType, [string, string]> = {
   "action.checked": ["CHECK ", "#58a6ff"],
   "action.recorded": ["ACTION", "#bc8cff"],
   "llm.call": ["LLM   ", "#3fb950"],
-  "a2a.message": ["A2A   ", "#d29922"],
   "delegation.hop": ["DELEG ", "#db61a2"],
   "incident.created": ["INCDNT", "#f85149"],
 };
@@ -333,10 +331,6 @@ function lineParts(e: ObsEvent, name: (id?: number) => string): { text: string; 
         out.push({ text: ` tokens in=${e.prompt_tokens ?? 0} out=${e.completion_tokens ?? 0}`, color: "#8b949e" });
       if (e.flags?.length) out.push({ text: ` [${e.flags.join(", ")}]`, color: "#d29922" });
       break;
-    case "a2a.message":
-      out.push({ text: `→ ${name(e.to_agent_id)} ${e.message_type ?? ""}` });
-      verdict(e.status);
-      break;
     case "delegation.hop":
       out.push({ text: `→ ${name(e.to_agent_id)} depth=${e.depth ?? "?"}${e.capabilities?.length ? ` caps=${e.capabilities.join(",")}` : ""}` });
       verdict(e.verified ? "verified" : "unverified");
@@ -369,8 +363,6 @@ function Terminal(props: {
   const boxRef = useRef<HTMLDivElement>(null);
   const [follow, setFollow] = useState(true);
   const [search, setSearch] = useState("");
-  const [showContent, setShowContent] = useState(true);
-  const [open, setOpen] = useState<Set<string>>(new Set());
   const [raw, setRaw] = useState<Record<string, RawState>>({});
   const name = useCallback((id?: number) => (id == null ? "—" : names.get(id) ?? `#${id}`), [names]);
 
@@ -378,7 +370,7 @@ function Terminal(props: {
     const q = search.trim().toLowerCase();
     if (!q) return events;
     return events.filter((e) =>
-      [name(e.agent_id), e.type, e.tool, e.model, e.decision, e.status, e.incident_type, ...(e.guards ?? []), ...(e.content ?? []).map((c) => c.text)]
+      [name(e.agent_id), e.type, e.tool, e.model, e.decision, e.status, e.incident_type, ...(e.guards ?? [])]
         .some((x) => x != null && String(x).toLowerCase().includes(q)),
     );
   }, [events, search, name]);
@@ -394,19 +386,15 @@ function Terminal(props: {
       setRaw((r) => { const n = { ...r }; delete n[k]; return n; });
       return;
     }
-    const reason = await promptDialog(t("obs.reveal_prompt", "Show this event WITHOUT PII masking? The request is recorded in the audit log. Reason:"), "");
+    const reason = await promptDialog(t("obs.reveal_prompt", "Show what the agent sent and received for this event? The request is recorded in the audit log. Reason:"), "");
     if (reason === null) return;
     setRaw((r) => ({ ...r, [k]: "loading" }));
     try {
       const content = await revealEvent(e.type, e.id, reason);
       setRaw((r) => ({ ...r, [k]: content }));
     } catch (err) {
-      setRaw((r) => ({ ...r, [k]: { error: obsError(err, t("obs.reveal_failed", "Could not load the original.")) } }));
+      setRaw((r) => ({ ...r, [k]: { error: obsError(err, t("obs.reveal_failed", "Could not load the content.")) } }));
     }
-  }
-
-  function toggleOpen(k: string) {
-    setOpen((o) => { const s = new Set(o); if (s.has(k)) s.delete(k); else s.add(k); return s; });
   }
 
   return (
@@ -415,12 +403,11 @@ function Terminal(props: {
         <span className="pt" style={{ margin: 0 }}>agent.activity.terminal</span>
         <span style={{ color: state === "live" ? "#3fb950" : "#d29922", fontSize: 12 }}>● {t(`obs.state_${state}`, state)}</span>
         <input type="text" value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t("obs.grep", "grep…")} style={{ width: 200 }} />
-        <button className={`btn${showContent ? " on" : ""}`} onClick={() => setShowContent(!showContent)}>{t("obs.show_content", "Content (masked)")}</button>
         <button className={`btn${follow ? " on" : ""}`} onClick={() => setFollow(!follow)}>{t("obs.follow", "Follow")}</button>
         <button className={`btn${paused ? " on" : ""}`} onClick={() => setPaused(!paused)}>{paused ? t("obs.resume", "Resume") : t("obs.pause", "Pause")}</button>
         <button className="btn" onClick={onClear}>{t("obs.clear", "Clear")}</button>
         <span style={{ color: "var(--muted)", fontSize: 11, marginLeft: "auto" }}>
-          {shown.length}/{events.length} · {t("obs.pii_note", "PII masked; originals only on an admin's audited request")}
+          {shown.length}/{events.length} · {t("obs.meta_note", "Metadata only; content on an admin's audited request")}
         </span>
       </div>
       <div className="term" ref={boxRef}
@@ -450,8 +437,6 @@ function Terminal(props: {
           const [tag, tagColor] = TAG[e.type] ?? [e.type, "#cccccc"];
           const d = new Date(e.ts);
           const stamp = `${d.toLocaleTimeString(undefined, { hour12: false })}.${String(d.getMilliseconds()).padStart(3, "0")}`;
-          const content = e.content ?? [];
-          const isOpen = open.has(k);
           const r = raw[k];
           return (
             <div key={k}>
@@ -460,27 +445,17 @@ function Terminal(props: {
                 <span style={{ color: tagColor, fontWeight: 700 }}>{tag}</span>
                 <span style={{ color: "#79c0ff" }}> {pad(name(e.agent_id), 20)} </span>
                 {lineParts(e, name).map((p, i) => <span key={i} style={{ color: p.color }}>{p.text}</span>)}
-                {showContent && content.some((c) => c.text.length > 240) && (
-                  <span className="lk" onClick={() => toggleOpen(k)}>{isOpen ? "[−]" : "[+]"}</span>
-                )}
-                {isAdmin && content.length > 0 && (
+                {isAdmin && (
                   <span className="lk" style={{ color: r && r !== "loading" ? "#ffcf70" : undefined }} onClick={() => doReveal(e)}
                     title={t("obs.reveal_hint", "Admins only. Recorded in the audit log.")}>
-                    {r === "loading" ? "[…]" : r ? `[${t("obs.hide_raw", "hide original")}]` : `[${t("obs.show_raw", "original")}]`}
+                    {r === "loading" ? "[…]" : r ? `[${t("obs.hide_content", "hide content")}]` : `[${t("obs.show_content", "content")}]`}
                   </span>
                 )}
-                {e.content_error && <span style={{ color: "#f85149" }}> [{t("obs.content_unavailable", "content unavailable")}]</span>}
               </div>
-              {showContent && content.map((c, i) => (
-                <div className="c" key={i}>
-                  <span style={{ color: "#6e7681" }}>{pad(c.label, 12)}│ </span>
-                  {isOpen || c.text.length <= 240 ? c.text : `${c.text.slice(0, 240)} …`}
-                </div>
-              ))}
               {r && r !== "loading" && !Array.isArray(r) && <div className="raw">{r.error}</div>}
               {Array.isArray(r) && (
                 <div className="raw">
-                  <div style={{ color: "#f0883e", fontWeight: 700 }}>⚠ {t("obs.unmasked", "UNMASKED — recorded in the audit log")}</div>
+                  <div style={{ color: "#f0883e", fontWeight: 700 }}>⚠ {t("obs.revealed", "Content — recorded in the audit log")}</div>
                   {r.length === 0 && <div>{t("obs.no_content", "no content stored for this event")}</div>}
                   {r.map((c, i) => <div key={i}><span style={{ color: "#c98500" }}>{pad(c.label, 12)}│ </span>{c.text}</div>)}
                 </div>
@@ -505,7 +480,6 @@ const PANELS: Panel[] = [
   { id: "llm_status", title: "llm.calls.by_status", dim: "llm_status", metric: "count" },
   { id: "agent", title: "agent.events.by_agent", dim: "agent", metric: "count" },
   { id: "guard", title: "guards.fired.timeline", dim: "guard", metric: "count" },
-  { id: "a2a", title: "a2a.messages.by_status", dim: "a2a_status", metric: "count" },
   { id: "incident", title: "incidents.by_type", dim: "incident", metric: "count" },
 ];
 const P = Object.fromEntries(PANELS.map((p) => [p.id, p])) as Record<string, Panel>;
@@ -566,14 +540,14 @@ export default function AgentObservabilityPage() {
     return () => clearInterval(id);
   }, [load, auto, minutes]);
 
-  // terminal: backfill of the selected window + live stream with masked
-  // content; reopens when the filters or the window change
+  // terminal: backfill of the selected window + live stream (metadata
+  // only); reopens when the filters or the window change
   useEffect(() => {
     let cancelled = false;
     setTerm([]);
     setHeld([]);
     setHasMore(false);
-    getObsEvents(filters, minutes, PAGE, true)
+    getObsEvents(filters, minutes, PAGE)
       .then((evs) => {
         if (cancelled) return;
         setHasMore(evs.length === PAGE);
@@ -592,7 +566,6 @@ export default function AgentObservabilityPage() {
         else setTerm((cur) => [...cur, ...events].slice(-TERM_MAX));
       },
       (state, detail) => setStream({ state, detail }),
-      true,
     );
     return () => {
       cancelled = true;
@@ -606,7 +579,7 @@ export default function AgentObservabilityPage() {
     if (!oldest || loadingMore) return;
     setLoadingMore(true);
     try {
-      const evs = await getObsEvents(filters, minutes, PAGE, true, oldest.ts);
+      const evs = await getObsEvents(filters, minutes, PAGE, oldest.ts);
       setTerm((cur) => {
         const seen = new Set(cur.map((e) => `${e.type}:${e.id}`));
         const older = evs.slice().reverse().filter((e) => !seen.has(`${e.type}:${e.id}`));
@@ -639,11 +612,11 @@ export default function AgentObservabilityPage() {
     { l: t("obs.k.events", "Events"), v: fmtNum(tt?.events), s: `${tt?.active_agents ?? "—"} ${t("obs.k.active_agents", "active agents")}` },
     { l: t("obs.k.decisions", "Decisions"), v: fmtNum(tt?.decisions), s: tt?.deny_rate != null ? `${tt.deny_rate}% ${t("obs.k.denied", "denied")}` : undefined },
     { l: t("obs.k.denied_n", "Denied"), v: fmtNum(tt?.denied), c: "#e66767" },
-    { l: t("obs.k.pending", "Waiting for approval"), v: fmtNum(tt?.pending), c: "#c98500", s: <Link href="/approvals?tab=agents">{t("obs.review", "review")} →</Link> },
+    { l: t("obs.k.pending", "Waiting for approval"), v: fmtNum(tt?.pending), c: "#c98500", s: <Link href="/approvals">{t("obs.review", "review")} →</Link> },
     { l: t("obs.k.llm", "LLM calls"), v: fmtNum(tt?.llm_calls), s: tt ? `${tt.llm_errors} ${t("obs.k.errors", "blocked / failed")}` : undefined },
     { l: t("obs.k.tokens", "Tokens"), v: fmtNum(tt?.llm_tokens), s: tt?.llm_p95_ms != null ? `p95 ${Math.round(tt.llm_p95_ms)} ms` : undefined },
     { l: t("obs.k.incidents", "Incidents"), v: fmtNum(tt?.incidents), c: "#e66767", s: tt ? <Link href="/incidents?tab=agents">{t("obs.open", "open")}: {tt.open_incidents} →</Link> : undefined },
-    { l: t("obs.k.a2a", "A2A / delegations"), v: `${fmtNum(tt?.a2a_messages)} / ${fmtNum(tt?.delegations)}` },
+    { l: t("obs.k.delegations", "Delegations"), v: fmtNum(tt?.delegations) },
   ];
   const chart = (id: string, opts: { height?: number; legendRight?: boolean } = {}) => (
     <TimeChart title={P[id].title} ts={series[id] ?? null} label={label} unit={P[id].unit} height={opts.height ?? 150}
@@ -706,7 +679,7 @@ export default function AgentObservabilityPage() {
 
       <h2>{t("obs.sec_agents", "Agents, guards and incidents")}</h2>
       <div className="grid">
-        {["agent", "guard", "a2a", "incident"].map((id) => <div key={id} style={{ gridColumn: "span 3" }}>{chart(id, { height: 140 })}</div>)}
+        {["agent", "guard", "incident"].map((id) => <div key={id} style={{ gridColumn: "span 4" }}>{chart(id, { height: 140 })}</div>)}
         <div className="p" style={{ gridColumn: "span 12", overflowX: "auto" }}>
           <div className="pt">agents.activity.table</div>
           <table className="t">

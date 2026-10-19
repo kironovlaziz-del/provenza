@@ -43,13 +43,6 @@ class Settings(BaseSettings):
     # deployment.
     ENVIRONMENT: str = "development"
 
-    # Optional content-safety add-ons: prompt firewall, PII masking,
-    # blocked terms, intent guardrail, injection / memory / code-exec
-    # guards. Off by default so the product reads as AI governance, not
-    # content moderation. Set CONTENT_SAFETY_ENABLED=true to expose
-    # these pages in the UI.
-    CONTENT_SAFETY_ENABLED: bool = False
-
     # When true, SQLAlchemy logs every SQL statement. Off by default;
     # enable for local debugging only.
     DEBUG: bool = False
@@ -138,17 +131,6 @@ class Settings(BaseSettings):
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
 
-    # Prompt Firewall: enable NER-based PII detection (person names,
-    # organizations, locations) on top of the built-in regex detectors.
-    # Requires spaCy plus a language model; when the model is not
-    # installed, NER is skipped silently.
-    PROMPT_FIREWALL_NER_ENABLED: bool = True
-    PROMPT_FIREWALL_NER_MODELS: dict = {
-    "en": "en_core_web_sm",
-    "uz": "ner_training/output/uz_ner_model",
-    }
-    PROMPT_FIREWALL_NER_DEFAULT_LANG: str = "en"
-
     # Removed features (MLOps training/deployments and RAG). Nothing in the
     # application reads these any more. They stay so that an existing .env
     # that still sets them keeps loading (extra="forbid"), and so that
@@ -162,6 +144,12 @@ class Settings(BaseSettings):
     TRAINING_RUNNER_IMAGE: str = ""
     TRAINING_CONTAINER_CPUS: float = 2.0
     TRAINING_CONTAINER_MEMORY: str = ""
+    # Removed content-safety features (Prompt Firewall, PII masking, blocked
+    # terms, guards): kept, unread, for the same reason.
+    CONTENT_SAFETY_ENABLED: bool = False
+    PROMPT_FIREWALL_NER_ENABLED: bool = False
+    PROMPT_FIREWALL_NER_MODELS: dict = {}
+    PROMPT_FIREWALL_NER_DEFAULT_LANG: str = "en"
 
     # Source tree for the browser extension template that
     # GET /shadow-ai/extension/download packages on demand - configurable

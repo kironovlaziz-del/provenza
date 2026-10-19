@@ -6,13 +6,8 @@ import Link from "next/link";
 import { useTranslation } from "react-i18next";
 import { PageHeader } from "@/components/PageHeader";
 import { RiskPill, StatusPill } from "@/components/Pill";
-import {
-  getUseCase,
-  listPolicies,
-  listPolicyVersions,
-  updateUseCase,
-} from "@/lib/api";
-import type { Policy, PolicyVersion, RiskLevel, UseCase } from "@/lib/types";
+import { getUseCase, updateUseCase } from "@/lib/api";
+import type { RiskLevel, UseCase } from "@/lib/types";
 import { useAuth } from "@/lib/auth";
 import { translateApiError } from "@/lib/errors";
 
@@ -31,12 +26,6 @@ export default function UseCaseDetailPage() {
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState<number | null>(null);
 
-  const [policies, setPolicies] = useState<Policy[]>([]);
-  const [selectedPolicyId, setSelectedPolicyId] = useState<number | "">("");
-  const [versions, setVersions] = useState<PolicyVersion[]>([]);
-  const [selectedVersionId, setSelectedVersionId] = useState<number | "">("");
-  const [linking, setLinking] = useState(false);
-
   function refresh() {
     setLoading(true);
     getUseCase(useCaseId)
@@ -50,17 +39,8 @@ export default function UseCaseDetailPage() {
 
   useEffect(() => {
     if (!Number.isNaN(useCaseId)) refresh();
-    listPolicies().then(setPolicies);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [useCaseId]);
-
-  useEffect(() => {
-    if (!selectedPolicyId) {
-      setVersions([]);
-      return;
-    }
-    listPolicyVersions(Number(selectedPolicyId)).then(setVersions);
-  }, [selectedPolicyId]);
 
   function showError(err: unknown) {
     const detail = (err as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail;
@@ -78,22 +58,6 @@ export default function UseCaseDetailPage() {
       showError(err);
     } finally {
       setSaving(false);
-    }
-  }
-
-  async function handleLinkPolicyVersion() {
-    if (!selectedVersionId) return;
-    setLinking(true);
-    setActionError(null);
-    try {
-      const updated = await updateUseCase(useCaseId, {
-        approved_policy_version_id: Number(selectedVersionId),
-      });
-      setUseCase(updated);
-    } catch (err) {
-      showError(err);
-    } finally {
-      setLinking(false);
     }
   }
 
@@ -129,12 +93,6 @@ export default function UseCaseDetailPage() {
               </dd>
               <dt>{t("use_cases.detail.owner")}</dt>
               <dd className="mono">{useCase.owner_user_id ?? "—"}</dd>
-              <dt>{t("use_cases.detail.linked_policy")}</dt>
-              <dd className="mono">
-                {useCase.approved_policy_version_id
-                  ? `#${useCase.approved_policy_version_id}`
-                  : t("use_cases.detail.not_linked")}
-              </dd>
               <dt>{t("use_cases.detail.created")}</dt>
               <dd className="mono">
                 {new Date(useCase.created_at).toLocaleString(i18n.language)}
@@ -186,67 +144,6 @@ export default function UseCaseDetailPage() {
           </div>
         </div>
 
-        <div className="panel">
-          <div className="panel-header">
-            <h2>{t("use_cases.detail.link_title")}</h2>
-          </div>
-          <div className="panel-body">
-            <p className="hint-text" style={{ marginBottom: 12 }}>
-              {t("use_cases.detail.link_hint")}
-            </p>
-            <div className="form-row">
-              <div className="field">
-                <label htmlFor="policy">{t("use_cases.detail.policy")}</label>
-                <select
-                  id="policy"
-                  value={selectedPolicyId}
-                  onChange={(e) => {
-                    setSelectedPolicyId(e.target.value ? Number(e.target.value) : "");
-                    setSelectedVersionId("");
-                  }}
-                >
-                  <option value="">{t("use_cases.detail.policy_placeholder")}</option>
-                  {policies.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="field">
-                <label htmlFor="version">{t("use_cases.detail.version")}</label>
-                <select
-                  id="version"
-                  value={selectedVersionId}
-                  onChange={(e) =>
-                    setSelectedVersionId(e.target.value ? Number(e.target.value) : "")
-                  }
-                  disabled={versions.length === 0}
-                >
-                  <option value="">{t("use_cases.detail.version_placeholder")}</option>
-                  {versions.map((v) => (
-                    // Only an approved version may govern requests (the server enforces it too).
-                    <option key={v.id} value={v.id} disabled={!v.approved_at}>
-                      v{v.version} (#{v.id}){" "}
-                      {v.approved_at
-                        ? t("use_cases.detail.version_approved")
-                        : t("use_cases.detail.version_pending")}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-            <button
-              className="btn btn-primary"
-              onClick={handleLinkPolicyVersion}
-              disabled={!selectedVersionId || linking}
-            >
-              {linking
-                ? t("use_cases.detail.linking")
-                : t("use_cases.detail.link_button")}
-            </button>
-          </div>
-        </div>
         </>
         )}
       </div>

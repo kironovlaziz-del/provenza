@@ -66,7 +66,6 @@ async def collect_facts(db: AsyncSession, org_id: int) -> dict:
     from app.core.config import settings
     from app.models.agent import Agent, AgentPolicy
     from app.models.agent_action import AgentIncident
-    from app.models.ai_policy import AIPolicy
     from app.models.audit_log import AIAuditLog
     from app.models.ai_provider import AIProvider
 
@@ -81,7 +80,11 @@ async def collect_facts(db: AsyncSession, org_id: int) -> dict:
 
     f["audit_30d"] = await _safe(count(select(func.count()).select_from(AIAuditLog).where(
         AIAuditLog.org_id == org_id, AIAuditLog.created_at >= now - timedelta(days=30))), None)
-    f["ai_policies"] = await _safe(count(select(func.count()).select_from(AIPolicy).where(AIPolicy.org_id == org_id)), 0)
+    async def policy_layers():
+        from app.models.policy_layer import PolicyLayer
+        docs = (await db.execute(select(PolicyLayer.document).where(PolicyLayer.org_id == org_id))).scalars().all()
+        return sum(1 for d in docs if any(k not in ("version", "description") for k in (d or {})))
+    f["policy_layers"] = await _safe(policy_layers(), 0)          # levels with rules
     f["agents"] = await _safe(count(select(func.count()).select_from(Agent).where(
         Agent.org_id == org_id, Agent.status != "retired")), 0)
     f["agents_without_signing_key"] = await _safe(count(select(func.count()).select_from(Agent).where(
@@ -122,10 +125,6 @@ async def collect_facts(db: AsyncSession, org_id: int) -> dict:
         svc = getattr(importlib.import_module(module), cls)(db)
         return (await svc.settings(org_id))["mode"]
     f["modes"] = {
-        "injection": await _safe(mode("app.services.injection_guard", "InjectionGuard"), None),
-        "code_exec": await _safe(mode("app.services.code_exec_guard", "CodeExecGuard"), None),
-        "memory": await _safe(mode("app.services.memory_guard", "MemoryGuard"), None),
-        "a2a": await _safe(mode("app.services.a2a_guard", "A2AGuard"), None),
         "behavior": await _safe(mode("app.services.behavior_monitor", "BehaviorMonitor"), None),
     }
 
@@ -137,9 +136,9 @@ async def collect_facts(db: AsyncSession, org_id: int) -> dict:
     f["require_pq_signatures"] = ident.get("require_pq_signatures") if ident else None
 
     async def retention():
-        from app.services.queue_ttl import org_settings
-        return (await org_settings(db, org_id))["raw_prompt_retention_days"]
-    f["retention_days"] = await _safe(retention(), None)
+        from app.services.retention import org_settings
+        return (await org_settings(db, org_id))["agent_content_retention_days"]
+    f["content_retention_days"] = await _safe(retention(), None)
 
     async def byok():
         from app.models.org_key import OrgKey
@@ -318,21 +317,18 @@ def c_incidents(f) -> Result:
     return "pass", "Incidents are recorded and none critical is open", e
 
 
-def c_pii_masking(f) -> Result:
-    return "pass", "Every prompt passes the Prompt Firewall: PII is masked before it reaches a model", \
-        [ev("Prompt Firewall", "always on", "/requests"), ev("AI Gateway", "masks every message", "/gateway")]
-
-
-def c_prompt_retention(f) -> Result:
-    d = f["retention_days"]
+def c_content_retention(f) -> Result:
+    d = f["content_retention_days"]
+    e = [ev("agent content retention, days", d or "indefinite", "/retention"),
+         ev("LLM gateway", "keeps no prompt or answer", "/gateway")]
     if d:
-        return "pass", f"Encrypted raw prompts are wiped after {d} days", [ev("retention, days", d, "/queue-ttl")]
-    return "fail", "Encrypted raw prompts are kept indefinitely", [ev("retention", "indefinite", "/queue-ttl")]
+        return "pass", f"What agents sent and got back is erased after {d} days", e
+    return "fail", "What agents sent and got back is kept indefinitely", e
 
 
 def c_erasure(f) -> Result:
     e = [ev("organization key (BYOK)", "active" if f["byok"] else "off", "/encryption-keys"),
-         ev("raw prompt retention", f["retention_days"] or "indefinite", "/queue-ttl")]
+         ev("agent content retention", f["content_retention_days"] or "indefinite", "/retention")]
     if f["byok"]:
         return "pass", "Crypto-shredding of the organization key makes its data unreadable on request", e
     return "partial", "Records can be removed one by one; organization-wide erasure needs BYOK", e
@@ -351,11 +347,12 @@ def c_human_intervention(f) -> Result:
 
 
 def c_privacy_by_design(f) -> Result:
-    parts = [c_pii_masking(f)[0], _mode(f["modes"]["memory"], "Memory integrity", "/agent-memory")[0],
-             c_prompt_retention(f)[0]]
-    return _worst(parts), "PII masking, memory integrity and retention by default", \
-        [ev("PII masking", "on", "/requests"), ev("memory integrity", f["modes"]["memory"] or "off", "/agent-memory"),
-         ev("retention, days", f["retention_days"] or "indefinite", "/queue-ttl")]
+    """By default Provenza keeps no prompt or answer of the LLM gateway, and
+    erases agent content after the retention period."""
+    st, _, e = c_content_retention(f)
+    if st == "pass":
+        return "pass", "No prompt kept by the gateway; agent content erased after the retention period", e
+    return "partial", "No prompt kept by the gateway, but agent content is kept indefinitely", e
 
 
 def c_pii_systems(f) -> Result:
@@ -381,11 +378,12 @@ def c_security(f) -> Result:
 
 
 def c_ai_policies(f) -> Result:
-    n = (f["ai_policies"] or 0) + f["agent_policies"]
+    n = (f["policy_layers"] or 0) + f["agent_policies"]
+    e = [ev("policy levels with rules", f["policy_layers"], "/policy-hierarchy"),
+         ev("agent policies", f["agent_policies"], "/agent-policies")]
     if n:
-        return "pass", f"{n} AI / agent policies in force", [ev("AI policies", f["ai_policies"], "/policies"),
-                                                             ev("agent policies", f["agent_policies"], "/agent-policies")]
-    return "fail", "No AI or agent policy defined", [ev("policies", 0, "/policies")]
+        return "pass", f"{n} policy level(s) / agent policies in force", e
+    return "fail", "No AI or agent policy defined", e
 
 
 def c_resources(f) -> Result:
@@ -609,12 +607,6 @@ def s_oversight(f, s: AISystem) -> Result:
     return "manual", "Human oversight of this system must be described", []
 
 
-def s_robustness(f, s: AISystem) -> Result:
-    parts = [_mode(f["modes"]["injection"], "Prompt-injection guard", "/agent-injection"),
-             _mode(f["modes"]["code_exec"], "Code-execution guard", "/agent-code-exec")]
-    return _worst([p[0] for p in parts]), "; ".join(p[1] for p in parts), [e for p in parts for e in p[2]]
-
-
 CHECKS: Dict[str, Callable] = {
     "no_unacceptable_in_production": c_no_unacceptable,
     "inventory_classified": c_inventory_classified,
@@ -628,8 +620,7 @@ CHECKS: Dict[str, Callable] = {
     "owners_and_monitoring": c_owners_and_monitoring,
     "monitoring_active": c_monitoring,
     "incidents_handled": c_incidents,
-    "pii_masking": c_pii_masking,
-    "prompt_retention": c_prompt_retention,
+    "content_retention": c_content_retention,
     "erasure_capability": c_erasure,
     "human_intervention": c_human_intervention,
     "privacy_by_design": c_privacy_by_design,
@@ -648,10 +639,6 @@ CHECKS: Dict[str, Callable] = {
     "tool_registry": c_tool_registry,
     "breaker": c_breaker,
     "approvals": c_asi_approvals,
-    "mode:injection": mode_check("injection", "Prompt-injection guard", "/agent-injection"),
-    "mode:code_exec": mode_check("code_exec", "Code-execution guard", "/agent-code-exec"),
-    "mode:memory": mode_check("memory", "Memory integrity", "/agent-memory"),
-    "mode:a2a": mode_check("a2a", "Agent-to-agent messages", "/agent-messages"),
     "mode:behavior": mode_check("behavior", "Behaviour monitor", "/agent-behavior"),
 }
 SYSTEM_CHECKS: Dict[str, Callable] = {
@@ -663,7 +650,6 @@ SYSTEM_CHECKS: Dict[str, Callable] = {
     "sys_data_documented": s_data_documented,
     "sys_logged": s_logged,
     "sys_human_oversight": s_oversight,
-    "sys_robustness": s_robustness,
 }
 
 

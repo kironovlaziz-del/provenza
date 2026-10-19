@@ -31,9 +31,6 @@ class DelegationChain(Base):
     breaker_tripped_at = Column(DateTime(timezone=True))
     breaker_reset_at = Column(DateTime(timezone=True))
     breaker_details = Column(JSONB)
-    # ASI01: a tool output in this chain carried a prompt injection
-    tainted_at = Column(DateTime(timezone=True))
-    taint_details = Column(JSONB)
 
 
 class DelegationHop(Base):

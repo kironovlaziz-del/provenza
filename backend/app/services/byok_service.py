@@ -8,8 +8,8 @@ provider), disable (back to the server key), shred (crypto-shredding),
 health check, and the re-encryption that moves an organization's existing
 secrets onto the target key. See app/core/keyring.py for the format.
 
-Covered columns: ai_providers.api_key_encrypted,
-ai_requests.input_text_encrypted, service_connections.bind_password_encrypted.
+Covered columns: every one _targets() lists - connection API keys, tool and
+peer credentials, TOTP secrets, the OIDC client secret, directory passwords.
 """
 
 import asyncio
@@ -24,7 +24,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core import keyring
 from app.core.crypto import _get_fernet, decrypt_secret
 from app.models.ai_provider import AIProvider
-from app.models.ai_request import AIRequest
 from app.models.org_key import ByokJob, OrgKey
 
 INLINE_LIMIT = 2000
@@ -43,7 +42,7 @@ def _targets() -> List[Tuple[type, str]]:
     from app.models.scim import OidcSettings
     from app.models.user import User
 
-    out = [(AIProvider, "api_key_encrypted"), (AIRequest, "input_text_encrypted"),
+    out = [(AIProvider, "api_key_encrypted"),
            (MCPServer, "auth_secret_encrypted"), (A2APeer, "auth_secret_encrypted"),
            (EgressRoute, "secret_encrypted"), (HttpTool, "auth_secret_encrypted"),
            (User, "totp_secret_encrypted"), (User, "totp_pending_encrypted"),

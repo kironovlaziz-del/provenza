@@ -7,17 +7,11 @@
 from app.models.organization import Organization
 from app.models.user import User, UserRole
 from app.models.ai_provider import AIProvider
-from app.models.ai_policy import AIPolicy, AIPolicyVersion
 from app.models.ai_use_case import AIUseCase
-from app.models.ai_request import AIRequest
-from app.models.ai_response import AIResponse
-from app.models.ai_action import AIAction
-from app.models.ai_approval import AIApproval
 from app.models.ai_incident import AIIncident
 from app.models.audit_log import (AIAuditLog, AuditCheckpoint, AuditKeyHandover, AuditKeyRotation,
                                   AuditKeyRotationApproval, AuditSigningKey, AuditCheckpointTimestamp,
                                   AuditTsaSettings)
-from app.models.ai_override import AIOverride
 from app.models.shadow_ai_sighting import ShadowAISighting
 from app.models.dataset import Dataset
 from app.models.training_job import TrainingJob
@@ -43,13 +37,9 @@ from app.models.breaker import AgentBreakerSettings
 from app.models.tool_registry import SupplyChainSettings, ToolRegistryEntry
 from app.models.approval import AgentActionApproval
 from app.models.behavior import AgentAnomaly, AgentBaseline, BehaviorSettings
-from app.models.injection import InjectionDetection, InjectionSettings
-from app.models.code_exec import CodeExecDetection, CodeExecSettings
-from app.models.memory import MemoryEntry, MemorySettings
-from app.models.a2a import A2AChannel, A2AMessage, A2ASettings
 from app.models.agent_identity import AgentIdentitySettings
 from app.models.gateway import GatewayCall, GatewayRoute, GatewaySettings
-from app.models.queue_ttl import QueueSettings, QueueSweep
+from app.models.retention import RetentionRun, RetentionSettings
 from app.models.org_key import ByokJob, OrgKey
 from app.models.rag_query_log import RagQueryLog
 from app.models.compliance import ComplianceAttestation, ComplianceReport
@@ -59,13 +49,10 @@ from app.models.team import RoleTemplate, Team
 from app.models.attestation import AgentAttestation, AttestationPolicy
 from app.models.policy_layer import PolicyLayer
 from app.models.kill_switch import KillSwitchEvent
-from app.models.pii import PiiRule, PiiSettings
-from app.models.blocked_term import BlockedTerm, BlockedTermCategory
 from app.models.pvp_guard import PVPGuardLog
 from app.models.mcp import MCPServer, MCPTool
 from app.models.http_tool import HttpTool
 from app.models.scim import OidcSettings, ScimSettings
-from app.models.guardrail import GuardrailSettings
 from app.models.egress_check import AgentEgressCheck
 from app.models.a2a_gateway import A2APeer, A2ATask
 from app.models.pvp_seal import PVPActionSeal
@@ -78,13 +65,7 @@ __all__ = [
     "User",
     "UserRole",
     "AIProvider",
-    "AIPolicy",
-    "AIPolicyVersion",
     "AIUseCase",
-    "AIRequest",
-    "AIResponse",
-    "AIAction",
-    "AIApproval",
     "AIIncident",
     "AIAuditLog",
     "AuditCheckpoint",
@@ -92,7 +73,6 @@ __all__ = [
     "AuditKeyRotation",
     "AuditKeyRotationApproval",
     "AuditKeyHandover",
-    "AIOverride",
     "ShadowAISighting",
     "Dataset",
     "TrainingJob",

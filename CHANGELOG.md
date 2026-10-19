@@ -165,6 +165,21 @@ this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- **The LLM gateway keeps metadata only.** A call is recorded with agent,
+  model, outcome, tokens and time; the prompt and the answer pass through
+  and are never stored or scanned.
+- **Agent observability shows metadata only.** The live feed carries no
+  content; an admin opens one event's content on an explicit request that
+  is written to the audit log.
+- **Data retention** (Settings → Data retention, `/retention`) replaces
+  Queue & Retention and keeps only the retention of agent telemetry.
+  "Keep indefinitely" now stays indefinite instead of falling back to 90
+  days.
+- **Dashboard and AI inventory** count LLM gateway calls instead of usage
+  requests; an LLM provider's signal is now `high_call_denial_rate`.
+- **Notifications**: `request_blocked` and `approval_pending` are gone
+  (nothing sent them any more) and are removed from existing channels.
+
 - **The production stack runs on rootful Podman with systemd (Quadlet)
   instead of Docker compose.** `deploy/quadlet/` holds the unit templates
   (11 containers, 9 volumes, 3 networks); `deploy/scripts/units.sh install`
@@ -192,6 +207,21 @@ this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Removed
 
+- **Content safety, the request pipeline and the Policy Center.** Provenza
+  governs AI systems and agents; inspecting and rewriting prompt text is not
+  its job. Removed: the Prompt Firewall with PII masking and PII rules,
+  blocked terms, the intent guardrail, the prompt-injection, code-execution,
+  memory and agent-message guards (with chain tainting), the Playground, the
+  Usage log with its queue, request approvals and overrides, the Policy
+  Center (versioned policies and their link to use cases), and the
+  `CONTENT_SAFETY_ENABLED` / `PROMPT_FIREWALL_NER_*` settings (still
+  accepted in an old `.env`, but unread). API prefixes `/requests`,
+  `/approvals`, `/overrides`, `/policies`, `/pii`, `/blocked-terms`,
+  `/guardrail`, `/injection`, `/code-exec`, `/memory`, `/a2a` and
+  `/queue`, and `POST /providers/{id}/chat`, are gone. The policy
+  hierarchy loses its `content` and `requests` sections; agent observability
+  loses agent-to-agent messages. Dependencies dropped: spaCy (and its English
+  model in the image), regex.
 - **MLOps, RAG and Simple Mode.** Provenza is a discovery and control plane
   for AI in the organization; building and hosting models is not its job.
   Removed: dataset upload, compute detection, training jobs (scikit-learn,
@@ -307,6 +337,11 @@ this project adheres to [Semantic Versioning](https://semver.org/).
   reported hosts must be bare hostnames or IPs.
 
 ### Upgrade notes
+
+- **Data of the removed features is deleted.** Migration `e8f9a0b1c2d3`
+  drops the tables of the Prompt Firewall, blocked terms, guards, Usage log,
+  approvals, overrides and policies with their data, and cannot be
+  downgraded. Take a backup before upgrading if you may need them.
 
 - **Sign-up closes.** Add users by invitation; create organizations with
   `scripts/create_admin.py`. Set `ALLOW_PUBLIC_SIGNUP=true` only for a demo.

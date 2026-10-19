@@ -7,7 +7,6 @@ import { useAuth } from "@/lib/auth";
 import { DialogHost } from "@/components/Dialog";
 import { Sidebar } from "@/components/Sidebar";
 import { SystemHealthBanner } from "@/components/SystemHealthBanner";
-import { FeaturesProvider } from "@/lib/features";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -33,22 +32,20 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <FeaturesProvider>
-      <div className="shell">
-        <Sidebar />
-        <div className="main">
-          {user.role === "auditor" && (
-            // one line, every page: why the buttons answer "read-only"
-            <div role="note" style={{ padding: "6px 16px", fontSize: 12, color: "var(--text-muted)",
-              borderBottom: "1px solid var(--border)", background: "var(--bg-panel)" }}>
-              {t("roles.auditor_banner", "Auditor: read-only access. You see everything administrators see and change nothing.")}
-            </div>
-          )}
-          <SystemHealthBanner />
-          {children}
-        </div>
-        <DialogHost />
+    <div className="shell">
+      <Sidebar />
+      <div className="main">
+        {user.role === "auditor" && (
+          // one line, every page: why the buttons answer "read-only"
+          <div role="note" style={{ padding: "6px 16px", fontSize: 12, color: "var(--text-muted)",
+            borderBottom: "1px solid var(--border)", background: "var(--bg-panel)" }}>
+            {t("roles.auditor_banner", "Auditor: read-only access. You see everything administrators see and change nothing.")}
+          </div>
+        )}
+        <SystemHealthBanner />
+        {children}
       </div>
-    </FeaturesProvider>
+      <DialogHost />
+    </div>
   );
 }

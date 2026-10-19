@@ -85,16 +85,6 @@ export default function IncidentDetailPage() {
               <dd>
                 <StatusPill status={incident.status} />
               </dd>
-              <dt>{t("incidents.detail.linked_request")}</dt>
-              <dd className="mono">
-                {incident.request_id ? (
-                  <Link href={`/requests/${incident.request_id}`}>
-                    #{incident.request_id}
-                  </Link>
-                ) : (
-                  "—"
-                )}
-              </dd>
               <dt>{t("incidents.detail.created")}</dt>
               <dd className="mono">
                 {new Date(incident.created_at).toLocaleString(i18n.language)}

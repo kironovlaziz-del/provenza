@@ -27,7 +27,7 @@ organization stays responsible for its own interpretation.
 
 from typing import Dict, List
 
-CATALOG_VERSION = "2026.11"
+CATALOG_VERSION = "2026.12"
 
 FRAMEWORKS: Dict[str, Dict[str, str]] = {
     "eu_ai_act": {"name": "EU AI Act", "ref": "Regulation (EU) 2024/1689"},
@@ -93,16 +93,16 @@ REQUIREMENTS: List[dict] = [
       check="incidents_handled", attest=True, fix="/agent-incidents", roles=BOTH),
 
     # ------------------------------------------------------------------ GDPR
-    R("gdpr.art5_1c", "gdpr", "Art. 5(1)(c)", "Data minimisation: personal data masked before it reaches a model",
-      check="pii_masking"),
-    R("gdpr.art5_1e", "gdpr", "Art. 5(1)(e)", "Storage limitation: raw prompts are not kept forever",
-      check="prompt_retention", fix="/queue-ttl"),
+    R("gdpr.art5_1c", "gdpr", "Art. 5(1)(c)", "Data minimisation: only the personal data needed reaches a model",
+      attest=True),
+    R("gdpr.art5_1e", "gdpr", "Art. 5(1)(e)", "Storage limitation: what agents sent and got back is not kept forever",
+      check="content_retention", fix="/retention"),
     R("gdpr.art17", "gdpr", "Art. 17", "Right to erasure: data can be made unreadable on request",
       check="erasure_capability", fix="/encryption-keys"),
     R("gdpr.art22", "gdpr", "Art. 22", "Automated decisions: a human can intervene",
       check="human_intervention", fix="/agent-approvals"),
     R("gdpr.art25", "gdpr", "Art. 25", "Data protection by design and by default",
-      check="privacy_by_design", fix="/agent-memory"),
+      check="privacy_by_design", fix="/retention"),
     R("gdpr.art30", "gdpr", "Art. 30", "Records of processing: AI systems with personal data documented",
       check="pii_systems_documented", fix="/inventory"),
     R("gdpr.art32", "gdpr", "Art. 32", "Security of processing: encryption, access control",
@@ -112,7 +112,7 @@ REQUIREMENTS: List[dict] = [
       check="sys_dpia", scope="system", applies="pii", fix="/inventory"),
 
     # ------------------------------------------------------------------ ISO/IEC 42001 Annex A
-    R("iso.a2", "iso42001", "A.2", "AI policy", check="ai_policies", attest=True, fix="/policies"),
+    R("iso.a2", "iso42001", "A.2", "AI policy", check="ai_policies", attest=True, fix="/policy-hierarchy"),
     R("iso.a3", "iso42001", "A.3", "Roles and responsibilities for AI systems", check="owners_assigned", fix="/inventory"),
     R("iso.a4", "iso42001", "A.4", "Resources for AI systems documented (data, tools)",
       check="resources_documented", fix="/inventory"),
@@ -129,7 +129,7 @@ REQUIREMENTS: List[dict] = [
       check="third_parties_governed", fix="/tool-registry"),
 
     # ------------------------------------------------------------------ NIST AI RMF
-    R("nist.govern1", "nist_ai_rmf", "GOVERN 1", "Policies and procedures for AI risk", check="ai_policies", fix="/policies"),
+    R("nist.govern1", "nist_ai_rmf", "GOVERN 1", "Policies and procedures for AI risk", check="ai_policies", fix="/policy-hierarchy"),
     R("nist.govern2", "nist_ai_rmf", "GOVERN 2", "Accountability: named owners", check="owners_assigned", fix="/inventory"),
     R("nist.map1", "nist_ai_rmf", "MAP 1", "Context and intended use established", check="use_cases_linked", fix="/inventory"),
     R("nist.map4", "nist_ai_rmf", "MAP 2-4", "Systems categorized, risks identified", check="inventory_classified", fix="/inventory"),
@@ -141,13 +141,13 @@ REQUIREMENTS: List[dict] = [
     R("nist.manage4", "nist_ai_rmf", "MANAGE 4", "Systems can be deactivated", check="deactivation", fix="/inventory"),
 
     # ------------------------------------------------------------------ OWASP Agentic Top 10
-    R("asi01", "owasp_agentic", "ASI01", "Agent goal hijack (prompt injection)", check="mode:injection", fix="/agent-injection"),
+    R("asi01", "owasp_agentic", "ASI01", "Agent goal hijack (prompt injection)", attest=True),
     R("asi02", "owasp_agentic", "ASI02", "Tool misuse (argument constraints)", check="argument_rules", fix="/agent-policies"),
     R("asi03", "owasp_agentic", "ASI03", "Identity and privilege abuse", check="agent_identity", fix="/agent-identity"),
     R("asi04", "owasp_agentic", "ASI04", "Agentic supply chain", check="tool_registry", fix="/tool-registry"),
-    R("asi05", "owasp_agentic", "ASI05", "Unexpected code execution", check="mode:code_exec", fix="/agent-code-exec"),
-    R("asi06", "owasp_agentic", "ASI06", "Memory and context poisoning", check="mode:memory", fix="/agent-memory"),
-    R("asi07", "owasp_agentic", "ASI07", "Insecure inter-agent communication", check="mode:a2a", fix="/agent-messages"),
+    R("asi05", "owasp_agentic", "ASI05", "Unexpected code execution", attest=True),
+    R("asi06", "owasp_agentic", "ASI06", "Memory and context poisoning", attest=True),
+    R("asi07", "owasp_agentic", "ASI07", "Insecure inter-agent communication", attest=True),
     R("asi08", "owasp_agentic", "ASI08", "Cascading failures", check="breaker", fix="/agent-breaker"),
     R("asi09", "owasp_agentic", "ASI09", "Human-agent trust exploitation", check="approvals", fix="/agent-approvals"),
     R("asi10", "owasp_agentic", "ASI10", "Rogue agents", check="mode:behavior", fix="/agent-behavior"),
@@ -155,7 +155,7 @@ REQUIREMENTS: List[dict] = [
     # ------------------------------------------------------------------ OWASP LLM Top 10 (2025)
     R("llm01", "owasp_llm", "LLM01", "Prompt injection: risky actions need a person, systems tested against misuse",
       check="injection_defenses", fix="/agent-approvals"),
-    R("llm02", "owasp_llm", "LLM02", "Sensitive information disclosure", check="pii_masking"),
+    R("llm02", "owasp_llm", "LLM02", "Sensitive information disclosure", attest=True),
     R("llm03", "owasp_llm", "LLM03", "Supply chain: models, tools and providers governed",
       check="third_parties_governed", fix="/tool-registry"),
     R("llm04", "owasp_llm", "LLM04", "Data and model poisoning: data sources documented",
@@ -189,7 +189,7 @@ REQUIREMENTS: List[dict] = [
 
     # ------------------------------------------------------------------ NIS2 (for AI systems)
     R("nis2.21a", "nis2", "Art. 21(2)(a)", "Risk analysis and security policies cover AI systems",
-      check="ai_policies", attest=True, fix="/policies"),
+      check="ai_policies", attest=True, fix="/policy-hierarchy"),
     R("nis2.21b", "nis2", "Art. 21(2)(b)", "Incident handling", check="incidents_handled", fix="/incidents"),
     R("nis2.21c", "nis2", "Art. 21(2)(c)", "Business continuity: AI systems can be stopped and replaced",
       check="deactivation", attest=True, fix="/kill-switch"),
@@ -208,7 +208,7 @@ REQUIREMENTS: List[dict] = [
 
     # ------------------------------------------------------------------ DORA (for AI systems)
     R("dora.6", "dora", "Art. 6", "ICT risk management framework covers AI systems",
-      check="ai_policies", attest=True, fix="/policies"),
+      check="ai_policies", attest=True, fix="/policy-hierarchy"),
     R("dora.8", "dora", "Art. 8", "Identification: AI systems inventoried and classified",
       check="inventory_classified", fix="/inventory"),
     R("dora.9", "dora", "Art. 9", "Protection and prevention", check="security_of_processing", fix="/encryption-keys"),

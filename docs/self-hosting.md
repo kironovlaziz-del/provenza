@@ -247,7 +247,7 @@ To make sure no prompt reaches a cloud AI service, an administrator sets
 **Connections → AI provider policy → Self-hosted only**. Provenza then:
 
 - connects only to non-public addresses for every provider call (the
-  playground, the LLM gateway, the request queue), checked at each
+  LLM gateway and listing a connection's models), checked at each
   connection after the name is resolved, so a base URL or a DNS record
   cannot lead to the internet;
 - refuses connections without a base URL (the vendor's cloud API) before

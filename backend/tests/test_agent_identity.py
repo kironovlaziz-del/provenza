@@ -5,11 +5,9 @@ revocation, and the require_agent_key organization setting.
 """
 
 import secrets
-from datetime import datetime, timezone
 
 import pytest
 
-from app.core.agent_signing import content_hash, sign_payload
 from tests.conftest import auth_headers
 
 A = "/api/v1/agents"
@@ -68,16 +66,6 @@ class TestAuthentication:
         assert any(i["agent_id"] == a["id"] for i in items)
 
     @pytest.mark.asyncio
-    async def test_impersonation_in_a2a_envelope(self, client, admin_token):
-        a, b = await _agent(client, admin_token), await _agent(client, admin_token)
-        env = {"type": "a2a_message", "from_agent_id": b["id"], "to_agent_id": a["id"], "chain_id": None,
-               "message_type": "x", "payload_sha256": content_hash("hi"), "nonce": secrets.token_hex(16),
-               "issued_at": datetime.now(timezone.utc).isoformat()}
-        r = await client.post("/api/v1/a2a/send", json={"envelope": env, "signature": sign_payload(env, b["private_key"]),
-                                                        "payload": "hi"}, headers=K(a))
-        assert r.status_code == 403
-
-    @pytest.mark.asyncio
     async def test_delegate_path_binding(self, client, admin_token):
         a, b = await _agent(client, admin_token), await _agent(client, admin_token)
         r = await client.post(f"{A}/{b['id']}/delegate", json={}, headers=K(a))
@@ -87,7 +75,7 @@ class TestAuthentication:
     async def test_agent_key_never_opens_admin_or_ui_endpoints(self, client, admin_token):
         a = await _agent(client, admin_token)
         for method, path, body in (("GET", f"{A}/", None), ("GET", ID + "/", None),
-                                   ("PUT", "/api/v1/injection/settings", {"mode": "off", "threshold": 60}),
+                                   ("PUT", "/api/v1/retention/settings", {"agent_check_retention_days": None}),
                                    ("POST", f"{ID}/agents/{a['id']}/rotate", None)):
             r = await client.request(method, path, json=body, headers=K(a))
             assert r.status_code in (401, 403), (path, r.status_code, r.text)
@@ -141,8 +129,7 @@ class TestRequireAgentKey:
             assert (await _check(client, K(a), a["id"])).status_code == 200
             # the UI keeps working: listing, the tester, settings
             assert (await client.get(f"{A}/", headers=auth_headers(admin_token))).status_code == 200
-            assert (await client.post("/api/v1/injection/scan", json={"text": "hi"},
-                                      headers=auth_headers(approver_token))).status_code == 200
+            assert (await client.get("/api/v1/retention/", headers=auth_headers(approver_token))).status_code == 200
         finally:
             await _settings(client, admin_token, require=False)
 

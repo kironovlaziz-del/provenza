@@ -7,7 +7,6 @@ class UseCaseBase(BaseModel):
     owner_user_id: Optional[int] = None
     risk_level: str = "low"  # low, medium, high, critical
     allowed_providers_json: Optional[Dict[str, Any]] = None
-    approved_policy_version_id: Optional[int] = None
 
 class UseCaseCreate(UseCaseBase):
     pass
@@ -26,6 +25,5 @@ class UseCaseUpdate(BaseModel):
     owner_user_id: Optional[int] = None
     risk_level: Optional[str] = None
     allowed_providers_json: Optional[Dict[str, Any]] = None
-    approved_policy_version_id: Optional[int] = None
     status: Optional[str] = None
 

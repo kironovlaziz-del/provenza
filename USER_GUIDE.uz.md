@@ -28,7 +28,7 @@ joylashtirish va dasturlash uchun [README.md](README.md) ga qarang.
 |-----|--------------------|
 | **admin** | Hamma narsa: foydalanuvchilar, ulanishlar, telemetriya manbalari, domenlar katalogi, kashfiyot |
 | **approver** | Tasdiqlash so‘rovlarini ko‘rib chiqish va hal qilish; kundalik amallar |
-| **user** | So‘rov yuborish, o‘z ma’lumotlarini ko‘rish |
+| **user** | Kundalik sahifalarni o‘qiydi (dashboard, inventar, agentlar, agent faolligi); tasdiqlash va sozlamalarsiz |
 | **auditor** | Admin yoki tasdiqlovchi ko‘radigan hamma narsani - inventar, siyosatlar, agentlar, audit jurnali, muvofiqlik - o‘qiydi va hech narsani o‘zgartirmaydi; audit jurnalini tekshirishi va muvofiqlik hisobotini yaratishi mumkin |
 | **compliance** | Muvofiqlik mas’uli (DPO, Chief AI Officer): auditor kabi o‘qiydi va muvofiqlik talablarini tasdiqlaydi |
 
@@ -40,40 +40,42 @@ muvofiqlik mas’uliga ham tegishli.
 
 ## 2. Boshqaruv paneli (Dashboard)
 
-Kirgandan so‘ng siz **Dashboard**ga tushasiz — bu so‘rovlar, hodisalar
-va kutilayotgan tasdiqlarning qisqacha ko‘rinishi.
+Kirgandan so‘ng siz **Dashboard**ga tushasiz — bu LLM shlyuz
+chaqiruvlari, hodisalar va kutilayotgan tasdiqlarning qisqacha ko‘rinishi.
 
 Chapdagi yon menyuda beshta guruh bor; har bir band o‘ziga tegishli
 sahifalar yorliqlari bilan ochiladi:
 
 - **Overview** — Dashboard, Incidents, Approvals va Kill switch.
-- **Visibility** — **Discovery** (topilgan agentlar, shadow AI
-  topilmalari, qurilmalar, tarmoq kashfiyoti, AI domenlar katalogi),
-  **Monitoring** (agentlar kuzatuvi, jonli xarita, vakolat zanjirlari va
-  server operatori uchun o‘rnatmaning holati), **AI inventory**
-  (inventar, foydalanish holatlari, AI provayderlar, ulanishlar) va
-  **Agents** (agentlar, jamoalar va rollar, agent identifikatori,
-  attestatsiya, vositalar reyestri).
-- **Control** — **Policies** (Policy Center, siyosatlar ierarxiyasi,
-  agent siyosatlari, muvofiqlik), **Protection** (xulq-atvor monitori,
-  circuit breaker) va **Gateways** (AI shlyuzi, egress sensorlari bilan
-  Runtime, sinov maydoni).
-- **Evidence** — **Audit & evidence**: audit jurnali va foydalanish
-  jurnali.
-- **Settings** — profilingiz, foydalanuvchilar, bildirishnomalar,
-  telemetriya manbalari, SIEM eksporti, shifrlash kalitlari, navbat va
-  saqlash muddati, tizim holati.
+- **Visibility** — **AI inventory** (inventar, AI provayderlar,
+  ulanishlar, foydalanish holatlari), **Agents** (agentlar, jamoalar va
+  rollar, vositalar reyestri, agent identifikatori, attestatsiya,
+  xulq-atvor monitori, circuit breaker), **Discovery** (topilgan
+  agentlar, qurilmalar, tarmoq kashfiyoti), **Shadow AI** (topilmalar, AI
+  domenlar katalogi) va **Agent activity** (agentlar kuzatuvi, jonli
+  xarita, vakolat zanjirlari).
+- **Control** — **Policies** (siyosatlar ierarxiyasi, agent
+  siyosatlari), **Compliance** va **Gateways** (AI shlyuzi, egress
+  sensorlari bilan Runtime).
+- **Evidence** — **Audit & evidence**: audit jurnali.
+- **Settings** — foydalanuvchilar, profilingiz, bildirishnomalar, tizim
+  holati va server operatori uchun o‘rnatmaning holati; **More** ostida:
+  SIEM eksporti, shifrlash kalitlari, ma’lumotlarni saqlash va telemetriya
+  manbalari.
 
-Ixtiyoriy kontent xavfsizligi qo‘shimchasining sahifalari (PII qoidalari,
-bloklangan atamalar, niyat filtri, injection / code-exec / memory /
-xabar himoyalari) faqat serverda `CONTENT_SAFETY_ENABLED=true` bo‘lganda
-ko‘rinadi.
+Kamroq ochiladigan sahifalar bo‘lim yorliqlari qatoridagi **More**
+ortida turadi.
+
+Agentlar kuzatuvi agentlar nima qilayotganini faqat metama’lumot sifatida
+ko‘rsatadi. Admin bitta hodisaning mazmunini (agent nima yuborgani va nima
+olgani) sabab ko‘rsatib ochishi mumkin, bu audit jurnaliga yoziladi; bu
+mazmun qancha saqlanishi Settings → Data retention'da belgilanadi.
 
 ---
 
 ## 3. Ulanishlar (AI provayderlar)
 
-Platforma promptlarni AI provayderga yuborishidan oldin ulanish qo‘shing.
+Agentlar AI provayderni shlyuz orqali chaqira olishidan oldin ulanish qo‘shing.
 
 1. Yon menyu → **AI inventory → Connections**.
 2. **New provider** → turini tanlang (OpenAI, Anthropic, Azure OpenAI
@@ -87,80 +89,31 @@ mumkin.
 
 ---
 
-## 4. Siyosat markazi (Policy Center)
-
-Siyosatlar nimaga ruxsat berilishini va promptlar qanday
-filtrlanishini belgilaydi.
-
-1. Yon menyu → **Policies → Policy Center** → **New policy**.
-2. Siyosatni oching va **versiya yarating**. Versiya JSON qoidalarini
-   saqlaydi (tasdiq kerakmi yoki yo'q). Siyosatning **bloklangan
-   atamalari** Bloklangan atamalar sahifasida (4.3) saqlanadi, doira: Policy.
-3. Versiyani **tasdiqlang** (Approve) — shunda u faollashadi. Versiyalar
-   o‘zgarmasdir — qoidalarni o‘zgartirish uchun yangi versiya yaratib,
-   uni tasdiqlang.
-4. Faol versiyani **foydalanish holati (use case)** ga bog‘lang.
-
-**Prompt Firewall** (kontent xavfsizligi qo‘shimchasi, 2-bo‘limga qarang): so‘rov siyosat asosida ishlaganda, PII (elektron
-pochta, karta raqamlari, SSN, telefon raqamlari, IP manzillar, API
-kalitlar) saqlashdan va provayderga yuborishdan oldin maskalanadi.
-Bloklangan atamani o‘z ichiga olgan prompt rad etiladi va yuborilmaydi
-(4.3).
-
-### 4.1 Siyosatlar ierarxiyasi
+## 4. Siyosatlar ierarxiyasi
 
 Policies → **Policy hierarchy**: bitta siyosat uch darajada - tashkilot,
 jamoa (va uning kichik jamoalari), agent - forma yoki YAML sifatida
 tahrirlanadi. Pastki daraja faqat qattiqlashtira oladi: eng kichik limit
 g'olib, har bir darajaning ruxsat ro'yxati ruxsat berishi kerak, barcha
-taqiq / tasdiq ro'yxatlari amal qiladi, biror joyda
-yoqilgan kalit yoqiq qoladi. Shlyuzga (limitlar, modellar, provayderlar),
-agent amallariga (vositalar, delegatsiya chuqurligi) va - tashkilot
-darajasi - foydalanuvchi so'rovlariga (provayderlar, tasdiq) qo'llaniladi. Tahrirlash paytida *Effective
-policy* har bir qiymatni u kelgan daraja bilan ko'rsatadi va yuqoridagi
-daraja qattiqroq bo'lgani uchun ta'siri yo'q narsalarni sanab beradi. Har
-bir saqlash audit jurnalida. Batafsil: docs/policies.md.
+taqiq / tasdiq ro'yxatlari amal qiladi. LLM shlyuzga (limitlar, modellar,
+provayderlar) va agent amallariga (vositalar, delegatsiya chuqurligi)
+qo'llaniladi. Tahrirlash paytida *Effective policy* har bir qiymatni u
+kelgan daraja bilan ko'rsatadi va yuqoridagi daraja qattiqroq bo'lgani
+uchun ta'siri yo'q narsalarni sanab beradi. Har bir saqlash audit
+jurnalida. Batafsil: docs/policies.md.
 
-### 4.2 Shaxsiy ma'lumot qoidalari
-
-Kontent xavfsizligi qo‘shimchasi (2-bo‘lim). Policies → **PII rules**: har bir o'rnatilgan turni (email, telefon, karta,
-SSN, IP manzil, API kalit, ismlar, tashkilotlar, joylar) yoqing yoki
-o'chiring va **Mask** (qiymat `[MASKED:TYPE]` bo'ladi) yoki **Block**
-(prompt rad etiladi) ni tanlang. *Your rules* bo'limida o'z
-identifikatorlaringiz uchun shablon qo'shing - ПИНФЛ, ИНН, pasport yoki
-shartnoma raqami namunasidan boshlang - va saqlashdan oldin *Try it* da
-tekshiring: u qoida nimani topishini belgilaydi va provayder nima olishini
-ko'rsatadi. Juda uzoq ishlashi mumkin bo'lgan shablonlar sababi bilan rad
-etiladi; saqlangan qoida baribir vaqtdan oshsa, o'sha prompt rad etiladi va
-ogohlantirish chiqadi. Batafsil: docs/pii-rules.md.
-
-### 4.3 Bloklangan atamalar
-
-Kontent xavfsizligi qo‘shimchasi (2-bo‘lim). Policies → **Blocked terms** - promptda bo'lmasligi kerak bo'lgan so'zlar
-uchun yagona joy. Har bir atama uchun qayerda amal qilishini (butun
-tashkilot, barcha agentlar, quyi jamoalari bilan jamoa, bitta agent yoki
-siyosatning use case'lari), qanday topilishini (**butun so'z** - ajratib,
-qo'shib, harf o'rniga raqam yoki o'xshash harflar bilan yozilgan bo'lsa ham
-- yoki **istalgan joyda**) va nima bo'lishini (**Block** promptni rad
-etadi; **Monitor** o'tkazib yuboradi va sanaydi - yangi atamani avval
-Monitor'da sinang) tanlang. Atamalarni **toifalarga** guruhlang va toifani
-o'chirib, uning atamalarini to'xtatib turing. Ro'yxat har bir atama necha
-marta ko'rilganini ko'rsatadi; **Import CSV** qo'shishdan oldin ko'rsatadi,
-**Export CSV** ro'yxatni yuklab beradi; **Try it** namuna nimaga tushishini
-ko'rsatadi. Gateway sozlamalari, siyosat ierarxiyasi yoki siyosat
-versiyalaridagi atamalar yangilashda shu yerga ko'chirildi. Batafsil:
-docs/blocked-terms.md.
+Policies → **Agent policies** agent amallari uchun vizual tuzilgan
+qoidalarni saqlaydi (vositani taqiqlash, faqat ayrim vositalarga ruxsat,
+tasdiq talab qilish, limitlar).
 
 ---
 
 ## 5. Foydalanish holatlari (Use Cases)
 
-Foydalanish holati maqsad, xavf darajasi va tasdiqlangan siyosat
-versiyasini birlashtiradi.
+Foydalanish holati maqsad, uning xavf darajasi va egasini qayd etadi.
 
 1. Yon menyu → **AI inventory → Use Cases** → **New use case**.
-2. Nom, xavf darajasi va (ixtiyoriy) tasdiqlangan siyosat versiyasi hamda
-   egasini belgilang.
+2. Nom, xavf darajasi va (ixtiyoriy) egasini belgilang.
 
 ### 5.1 Ta'sirni baholash
 
@@ -186,16 +139,12 @@ yuqori xavfli har bir tizim uchun sinovni talab qiladi.
 
 ---
 
-## 6. Foydalanish reyestri va tasdiqlash
+## 6. Tasdiqlash
 
-- **Audit & evidence → Usage log** har bir AI so‘rovini maqsadi, holati
-  va to‘liq so‘rov → javob izi bilan ko‘rsatadi.
-- Agar so‘rov tasdiqlashni talab qilsa, u **Overview → Approvals**da
-  paydo bo‘ladi. Tasdiqlovchilar uni ochib, sabab bilan **Approve** yoki
-  **Reject** qiladi. Barcha qarorlar auditga yoziladi.
-- So‘rov sahifasidagi **Overrides** administratorga zarur bo‘lganda
-  o‘sha so‘rovni qo‘lda to‘xtatish, tahrirlash yoki orqaga qaytarish
-  imkonini beradi.
+Siyosat inson tasdig'ini talab qilgan agent amali **Overview →
+Approvals**da kutadi. Admin va tasdiqlovchilar uni argumentlari bo'yicha
+baholab, sabab bilan **Approve** yoki **Reject** qiladi; agent faqat
+tasdiqdan keyin davom etadi. Barcha qarorlar auditga yoziladi.
 
 ---
 
@@ -387,8 +336,8 @@ to'xtatish hali ushlab turmasa: unda o'sha to'xtatishni bekor qiling (8.4.5).
 
 Overview → **Kill switch** AI'ni to'rt bosqichda to'xtatadi: bitta
 **agent**, **jamoa** (quyi jamoalari bilan), **barcha agentlar** yoki **butun
-AI trafigi** (barcha agentlar, shuningdek gateway, AI so'rovlari va
-playground). Har bir to'xtatish sababni talab qiladi; tashkilot
+AI trafigi** (barcha agentlar, shuningdek shlyuz orqali barcha
+chaqiruvlar). Har bir to'xtatish sababni talab qiladi; tashkilot
 miqyosidagi ikki daraja uchun `STOP` deb yozish ham kerak. To'xtatilgan
 agentlar suspended holatiga o'tadi va (belgini olib tashlamasangiz) ularning
 delegatsiya zanjirlari tugaydi. To'xtatish amalda ekan, u qamragan narsa
@@ -447,8 +396,7 @@ xizmatlarni **Ignore** qilishingiz ham mumkin.
 
 Yon menyu → **Settings → Notifications**. **Email** yoki **webhook**
 kanallarini qo‘shing va har birini o‘zingizga kerakli hodisalarga obuna
-qiling (`incident_created`, `approval_pending`, `request_blocked`,
-`shadow_ai_reported`, `shadow_ai_blocked_domain`, `kill_switch`,
+qiling (`incident_created`, `shadow_ai_reported`, `shadow_ai_blocked_domain`, `kill_switch`,
 `egress_sensor_offline`, `alert` - server monitoringi ogohlantirishlari -
 va boshqalar). Agar
 serverda email (SMTP) sozlanmagan bo‘lsa, email kanallari jimgina
@@ -511,7 +459,7 @@ qiling.
 
 ## 13. O‘rnatmani kuzatish
 
-Monitoring → **Observability** server operatori - uni boshqaradigan
+Settings → **Observability** server operatori - uni boshqaradigan
 tashkilot administratorlari uchun. U "hammasi ishlayaptimi" degan
 savolga javob beradi: API, ma’lumotlar bazasi va navbat, fon vazifalari,
 egress sensorlari, audit dalillari va saqlash muddati - har biri joyida

@@ -41,8 +41,7 @@ def process_telemetry_batch(
     """
     Celery wrapper around the async TelemetryService.ingest_events.
     Celery's prefork pool has no running event loop, so a fresh one is
-    started per task invocation - same pattern as request_tasks.py's
-    process_request_task.
+    started per task invocation - same pattern as retention_tasks.py.
 
     Returns the same breakdown TelemetryIngestResponse would have, as a
     plain dict (Celery's result backend is configured for JSON) - not

@@ -8,14 +8,12 @@ export type ObsEventType =
   | "action.checked"
   | "action.recorded"
   | "llm.call"
-  | "a2a.message"
   | "delegation.hop"
   | "incident.created";
 export const OBS_EVENT_TYPES: ObsEventType[] = [
   "action.checked",
   "action.recorded",
   "llm.call",
-  "a2a.message",
   "delegation.hop",
   "incident.created",
 ];
@@ -44,16 +42,11 @@ export interface ObsEvent {
   prompt_tokens?: number;
   completion_tokens?: number;
   flags?: string[];
-  // a2a.message / delegation.hop
+  // delegation.hop
   to_agent_id?: number;
-  message_type?: string;
   depth?: number;
   capabilities?: string[];
   verified?: boolean;
-  // detail=1: content with PII masked
-  content?: { label: string; text: string }[];
-  masked?: boolean;
-  content_error?: boolean;
 }
 
 export interface AgentRow {
@@ -83,7 +76,6 @@ export interface ObsSummary {
     llm_errors: number;
     llm_tokens: number;
     llm_p95_ms: number | null;
-    a2a_messages: number;
     delegations: number;
     decisions: number;
     allowed: number;
@@ -100,7 +92,7 @@ export interface ObsSummary {
   agents: AgentRow[];
 }
 
-export type ObsDim = "type" | "decision" | "agent" | "model" | "llm_status" | "tool" | "guard" | "incident" | "a2a_status";
+export type ObsDim = "type" | "decision" | "agent" | "model" | "llm_status" | "tool" | "guard" | "incident";
 export type ObsMetric = "count" | "tokens" | "p95_ms";
 
 export interface Timeseries {
@@ -132,7 +124,7 @@ export async function getBreakdown(dim: ObsDim, by: ObsDim, minutes: number, age
   return data;
 }
 
-/** Admin only, audited on the server: the event's content without PII masking. */
+/** Admin only, audited on the server: what the agent sent and got back for one event. */
 export async function revealEvent(type: ObsEventType, id: number, reason: string): Promise<{ label: string; text: string }[]> {
   const { data } = await api.post<{ content: { label: string; text: string }[] }>("/observability/reveal", { type, id, reason });
   return data.content;
@@ -157,9 +149,8 @@ export async function getObsSummary(minutes: number, agentIds: number[]): Promis
   return data;
 }
 
-export async function getObsEvents(f: ObsFilters, minutes = 15, limit = 300, detail = false, before?: string): Promise<ObsEvent[]> {
+export async function getObsEvents(f: ObsFilters, minutes = 15, limit = 300, before?: string): Promise<ObsEvent[]> {
   const params: Record<string, string | number> = { ...filterParams(f), minutes, limit };
-  if (detail) params.detail = "true";
   if (before) params.before = before;
   const { data } = await api.get<ObsEvent[]>("/observability/events", { params });
   return data;
@@ -181,14 +172,13 @@ export function openObsStream(
   f: ObsFilters,
   onEvents: (events: ObsEvent[], dropped: number) => void,
   onState: (s: StreamState, detail?: string) => void,
-  withContent = false,
 ): () => void {
   const controller = new AbortController();
   let stopped = false;
   let delay = 1000;
   let timer: ReturnType<typeof setTimeout> | null = null;
   const apiBase = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
-  const qs = new URLSearchParams({ ...filterParams(f), ...(withContent ? { detail: "true" } : {}) }).toString();
+  const qs = new URLSearchParams(filterParams(f)).toString();
 
   function retry(detail?: string) {
     if (stopped) return;

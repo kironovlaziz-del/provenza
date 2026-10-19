@@ -14,43 +14,30 @@ agent's own key; every call then goes through:
                    allowed_models (same rule as the policy engine) and have a
                    route to an active connection
   3. limits        requests per minute per agent; max_tokens capped
-  4. firewall      every message through the Prompt Firewall: blocked terms
-                   refuse the call, PII is masked before it leaves Provenza
-  5. ASI01         instructions hidden in user / tool messages (indirect
-                   injection) - refused in enforce mode, flagged in monitor
-  6. provider      the call itself, with the connection's key
-  7. output        ASI01 / ASI05 on the answer - in enforce mode a poisoned
-                   answer is replaced (finish_reason "content_filter")
-  8. record        ai_requests (raw prompt Fernet-encrypted, masked text in
-                   clear, as for every other request) + ai_responses +
-                   gateway_calls
+  4. provider      the call itself, with the connection's key
+  5. record        gateway_calls: agent, model, connection, verdict, tokens,
+                   latency. What was sent and answered is not kept.
 
 Errors are returned in the OpenAI shape {"error": {"message", "type", "code"}}.
 """
 
-import asyncio
 import fnmatch
-import json
 import time
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional, Tuple
+from typing import List, Optional, Tuple
 
 from fastapi import HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.crypto import encrypt_secret
 from app.models.agent import Agent
 from app.models.ai_provider import AIProvider
-from app.models.ai_request import AIRequest
-from app.models.ai_response import AIResponse
 from app.models.gateway import GatewayCall, GatewayRoute, GatewaySettings
 from app.models.user import User
-from app.services import gateway_adapters, prompt_firewall, provider_policy
+from app.services import gateway_adapters, provider_policy
 from app.services.provider_adapters import ProviderCallError
 
-DEFAULTS = {"enabled": True, "rpm_per_agent": 60, "max_tokens_cap": 4096, "scan_output": True}
-SCANNED_ROLES = ("user", "tool", "function")
+DEFAULTS = {"enabled": True, "rpm_per_agent": 60, "max_tokens_cap": 4096}
 
 
 class GatewayError(Exception):
@@ -68,10 +55,6 @@ def provider_api_key(provider: AIProvider) -> Optional[str]:
         return None
     from app.core.crypto import decrypt_secret
     return decrypt_secret(provider.api_key_encrypted)
-
-
-def _text(content: Any) -> str:
-    return gateway_adapters._text(content)
 
 
 class GatewayService:
@@ -94,7 +77,7 @@ class GatewayService:
         row = await self._settings_row(org_id)
         before = None if row is None else {k: getattr(row, k) for k in DEFAULTS}
         if row is None:
-            row = GatewaySettings(org_id=org_id, blocked_terms=[])  # terms: services/blocked_terms.py
+            row = GatewaySettings(org_id=org_id)
             self.db.add(row)
         for k in DEFAULTS:
             setattr(row, k, values[k])
@@ -160,11 +143,11 @@ class GatewayService:
 
     # ------------------------------------------------------------------ chat
     async def _record(self, org_id: int, agent_id: int, model: str, status_: str, reason: Optional[str],
-                      flags: List[str], provider_id: Optional[int] = None, ai_request_id: Optional[int] = None,
+                      flags: List[str], provider_id: Optional[int] = None,
                       latency_ms: Optional[int] = None, usage: Optional[dict] = None) -> GatewayCall:
         call = GatewayCall(org_id=org_id, agent_id=agent_id, model=model[:200], status=status_,
                            reason=(reason or None) and reason[:500], flags=flags, provider_id=provider_id,
-                           ai_request_id=ai_request_id, latency_ms=latency_ms,
+                           latency_ms=latency_ms,
                            prompt_tokens=(usage or {}).get("prompt_tokens"),
                            completion_tokens=(usage or {}).get("completion_tokens"))
         self.db.add(call)
@@ -174,22 +157,17 @@ class GatewayService:
 
     async def chat(self, agent: Agent, user: User, body: dict) -> dict:
         # plain values up front: commits below must not leave us reading expired ORM state
-        org_id, agent_id, agent_name = agent.org_id, agent.id, agent.name
+        org_id, agent_id = agent.org_id, agent.id
         agent_status, allowed_models = agent.status, set(agent.allowed_models or [])
-        user_id = user.id
         model = body["model"]
         cfg = await self.settings(org_id)
         # the policy hierarchy (gateway settings -> organization -> team -> agent):
-        # limits, models, providers, output scanning (blocked terms: services/blocked_terms.py)
+        # limits, models, providers
         from app.services import hier_policy
 
         eff = await hier_policy.for_agent(self.db, agent)
         rpm = eff.limit("limits.requests_per_minute") or cfg["rpm_per_agent"]
         max_tokens_cap = eff.limit("limits.max_tokens") or cfg["max_tokens_cap"]
-        from app.services import blocked_terms as bt
-
-        blocked_terms = await bt.for_agent(self.db, agent)
-        scan_output = eff.switch("content.scan_output")
         from app.services.kill_switch import traffic_stop
 
         stop = await traffic_stop(self.db, org_id)
@@ -253,116 +231,23 @@ class GatewayService:
             raise GatewayError(429, "rate_limited", f"Rate limit of {rpm} requests per minute "
                                                     f"for this agent reached.", "rate_limit_error")
 
-        # ---- firewall + ASI01 on every message
-        from app.services.injection_detector import scan_text
-        from app.services.injection_guard import InjectionGuard
-        inj_cfg = await InjectionGuard(self.db).settings(org_id)
-        flags: List[str] = []
-        outgoing: List[Dict[str, Any]] = []
-        injection_hits: List[str] = []
-        from app.services import pii_rules
-
-        pii_cfg = await pii_rules.config(self.db, org_id, request_budget=1.0)  # all messages together
-        term_hits: List[Any] = []  # counted once per request, after every message is checked
-        for i, m in enumerate(body["messages"]):
-            text = _text(m.get("content"))
-            # in a thread: custom PII rules may run up to their time limit
-            fw = await asyncio.to_thread(prompt_firewall.scan, text, blocked_terms, "en", pii_cfg) if text else None
-            if fw is not None and fw.timed_out:
-                await pii_rules.note_timeouts(self.db, org_id, fw.timed_out)
-            if fw is not None:
-                term_hits += fw.term_hits
-            if fw is not None and fw.blocked:
-                await bt.record_hits(self.db, org_id, term_hits)
-                await self._record(org_id, agent_id, model, "blocked", fw.blocked_reason, list(fw.flags), provider_id)
-                raise GatewayError(403, "blocked_by_firewall", fw.blocked_reason or "Blocked by the Prompt Firewall.",
-                                   "permission_error")
-            if fw is not None:
-                flags += [f for f in fw.flags if f not in flags]
-            if text and m["role"] in SCANNED_ROLES and inj_cfg["mode"] != "off":
-                r = scan_text(text, inj_cfg["threshold"])
-                if r["verdict"] == "injection":
-                    injection_hits.append(f"messages[{i}] ({m['role']}): "
-                                          + ", ".join(f["label"] for f in r["findings"][:3]))
-            outgoing.append({**{k: v for k, v in m.items() if k != "content"},
-                             "content": fw.masked_text if fw is not None else m.get("content")})
-        await bt.record_hits(self.db, org_id, term_hits)  # committed with the request just below
-        if injection_hits:
-            flags.append("asi01:injection")
-            if inj_cfg["mode"] == "enforce":
-                await self._record(org_id, agent_id, model, "blocked", "prompt injection: " + "; ".join(injection_hits),
-                                   flags, provider_id)
-                raise GatewayError(403, "prompt_injection", "Prompt-injection pattern in "
-                                   + "; ".join(injection_hits) + " (ASI01)", "permission_error")
-
-        # ---- intent (services/guardrail.py): the last user message, masked
-        from app.services import guardrail
-        last_user = next((_text(m.get("content")) for m in reversed(outgoing) if m.get("role") == "user"), "")
-        verdict = await guardrail.classify(self.db, org_id, last_user, "gateway")
-        if verdict:
-            flags += [f for f in verdict.flags if f not in flags]
-            if verdict.block:
-                await self._record(org_id, agent_id, model, "blocked", f"intent guardrail: {verdict.reason}",
-                                   flags, provider_id)
-                raise GatewayError(403, "blocked_by_guardrail", f"Intent guardrail: {verdict.reason}",
-                                   "permission_error")
-
-        params ={k: body.get(k) for k in ("temperature", "top_p", "stop")}
+        params = {k: body.get(k) for k in ("temperature", "top_p", "stop")}
         requested = body.get("max_tokens") or body.get("max_completion_tokens")
         params["max_tokens"] = min(requested or max_tokens_cap, max_tokens_cap)
-
-        masked_transcript = "\n".join(f"[{m['role']}] {_text(m.get('content'))}" for m in outgoing)[:20000]
-        ai_req = AIRequest(
-            org_id=org_id, user_id=user_id, provider_id=provider_id,
-            input_text_encrypted=encrypt_secret(json.dumps(body["messages"], ensure_ascii=False, default=str), org_id=org_id),
-            masked_input_text=masked_transcript, purpose=f"gateway:{agent_name}"[:255], risk_level="low",
-            status="pending", firewall_flags=flags,
-        )
-        self.db.add(ai_req)
-        await self.db.commit()
-        await self.db.refresh(ai_req)
-        ai_req_id = ai_req.id
+        outgoing = [{**m} for m in body["messages"]]
 
         started = time.monotonic()
         try:
             with provider_policy.scope(self_hosted):
-                text, finish, raw, usage = await gateway_adapters.chat(p_type, p_key, p_base, upstream, outgoing,
-                                                                       params)
+                text, finish, _raw, usage = await gateway_adapters.chat(p_type, p_key, p_base, upstream, outgoing,
+                                                                        params)
         except ProviderCallError as exc:
-            ai_req.status = "failed"
-            ai_req.error_message = str(exc)[:2000]
-            await self.db.commit()
-            await self._record(org_id, agent_id, model, "failed", str(exc), flags, provider_id, ai_req_id,
+            await self._record(org_id, agent_id, model, "failed", str(exc), [], provider_id,
                                int((time.monotonic() - started) * 1000))
             raise GatewayError(502, "provider_error", str(exc), "api_error")
         latency = int((time.monotonic() - started) * 1000)
 
-        # ---- output: ASI01 / ASI05
-        filtered_reason = None
-        if scan_output and text:
-            from app.services.code_exec_detector import scan_value
-            from app.services.code_exec_guard import CodeExecGuard
-            ce_cfg = await CodeExecGuard(self.db).settings(org_id)
-            out_inj = scan_text(text, inj_cfg["threshold"]) if inj_cfg["mode"] != "off" else {"verdict": "clean"}
-            crit = [f for f in scan_value(text, "$") if f["severity"] == "critical"] if ce_cfg["mode"] != "off" else []
-            if out_inj["verdict"] == "injection":
-                flags.append("output:asi01")
-                if inj_cfg["mode"] == "enforce":
-                    filtered_reason = "answer carries a prompt injection (ASI01)"
-            if crit:
-                flags.append("output:asi05")
-                if ce_cfg["mode"] == "enforce":
-                    filtered_reason = "answer carries critical code: " + ", ".join(f["label"] for f in crit[:3]) + " (ASI05)"
-        if filtered_reason:
-            text, finish = "", "content_filter"
-
-        ai_req.status = "completed"
-        ai_req.firewall_flags = flags
-        self.db.add(AIResponse(request_id=ai_req_id, provider_response_json=raw if isinstance(raw, dict) else {"raw": str(raw)},
-                               response_text=text))
-        await self.db.commit()
-        call = await self._record(org_id, agent_id, model, "filtered" if filtered_reason else "completed",
-                                  filtered_reason, flags, provider_id, ai_req_id, latency, usage)
+        call = await self._record(org_id, agent_id, model, "completed", None, [], provider_id, latency, usage)
         return {
             "id": f"chatcmpl-pvz-{call.id}",
             "object": "chat.completion",
@@ -372,8 +257,7 @@ class GatewayService:
             "usage": {"prompt_tokens": usage.get("prompt_tokens"), "completion_tokens": usage.get("completion_tokens"),
                       "total_tokens": (usage.get("prompt_tokens") or 0) + (usage.get("completion_tokens") or 0)
                       if usage.get("prompt_tokens") is not None else None},
-            "provenza": {"call_id": call.id, "request_id": ai_req_id, "flags": flags,
-                         "filtered": filtered_reason},
+            "provenza": {"call_id": call.id},
         }
 
     # ------------------------------------------------------------------ overview
@@ -412,6 +296,6 @@ class GatewayService:
             "calls": [{"id": c.id, "created_at": c.created_at, "agent_id": c.agent_id, "agent_name": name,
                        "model": c.model, "provider": pname.get(c.provider_id), "status": c.status, "reason": c.reason,
                        "flags": c.flags, "latency_ms": c.latency_ms, "prompt_tokens": c.prompt_tokens,
-                       "completion_tokens": c.completion_tokens, "ai_request_id": c.ai_request_id}
+                       "completion_tokens": c.completion_tokens}
                       for c, name in calls],
         }

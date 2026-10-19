@@ -28,7 +28,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.agent import Agent
 from app.models.agent_action import AgentAction, AgentIncident
 from app.models.ai_provider import AIProvider
-from app.models.ai_request import AIRequest
+from app.models.gateway import GatewayCall
 from app.models.ai_system import AISystem, AISystemDataLink
 from app.models.ai_use_case import AIUseCase
 from app.models.shadow_ai_sighting import ShadowAISighting
@@ -317,7 +317,7 @@ class InventoryService:
         """Activity and trust signals for one system, computed on the fly from
         the events other modules already record (nothing is stored here):
           agent        -> agent_actions / agent_incidents
-          llm_provider -> ai_requests
+          llm_provider -> gateway_calls
           shadow       -> shadow_ai_sightings
         Signals are prompts for a reviewer, not verdicts."""
         system = await self.get(system_id, org_id)
@@ -368,32 +368,29 @@ class InventoryService:
                 signals.append("actions_awaiting_approval")
 
         elif system.kind == "llm_provider" and system.provider_id:
-            source = "ai_requests"
+            source = "gateway_calls"
             rows = (await self.db.execute(
-                select(AIRequest.status, func.count())
-                .where(AIRequest.org_id == org_id, AIRequest.provider_id == system.provider_id,
-                       AIRequest.created_at >= since)
-                .group_by(AIRequest.status)
+                select(GatewayCall.status, func.count())
+                .where(GatewayCall.org_id == org_id, GatewayCall.provider_id == system.provider_id,
+                       GatewayCall.created_at >= since)
+                .group_by(GatewayCall.status)
             )).all()
             by = {(k or "unknown"): v for k, v in rows}
             total = sum(by.values())
             counts = {
-                "requests": total,
+                "calls": total,
                 "completed": by.get("completed", 0),
-                "blocked": by.get("blocked", 0),
-                "pending_approval": by.get("pending_approval", 0),
-                "other": total - by.get("completed", 0) - by.get("blocked", 0) - by.get("pending_approval", 0),
+                "denied": by.get("denied", 0) + by.get("rate_limited", 0),
+                "failed": by.get("failed", 0),
             }
             last = (await self.db.execute(
-                select(func.max(AIRequest.created_at)).where(
-                    AIRequest.org_id == org_id, AIRequest.provider_id == system.provider_id)
+                select(func.max(GatewayCall.created_at)).where(
+                    GatewayCall.org_id == org_id, GatewayCall.provider_id == system.provider_id)
             )).scalar_one()
             if total:
-                rates["block_rate"] = round(counts["blocked"] / total, 3)
-                if total >= MIN_EVENTS_FOR_RATE and rates["block_rate"] > HIGH_RATE_THRESHOLD:
-                    signals.append("high_block_rate")
-            if counts["pending_approval"]:
-                signals.append("requests_awaiting_approval")
+                rates["denial_rate"] = round(counts["denied"] / total, 3)
+                if total >= MIN_EVENTS_FOR_RATE and rates["denial_rate"] > HIGH_RATE_THRESHOLD:
+                    signals.append("high_call_denial_rate")
 
         elif system.kind == "shadow" and system.shadow_tool:
             source = "shadow_ai_sightings"

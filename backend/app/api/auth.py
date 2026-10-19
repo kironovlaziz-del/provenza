@@ -35,9 +35,7 @@ async def auth_config():
     """Public, unauthenticated: what the sign-in screens may offer."""
     return {
         "signup_enabled": settings.ALLOW_PUBLIC_SIGNUP,
-        "features": {
-            "content_safety": settings.CONTENT_SAFETY_ENABLED,
-        },
+        "features": {},
     }
 
 

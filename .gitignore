@@ -28,14 +28,6 @@ celery.log
 # Trained model artifacts and uploaded datasets
 backend/data/
 
-# NER training data & model binaries (rebuilt locally)
-backend/ner_training/data/
-backend/ner_training/output/
-
-# NER training data & model binaries (rebuilt locally)
-backend/ner_training/data/
-backend/ner_training/output/
-
 
 # agent: secrets and compiled binary (source is committed, these are not)
 agent/config.json

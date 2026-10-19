@@ -22,8 +22,8 @@ active, whatever it covers stays stopped:
     is added to the event;
   * an agent it covers cannot be switched back on by hand (status change,
     quarantine release) - lift the stop instead.
-org_traffic also stops the gateway and AI requests while it is active
-(gateway_service, request_service ask traffic_stop()).
+org_traffic also stops the LLM gateway and the egress sensors' workloads
+while it is active (gateway_service, egress_sensor ask traffic_stop()).
 
 Lifting gives back what the event stopped and nothing else: agents it
 suspended return to the status they had, unless

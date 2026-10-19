@@ -5,18 +5,17 @@
 """
 Demo traffic for Agent observability: a few demo agents call the real API
 (policy checks with their own X-Agent-Key) the way production agents do, so
-the dashboard, the live terminal and the guards can be shown and verified.
+the dashboard, the live terminal and the policy decisions can be shown.
 
     cd backend && source .venv/bin/activate
     python scripts/simulate_agents.py --admin-email admin@example.com --minutes 5
     python scripts/simulate_agents.py --admin-email admin@example.com --cleanup
 
 What it sends, per agent, at random:
-  - allowed tool calls (with a fake e-mail/phone in the arguments, so PII
-    masking is visible in the terminal),
+  - allowed tool calls (with a fake e-mail/phone in the arguments),
   - calls to tools the agent is not allowed to use (denied, incidents),
-  - prompt-injection text in the arguments (ASI01 guard),
-  - shell / eval payloads to code tools (ASI05 guard),
+  - unusual arguments (injected instructions, shell / eval payloads), which
+    the policy decides on like any other call,
   - optionally LLM calls through the gateway (--gateway-model, needs a route).
 
 Demo agents are named "demo-*" and marked in their description. Their API

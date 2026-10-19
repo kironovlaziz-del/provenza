@@ -335,7 +335,7 @@ request cannot spend the server's work or another agent's quota:
 | 4 | structure: depth ≤ 64, ≤ 50 000 nodes, strings ≤ 2 000 000 characters, keys ≤ 1 000, no U+0000 | 422 `pvp.input_rejected` |
 | 5 | identifiers (tool, action type, capability, tool lists): no invisible or control characters, no surrounding space, NFKC-stable, letters from one script | 422 `pvp.input_rejected` |
 | 6 | PVP schema (§3) | 422 |
-| 7 | signature, policy, injection (ASI01), code shapes (ASI05), behaviour (ASI10): the orchestrator and the services it calls | per check |
+| 7 | signature, policy, supply chain, behaviour (ASI10): the orchestrator and the services it calls | per check |
 
 Steps 4 and 5 exist for concrete reasons:
 - before step 4, an input nested 5 000 levels deep crashed the check
@@ -357,9 +357,9 @@ the request; it is empty for a session, because an id in the body is a
 claim and not an identity. Rate-limit refusals are not logged row by row,
 since a flood of them would turn into a flood of writes.
 
-Suspicious but well-formed content is not the guard's call. In enforce
-mode, the injection and code-execution guards already hold such an action
-for human approval (ASI09). Nothing is executed in a "restricted mode".
+Suspicious but well-formed content is not the guard's call: policies decide
+which tools need a person's approval (ASI09). Nothing is executed in a
+"restricted mode".
 
 ## 5. Mapping to external protocols
 

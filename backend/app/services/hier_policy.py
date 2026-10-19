@@ -8,13 +8,11 @@ agent, each level a document of core/policy_doc.py, combined so that lower
 levels can only tighten.
 
 Where it applies:
-  * gateway (gateway_service): limits, models, providers, output scanning - for the calling agent, on top of the gateway settings
-    (which take part as the topmost level, "gateway settings");
+  * gateway (gateway_service): limits, models, providers - for the
+    calling agent, on top of the gateway settings (which take part as the
+    topmost level, "gateway settings");
   * agent actions (agent_audit -> agent_policy_engine): tools allow / deny /
-    require approval, models, delegation depth;
-  * user requests (request_service): the organization level - providers,
-    approval required - on top of the use case's policy.
-Blocked terms have their own page and scopes (services/blocked_terms.py).
+    require approval, models, delegation depth.
 """
 
 from __future__ import annotations
@@ -47,22 +45,13 @@ def doc_error(e: PolicyDocError):
     return api_error(status.HTTP_422_UNPROCESSABLE_ENTITY, e.code, path=e.path, detail=e.detail)
 
 
-def _check_scope(doc: Dict[str, Any], scope: str) -> Dict[str, Any]:
-    """User requests are governed by the organization level only: a
-    `requests` section anywhere else would be shown but do nothing."""
-    if scope != "org" and doc.get("requests"):
-        raise PolicyDocError("policy.org_only", "requests", "only the organization level governs user requests")
-    return doc
-
-
-def parse(yaml_text: Optional[str], document: Optional[Dict[str, Any]],
-          scope: str = "org") -> Tuple[Dict[str, Any], str]:
+def parse(yaml_text: Optional[str], document: Optional[Dict[str, Any]]) -> Tuple[Dict[str, Any], str]:
     """(validated document, YAML to keep). YAML wins when both are given:
     it is what the admin typed, comments included."""
     try:
         if yaml_text is not None:
-            return _check_scope(policy_doc.from_yaml(yaml_text), scope), yaml_text
-        doc = _check_scope(policy_doc.validate(document or {}), scope)
+            return policy_doc.from_yaml(yaml_text), yaml_text
+        doc = policy_doc.validate(document or {})
         return doc, policy_doc.to_yaml(doc)
     except PolicyDocError as e:
         raise doc_error(e)
@@ -120,7 +109,7 @@ async def save_layer(db: AsyncSession, org_id: int, user_id: int, scope: str, ta
     """Write a level. expected_revision: the revision the editor started from
     (0 for a level that did not exist) - a concurrent change is refused
     rather than silently overwritten. Returns (layer, document before)."""
-    doc, source = parse(yaml_text, document, scope)
+    doc, source = parse(yaml_text, document)
     layer = await get_layer(db, org_id, scope, target_id, lock=True)
     current = layer.revision if layer else 0
     if expected_revision is not None and expected_revision != current:
@@ -148,10 +137,8 @@ async def save_layer(db: AsyncSession, org_id: int, user_id: int, scope: str, ta
 # --------------------------------------------------------------------------- the chain
 def _gateway_level(cfg: Dict[str, Any]) -> Dict[str, Any]:
     """The gateway settings, as the topmost level of the hierarchy."""
-    doc: Dict[str, Any] = {"limits": {"requests_per_minute": int(cfg["rpm_per_agent"]),
-                                      "max_tokens": int(cfg["max_tokens_cap"])},
-                           "content": {"scan_output": bool(cfg["scan_output"])}}
-    return doc
+    return {"limits": {"requests_per_minute": int(cfg["rpm_per_agent"]),
+                       "max_tokens": int(cfg["max_tokens_cap"])}}
 
 
 async def _team_chain(db: AsyncSession, org_id: int, team_id: Optional[int]) -> List[Team]:
@@ -234,11 +221,6 @@ async def engine_policies(db: AsyncSession, agent: Agent) -> Tuple[List[Dict[str
     return policies, depth
 
 
-async def for_requests(db: AsyncSession, org_id: int) -> Effective:
-    """What governs user requests (Policy Center): the organization level."""
-    return Effective(combine(await chain(db, org_id, gateway=False)))
-
-
 async def preview(db: AsyncSession, org_id: int, scope: str, target_id: Optional[int],
                   yaml_text: Optional[str], document: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     """What the level would be and what it would make the effective policy,
@@ -247,7 +229,6 @@ async def preview(db: AsyncSession, org_id: int, scope: str, target_id: Optional
     target = await _target(db, org_id, scope, target_id)
     try:
         doc = policy_doc.from_yaml(yaml_text) if yaml_text is not None else policy_doc.validate(document or {})
-        _check_scope(doc, scope)
     except PolicyDocError as e:
         return {"ok": False, "error": {"code": e.code, "path": e.path, "detail": e.detail}}
     levels = await chain(db, org_id, team_id=target_id if scope == "team" else None,

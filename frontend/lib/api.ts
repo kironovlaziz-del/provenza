@@ -1,17 +1,10 @@
 import axios from "axios";
 import type {
   User,
-  Policy,
-  PolicyVersion,
   Provider,
   UseCase,
-  AIRequest,
-  AIResponse,
-  Approval,
   Incident,
   AuditLog,
-  Override,
-  OverrideType,
   ShadowSighting,
   NotificationChannel,
   NotificationChannelType,
@@ -117,13 +110,8 @@ export async function login(orgSlug: string, email: string, password: string) {
 }
 
 /** Public: what the sign-in screens may offer (self-service sign-up is off by default). */
-export interface AppFeatures {
-  content_safety: boolean;
-}
-
 export interface AppConfig {
   signup_enabled: boolean;
-  features: AppFeatures;
 }
 
 export async function getAuthConfig(): Promise<AppConfig> {
@@ -238,80 +226,10 @@ export async function updateUserStatus(id: number, status: "active" | "disabled"
   return data;
 }
 
-// ---- Policies (Policy Center) ----
-export async function listPolicies() {
-  const { data } = await api.get<Page<Policy>>("/policies/");
-  return unwrap(data);
-}
-
-export async function listPoliciesPage(skip = 0, limit = 50) {
-  const { data } = await api.get<Page<Policy>>("/policies/", { params: { skip, limit } });
-  return data;
-}
-
-export async function getPolicy(id: number) {
-  const { data } = await api.get<Policy>(`/policies/${id}`);
-  return data;
-}
-
-export async function createPolicy(payload: { name: string; description?: string }) {
-  const { data } = await api.post<Policy>("/policies/", payload);
-  return data;
-}
-
-export async function listPolicyVersions(policyId: number) {
-  const { data } = await api.get<PolicyVersion[]>(`/policies/${policyId}/versions`);
-  return data;
-}
-
-export async function createPolicyVersion(
-  policyId: number,
-  rulesJson: Record<string, unknown>
-) {
-  const { data } = await api.post<PolicyVersion>(`/policies/${policyId}/versions`, {
-    rules_json: rulesJson,
-  });
-  return data;
-}
-
-export async function archivePolicy(id: number) {
-  const { data } = await api.post(`/policies/${id}/archive`);
-  return data;
-}
-
-export async function activatePolicy(id: number) {
-  const { data } = await api.post(`/policies/${id}/activate`);
-  return data;
-}
-
-
-export async function approvePolicyVersion(policyId: number, versionId: number) {
-  const { data } = await api.post<PolicyVersion>(
-    `/policies/${policyId}/versions/${versionId}/approve`
-  );
-  return data;
-}
-
 // ---- Providers (Vendor Risk Desk) ----
-export interface ProviderChatResult {
-  answer: string;
-  masked: boolean;
-  flags: string[];
-  blocked: boolean;
-  blocked_reason?: string | null;
-}
 
 export async function listProviderModels(providerId: number) {
   const { data } = await api.get<{ models: string[]; note?: string }>(`/providers/${providerId}/models`);
-  return data;
-}
-
-export async function providerChat(providerId: number, message: string, systemPrompt?: string, model?: string) {
-  const { data } = await api.post<ProviderChatResult>(`/providers/${providerId}/chat`, {
-    message,
-    system_prompt: systemPrompt,
-    model,
-  });
   return data;
 }
 
@@ -386,7 +304,6 @@ export async function createUseCase(payload: {
   name: string;
   risk_level: RiskLevel;
   owner_user_id?: number;
-  approved_policy_version_id?: number;
 }) {
   const { data } = await api.post<UseCase>("/use-cases/", payload);
   return data;
@@ -398,65 +315,9 @@ export async function updateUseCase(
     name: string;
     risk_level: RiskLevel;
     status: string;
-    approved_policy_version_id: number;
   }>
 ) {
   const { data } = await api.put<UseCase>(`/use-cases/${id}`, payload);
-  return data;
-}
-
-// ---- Requests (Usage Registry / Action Trace) ----
-export async function listRequests() {
-  const { data } = await api.get<Page<AIRequest>>("/requests/");
-  return unwrap(data);
-}
-
-export async function listRequestsPage(skip = 0, limit = 50) {
-  const { data } = await api.get<Page<AIRequest>>("/requests/", { params: { skip, limit } });
-  return data;
-}
-
-export async function getRequest(id: number) {
-  const { data } = await api.get<AIRequest>(`/requests/${id}`);
-  return data;
-}
-
-export async function getRequestResponse(id: number) {
-  const { data } = await api.get<AIResponse | null>(`/requests/${id}/response`);
-  return data;
-}
-
-export async function createRequest(payload: {
-  use_case_id: number;
-  provider_id: number;
-  input_text: string;
-  purpose: string;
-}) {
-  const { data } = await api.post<AIRequest>("/requests/", payload);
-  return data;
-}
-
-// ---- Approvals ----
-export async function listApprovals() {
-  const { data } = await api.get<Page<Approval>>("/approvals/");
-  return unwrap(data);
-}
-
-export async function listApprovalsPage(skip = 0, limit = 50) {
-  const { data } = await api.get<Page<Approval>>("/approvals/", { params: { skip, limit } });
-  return data;
-}
-
-export async function createApproval(payload: { request_id: number }) {
-  const { data } = await api.post<Approval>("/approvals/", payload);
-  return data;
-}
-
-export async function decideApproval(
-  id: number,
-  payload: { decision: "approved" | "rejected"; reason?: string }
-) {
-  const { data } = await api.post<Approval>(`/approvals/${id}/decision`, payload);
   return data;
 }
 
@@ -477,7 +338,6 @@ export async function getIncident(id: number) {
 }
 
 export async function createIncident(payload: {
-  request_id?: number;
   severity: RiskLevel;
   category: string;
   summary: string;
@@ -520,23 +380,6 @@ export async function listAuditLogs(filters?: {
   const qs = params.toString();
   const { data } = await api.get<Page<AuditLog>>(`/audit-logs/${qs ? `?${qs}` : ""}`);
   return unwrap(data);
-}
-
-// ---- Override Console ----
-export async function listOverrides(requestId: number) {
-  const { data } = await api.get<Page<Override>>("/overrides/", {
-    params: { request_id: requestId },
-  });
-  return unwrap(data);
-}
-
-export async function createOverride(payload: {
-  request_id: number;
-  override_type: OverrideType;
-  override_payload_json?: Record<string, unknown>;
-}) {
-  const { data } = await api.post<Override>("/overrides/", payload);
-  return data;
 }
 
 // ---- Shadow AI Monitor ----
@@ -619,20 +462,21 @@ export async function testNotificationChannel(id: number) {
 }
 
 // ---- Dashboard stats ----
+/** LLM calls through the gateway on one day, by outcome. */
 export interface DayBucket {
   date: string;
   total: number;
   completed: number;
-  blocked: number;
+  denied: number;
   failed: number;
 }
 
 export interface DashboardStats {
   window_days: number;
-  requests_by_day: DayBucket[];
-  requests_by_status: Record<string, number>;
+  calls_by_day: DayBucket[];
+  calls_by_status: Record<string, number>;
   incidents_by_severity: Record<string, number>;
-  total_requests: number;
+  total_calls: number;
   total_incidents: number;
   pending_approvals: number;
   total_policies: number;

@@ -31,7 +31,7 @@ from app.services.audit_service import AuditService
 
 router = APIRouter()
 _admin = require_role(UserRole.admin)
-# reading shows blocked terms and rules: what the firewall looks for is not for every user
+# reading shows the rules: not for every user
 _reviewer = require_role(UserRole.admin, UserRole.approver)
 
 

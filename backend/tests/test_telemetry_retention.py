@@ -1,8 +1,8 @@
 """
-Agent telemetry retention (Queue & Retention): old policy checks are deleted
-unless something still refers to them, old agent/LLM content is erased while
-the rows stay, "keep indefinitely" disables both, and omitted settings keep
-their value.
+Agent telemetry retention (Settings -> Data retention): old policy checks
+are deleted unless something still refers to them, old agent content is
+erased while the rows stay, "keep indefinitely" disables both, omitted
+settings keep their value, and the beat run covers organizations with agents.
 """
 
 import secrets
@@ -15,8 +15,8 @@ from app.models.agent import Agent
 from app.models.agent_action import ActionCheck, AgentAction
 from tests.conftest import auth_headers
 
-Q = "/api/v1/queue"
-BASE = {"queue_ttl_seconds": 900, "approval_ttl_hours": 72, "raw_prompt_retention_days": None}
+Q = "/api/v1/retention"
+BASE: dict = {}
 
 
 async def _agent(client, token):
@@ -66,11 +66,11 @@ class TestTelemetryRetention:
         # keep indefinitely: nothing happens
         s = await _settings(client, admin_token, agent_check_retention_days=None, agent_content_retention_days=None)
         assert s["agent_check_retention_days"] is None
-        r = (await client.post(Q + "/sweep", headers=auth_headers(admin_token))).json()
+        r = (await client.post(Q + "/run", headers=auth_headers(admin_token))).json()
         assert r["purged_checks"] == 0 and r["scrubbed_content"] == 0
 
         await _settings(client, admin_token, agent_check_retention_days=30, agent_content_retention_days=30)
-        r = (await client.post(Q + "/sweep", headers=auth_headers(admin_token))).json()
+        r = (await client.post(Q + "/run", headers=auth_headers(admin_token))).json()
         assert r["purged_checks"] >= 1 and r["scrubbed_content"] >= 1
 
         db_session.expire_all()
@@ -84,13 +84,27 @@ class TestTelemetryRetention:
         assert rows[ids["old_action"]].tool_name == "db.read"
         assert rows[ids["new_action"]].input_data == {"q": "recent"}
 
-        sweeps = (await client.get(Q + "/", headers=auth_headers(admin_token))).json()["sweeps"]
-        assert sweeps[0]["purged_checks"] >= 1
+        runs = (await client.get(Q + "/", headers=auth_headers(admin_token))).json()["runs"]
+        assert runs[0]["purged_checks"] >= 1 and runs[0]["trigger"] == "manual"
 
     @pytest.mark.asyncio
     async def test_omitted_settings_are_kept_and_validated(self, client, admin_token):
         await _settings(client, admin_token, agent_check_retention_days=45, agent_content_retention_days=120)
-        s = await _settings(client, admin_token)              # only the original three keys
+        s = await _settings(client, admin_token)              # nothing sent: nothing changes
         assert s["agent_check_retention_days"] == 45 and s["agent_content_retention_days"] == 120
         bad = await client.put(Q + "/settings", json={**BASE, "agent_check_retention_days": 0}, headers=auth_headers(admin_token))
         assert bad.status_code == 422
+
+    @pytest.mark.asyncio
+    async def test_roles_and_beat_run(self, client, admin_token, approver_token, db_session):
+        assert (await client.get(Q + "/", headers=auth_headers(approver_token))).status_code == 200
+        assert (await client.put(Q + "/settings", json={"agent_check_retention_days": 10},
+                                 headers=auth_headers(approver_token))).status_code == 403
+        assert (await client.post(Q + "/run", headers=auth_headers(approver_token))).status_code == 403
+
+        agent_id = await _agent(client, admin_token)
+        org_id = (await db_session.get(Agent, agent_id)).org_id
+        from app.services import retention
+
+        result = await retention.run_all(db_session)
+        assert org_id in result and set(result[org_id]) == {"purged_checks", "scrubbed_content"}

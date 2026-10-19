@@ -258,18 +258,16 @@ async def _create_org_with_admin_and_approver(
     db.add_all([admin, approver])
     if relaxed_identity:
         # Production defaults are strict (agents act only with their own key,
-        # keyless agents cannot act, A2A enforced). Most tests predate that and
+        # keyless agents cannot act). Most tests predate that and
         # drive agents through a user session, so this fixture organization
         # keeps the old relaxed settings explicitly; tests/test_strict_identity.py
         # covers the strict defaults with relaxed_identity=False.
-        from app.models.a2a import A2ASettings
         from app.models.agent_identity import AgentIdentitySettings
         from app.models.tool_registry import SupplyChainSettings
 
         db.add(AgentIdentitySettings(org_id=org.id, require_agent_key=False,
                                      allow_direct_registration=True, rotation_grace_minutes=60,
                                      require_pq_signatures=False))
-        db.add(A2ASettings(org_id=org.id, mode="monitor"))
         # the Tool Registry enforces by default; most tests call tools they never registered
         db.add(SupplyChainSettings(org_id=org.id, mode="monitor"))
     await db.flush()

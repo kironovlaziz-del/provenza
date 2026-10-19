@@ -81,19 +81,6 @@ export default function ChainDetailPage() {
           </div>
         </div>
 
-        {chain.tainted_at && (
-          <div className="panel" style={{ marginBottom: 16, borderColor: "#ef4444" }}>
-            <div className="panel-body">
-              ☣ {t("chains.tainted_banner", "A tool output in this chain contained a prompt injection (ASI01). Every further action needs a human approval until an admin clears the taint.")}{" "}
-              {chain.taint_details?.tool_name ? (
-                <span className="hint-text mono" style={{ fontSize: 12 }}>
-                  {String(chain.taint_details.tool_name)}{chain.taint_details.path ? ` → ${String(chain.taint_details.path)}` : ""}
-                </span>
-              ) : null}{" "}
-              <a href="/agent-injection">{t("chains.tainted_link", "Review in Prompt Injection")}</a>
-            </div>
-          </div>
-        )}
         {chain.status === "tripped" && (
           <div className="panel" style={{ marginBottom: 20, borderColor: "#f59e0b" }}>
             <div className="panel-body" style={{ color: "#d97706" }}>

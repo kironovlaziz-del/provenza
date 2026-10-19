@@ -5,10 +5,9 @@
 """
 Multi-message chat calls for the gateway.
 
-provider_adapters.call_provider sends a single prompt; the gateway forwards
-a whole conversation (system / user / assistant / tool messages) and the
-sampling parameters. Same provider types, same base URLs and headers, same
-shared httpx client and ProviderCallError as provider_adapters.
+The gateway forwards a whole conversation (system / user / assistant / tool
+messages) and the sampling parameters, with the shared httpx client and
+ProviderCallError of provider_adapters.
 """
 
 from typing import Any, Dict, List, Optional, Tuple
@@ -104,7 +103,7 @@ async def chat(provider_type: str, api_key: Optional[str], base_url: Optional[st
         u = data.get("usage") or {}
         return text, finish, data, {"prompt_tokens": u.get("input_tokens"), "completion_tokens": u.get("output_tokens")}
 
-    # custom: the provider_adapters contract ({"prompt"} -> {"response"|"text"}), plus the messages
+    # custom: {"prompt", "messages", "model", ...} -> {"response"|"text"}
     if not base_url:
         raise ProviderCallError("Custom connections require a base_url pointing at the inference endpoint.")
     prompt = "\n\n".join(f"{m['role']}: {_text(m.get('content'))}" for m in messages)

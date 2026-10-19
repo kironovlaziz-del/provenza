@@ -27,7 +27,7 @@ development, see [README.md](README.md).
 |------|--------|
 | **admin** | Everything, including user management, connections, ingestion sources, domain catalog, discovery |
 | **approver** | Review and decide approval requests; everyday operations |
-| **user** | Submit requests, view their own data |
+| **user** | Reads the everyday pages (dashboard, inventory, agents, agent activity); no reviews or settings |
 | **auditor** | Read everything an admin or approver sees - inventory, policies, agents, the audit log, compliance - and change nothing; may verify the audit log and generate compliance reports |
 | **compliance** | Compliance officer (DPO, Chief AI Officer): reads the same as an auditor and confirms compliance requirements |
 
@@ -39,36 +39,39 @@ officers too.
 
 ## 2. The dashboard
 
-After sign-in you land on the **Dashboard** — a summary of requests,
-incidents and pending approvals over a recent window.
+After sign-in you land on the **Dashboard** — a summary of LLM gateway
+calls, incidents and pending approvals over a recent window.
 
 The left sidebar has five groups; each item opens a page with tabs for
 its related pages:
 
 - **Overview** — Dashboard, Incidents, Approvals and the Kill switch.
-- **Visibility** — **Discovery** (agents found, shadow-AI sightings,
-  devices, network discovery, AI domain catalog), **Monitoring** (agent
-  observability, the live map, delegation chains and, for the server's
-  operator, the installation's health), **AI inventory** (inventory, use
-  cases, AI providers, connections) and **Agents** (agents, teams & roles,
-  agent identity, attestation, tool registry).
-- **Control** — **Policies** (Policy Center, policy hierarchy, agent
-  policies, compliance), **Protection** (behavior monitor, circuit
-  breaker) and **Gateways** (the AI gateway, Runtime with the egress
-  sensors, the playground).
-- **Evidence** — **Audit & evidence**: the audit log and the usage log.
-- **Settings** — your profile, users, notifications, ingestion sources,
-  SIEM export, encryption keys, queue & retention and system status.
+- **Visibility** — **AI inventory** (inventory, AI providers,
+  connections, use cases), **Agents** (agents, teams & roles, tool
+  registry, agent identity, attestation, behavior monitor, circuit
+  breaker), **Discovery** (agents found, devices, network discovery),
+  **Shadow AI** (sightings, AI domain catalog) and **Agent activity**
+  (agent observability, the live map, delegation chains).
+- **Control** — **Policies** (policy hierarchy, agent policies),
+  **Compliance** and **Gateways** (the AI gateway, Runtime with the egress
+  sensors).
+- **Evidence** — **Audit & evidence**: the audit log.
+- **Settings** — users, your profile, notifications, system status and,
+  for the server's operator, the installation's health; under **More**:
+  SIEM export, encryption keys, data retention and ingestion sources.
 
-Pages of the optional content-safety add-on (PII rules, blocked terms,
-intent guardrail, injection / code-exec / memory / message guards) appear
-only when the server sets `CONTENT_SAFETY_ENABLED=true`.
+Pages you open less often sit behind **More** on their section's tab bar.
+
+Agent observability shows what agents do as metadata only. An admin can open
+the content of one event (what the agent sent and got back) by giving a
+reason, which is written to the audit log; how long that content is kept is
+set under Settings → Data retention.
 
 ---
 
 ## 3. Connections (AI providers)
 
-Before the platform can send prompts to an AI provider, add a
+Before agents can call an AI provider through the gateway, add a
 connection.
 
 1. Sidebar → **AI inventory → Connections**.
@@ -81,73 +84,29 @@ You can also set an SLA and a risk score for vendor-risk tracking.
 
 ---
 
-## 4. Policy Center
-
-Policies define what is allowed and how prompts are filtered.
-
-1. Sidebar → **Policies → Policy Center** → **New policy**.
-2. Open the policy and **create a version**. A version holds the JSON
-   rules (approval required or not). The policy's **blocked terms** are
-   kept on the Blocked terms page (4.3), applying to: Policy.
-3. **Approve** the version to make it active. Versions are immutable —
-   to change rules, create and approve a new version.
-4. Bind the active version to a **use case** (see below).
-
-**Prompt Firewall** (content-safety add-on, see section 2): when a request runs under a policy, PII (emails,
-credit cards, SSNs, phone numbers, IP addresses, API keys) is masked
-before storage and before the provider ever sees it (4.2). A prompt
-containing a blocked term is rejected and never sent (4.3).
-
-### 4.1 Policy hierarchy
+## 4. Policy hierarchy
 
 Policies → **Policy hierarchy**: one policy at three levels -
 organization, team (and its sub-teams), agent - edited as a form or as
 YAML. A lower level can only tighten: the smallest limit wins, every
-level's allow list must allow, all deny / approval lists apply, and a
-switch turned on anywhere stays on. It applies to the gateway (limits,
-models, providers), to agent actions (tools, delegation depth) and - the
-organization level - to user requests (providers, approval). While you edit, *Effective policy*
+level's allow list must allow, and all deny / approval lists apply. It
+applies to the LLM gateway (limits, models, providers) and to agent
+actions (tools, delegation depth). While you edit, *Effective policy*
 shows every value with the level it comes from and lists what has no
 effect because a level above is stricter. Every save is in the audit log.
 Details: docs/policies.md.
 
-### 4.2 PII rules
-
-Content-safety add-on (section 2). Policies → **PII rules**: switch each built-in type (email, phone, card,
-SSN, IP address, API key, names, organizations, places) on or off and choose
-**Mask** (the value becomes `[MASKED:TYPE]`) or **Block** (the prompt is
-refused). Under *Your rules* add patterns for your own identifiers - start
-from the ПИНФЛ, ИНН, passport or contract-number preset - and check them in
-*Try it* before saving: it highlights what the rule finds and shows what the
-provider would get. Patterns that could run too long are refused with the
-reason; a saved rule that still runs out of time refuses that prompt and
-shows a warning. Details: docs/pii-rules.md.
-
-### 4.3 Blocked terms
-
-Content-safety add-on (section 2). Policies → **Blocked terms** is the one place for words a prompt must not
-contain. For each term choose where it applies (the whole organization,
-all agents, a team with its sub-teams, one agent, or a policy's use cases),
-how it is found (**whole word** - also spelt apart, joined, with digits for
-letters or look-alike letters - or **anywhere**) and what happens
-(**Block** refuses the prompt; **Monitor** lets it through and counts it -
-try a new term in Monitor first). Group terms in **categories** and switch
-a category off to pause its terms. The list shows how often each term was
-seen; **Import CSV** previews before adding, **Export CSV** downloads the
-list; **Try it** shows what a sample would trip. Terms that were in the
-gateway settings, the policy hierarchy or policy versions were moved here
-when upgrading. Details: docs/blocked-terms.md.
+Policies → **Agent policies** holds the rules for agent actions built
+visually (deny a tool, allow only some tools, require approval, limits).
 
 ---
 
 ## 5. Use Cases
 
-A use case ties together a purpose, a risk level, and an approved policy
-version.
+A use case records a purpose, its risk level and its owner.
 
 1. Sidebar → **AI inventory → Use Cases** → **New use case**.
-2. Set the name, risk level, and (optionally) the approved policy
-   version and owner.
+2. Set the name, risk level and (optionally) the owner.
 
 ### 5.1 Impact assessment
 
@@ -172,15 +131,12 @@ test of every system above minimal risk.
 
 ---
 
-## 6. Usage Registry & Approvals
+## 6. Approvals
 
-- **Audit & evidence → Usage log** lists every AI request with its
-  purpose, status, and full request → response trace.
-- If a request requires sign-off, it appears under **Overview →
-  Approvals**. Approvers open it and **Approve** or **Reject** with a
-  reason. All decisions are audit-logged.
-- **Overrides** on a request's page let an admin manually stop, edit, or
-  roll back that request when needed.
+An agent action that a policy marks as needing a person waits under
+**Overview → Approvals**. Admins and approvers judge it by its arguments
+and **Approve** or **Reject** it with a reason; the agent continues only
+after an approval. All decisions are audit-logged.
 
 ---
 
@@ -360,7 +316,7 @@ it: then lift that stop (8.4.5).
 
 Overview → **Kill switch** stops AI in four steps: one **agent**, a
 **team** (with its sub-teams), **all agents**, or **all AI traffic** (every
-agent plus the gateway, AI requests and the playground). Each stop needs a
+agent plus every call through the gateway). Each stop needs a
 reason; the two organization-wide levels also ask you to type `STOP`.
 Stopped agents are suspended and, unless you untick it, their delegation
 chains end. While a stop is in force, whatever it covers stays stopped:
@@ -415,8 +371,7 @@ about.
 
 Sidebar → **Settings → Notifications**. Add **email** or **webhook**
 channels and subscribe each to the events you care about
-(`incident_created`, `approval_pending`, `request_blocked`,
-`shadow_ai_reported`, `shadow_ai_blocked_domain`, `kill_switch`,
+(`incident_created`, `shadow_ai_reported`, `shadow_ai_blocked_domain`, `kill_switch`,
 `egress_sensor_offline`, `alert` - the server's monitoring alerts - and
 more). If email
 (SMTP) is not configured on the server, email channels are skipped
@@ -476,7 +431,7 @@ hear about it.
 
 ## 13. Monitoring the installation
 
-Monitoring → **Observability** is for the server's operator: the
+Settings → **Observability** is for the server's operator: the
 administrators of the organization that runs it. It answers "is
 everything working": the API, the database and queue, background jobs,
 egress sensors, audit evidence and data retention, each with what to do

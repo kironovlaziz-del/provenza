@@ -177,12 +177,7 @@ class AgentAudit:
             return decision
         if supply is not None:
             return supply
-        # ASI01: injected instructions in the arguments, tainted chain
-        from app.services.injection_guard import InjectionGuard
-        decision = await InjectionGuard(self.db).apply(org_id, agent_id, chain_id, tool_name, input_data, decision)
-        # ASI05: shell / eval / SQL / traversal shapes in the arguments, code tools
-        from app.services.code_exec_guard import CodeExecGuard
-        return await CodeExecGuard(self.db).apply(org_id, agent_id, chain_id, tool_name, input_data, decision)
+        return decision
 
     async def record(
         self,

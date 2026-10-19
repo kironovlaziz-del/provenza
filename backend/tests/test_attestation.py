@@ -281,12 +281,9 @@ async def test_user_sessions_cannot_bypass_it(client, admin_token, cluster):
     h = auth_headers(admin_token)
     for path, body in (
         (f"{A}/actions/check", {"agent_id": agent["id"], "tool_name": "kb.search", "input": {}}),
-        ("/api/v1/memory/write", {"agent_id": agent["id"], "namespace": "n", "content": "x", "source": "user"}),
-        ("/api/v1/memory/verify", {"agent_id": agent["id"], "items": [{"sha256": "0" * 64}]}),
-        ("/api/v1/a2a/receive", {"agent_id": agent["id"], "message_id": 1}),
         # other spellings the endpoint would read as the same id
-        ("/api/v1/memory/write", {"agent_id": float(agent["id"]), "namespace": "n", "content": "x", "source": "user"}),
-        ("/api/v1/memory/write", {"agent_id": str(agent["id"]), "namespace": "n", "content": "x", "source": "user"}),
+        (f"{A}/actions/check", {"agent_id": float(agent["id"]), "tool_name": "kb.search", "input": {}}),
+        (f"{A}/actions/check", {"agent_id": str(agent["id"]), "tool_name": "kb.search", "input": {}}),
     ):
         r = await client.post(path, headers=h, json=body)
         assert r.status_code == 403 and r.json()["detail"] == "agent.attestation_required", (path, r.text)

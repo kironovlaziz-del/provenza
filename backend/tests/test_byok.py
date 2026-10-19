@@ -14,7 +14,6 @@ from app.core import keyring
 from app.core.crypto import decrypt_secret, encrypt_secret
 from app.models.agent import Agent
 from app.models.ai_provider import AIProvider
-from app.models.ai_request import AIRequest
 from tests.conftest import auth_headers
 
 B = "/api/v1/byok"
@@ -30,11 +29,11 @@ async def _org(client, token, db):
 
 
 async def _secrets(db, org_id):
-    """A connection key and a raw prompt, both under the legacy server key."""
+    """Two connection keys, both under the legacy server key."""
     p = AIProvider(org_id=org_id, name="p-" + secrets.token_hex(3), type="openai", status="active",
                    api_key_encrypted=encrypt_secret("sk-live-123"))
-    r = AIRequest(org_id=org_id, status="completed", masked_input_text="x",
-                  input_text_encrypted=encrypt_secret("my raw prompt"))
+    r = AIProvider(org_id=org_id, name="q-" + secrets.token_hex(3), type="anthropic", status="active",
+                   api_key_encrypted=encrypt_secret("sk-other-456"))
     db.add_all([p, r])
     await db.commit()
     await db.refresh(p)
@@ -44,7 +43,7 @@ async def _secrets(db, org_id):
 
 async def _values(db, pid, rid):
     db.expire_all()
-    return (await db.get(AIProvider, pid)).api_key_encrypted, (await db.get(AIRequest, rid)).input_text_encrypted
+    return (await db.get(AIProvider, pid)).api_key_encrypted, (await db.get(AIProvider, rid)).api_key_encrypted
 
 
 class FakeVault:
@@ -81,7 +80,7 @@ class TestLifecycle:
         k1 = r.json()["key_id"]
         pkey, praw = await _values(db_session, pid, rid)
         assert pkey.startswith(f"pvz2:{k1}:") and praw.startswith(f"pvz2:{k1}:")
-        assert decrypt_secret(pkey) == "sk-live-123" and decrypt_secret(praw) == "my raw prompt"
+        assert decrypt_secret(pkey) == "sk-live-123" and decrypt_secret(praw) == "sk-other-456"
         assert encrypt_secret("new", org_id=org).startswith(f"pvz2:{k1}:")      # new data goes to the org key
         assert not encrypt_secret("new").startswith("pvz2:")                       # no org -> server key
 
@@ -93,12 +92,12 @@ class TestLifecycle:
         ov = (await client.get(B + "/", headers=auth_headers(admin_token))).json()
         assert [k["status"] for k in ov["keys"]] == ["active", "retired"]
         prov = next(d for d in ov["data"] if d["table"] == "ai_providers")
-        assert prov["active_key"] == 1 and prov["server_key"] == 0
+        assert prov["active_key"] == 2 and prov["server_key"] == 0
 
         r = await client.post(B + "/disable", headers=auth_headers(admin_token))
         assert r.status_code == 200 and r.json()["done"] == 2
         pkey, praw = await _values(db_session, pid, rid)
-        assert not pkey.startswith("pvz2:") and decrypt_secret(praw) == "my raw prompt"
+        assert not pkey.startswith("pvz2:") and decrypt_secret(praw) == "sk-other-456"
         assert not encrypt_secret("new", org_id=org).startswith("pvz2:")
         assert (await client.post(B + "/disable", headers=auth_headers(admin_token))).status_code == 409
 

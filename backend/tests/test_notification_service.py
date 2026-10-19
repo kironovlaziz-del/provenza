@@ -267,13 +267,13 @@ async def test_notify_only_dispatches_subscribed_event_types(monkeypatch):
         channel_type="email",
         target="a@b.com",
         enabled=True,
-        events_json=["approval_pending"],
+        events_json=["kill_switch"],
     )
     subscribed = SimpleNamespace(
         channel_type="email",
         target="c@d.com",
         enabled=True,
-        events_json=["incident_created", "approval_pending"],
+        events_json=["incident_created", "kill_switch"],
     )
     fake_db = _FakeAsyncDB([not_subscribed, subscribed])
 
@@ -322,7 +322,7 @@ def test_notify_sync_dedupes_and_filters_like_the_async_version(monkeypatch):
         channel_type="email",
         target="other@x.com",
         enabled=True,
-        events_json=["request_blocked"],
+        events_json=["egress_violation"],
     )
     fake_db = _FakeSyncDB([duplicate, duplicate, unsubscribed])
 
