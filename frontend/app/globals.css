@@ -431,13 +431,11 @@ tbody tr.clickable:hover {
 
 .form-row {
   display: flex;
-  flex-wrap: wrap;
   gap: 12px;
 }
 
 .form-row .field {
-  flex: 1 1 180px;
-  min-width: 0;
+  flex: 1;
 }
 
 .error-text {

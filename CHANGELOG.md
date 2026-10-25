@@ -70,7 +70,7 @@ this project adheres to [Semantic Versioning](https://semver.org/).
   server answers, sends a reconciliation report signed with its key (the
   manifest, Tool Registry and sealed credentials compared with the release
   held before the outage; an incident per difference). The quorum of that
-  release lifts it under Gateways → External APIs → Proxies with their passkeys, accepting
+  release lifts it under Egress → Proxies with their passkeys, accepting
   every difference no signed release explains; the proxy checks them itself.
   Pinned sensors isolate every workload after `offline_seconds` without the
   server, or when the release has expired, and lift themselves when it answers.
@@ -125,7 +125,7 @@ this project adheres to [Semantic Versioning](https://semver.org/).
   every forwarded or refused request carries its signed receipt, kept in
   the action's sealed evidence (`witness`) and in the proxy's hash-chained
   log; `tools/provenza_audit.py receipt --proxy-fingerprint` checks it.
-  Fingerprints under Gateways → External APIs → Proxies and in the key manifest. API:
+  Fingerprints under Egress → Proxies and in the key manifest. API:
   `/egress-proxy/key`, `/egress-proxy/policy-release`, `/egress-proxy/check-info`.
 - **Signed policy releases** ([docs/pvp/edge.md](docs/pvp/edge.md), section
   3.1). Administrators freeze what decides allow or deny (agents' rights,
@@ -524,7 +524,7 @@ this project adheres to [Semantic Versioning](https://semver.org/).
   `update-signing-key`. Migration `e4f5a6b7c8d9` can be downgraded.
 - **Credentials held by the server stop being used until they are sealed.**
   After the upgrade, upgrade and start the egress proxies (they register
-  their encryption key), then an administrator opens Gateways → External APIs →
+  their encryption key), then an administrator opens Gateways → Egress →
   Proxies and chooses *Seal and erase*: the credentials are sealed to every
   proxy with a key and erased from the server. Until then, upstreams that
   take a credential are refused; afterwards they are reached through the

@@ -358,7 +358,7 @@ export default function AgentIdentityPage() {
               <span>
                 <strong>{t("identity.require_egress", "Require confined egress")}</strong>
                 <span className="hint-text" style={{ display: "block", fontSize: 12 }}>
-                  {t("identity.require_egress_hint", "An agent acts only while its latest egress self-check found its host able to reach the egress proxy and nothing else. Lock hosts down with Gateways -> External APIs -> Lock agents down.")}
+                  {t("identity.require_egress_hint", "An agent acts only while its latest egress self-check found its host able to reach the egress proxy and nothing else. Lock hosts down with Gateways -> Egress -> Lock agents down.")}
                 </span>
               </span>
             </label>

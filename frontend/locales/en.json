@@ -2044,7 +2044,7 @@
     "egress_pending": "pending",
     "egress_unchecked": "not checked",
     "require_egress": "Require confined egress",
-    "require_egress_hint": "An agent acts only while its latest egress self-check found its host able to reach the egress proxy and nothing else. Lock hosts down with Gateways -> External APIs -> Lock agents down.",
+    "require_egress_hint": "An agent acts only while its latest egress self-check found its host able to reach the egress proxy and nothing else. Lock hosts down with Gateways -> Egress -> Lock agents down.",
     "egress_age": "A check counts for, hours",
     "confirm_require_egress": "Require confined egress? {{n}} active agents have no recent \"confined\" egress check: their actions will be refused until they run one from a locked-down host."
   },
@@ -3461,7 +3461,7 @@
     "hint": "A passkey stays on your phone or computer and is unlocked with its PIN. It confirms each sign-in and everything you sign; Provenza keeps only its public key. Add a second one on another device so you are not locked out.",
     "label": "Name (e.g. work laptop)",
     "none": "No passkey yet.",
-    "password": "Your Provenza password (the one you sign in with, not the device PIN)",
+    "password": "Your password",
     "remove": "Remove",
     "remove_confirm": "Remove “{{label}}”? Confirm with your password and a passkey.",
     "title": "Passkeys",
@@ -3554,20 +3554,19 @@
     "sealed": "sealed to {{n}} proxies",
     "local": "in the proxies' configuration",
     "none": "no credential",
-    "awaiting": "the server still holds the old one: seal it under Gateways → External APIs → Proxies",
+    "awaiting": "the server still holds the old one: seal it under Gateways → Egress → Proxies",
     "replace": "Replace",
     "set": "Set credential",
     "seal": "Seal to the proxies",
     "use_local": "In the proxies' configuration",
     "remove": "Remove",
-    "legacy": "Credentials this server still holds from before: {{n}}. Nothing uses them until they are sealed to the proxies; then they are erased here.",
+    "legacy": "This server still holds {{n}} credentials from before. Nothing uses them until they are sealed to the proxies; then they are erased here.",
     "legacy_confirm": "Seal them to the {{n}} proxies with a key and erase them here? A proxy added later needs them entered again.",
     "legacy_seal": "Seal and erase",
     "stale": "sealed for an earlier address: seal it again",
     "only_to": "The proxies send it only to",
     "not_yet": "not sealed yet",
     "unsigned": "sealed by the server: proxies that follow the signed policy use it only once an administrator vouches for it",
-    "countersign": "Vouch for it",
-    "no_keys_legacy": "No egress proxy has registered its key yet: install and start one (proxy/README.md), then seal them here."
+    "countersign": "Vouch for it"
   }
 }

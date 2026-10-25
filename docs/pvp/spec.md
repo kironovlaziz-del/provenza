@@ -631,7 +631,7 @@ the registered key; otherwise it raises a `witness_mismatch` incident. The
 proxy appends the same line to its own hash-chained log
 (`state_dir/receipts.jsonl`). `tools/provenza_audit.py receipt
 --proxy-fingerprint` checks the witness offline; the fingerprint is shown
-under *Gateways → External APIs → Proxies* and in the key manifest.
+under *Egress → Proxies* and in the key manifest.
 
 **Enforcing the signed policy** (`policy.mode: "enforce"` in the proxy's
 configuration, [edge.md](edge.md) §4). The proxy fetches releases

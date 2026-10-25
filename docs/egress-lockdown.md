@@ -22,7 +22,7 @@ agent ──► provenza-proxy:8443 ──► /<route>/...      checked, credent
 
 ## 1. Generate the rules
 
-Go to **Gateways → External APIs → Lock agents down**, or call
+Go to **Gateways → Egress → Lock agents down**, or call
 `POST /api/v1/egress-lockdown/render`. Pick where the agent runs:
 
 | | What you get |
