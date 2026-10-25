@@ -440,6 +440,17 @@ tbody tr.clickable:hover {
   min-width: 0;
 }
 
+/* A table wider than its panel scrolls inside it; long keys and fingerprints wrap. */
+.table-scroll {
+  overflow-x: auto;
+  max-width: 100%;
+}
+
+.u-break {
+  word-break: break-all;
+  overflow-wrap: anywhere;
+}
+
 .error-text {
   color: var(--risk-critical);
   font-size: 13px;
