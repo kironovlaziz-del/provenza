@@ -39,6 +39,14 @@ separators are refused. If Provenza is unreachable, nothing is sent (503).
 4. Run the proxy (it registers its keys on start), then seal the route's
    credential to it - a proxy added later needs the credential sealed again.
 
+On the Provenza server itself, steps 3 and 4 are done by the installer
+(`provenza edge setup`, [docs/self-hosting.md](../docs/self-hosting.md)): the
+proxy runs there as `provenza-proxy.service` with its key in
+`/etc/provenza-proxy/`, following the signed policy (`"pin": "tofu"`). On
+another host, the binary for it is served by Provenza:
+`/api/v1/egress-sensor/download/provenza-proxy-linux-amd64` (or `-arm64`),
+listed in `SHA256SUMS` next to it.
+
 ```sh
 go build -trimpath -o provenza-proxy ./proxy      # or: docker build -t provenza-proxy proxy/
 PROVENZA_PROXY_KEY=pvz_proxy_... ./provenza-proxy -config proxy.json

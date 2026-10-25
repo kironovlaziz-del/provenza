@@ -8,6 +8,26 @@ this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **The edge services set themselves up** ([docs/self-hosting.md](docs/self-hosting.md),
+  "The edge services of this host"). `install.sh` - and `provenza edge setup`
+  on an installation made before - puts the egress proxy (`provenza-proxy`,
+  `127.0.0.1:8443`, following the signed policy with `"pin": "tofu"`) and the
+  endpoint agent (`provenza-agent`) on the host, with their keys: made by the
+  backend (`scripts/edge_keys.py`, entrypoint role `edge-keys`) and written
+  straight into their files, never shown. With `--sensor` the egress sensor
+  gets its key and starts; `--sensor-guard` runs the proxy through it, pinned
+  to its binary and configuration. The binaries are built into the backend
+  image (stage `edge`) and also served next to the sensor's
+  (`/api/v1/egress-sensor/download/provenza-{proxy,agent}-linux-{amd64,arm64}`).
+  `provenza upgrade` and `provenza rebuild` refresh them (`provenza edge
+  refresh`). The proxy's SHA-256 values go into the next signed release's
+  settings, replacing the ones this host added before. The endpoint agent
+  1.4.0 reads its key from `ingestion_key_file`, expands wildcards in
+  `model_search_paths` (`/home/*/.ollama/models`) on every scan, and sends an
+  `agent_heartbeat` every 15 minutes, so its device is listed even when
+  nothing AI-related runs there (the server refreshes the device and records
+  nothing else). CI builds and tests the agent.
+
 - **Enforce mode and the proxy's agent mode** ([docs/pvp/edge.md](docs/pvp/edge.md),
   section 4.2). A setting of the signed policy (Policies → Signed policy →
   settings, *Mode*; the bundle's `enforcement` section): in enforce mode no

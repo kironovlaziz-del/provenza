@@ -25,6 +25,25 @@ RUN set -eu; mkdir -p /dist; \
     cp install.sh packaging/provenzasensor.service /dist/; \
     cd /dist && sha256sum provenza-sensor-linux-* install.sh provenzasensor.service > SHA256SUMS
 
+# --------------------------------------------------------------- edge stage
+# The egress proxy and the endpoint agent, for the hosts that run them: this
+# one (deploy/scripts/edge.sh puts them in place when installing or
+# upgrading) and any other (served next to the sensor, below).
+FROM docker.io/library/golang:${GO_VERSION} AS edge
+WORKDIR /src
+COPY agent/go.mod agent/go.sum ./agent/
+RUN cd agent && go mod download
+COPY proxy/ ./proxy/
+COPY agent/ ./agent/
+RUN set -eu; mkdir -p /dist; \
+    for arch in amd64 arm64; do \
+      (cd proxy && CGO_ENABLED=0 GOOS=linux GOARCH=$arch go build -trimpath -ldflags "-s -w" \
+        -o /dist/provenza-proxy-linux-$arch .); \
+      (cd agent && CGO_ENABLED=0 GOOS=linux GOARCH=$arch go build -trimpath -ldflags "-s -w" \
+        -o /dist/provenza-agent-linux-$arch .); \
+    done; \
+    cd /dist && sha256sum provenza-proxy-linux-* provenza-agent-linux-* > SHA256SUMS.edge
+
 # ---------------------------------------------------------------- build stage
 FROM python:${PYTHON_VERSION}-slim AS build
 ENV PIP_NO_CACHE_DIR=1 PIP_DISABLE_PIP_VERSION_CHECK=1
@@ -58,6 +77,9 @@ COPY backend/ /app/
 COPY extension/ /opt/provenza/extension/
 COPY deploy/backend-entrypoint.sh /usr/local/bin/provenza-entrypoint
 COPY --from=sensor /dist/ /app/sensor-dist/
+COPY --from=edge /dist/ /tmp/edge-dist/
+RUN cd /tmp/edge-dist && cp provenza-proxy-linux-* provenza-agent-linux-* /app/sensor-dist/ \
+ && cat SHA256SUMS.edge >> /app/sensor-dist/SHA256SUMS && rm -rf /tmp/edge-dist
 RUN chmod 0755 /usr/local/bin/provenza-entrypoint \
  && rm -f /app/apply_*.py /app/celerybeat-schedule \
  && mkdir -p /app/data /app/run \

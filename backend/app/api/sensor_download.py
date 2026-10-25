@@ -11,6 +11,8 @@ binaries, served by the control plane itself.
     GET /api/v1/egress-sensor/download/provenza-sensor-linux-arm64
     GET /api/v1/egress-sensor/download/provenzasensor.service
     GET /api/v1/egress-sensor/download/SHA256SUMS
+    GET /api/v1/egress-sensor/download/provenza-proxy-linux-{amd64,arm64}
+    GET /api/v1/egress-sensor/download/provenza-agent-linux-{amd64,arm64}
 
 The production image builds them from this checkout (deploy/backend.Dockerfile,
 stage "sensor"), so a host always gets the sensor that matches its control
@@ -40,6 +42,11 @@ FILES = {
     "SHA256SUMS": ("SHA256SUMS", "text/plain; charset=utf-8"),
     "provenza-sensor-linux-amd64": ("provenza-sensor-linux-amd64", "application/octet-stream"),
     "provenza-sensor-linux-arm64": ("provenza-sensor-linux-arm64", "application/octet-stream"),
+    # the egress proxy and the endpoint agent (the image's "edge" stage), for other hosts
+    "provenza-proxy-linux-amd64": ("provenza-proxy-linux-amd64", "application/octet-stream"),
+    "provenza-proxy-linux-arm64": ("provenza-proxy-linux-arm64", "application/octet-stream"),
+    "provenza-agent-linux-amd64": ("provenza-agent-linux-amd64", "application/octet-stream"),
+    "provenza-agent-linux-arm64": ("provenza-agent-linux-arm64", "application/octet-stream"),
 }
 
 

@@ -27,7 +27,10 @@ What Provenza protects, how, and where its guarantees stop.
   never forged replies.
 - **Least-privilege agent.** The endpoint agent runs as an unprivileged
   user. ARP and DHCP discovery need the single `CAP_NET_RAW` capability,
-  which the agent probes at runtime ([Shadow AI](shadow-ai.md)).
+  which the agent probes at runtime ([Shadow AI](shadow-ai.md)). On the
+  Provenza host the installer runs it as root with every capability dropped
+  but `CAP_DAC_READ_SEARCH` (other users' model directories) and
+  `CAP_NET_RAW`, on a read-only system (`deploy/edge/provenza-agent.service`).
 - **Extension privacy.** The browser extension reports only *that*
   sensitive data was detected (type and label), never any fragment of the
   value, and it does not send full page URLs.

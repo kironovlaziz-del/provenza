@@ -1,0 +1,34 @@
+# Provenza egress proxy on this host. Installed by deploy/scripts/edge.sh
+# (provenza edge setup), which also writes /etc/provenza-proxy/proxy.json and
+# the proxy's key; see proxy/README.md.
+[Unit]
+Description=Provenza egress proxy
+Wants=network-online.target
+After=network-online.target provenzasensor.service
+
+[Service]
+User=provenza-proxy
+@SUPPLEMENTARY_GROUPS@
+ExecStart=@EXEC_START@
+Restart=on-failure
+RestartSec=2s
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+CapabilityBoundingSet=
+ReadOnlyPaths=/etc/provenza-proxy
+# its signing key, receipt log and the last verified signed policy (state_dir)
+StateDirectory=provenza-proxy
+StateDirectoryMode=0700
+
+[Install]
+WantedBy=multi-user.target

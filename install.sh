@@ -13,12 +13,15 @@
 # units from deploy/quadlet/: PostgreSQL, Redis, migrations, API, worker,
 # scheduler, web UI, Caddy with automatic HTTPS, Prometheus, Grafana,
 # Alertmanager), creates the administrator and schedules a daily backup.
+# On this host it also sets up the egress proxy and the endpoint agent, with
+# their keys (deploy/scripts/edge.sh): nothing to copy from the interface.
 #
 # Unattended:
 #   PROVENZA_ADMIN_PASSWORD=... ./install.sh --yes --domain app.example.com \
 #     --org "Example Inc" --admin-email admin@example.com [--admin-name "Jane Admin"] \
-#     [--no-backup] [--force] [--sensor|--no-sensor]
-#   (--force: go on despite host warnings - low memory or disk, ports 80/443 taken)
+#     [--no-backup] [--force] [--sensor|--no-sensor] [--no-edge]
+#   (--force: go on despite host warnings - low memory or disk, ports 80/443 taken;
+#    --no-edge: no egress proxy and endpoint agent on this host)
 #
 # Run it again at any time: an existing configuration (deploy/.env) is kept,
 # and an existing administrator is left unchanged. A stack still running on
@@ -34,6 +37,7 @@ READY_TIMEOUT=${PROVENZA_READY_TIMEOUT:-900}   # seconds; the first build alone 
 
 DOMAIN="" ORG="" ADMIN_EMAIL="" ADMIN_NAME="" ASSUME_YES=0 FORCE=0 BACKUP=1
 SENSOR_MODE=ask   # ask | yes | no
+EDGE=1
 ARGS=("$@")
 
 # ---------------------------------------------------------------- output (before lib.sh exists)
@@ -77,6 +81,7 @@ while [ $# -gt 0 ]; do
     --no-backup|--no-cron) BACKUP=0; shift ;;
     --sensor) SENSOR_MODE=yes; shift ;;
     --no-sensor) SENSOR_MODE=no; shift ;;
+    --no-edge) EDGE=0; shift ;;
     --force) FORCE=1; shift ;;
     -h|--help) usage ;;
     *) die "unknown option: $1 (see --help)" ;;
@@ -285,7 +290,8 @@ if [ "$SENSOR_MODE" = yes ] || { [ "$SENSOR_MODE" = ask ] && [ "$ASSUME_YES" = 0
     SENSOR_BIN=$(mktemp -d)/provenza-sensor
     if [ -n "$sarch" ] && podman cp "backend:/app/sensor-dist/provenza-sensor-linux-$sarch" "$SENSOR_BIN" 2>/dev/null; then
       chmod 0755 "$SENSOR_BIN"
-      if "$ROOT_DIR/sensor/install.sh" --binary "$SENSOR_BIN" --url "$url" --yes; then
+      # prepared only: edge.sh below makes its key and enrolls it
+      if "$ROOT_DIR/sensor/install.sh" --binary "$SENSOR_BIN" --yes; then
         SENSOR_INSTALLED=1
       else
         warn "sensor install returned non-zero - see the output above"
@@ -299,6 +305,21 @@ if [ "$SENSOR_MODE" = yes ] || { [ "$SENSOR_MODE" = ask ] && [ "$ASSUME_YES" = 0
   fi
 fi
 
+# ---------------------------------------------------------------- 6. edge
+
+EDGE_OK=0
+if [ "$EDGE" = 1 ]; then
+  sensor_flag=()
+  [ "$SENSOR_INSTALLED" = 1 ] && sensor_flag=(--sensor)
+  if bash "$DEPLOY/scripts/edge.sh" setup --org "$SLUG" "${sensor_flag[@]}"; then
+    EDGE_OK=1
+  else
+    warn "the egress proxy and the endpoint agent were not set up (above): later, provenza edge setup"
+  fi
+fi
+SENSOR_ENROLLED=0
+[ -s /etc/provenza-sensor/key ] && SENSOR_ENROLLED=1
+
 # ---------------------------------------------------------------- done
 
 cat <<EOF
@@ -310,7 +331,12 @@ ${G}${B}✓ Provenza is running at $url${N}
   Manage it: provenza status | logs <service> | restart | upgrade   (provenza help)
 EOF
 
-if [ "$SENSOR_INSTALLED" = 1 ]; then
+if [ "$SENSOR_ENROLLED" = 1 ]; then
+  cat <<EOF
+
+The egress sensor is installed on this host, enrolled and running ($url/runtime).
+EOF
+elif [ "$SENSOR_INSTALLED" = 1 ]; then
   cat <<EOF
 
 The egress sensor is installed on this host and enabled, waiting for a key.
@@ -328,14 +354,25 @@ It downloads the sensor from this server (no Go, no git needed there).
 EOF
 fi
 
+if [ "$EDGE_OK" = 1 ]; then
+  cat <<EOF
+
+The egress proxy (127.0.0.1:8443) and the endpoint agent run on this host,
+with their keys in place: provenza edge status.
+EOF
+fi
+
 cat <<EOF
 
 Next steps
   1. Sign in at $url and follow the setup checklist on the dashboard.
-  2. My profile → turn on two-factor sign-in.
-  3. Agents → create an enrollment token, then on the agent's host:
+  2. My profile → add a passkey and turn on two-factor sign-in.
+  3. Policies → Signed policy → ${B}Prepare the first release${N} → ${B}Sign with passkey${N}.
+     The egress proxy on this host trusts that release (and only what follows
+     from it); until then it refuses every request.
+  4. Agents → create an enrollment token, then on the agent's host:
        pip install provenza
-  4. ${B}Back up deploy/.env now${N} (off this server): without its ENCRYPTION_KEY
+  5. ${B}Back up deploy/.env now${N} (off this server): without its ENCRYPTION_KEY
      no backup can be read.
 
 Upgrade later with provenza upgrade - see docs/self-hosting.md.

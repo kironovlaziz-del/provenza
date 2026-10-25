@@ -59,6 +59,19 @@ async def _ingest(db, src, events):
 
 
 class TestIngestion:
+    async def test_heartbeat_lists_the_device_and_records_nothing_else(self, db_session, org_and_users, notes):
+        src = await _source(db_session, org_and_users["org"].id)
+        hb = TelemetryEventIn(event_type="agent_heartbeat", agent_id="quiet-1", user_id="root",
+                              payload={"os": "linux", "agent_version": "1.4.0"})
+        r = await _ingest(db_session, src, [hb])
+        assert r.devices_seen == 1 and r.agents_found == 0 and r.sightings_created == 0
+        dev = (await db_session.execute(select(EndpointDevice).where(
+            EndpointDevice.ingestion_source_id == src.id))).scalar_one()
+        assert (dev.host_id, dev.agent_version) == ("quiet-1", "1.4.0")
+        logged = (await db_session.execute(select(AITelemetryEvent).where(
+            AITelemetryEvent.ingestion_source_id == src.id))).scalars().all()
+        assert logged == [] and notes == []
+
     async def test_agent_detected_creates_device_and_finding(self, db_session, org_and_users, notes):
         src = await _source(db_session, org_and_users["org"].id)
         r = await _ingest(db_session, src, [_agent_event()])

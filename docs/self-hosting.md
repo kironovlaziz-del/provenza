@@ -94,6 +94,7 @@ issues a local certificate, and the browser warns about it once.
 5. **Starts the stack and waits** until every service reports healthy.
 6. **Creates the organization and its first administrator.** The password reaches the container through the environment and never appears in a command line.
 7. **Schedules a daily backup** at 03:15 with the systemd timer `provenza-backup.timer`.
+8. **Sets up the edge services of this host** (`provenza edge setup`, below): the egress proxy and the endpoint agent, with their keys. With `--sensor`, the egress sensor too, enrolled. `--no-edge` leaves them out.
 
 Running `sudo ./install.sh` again is safe: it keeps the existing `deploy/.env`,
 rebuilds the images, re-renders the units and leaves existing users alone.
@@ -118,6 +119,28 @@ The downtime is a few minutes. The old cron line for `backup.sh` is replaced by
 `provenza-backup.timer`. Keep the Docker containers and volumes for a while: the
 script prints the commands to go back and, later, to delete them.
 
+### The edge services of this host
+
+The installer (or `provenza edge setup` on an installation made before) puts
+two services next to the stack, with nothing to copy from the interface:
+
+| Service | What it does | Files |
+|---|---|---|
+| `provenza-proxy` | The egress proxy on `127.0.0.1:8443`: agents reach external APIs through it, with credentials sealed to it. It follows the signed policy itself (`"policy": {"mode": "enforce", "pin": "tofu"}`): it trusts the first release the administrators sign and only what follows from it. | `/etc/provenza-proxy/proxy.json`, `proxy.key`; `/var/lib/provenza-proxy` |
+| `provenza-agent` | The endpoint agent: AI tools, agents and local models on this host (**Discovery → Devices**, **Agents Found**). | `/etc/provenza-agent/config.json`, `ingestion.key` |
+
+- **The binaries** come from the backend image, built from this checkout: no Go on the host.
+- **Their keys** are made by the backend (`scripts/edge_keys.py`) and written straight into their files (mode 600). They are never shown; the objects are named after the host and listed in the interface like any other (**Gateways → External APIs → Proxies**, **Settings → Ingestion Sources**), where they are revoked.
+- **What exists is kept:** a key file, a configuration you edited. Run it again at any time.
+- **Upgrades** (`provenza upgrade`, `provenza rebuild`) refresh the binaries and units (`provenza edge refresh`).
+- **The signed policy:** the proxy binary's and configuration's SHA-256 are added to the next release (Policies → Signed policy), for sensors that follow it. They take effect when the release is signed.
+- `provenza edge setup --sensor-guard`: the proxy runs through the egress sensor of this host, which lets it out only while it runs this exact binary with this exact configuration (`proxy_binaries` / `proxy_configs` in `sensor.json`, kept up to date on every refresh). For a sensor without `policy.pin`.
+- `provenza edge status` shows the services and the release the proxy follows.
+
+One step stays yours, because it is what the proxy trusts: **Policies → Signed
+policy → Prepare the first release → Sign with passkey** (add a passkey under
+**My profile** first). Until then the proxy refuses every request.
+
 ### First steps after installing
 
 1. **Back up `deploy/.env`** to somewhere off the server, such as a password manager. Without its `ENCRYPTION_KEY`, no backup can be read.
@@ -127,8 +150,9 @@ script prints the commands to go back and, later, to delete them.
    - register the first agent;
    - set up notifications;
    - require two-factor sign-in.
-3. Under **My profile**, turn on two-factor sign-in for yourself. Then, under **Settings → Users**, require it for admins and approvers.
-4. Connect an agent:
+3. Under **My profile**, add a passkey and turn on two-factor sign-in for yourself. Then, under **Settings → Users**, require it for admins and approvers.
+4. **Sign the policy:** Policies → Signed policy → Prepare the first release → Sign with passkey. The egress proxy of this host waits for it.
+5. Connect an agent:
    - **Agents** → create an enrollment token;
    - on the agent's host, install the SDK: `pip install provenza` (or the JS or Go SDK).
 
@@ -213,6 +237,7 @@ The installer puts the `provenza` command in `/usr/local/bin`; it asks for
 | Logs | `provenza logs backend` (any service; `-f` follows, `-n 500` for more), `provenza logs` for all |
 | Start / stop / restart | `provenza start` · `provenza stop` · `provenza restart` |
 | One service | `provenza restart caddy` |
+| The egress proxy and the endpoint agent of this host | `provenza edge status` · `provenza edge setup` · `journalctl -u provenza-proxy` |
 | Upgrade | `provenza upgrade` (see Upgrade above; with no new code it refreshes the PostgreSQL, Redis, Caddy and monitoring images) |
 | Rebuild the code on disk | `provenza rebuild` - after a manual `git pull` or a patch, which `upgrade` would not see: build, back up, restart; no fetch and no rollback |
 | Backup now | `provenza backup` |

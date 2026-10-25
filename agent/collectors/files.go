@@ -42,7 +42,7 @@ func NewFileCollector(cfg *config.AgentConfig, rep *reporters.Reporter) *FileCol
 func (c *FileCollector) ScanOnce() {
 	currentUser := os.Getenv("USER")
 
-	for _, rootPath := range c.cfg.ModelSearchPaths {
+	for _, rootPath := range c.cfg.SearchRoots() {
 		if _, err := os.Stat(rootPath); os.IsNotExist(err) {
 			continue
 		}

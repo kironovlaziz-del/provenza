@@ -276,6 +276,11 @@ monitor (a server, or an employee workstation via your MDM). It detects
 local AI tools (running processes, listening ports, model files) and, if
 enabled, discovers network services.
 
+On the Provenza server itself there is nothing to do: the installer runs
+the agent there with its key (`provenza edge setup`, see
+[Self-hosting](docs/self-hosting.md)), and its device is listed at once.
+On any other machine:
+
 1. Create an **Ingestion Source** of type *Endpoint agent* and copy the
    key.
 2. Put the key and your server URL into the agent's `config.json`

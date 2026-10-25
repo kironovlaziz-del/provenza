@@ -1,0 +1,32 @@
+# Provenza endpoint agent on this host: reports AI tools, agents and local
+# models it finds (Discovery). Installed by deploy/scripts/edge.sh (provenza
+# edge setup), which also writes /etc/provenza-agent/config.json and its key.
+#
+# Root, with every capability dropped but two: reading other users' model
+# directories (/home/*/.ollama, ...) and raw sockets for ARP/DHCP discovery.
+[Unit]
+Description=Provenza endpoint agent
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+ExecStart=/usr/local/bin/provenza-agent -config /etc/provenza-agent/config.json
+Restart=on-failure
+RestartSec=5s
+NoNewPrivileges=yes
+CapabilityBoundingSet=CAP_DAC_READ_SEARCH CAP_NET_RAW
+ProtectSystem=strict
+ProtectHome=read-only
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK AF_PACKET
+RestrictNamespaces=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+ReadOnlyPaths=/etc/provenza-agent
+
+[Install]
+WantedBy=multi-user.target

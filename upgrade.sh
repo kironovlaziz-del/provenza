@@ -128,6 +128,8 @@ step "Starting the new version (migrations run first)"
 if start_version; then
   systemctl start provenza-caddy.service
   ok "upgraded to $(git_as_owner describe --tags --always HEAD), database at $(db_revision)"
+  # this host's egress proxy and endpoint agent: the binaries of the new version
+  bash "$DEPLOY_DIR/scripts/edge.sh" refresh || warn "the edge services were not refreshed: provenza edge refresh"
   printf '\n%s✓ Upgrade complete%s - the previous images are kept as :rollback until the next upgrade.\n' "$G$B" "$N"
   exit 0
 fi
