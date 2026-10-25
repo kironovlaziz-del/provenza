@@ -24,7 +24,7 @@ separators are refused. If Provenza is unreachable, nothing is sent (503).
 
 ## Setup
 
-1. In Provenza, **Egress → Routes**: add a route, e.g. slug `stripe`,
+1. In Provenza, **Gateways → External APIs → Routes**: add a route, e.g. slug `stripe`,
    upstream `https://api.stripe.com`, methods `GET, POST`, prefixes
    `/v1/charges`. Credential:
    - `sealed` - typed in the browser and sealed there to each proxy's own
@@ -34,7 +34,7 @@ separators are refused. If Provenza is unreachable, nothing is sent (503).
      (`local_secrets`); Provenza never sees it;
    - `none`.
 2. Give the agent the right `proxy.stripe`.
-3. **Egress → Proxies → New**: the key (`pvz_proxy_…`) is shown once. It
+3. **Gateways → External APIs → Proxies → New**: the key (`pvz_proxy_…`) is shown once. It
    authenticates the proxy; it opens no credential.
 4. Run the proxy (it registers its keys on start), then seal the route's
    credential to it - a proxy added later needs the credential sealed again.
@@ -136,13 +136,13 @@ policy release it judged by) and appends it to `state_dir/receipts.jsonl`,
 each line carrying the SHA-256 of the line before. Provenza keeps the
 receipt in the action's sealed evidence; `tools/provenza_audit.py receipt
 --proxy-fingerprint <fingerprint>` checks it offline. The fingerprint is
-shown under **Egress → Proxies**. A proxy that comes back with another key
+shown under **Gateways → External APIs → Proxies**. A proxy that comes back with another key
 is refused: a new key is a new proxy.
 
 The X25519 key credentials are sealed to is derived from the same key, and
 registered signed by it; its fingerprint is pinned in the signed policy's
 manifest. The proxy logs both fingerprints on start (`keys registered`):
-compare them with **Egress → Proxies** before you seal a credential. An
+compare them with **Gateways → External APIs → Proxies** before you seal a credential. An
 envelope opens only for the route (or connection, server, tool) and the
 proxy it was sealed for (`internal/egress/sealed.go`,
 `backend/app/pvp/sealed.py`); one the server moved elsewhere does not open,
@@ -248,7 +248,7 @@ sections 6-7):
   across restarts (`state_dir/killswitch.json`). When Provenza answers, the
   proxy sends a reconciliation report signed with its key: what the server
   states differently from the release it held before the outage. The quorum
-  of that release lifts it under **Egress → Proxies**, each with a passkey,
+  of that release lifts it under **Gateways → External APIs → Proxies**, each with a passkey,
   accepting every difference no signed release explains; the proxy checks
   the signatures itself.
 
@@ -257,7 +257,7 @@ sections 6-7):
 The proxy governs what goes through it. Close the other paths: an agent
 that may reach anything else can call APIs without asking. With
 `relay_provenza` the agent needs to reach this proxy and nothing else, and
-**Gateways → Egress → Lock agents down** in Provenza generates the rules for
+**Gateways → External APIs → Lock agents down** in Provenza generates the rules for
 Kubernetes, Docker compose or nftables. To verify a host, run the SDKs' egress
 self-check. See [docs/egress-lockdown.md](../docs/egress-lockdown.md).
 

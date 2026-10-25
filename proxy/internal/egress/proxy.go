@@ -337,7 +337,7 @@ func (p *Proxy) refreshCredentials(ctx context.Context) error {
 			if _, err := trust.VerifySealed(c.Sealer, rel.Manifest, trust.SealedWant{OrgID: p.reg.OrgID,
 				Object: c.Object, ObjectID: id, ProxyID: p.reg.ProxyID, Upstream: upstream, EnvelopeSHA256: sum}); err != nil {
 				p.log.Warn("provenza proxy: a sealed credential no administrator of the signed policy vouched for "+
-					"was refused (countersign it under Egress)", "object", c.Object, "id", c.ObjectID, "err", err)
+					"was refused (countersign it under Gateways -> External APIs)", "object", c.Object, "id", c.ObjectID, "err", err)
 				continue
 			}
 			vouched[c.Object+":"+c.ObjectID] = true
@@ -431,7 +431,7 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	relay := raw == RelayPrefix || strings.HasPrefix(raw, RelayPrefix+"/")
 	if engaged, why := p.ks.engagedNow(); engaged && !relay {
 		refuse(w, http.StatusServiceUnavailable, "provenza_kill_switch", "this proxy is stopped by its local kill "+
-			"switch ("+why+"); administrators lift it after the reconciliation (Egress -> Proxies)")
+			"switch ("+why+"); administrators lift it after the reconciliation (Gateways -> External APIs -> Proxies)")
 		return
 	}
 	// the gateways' protocols (act.go): no route slug starts with "_"
@@ -812,7 +812,7 @@ func (p *Proxy) forward(w http.ResponseWriter, r *http.Request, route Route, pat
 				"upstream", origin(out.URL.String()))
 			report(0, nil, 0, "proxy.sealed_credential_missing")
 			refuse(w, http.StatusBadGateway, "provenza_credential",
-				"this route's credential is not sealed to this proxy for this upstream (Egress -> Routes)")
+				"this route's credential is not sealed to this proxy for this upstream (Gateways -> External APIs -> Routes)")
 			return
 		}
 		out.Header.Set(route.AuthHeader, value)
