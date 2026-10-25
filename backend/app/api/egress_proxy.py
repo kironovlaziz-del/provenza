@@ -561,8 +561,8 @@ class KeyIn(BaseModel):
 async def register_proxy_key(data: KeyIn, db: AsyncSession = Depends(get_db),
                              proxy: EgressProxy = Depends(current_proxy)):
     """The proxy's own Ed25519 key, generated on its host: registered once.
-    A different key later is refused - a new key is a new proxy (Egress ->
-    Proxies), so a stolen proxy key cannot swap the key receipts are signed with."""
+    A different key later is refused - a new key is a new proxy (Gateways ->
+    External APIs -> Proxies), so a stolen proxy key cannot swap the key receipts are signed with."""
     from app.core.agent_signing import key_fingerprint, normalize_public_key
 
     try:

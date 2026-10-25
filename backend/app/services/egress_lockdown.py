@@ -65,7 +65,7 @@ metadata:
   namespace: {proxy_namespace}
 type: Opaque
 stringData:
-  proxy.key: "pvz_proxy_..."   # Provenza: Gateways -> Egress -> Proxies -> New (shown once)
+  proxy.key: "pvz_proxy_..."   # Provenza: Gateways -> External APIs -> Proxies -> New (shown once)
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -204,7 +204,7 @@ networks:
         "agent_env": {"PROVENZA_URL": f"http://provenza-proxy:{proxy_port}/_provenza",
                       "<ROUTE>_BASE_URL": f"http://provenza-proxy:{proxy_port}/<route>"},
         "notes": [
-            "proxy.key: the proxy's key from Provenza (Gateways -> Egress -> Proxies -> New), mode 600.",
+            "proxy.key: the proxy's key from Provenza (Gateways -> External APIs -> Proxies -> New), mode 600.",
             f'Do not give the "{agent_service}" service any other network or "network_mode: host".',
         ],
     }
