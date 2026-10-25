@@ -44,6 +44,8 @@ export function EnrollPanel({ token, hybrid, rekey = false }: { token: string; h
             <span className="pill pill-low">✓ {t(rekey ? "enroll.browser_rekeyed" : "enroll.browser_done", { id: done.agent_id })}</span>
             <code className="mono" style={{ fontSize: 12 }}>{done.key_fingerprint}</code>
             <p className="hint-text" style={{ color: "#f59e0b" }}>{t("enroll.browser_file_warning")}</p>
+            <p className="hint-text">{t("enroll.connect_hint")}</p>
+            <code className="mono" style={{ fontSize: 12 }}>provenza-proxy connect gemini-cli</code>
             <div>
               <button type="button" className="btn btn-sm" onClick={() => downloadKeysFile(done)}>{t("enroll.browser_download_again")}</button>
             </div>

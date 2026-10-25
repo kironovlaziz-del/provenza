@@ -226,16 +226,42 @@ http = httpx.Client(transport=httpx.HTTPTransport(uds="/run/provenza/bot.sock"))
 client = OpenAI(base_url="http://agent/_llm/v1", api_key="unused", http_client=http)
 ```
 
-The identity is the SDK's (`provenza enroll`, saved with `key_store="file"`,
-mode 600): agent mode reads its `agent_id`, `api_key` and Ed25519 key.
-Whoever reaches the listener acts as the agent: on a unix socket
-(`unix:<path>`, created with mode 0600, a stale one replaced) only its owner
-- run agent mode as the agent's user - and root reach it; a TCP address is
-taken on the loopback only (`127.0.0.1:8480`), where every local process
-reaches it, and agent mode warns so. It signs each request (`X-Provenza-Chain-Id` goes into the signed request), drops the
-client's `Authorization` and sends the agent's key; answers, streams
-included, come back as the proxy sends them. A hybrid (ML-DSA) key is not
-supported here: such an agent signs with the SDK.
+The identity is the agent's identity file: `provenza-agent.json`, saved at
+enrollment by the interface (**Agents** → the agent) or by the SDK
+(`key_store="file"`), mode 600. Agent mode reads its `agent_id`, `api_key`,
+the Ed25519 key and, for a hybrid key, the ML-DSA-65 one: it signs with both,
+as the SDKs do. Whoever reaches the listener acts as the agent: on a unix
+socket (`unix:<path>`, created with mode 0600, a stale one replaced) only its
+owner - run agent mode as the agent's user - and root reach it; a TCP address
+is taken on the loopback only (`127.0.0.1:8480`), where every local process
+reaches it, and agent mode warns so. It signs each request
+(`X-Provenza-Chain-Id` goes into the signed request), drops the client's
+`Authorization` and sends the agent's key; answers, streams included, come
+back as the proxy sends them.
+
+### Connecting a client in one command
+
+```sh
+provenza-proxy connect gemini-cli      # or: claude-code, cursor, openai
+```
+
+As the agent's user, with its identity in `~/.config/provenza/provenza-agent.json`
+(or `--identity <file>`, `$PROVENZA_IDENTITY`):
+
+- agent mode runs as a service of this user (`~/.config/systemd/user/provenza-agent-<id>.service`,
+  `127.0.0.1:8480` - `--port` - in front of `--proxy`, default `http://127.0.0.1:8443`);
+  `sudo loginctl enable-linger <user>` keeps it running after the user logs out.
+  Without a systemd session (`su`, a container: `--no-service`) it prints the command to run;
+- the client gets Provenza's MCP endpoint (`http://127.0.0.1:8480/_mcp`), with no key in it:
+  Gemini CLI in `~/.gemini/settings.json` (`"httpUrl"`), Cursor in `~/.cursor/mcp.json`,
+  Claude Code with `claude mcp add --transport http --scope user provenza ...`. The rest of
+  the file is kept, the original is saved once as `<file>.provenza-backup`, and a file that is
+  not plain JSON is left alone (the entry to add is printed);
+- `openai`: nothing to write - `base_url` `http://127.0.0.1:8480/_llm/v1`, any API key.
+
+The client reaches the MCP servers of **Gateways → MCP tools**; each call is checked
+against the agent's rights. `--remove` takes the entry and the service out again. A signed
+policy names each agent's key: after the agent gets a new key, sign a release.
 
 ## When Provenza is unreachable
 

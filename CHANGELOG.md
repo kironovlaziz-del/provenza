@@ -8,6 +8,19 @@ this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **A client connected in one command: `provenza-proxy connect`**
+  ([proxy/README.md](proxy/README.md), "Connecting a client in one command").
+  `provenza-proxy connect gemini-cli` (or `claude-code`, `cursor`, `openai`),
+  run as the agent's user with its identity file, runs the proxy's agent mode
+  as a systemd --user service (`provenza-agent-<id>.service`, `127.0.0.1:8480`
+  in front of the egress proxy) and gives the client Provenza's MCP endpoint
+  through it, with no key in the client's configuration (Gemini CLI
+  `~/.gemini/settings.json`, Cursor `~/.cursor/mcp.json`, Claude Code `claude
+  mcp add`); the rest of the file is kept and the original saved once.
+  `--remove` takes both out. Agent mode now signs with **hybrid keys** too
+  (Ed25519 + ML-DSA-65, as the SDKs): the proxy needs Go 1.27
+  (`crypto/mldsa`), and so does the backend image's build.
+
 - **The edge services set themselves up** ([docs/self-hosting.md](docs/self-hosting.md),
   "The edge services of this host"). `install.sh` - and `provenza edge setup`
   on an installation made before - puts the egress proxy (`provenza-proxy`,

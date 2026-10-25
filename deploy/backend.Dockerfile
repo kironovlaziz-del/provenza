@@ -4,7 +4,7 @@
 # Build context: repository root (deploy/scripts/lib.sh build_images).
 
 ARG PYTHON_VERSION=3.12
-ARG GO_VERSION=1.26
+ARG GO_VERSION=1.27
 
 # ------------------------------------------------------------- sensor stage
 # The egress sensor, served by the API at /api/v1/egress-sensor/download/

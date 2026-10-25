@@ -2450,6 +2450,7 @@
     "browser_done": "Agent #{{id}} enrolled - provenza-agent.json downloaded",
     "browser_rekeyed": "Agent #{{id}} has a new key - provenza-agent.json downloaded (with its new API key)",
     "browser_file_warning": "The file holds the agent's private keys and API key: move it to the agent's machine, readable only by the agent's user (chmod 600), and delete it from this computer's downloads.",
+    "connect_hint": "On that machine, as the agent's user, with the file in ~/.config/provenza/: connect an AI client (gemini-cli, claude-code, cursor or openai) - it signs every request as this agent:",
     "browser_download_again": "Download again",
     "browser_failed": "Enrollment in the browser failed",
     "browser_unsupported": "This browser cannot generate Ed25519 keys (needs Chrome 113+, Firefox 129+ or Safari 17+). Use the command below.",

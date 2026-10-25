@@ -173,8 +173,11 @@ siyosatsiz hech bir amal bajarilmaydi. Shunda Provenzaning o'z shlyuzlari
 hech narsani bajarmaydi, agentning o'zi qilgan tekshiruvi esa faqat kuzatadi:
 har bir amal agent imzolagan holda enforce rejimidagi egress proksi orqali
 o'tadi - SDKlar imzolaydi; imzolay olmaydigan mijoz (oddiy OpenAI yoki MCP
-mijozi) uchun uning yonida proksining agent rejimini ishga tushiring
-(`provenza-proxy -agent-identity …`, `proxy/README.md` ga qarang). Yoqish
+mijozi) uchun uning yonida proksining agent rejimini ishga tushiring:
+agent foydalanuvchisi nomidan, uning `provenza-agent.json` fayli bilan
+`provenza-proxy connect gemini-cli` (yoki `claude-code`, `cursor`, `openai`)
+uni ishga tushiradi va mijozga Provenzaning MCP manzilini beradi
+(`proxy/README.md` ga qarang). Yoqish
 darhol kuchga kiradi; o'chirish uchun imzolangan reliz kerak. Yoqishdan
 oldin barcha agentlarni proksi ortiga o'tkazing.
 

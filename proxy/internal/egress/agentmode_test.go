@@ -6,6 +6,7 @@ package egress
 
 import (
 	"context"
+	"crypto/mldsa"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -67,7 +68,8 @@ func TestTheAgentsIdentity(t *testing.T) {
 		mode os.FileMode
 	}{
 		"readable by others": {nil, 0o644},
-		"hybrid":             {func(m map[string]any) { m["pq_private_key"] = "AAAA" }, 0o600},
+		"bad ML-DSA key":     {func(m map[string]any) { m["pq_private_key"] = "AAAA" }, 0o600},
+		"ML-DSA public only": {func(m map[string]any) { m["pq_public_key"] = "AAAA" }, 0o600},
 		"keychain":           {func(m map[string]any) { m["secrets"] = "keychain"; m["private_key"] = nil }, 0o600},
 		"not enrolled":       {func(m map[string]any) { delete(m, "agent_id") }, 0o600},
 		"another key":        {func(m map[string]any) { m["public_key"] = strings.Repeat("A", 43) + "=" }, 0o600},
@@ -366,5 +368,64 @@ func TestAVouchedEnvelopeIsASignedDifference(t *testing.T) {
 		json.Number("1"), json.Number("1"))
 	if len(unsigned) != 1 || unsigned[0] != "credentials.sealed.route:7" {
 		t.Fatalf("unsigned: %v", unsigned)
+	}
+}
+
+// A hybrid identity (Ed25519 + ML-DSA-65): agent mode signs with both halves,
+// over the same canonical payload, as the SDKs do.
+func TestAgentModeSignsWithAHybridKey(t *testing.T) {
+	ev := enforceVectors(t)
+	sk, err := mldsa.GenerateKey(mldsa.MLDSA65())
+	if err != nil {
+		t.Fatal(err)
+	}
+	f := agentFields(ev)
+	f["pq_private_key"] = base64.StdEncoding.EncodeToString(sk.Bytes())
+	f["pq_public_key"] = base64.StdEncoding.EncodeToString(sk.PublicKey().Bytes())
+	id, err := LoadAgentIdentity(identityFile(t, f, 0o600))
+	if err != nil || !id.Hybrid() {
+		t.Fatalf("hybrid identity: %v", err)
+	}
+	other, _ := mldsa.GenerateKey(mldsa.MLDSA65())
+	f["pq_public_key"] = base64.StdEncoding.EncodeToString(other.PublicKey().Bytes())
+	if _, err := LoadAgentIdentity(identityFile(t, f, 0o600)); err == nil {
+		t.Fatal("an ML-DSA public key that is not the private key's was accepted")
+	}
+
+	d := Descriptor{Route: "stripe", Method: "POST", Path: "/v1/charges", BodySHA256: sha256Hex([]byte("{}")), BodyBytes: 2}
+	header, err := id.Sign(d, nil, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, err := base64.RawURLEncoding.DecodeString(header)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var signed struct {
+		Payload     map[string]any `json:"payload"`
+		PQSignature string         `json:"pq_signature"`
+		PQPublicKey string         `json:"pq_public_key"`
+	}
+	if err := json.Unmarshal(raw, &signed); err != nil || signed.PQSignature == "" {
+		t.Fatalf("no ML-DSA signature: %v %s", err, raw)
+	}
+	msg, _ := canon.Bytes(signed.Payload)
+	pub, _ := base64.StdEncoding.DecodeString(signed.PQPublicKey)
+	pk, err := mldsa.NewPublicKey(mldsa.MLDSA65(), pub)
+	ps, _ := base64.StdEncoding.DecodeString(signed.PQSignature)
+	if err != nil || mldsa.Verify(pk, msg, ps, nil) != nil {
+		t.Fatal("the ML-DSA signature does not verify over the canonical payload")
+	}
+	// what an enforcing proxy checks: the Ed25519 half, the key's fingerprint, fresh and once
+	sr, err := trust.ParseSignedRequest(header)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dmap, _ := canon.Of(d)
+	sha, _ := canon.SHA256(dmap)
+	fp, err := sr.Verify("proxy", "proxy.stripe", sha, trust.NewNonces(), time.Now())
+	want, _ := trust.KeyFingerprint(id.PublicKey, id.PQPublic)
+	if err != nil || fp != want {
+		t.Fatalf("verify: %v (fingerprint %s, want %s)", err, fp, want)
 	}
 }
