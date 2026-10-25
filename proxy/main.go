@@ -9,6 +9,11 @@
 // Agent mode, next to an agent whose client cannot sign (internal/egress/agentmode.go):
 //
 //	provenza-proxy -agent-identity bot.json -listen unix:/run/provenza/bot.sock -upstream http://egress-proxy:8443
+//
+// An AI client connected in one command (internal/connect): agent mode as a
+// service of this user, and Provenza's MCP endpoint in the client's configuration:
+//
+//	provenza-proxy connect gemini-cli [--identity provenza-agent.json] [--proxy http://127.0.0.1:8443]
 package main
 
 import (
@@ -20,14 +25,19 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
 
+	"github.com/kironovlaziz-del/provenza/proxy/internal/connect"
 	"github.com/kironovlaziz-del/provenza/proxy/internal/egress"
 )
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "connect" {
+		os.Exit(runConnect(os.Args[2:]))
+	}
 	path := flag.String("config", "/etc/provenza/proxy.json", "configuration file (JSON)")
 	genkey := flag.Bool("genkey", false, "print a new signing key (for signing_key_file; the encryption key "+
 		"sealed credentials are opened with is derived from it) and exit; its fingerprint goes to stderr")
@@ -133,4 +143,74 @@ func runAgent(identity, listen, upstream string, log *slog.Logger) error {
 		return err
 	}
 	return nil
+}
+
+// runConnect: `provenza-proxy connect <client>` (internal/connect).
+func runConnect(args []string) int {
+	fs := flag.NewFlagSet("connect", flag.ContinueOnError)
+	home, _ := os.UserHomeDir()
+	defIdentity := os.Getenv("PROVENZA_IDENTITY")
+	if defIdentity == "" {
+		defIdentity = filepath.Join(home, ".config", "provenza", "provenza-agent.json")
+	}
+	identity := fs.String("identity", defIdentity, "the agent's identity file (provenza-agent.json from enrollment, mode 600)")
+	proxy := fs.String("proxy", "http://127.0.0.1:8443", "the egress proxy")
+	port := fs.Int("port", 8480, "agent mode's port on 127.0.0.1")
+	remove := fs.Bool("remove", false, "take the client's entry and agent mode out again")
+	noService := fs.Bool("no-service", false, "do not run agent mode as a systemd --user service")
+	fs.Usage = func() {
+		fmt.Fprintf(fs.Output(), "usage: provenza-proxy connect <%s> [flags]\n", strings.Join(connect.Names(), "|"))
+		fs.PrintDefaults()
+	}
+	if len(args) == 0 || strings.HasPrefix(args[0], "-") {
+		fs.Usage()
+		return 2
+	}
+	client, ok := connect.Clients[args[0]]
+	if !ok {
+		fmt.Fprintf(os.Stderr, "unknown client %q: one of %s\n", args[0], strings.Join(connect.Names(), ", "))
+		return 2
+	}
+	if err := fs.Parse(args[1:]); err != nil {
+		return 2
+	}
+	if *port < 1 || *port > 65535 {
+		fmt.Fprintln(os.Stderr, "--port: 1-65535")
+		return 2
+	}
+	abs, err := filepath.Abs(*identity)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	id, err := egress.LoadAgentIdentity(abs)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "the agent's identity (%s): %v\n", abs, err)
+		fmt.Fprintln(os.Stderr, "  Agents -> the agent -> enroll it, save provenza-agent.json here (chmod 600), or pass --identity")
+		return 1
+	}
+	self, err := os.Executable()
+	if err == nil {
+		self, err = filepath.EvalSymlinks(self)
+	}
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	if _, err := egress.NewAgentMode(id, "127.0.0.1:1", *proxy, nil); err != nil { // the proxy's address is sound
+		fmt.Fprintln(os.Stderr, err)
+		return 2
+	}
+	verb := "Connecting"
+	if *remove {
+		verb = "Disconnecting"
+	}
+	fmt.Printf("%s %s as agent #%d\n", verb, client.Title, id.AgentID)
+	err = connect.Do(connect.Options{Client: client, Identity: abs, AgentID: id.AgentID, Proxy: *proxy, Port: *port,
+		Binary: self, Home: home, Remove: *remove, Service: !*noService, Out: os.Stdout, Run: connect.RunCommand})
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	return 0
 }

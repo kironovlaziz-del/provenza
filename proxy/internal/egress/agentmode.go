@@ -15,16 +15,19 @@ package egress
 //	provenza-proxy -agent-identity ~/.config/provenza/agents/bot.json \
 //	    -listen unix:/run/provenza/bot.sock -upstream http://egress-proxy:8443
 //
-// The identity is the SDK's (provenza enroll): agent_id, api_key and the
-// Ed25519 private key; the file must be readable by its owner only. Whoever
-// can reach the listener acts as the agent: a unix socket (mode 0600: its
-// owner only) is the way to keep it to the agent; a TCP address is taken on
-// the loopback only, where any local process reaches it. A hybrid (ML-DSA)
-// key is not supported here: such an agent signs with the SDK.
+// The identity is the agent's identity file (provenza-agent.json, saved at
+// enrollment by the interface or the SDK): agent_id, api_key, the Ed25519
+// private key and, for a hybrid key, the ML-DSA-65 one; the file must be
+// readable by its owner only. Whoever can reach the listener acts as the
+// agent: a unix socket (mode 0600: its owner only) is the way to keep it to
+// the agent; a TCP address is taken on the loopback only, where any local
+// process reaches it. `provenza-proxy connect` sets this up for a client
+// (connect.go).
 
 import (
 	"bytes"
 	"crypto/ed25519"
+	"crypto/mldsa"
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/hex"
@@ -57,8 +60,11 @@ type AgentIdentity struct {
 	PrivateKey string `json:"private_key"`
 	PublicKey  string `json:"public_key"`
 	PQPrivate  string `json:"pq_private_key"`
+	PQPublic   string `json:"pq_public_key"`
+	Server     string `json:"server"`
 	Secrets    string `json:"secrets"`
 	key        ed25519.PrivateKey
+	pqKey      *mldsa.PrivateKey // a hybrid key: ML-DSA-65 as well
 }
 
 // LoadAgentIdentity reads the SDK's identity file.
@@ -81,8 +87,6 @@ func LoadAgentIdentity(path string) (*AgentIdentity, error) {
 	switch {
 	case id.Secrets == "keychain":
 		return nil, errors.New("the identity keeps its secrets in the OS keychain: save it with key_store='file' for agent mode")
-	case id.PQPrivate != "":
-		return nil, errors.New("a hybrid (ML-DSA) key is not supported in agent mode: sign with the Provenza SDK")
 	case id.AgentID < 1 || id.APIKey == "":
 		return nil, errors.New("the identity has no agent_id or api_key: enroll the agent first")
 	}
@@ -96,8 +100,28 @@ func LoadAgentIdentity(path string) (*AgentIdentity, error) {
 		return nil, errors.New("the identity's public_key is not its private key's")
 	}
 	id.PublicKey = pub
+	if id.PQPrivate != "" {
+		pqSeed, err := base64.StdEncoding.DecodeString(id.PQPrivate)
+		if err != nil {
+			return nil, errors.New("the identity's pq_private_key is not base64")
+		}
+		sk, err := mldsa.NewPrivateKey(mldsa.MLDSA65(), pqSeed)
+		if err != nil {
+			return nil, fmt.Errorf("the identity's pq_private_key is not an ML-DSA-65 key: %w", err)
+		}
+		pqPub := base64.StdEncoding.EncodeToString(sk.PublicKey().Bytes())
+		if id.PQPublic != "" && id.PQPublic != pqPub {
+			return nil, errors.New("the identity's pq_public_key is not its pq_private_key's")
+		}
+		id.pqKey, id.PQPublic = sk, pqPub
+	} else if id.PQPublic != "" {
+		return nil, errors.New("the identity has a pq_public_key without its pq_private_key")
+	}
 	return &id, nil
 }
+
+// Hybrid: the agent's key is Ed25519 + ML-DSA-65.
+func (id *AgentIdentity) Hybrid() bool { return id.pqKey != nil }
 
 // Sign: the agent's signed request (X-Provenza-Request) for d.
 func (id *AgentIdentity) Sign(d Descriptor, chainID *int64, now time.Time) (string, error) {
@@ -125,8 +149,18 @@ func (id *AgentIdentity) Sign(d Descriptor, chainID *int64, now time.Time) (stri
 	if err != nil {
 		return "", err
 	}
-	out, err := json.Marshal(map[string]any{"payload": payload, "public_key": id.PublicKey,
-		"signature": base64.StdEncoding.EncodeToString(ed25519.Sign(id.key, msg))})
+	signed := map[string]any{"payload": payload, "public_key": id.PublicKey,
+		"signature": base64.StdEncoding.EncodeToString(ed25519.Sign(id.key, msg))}
+	if id.pqKey != nil {
+		// both halves over the same canonical payload, as the SDKs sign (AND: the server checks both)
+		pq, err := id.pqKey.Sign(nil, msg, nil)
+		if err != nil {
+			return "", err
+		}
+		signed["pq_signature"] = base64.StdEncoding.EncodeToString(pq)
+		signed["pq_public_key"] = id.PQPublic
+	}
+	out, err := json.Marshal(signed)
 	if err != nil {
 		return "", err
 	}

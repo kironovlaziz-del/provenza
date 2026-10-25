@@ -2450,6 +2450,7 @@
     "browser_done": "#{{id}} agent ro'yxatga olindi - provenza-agent.json yuklab olindi",
     "browser_rekeyed": "#{{id}} agentda yangi kalit - provenza-agent.json yuklab olindi (yangi API kaliti bilan)",
     "browser_file_warning": "Faylda agentning shaxsiy kalitlari va API kaliti bor: uni agent kompyuteriga ko'chiring, faqat agent foydalanuvchisi o'qiy oladigan qiling (chmod 600) va bu kompyuterning yuklamalaridan o'chiring.",
+    "connect_hint": "O'sha mashinada, agent foydalanuvchisi nomidan, fayl ~/.config/provenza/ ichida bo'lganda AI mijozini ulang (gemini-cli, claude-code, cursor yoki openai) - u har bir so'rovni shu agent nomidan imzolaydi:",
     "browser_download_again": "Qayta yuklab olish",
     "browser_failed": "Brauzerda ro'yxatga olish amalga oshmadi",
     "browser_unsupported": "Bu brauzer Ed25519 kalitlarini yarata olmaydi (Chrome 113+, Firefox 129+ yoki Safari 17+ kerak). Quyidagi buyruqdan foydalaning.",

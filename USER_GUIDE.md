@@ -161,8 +161,10 @@ agent's own signature and the signed policy. Provenza's own gateways then
 execute nothing, and an agent's check of its own only observes: every
 action goes through an egress proxy in enforce mode, signed by the agent -
 the SDKs sign; for a client that cannot (a stock OpenAI or MCP client) run
-the proxy's agent mode next to it (`provenza-proxy -agent-identity …`, see
-`proxy/README.md`). Switching it on takes effect at once; switching it off
+the proxy's agent mode next to it: `provenza-proxy connect gemini-cli` (or
+`claude-code`, `cursor`, `openai`), run as the agent's user with its
+`provenza-agent.json`, starts it and gives the client Provenza's MCP
+endpoint (see `proxy/README.md`). Switching it on takes effect at once; switching it off
 needs a signed release. Before you switch it on, put every agent behind a
 proxy.
 

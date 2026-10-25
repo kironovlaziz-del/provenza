@@ -392,3 +392,64 @@ async def test_the_go_proxy_against_this_server(client, admin_token, db_session,
     assert actions[0].output_data == {"status": 201, "response_sha256": hashlib.sha256(b'{"id":"ch_1"}').hexdigest(),
                                       "response_bytes": 13}
     assert actions[1].input_data == desc
+
+
+@pytest.mark.asyncio
+async def test_agent_mode_signs_with_a_hybrid_key_this_server_verifies(tmp_path, proxy_binary):
+    """Agent mode (provenza-proxy -agent-identity) with an Ed25519 + ML-DSA-65
+    identity: the signed request it adds verifies here, both halves."""
+    from app.core.agent_signing import (generate_keypair, generate_pq_keypair, pq_available,
+                                        verify_agent_signature)
+    from app.pvp.enforcement import signed_request
+    from app.pvp.model import PVPActionRequest
+
+    if not pq_available():
+        pytest.skip("ML-DSA needs cryptography >= 48")
+    priv, pub = generate_keypair()
+    pq_seed, pq_pub = generate_pq_keypair()
+    identity = tmp_path / "provenza-agent.json"
+    identity.write_text(json.dumps({"server": "https://p.example", "agent_id": 9, "api_key": "k" * 32,
+                                    "private_key": priv, "public_key": pub,
+                                    "pq_private_key": pq_seed, "pq_public_key": pq_pub}))
+    identity.chmod(0o600)
+    seen = []
+
+    async def upstream(method, target, headers, body):
+        seen.append((method, target, headers, body))
+        return 200, {"Content-Type": "application/json"}, b'{"ok":true}'
+
+    server, up = await _http_server(upstream)
+    port = _free_port()
+    proc = subprocess.Popen([str(proxy_binary), "-agent-identity", str(identity), "-listen", f"127.0.0.1:{port}",
+                             "-upstream", up], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    try:
+        body = b'{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
+        async with httpx.AsyncClient() as c:
+            for _ in range(50):
+                try:
+                    r = await c.post(f"http://127.0.0.1:{port}/_mcp?x=1", content=body,
+                                     headers={"Content-Type": "application/json", "Authorization": "Bearer stolen"})
+                    break
+                except httpx.ConnectError:
+                    await asyncio.sleep(0.1)
+        assert r.status_code == 200, r.text
+    finally:
+        proc.terminate()
+        proc.wait(timeout=10)
+        server.close()
+
+    method, target, headers, got = seen[0]
+    h = {k.lower(): v for k, v in headers.items()}
+    assert (method, target, got) == ("POST", "/_mcp?x=1", body)
+    assert h["x-agent-key"] == "k" * 32 and "authorization" not in h     # the client's own key is dropped
+    sr = signed_request(h["x-provenza-request"])
+    p = sr["payload"]
+    assert sr["pq_public_key"] == pq_pub and sr["public_key"] == pub
+    desc = descriptor("_mcp", "POST", "/", query="x=1", body=body)
+    req = PVPActionRequest(agent_id=9, chain_id=p["chain_id"], action_type="proxy", tool_name="proxy._mcp",
+                           input=desc, nonce=p["nonce"], issued_at=p["issued_at"], signature=sr["signature"],
+                           pq_signature=sr["pq_signature"])
+    assert req.signed_payload()["input_sha256"] == p["input_sha256"]
+    assert verify_agent_signature(req.signed_payload(), sr["signature"], sr["pq_signature"], pub, pq_pub)
+    forged = sr["pq_signature"][:20] + ("A" if sr["pq_signature"][20] != "A" else "B") + sr["pq_signature"][21:]
+    assert not verify_agent_signature(req.signed_payload(), sr["signature"], forged, pub, pq_pub)
