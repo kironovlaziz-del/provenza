@@ -22,15 +22,14 @@ agent's quota before the caller is known:
                     ("stripe.chаrge" with a Cyrillic "a" is not the
                     tool a policy names)
   6. PVP schema     app/pvp/model.py (the adapter's _pvp)
-  7. signature, policy, injection (ASI01), code shapes (ASI05), behaviour
-                    (ASI10): the orchestrator and the services it calls -
-                    the guard does not duplicate them
+  7. signature, policy, supply chain, behaviour (ASI10): the
+                    orchestrator and the services it calls - the guard does
+                    not duplicate them
 
 The guard refuses; it never rewrites. A rewritten input no longer matches
 the hash the agent signed, so "sanitizing" would only move the problem.
-Suspicious-but-valid content is not the guard's call either: the injection
-and code-execution guards already hold such actions for a human (ASI09)
-in enforce mode.
+Suspicious-but-valid content is not the guard's call either: policies
+decide which tools need a person's approval (ASI09).
 
 A refusal of an authenticated request is written to pvp_guard_log: the
 body's hash and size and, per finding, a code and a JSON path - never the

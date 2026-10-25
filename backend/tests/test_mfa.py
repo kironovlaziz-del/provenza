@@ -40,6 +40,8 @@ async def test_enroll_and_sign_in_with_a_second_factor(client, org_and_users, ad
     assert len(codes) == 10
     me = (await client.get("/api/v1/users/me/mfa", headers=auth_headers(admin_token))).json()
     assert me["enabled"] is True and me["recovery_codes_left"] == 10
+    # one session of an administrator at a time: sign out before signing in again
+    assert (await client.post("/api/v1/auth/logout", headers=auth_headers(admin_token))).status_code == 204
 
     step = await _password_step(client, org, admin.email)
     assert step["mfa_required"] is True and step["access_token"] is None and step["mfa_token"]

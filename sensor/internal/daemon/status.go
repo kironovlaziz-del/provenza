@@ -12,6 +12,8 @@ import (
 	"path/filepath"
 	"runtime"
 	"time"
+
+	"github.com/kironovlaziz-del/provenza/sensor/internal/client"
 )
 
 // Status is the read-only snapshot returned by `provenza-sensor status`
@@ -29,6 +31,9 @@ type Status struct {
 	Cgroups  CgroupsSection `json:"cgroups"`
 	DNS      []DNSSection   `json:"dns,omitempty"`
 	Stats    StatsSection   `json:"stats"`
+
+	SignedPolicy *client.SignedPolicyReport `json:"signed_policy,omitempty"`
+	ProxyRuns    []client.ProxyRunReport    `json:"proxy_runs,omitempty"`
 }
 
 type HostSection struct {
@@ -174,13 +179,15 @@ func (d *Daemon) snapshot() Status {
 			RunGroup:     d.cfg.RunGroup,
 			RingBytes:    d.cfg.RingBytes,
 		},
-		Key: keySection(d.cfg.KeyFile),
+		Key:          keySection(d.cfg.KeyFile),
+		SignedPolicy: d.signedReport(),
+		ProxyRuns:    d.proxyReports(),
 		Hooks: HooksSection{
 			Attached: append([]string(nil), d.kernel.Hooks...),
 			LSM:      d.kernel.LSM,
 			Mkdir:    d.kernel.Mkdir,
 		},
-		Warnings: append([]string(nil), d.kernel.Notes...),
+		Warnings: d.warnings(),
 		DNS:      d.dns.stats(cgByWid),
 		Stats:    d.statsAndRates(),
 	}

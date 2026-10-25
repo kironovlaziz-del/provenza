@@ -10,6 +10,8 @@ EVENT_TYPES = [
     "agent_discovered",
     "audit_key_rotation",
     "kill_switch",
+    "session_conflict",        # a second sign-in of an administrator or approver, blocked
+    "policy_release",          # a signed policy release waits for signatures / came into force
     "runtime_violation",       # kept for channels configured before the
                                # egress sensor replaced the runtime daemon
     "egress_violation",        # a sensor reported alerted/blocked connections

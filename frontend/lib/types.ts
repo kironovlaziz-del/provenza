@@ -33,6 +33,7 @@ export interface Provider {
   base_url?: string | null;
   default_model?: string | null;
   has_credentials: boolean;
+  credential_source?: "none" | "sealed" | "local";
   created_at: string;
   updated_at?: string | null;
 }

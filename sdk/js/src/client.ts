@@ -20,8 +20,10 @@ const API = "/api/v1";
 export class Client {
   readonly serverUrl: string;
 
+  /** api: "/api/v1" for Provenza; "" for an egress proxy's own paths (/_tools/...). */
   constructor(serverUrl: string, readonly apiKey: string | null = null,
-              private readonly timeoutMs = 10_000, private readonly fetchImpl: Fetch = fetch) {
+              private readonly timeoutMs = 10_000, private readonly fetchImpl: Fetch = fetch,
+              private readonly api: string = API) {
     if (!/^https?:\/\//.test(serverUrl)) throw new TypeError("serverUrl must start with https:// (or http:// for a local server)");
     this.serverUrl = trimEnd(serverUrl, "/");
   }
@@ -35,13 +37,17 @@ export class Client {
     return h;
   }
 
-  async request(method: "GET" | "POST", path: string, body?: unknown, authenticated = true): Promise<any> {
+  /** sign: headers over the exact body bytes (the agent's signed request for an egress proxy). */
+  async request(method: "GET" | "POST", path: string, body?: unknown, authenticated = true,
+                sign?: (raw: Buffer) => Record<string, string>): Promise<any> {
     const headers = this.headers(authenticated);
     if (body !== undefined) headers["content-type"] = "application/json";
+    const text0 = body === undefined ? undefined : JSON.stringify(body);
+    if (sign && text0 !== undefined) Object.assign(headers, sign(Buffer.from(text0, "utf8")));
     let resp: Response;
     try {
-      resp = await this.fetchImpl(this.serverUrl + API + path, {
-        method, headers, body: body === undefined ? undefined : JSON.stringify(body),
+      resp = await this.fetchImpl(this.serverUrl + this.api + path, {
+        method, headers, body: text0,
         redirect: "manual", signal: AbortSignal.timeout(this.timeoutMs),
       });
     } catch (exc) {
@@ -59,8 +65,9 @@ export class Client {
     return data;
   }
 
-  post(path: string, body: unknown, authenticated = true): Promise<any> {
-    return this.request("POST", path, body, authenticated);
+  post(path: string, body: unknown, authenticated = true,
+       sign?: (raw: Buffer) => Record<string, string>): Promise<any> {
+    return this.request("POST", path, body, authenticated, sign);
   }
 
   get(path: string): Promise<any> {

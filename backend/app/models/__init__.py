@@ -40,6 +40,9 @@ from app.models.behavior import AgentAnomaly, AgentBaseline, BehaviorSettings
 from app.models.agent_identity import AgentIdentitySettings
 from app.models.gateway import GatewayCall, GatewayRoute, GatewaySettings
 from app.models.retention import RetentionRun, RetentionSettings
+from app.models.signing import SigningSession, UserPasskey
+from app.models.policy_release import PolicyRelease, PolicyReleaseSignature, PolicySigningSettings
+from app.models.sealed_credential import SealedCredential
 from app.models.org_key import ByokJob, OrgKey
 from app.models.rag_query_log import RagQueryLog
 from app.models.compliance import ComplianceAttestation, ComplianceReport
@@ -56,7 +59,7 @@ from app.models.scim import OidcSettings, ScimSettings
 from app.models.egress_check import AgentEgressCheck
 from app.models.a2a_gateway import A2APeer, A2ATask
 from app.models.pvp_seal import PVPActionSeal
-from app.models.egress_proxy import EgressProxy, EgressRedemption, EgressRoute
+from app.models.egress_proxy import EgressProxy, EgressRedemption, EgressRoute, ProxyKillSwitch, ProxyKillSwitchSignature
 from app.models.egress_sensor import (EgressPolicyRevision, EgressPolicySettings, EgressSensor,
                                     EgressSensorWorkload, EgressViolation, EgressWorkload)
 
@@ -101,10 +104,18 @@ __all__ = [
     "EndpointDevice",
     "DiscoveredAgent",
     "EgressSensor",
+    "ProxyKillSwitch",
+    "ProxyKillSwitchSignature",
     "EgressWorkload",
     "EgressPolicyRevision",
     "EgressPolicySettings",
     "EgressViolation",
+    "SigningSession",
+    "UserPasskey",
+    "PolicyRelease",
+    "PolicyReleaseSignature",
+    "PolicySigningSettings",
+    "SealedCredential",
 ]
 
 # live agent events (after-commit session hook)

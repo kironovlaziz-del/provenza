@@ -23,6 +23,8 @@
 #   --key-file PATH   read the sensor key from this file; enroll and start
 #   --key KEY         the key itself - it stays in the shell history; prefer the prompt
 #   --cgroup-root P   cgroup v2 mount (default /sys/fs/cgroup)
+#   --policy-pin SHA  follow the signed policy: the key manifest's SHA-256 (Policies -> Signed
+#                     policy) or "tofu"; commands then need an administrator's passkey
 #   --binary PATH     use this provenza-sensor binary instead of building or downloading
 #   --uninstall       detach the sensor and remove files
 #   --yes             non-interactive
@@ -38,6 +40,7 @@ PIN_DIR="/sys/fs/bpf/provenza"
 STATE_DIR="/var/lib/provenza-sensor"
 RUN_SOCKET="/run/provenza-sensor/run.sock"
 RUN_GROUP="provenza"
+POLICY_PIN=""
 BIN_SRC=""
 ASSUME_YES=0
 FORCE=0
@@ -68,6 +71,7 @@ while [ $# -gt 0 ]; do
     --state-dir) STATE_DIR=${2:?}; shift 2 ;;
     --run-socket) RUN_SOCKET=${2:?}; shift 2 ;;
     --run-group) RUN_GROUP=${2:?}; shift 2 ;;
+    --policy-pin) POLICY_PIN=${2:?}; shift 2 ;;
     --binary) BIN_SRC=${2:?}; shift 2 ;;
     --uninstall) UNINSTALL=1; shift ;;
     --yes|-y) ASSUME_YES=1; shift ;;
@@ -229,7 +233,7 @@ if [ -n "$URL" ] && [ -n "$KEY" ]; then
   printf '%s\n' "$KEY" | provenza-sensor enroll --url "$URL" --key - \
     --cgroup-root "$CGROUP_ROOT" --pin-dir "$PIN_DIR" \
     --state-dir "$STATE_DIR" --run-socket "$RUN_SOCKET" --run-group "$RUN_GROUP" \
-    --no-restart
+    ${POLICY_PIN:+--policy-pin "$POLICY_PIN"} --no-restart
   systemctl enable --now provenzasensor
   ok "sensor running"
   echo

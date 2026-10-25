@@ -46,25 +46,55 @@ PREFIX = "egress."
 BLOCKED_INCIDENT = "ai_domain_blocked"
 
 
+def signed_match(domains: Dict[str, str], host: str):
+    """DomainCatalogService.match_domain over the signed catalog (domain -> status)."""
+    from app.services.domain_catalog_service import DomainMatch
+
+    if host in domains:
+        return DomainMatch(domains[host], None, None, 0)
+    suffix = [d for d in domains if host.endswith("." + d)]
+    if suffix:
+        return DomainMatch(domains[max(suffix, key=len)], None, None, 0)
+    from app.services.domain_catalog_seed import lookup_seed_hint
+
+    hint = lookup_seed_hint(host)
+    return DomainMatch("unknown", hint["tool_name"] if hint else None, hint["category"] if hint else None, None)
+
+
+def classify_signed(signed, tool_name: Optional[str], input_data: Dict[str, Any]) -> Tuple[str, Optional[Decision]]:
+    """classify() by the signed catalog and provider policy alone - no database."""
+    host = str((input_data or {}).get("host") or "").strip().lower()
+    if not host or tool_name != PREFIX + host:
+        return "invalid", Decision(DENIED, "an egress action names its host in tool_name (egress.<host>) and input.host",
+                                   None)
+    match = signed_match(signed.ai_domains(), host)
+    return match.policy_status, _verdict(host, match, signed.provider_policy() == "self_hosted")
+
+
+def _verdict(host: str, match, self_hosted: bool) -> Optional[Decision]:
+    if match.policy_status == "blocked":
+        what = f" ({match.tool_name})" if match.tool_name else ""
+        return Decision(DENIED, f"{host}{what} is blocked in the organization's AI domain catalog", BLOCKED_INCIDENT)
+    known = match.matched_catalog_id is not None or match.tool_name is not None
+    if known and self_hosted:
+        what = f" ({match.tool_name})" if match.tool_name else ""
+        return Decision(DENIED, f"{host}{what} is a cloud AI service; the organization allows only self-hosted "
+                                "providers", provider_policy.INCIDENT)
+    return None
+
+
 async def classify(db: AsyncSession, org_id: int, tool_name: Optional[str],
-                   input_data: Dict[str, Any]) -> Tuple[str, Optional[Decision]]:
-    """(catalog status, a refusal or None) for one egress action."""
+                   input_data: Dict[str, Any], signed=None) -> Tuple[str, Optional[Decision]]:
+    """(catalog status, a refusal or None) for one egress action - by the
+    working copy of the catalog, or by the signed one (app/pvp/signed_policy.py)."""
+    if signed is not None:
+        return classify_signed(signed, tool_name, input_data)
     host = str((input_data or {}).get("host") or "").strip().lower()
     if not host or tool_name != PREFIX + host:
         return "invalid", Decision(DENIED, "an egress action names its host in tool_name (egress.<host>) and input.host",
                                    None)
     match = await DomainCatalogService(db).match_domain(org_id, host)
-    if match.policy_status == "blocked":
-        what = f" ({match.tool_name})" if match.tool_name else ""
-        return "blocked", Decision(DENIED, f"{host}{what} is blocked in the organization's AI domain catalog",
-                                   BLOCKED_INCIDENT)
-    known = match.matched_catalog_id is not None or match.tool_name is not None
-    if known and await provider_policy.self_hosted_required(db, org_id):
-        what = f" ({match.tool_name})" if match.tool_name else ""
-        return match.policy_status, Decision(
-            DENIED, f"{host}{what} is a cloud AI service; the organization allows only self-hosted providers",
-            provider_policy.INCIDENT)
-    return match.policy_status, None
+    return match.policy_status, _verdict(host, match, await provider_policy.self_hosted_required(db, org_id))
 
 
 async def catalog(db: AsyncSession, org_id: int) -> List[Dict[str, Any]]:

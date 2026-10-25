@@ -4,8 +4,10 @@
 
 """
 HTTP tool gateway (app/pvp/http_tools.py): the agent names a tool and its
-arguments; Provenza checks, calls the API with the credential it holds, and
-records - in one operation. A real HTTP server on 127.0.0.1 plays the API.
+arguments; Provenza checks, calls the API and records - in one operation.
+This server holds no credential: a tool that takes one is called through an
+egress proxy (tests/test_sealed_credentials.py). A real HTTP server on
+127.0.0.1 plays the API.
 """
 
 import json
@@ -76,7 +78,7 @@ SCHEMA = {"type": "object", "required": ["id", "tier"], "additionalProperties": 
 
 async def _tool(client, token, api, **over):
     body = {"name": "crm.set_tier", "method": "PATCH", "url": api.base + "/customers/{id}", "input_schema": SCHEMA,
-            "auth_secret": SECRET, "description": "Set a customer's tier", **over}
+            "description": "Set a customer's tier", **over}
     r = await client.post(T, json=body, headers=auth_headers(token))
     assert r.status_code == 200, r.text
     return r.json()
@@ -102,7 +104,7 @@ async def _call(client, agent, tool="crm.set_tier", args=None, sign=True):
 @pytest.mark.asyncio
 async def test_the_agent_calls_through_provenza_and_never_sees_the_key(client, admin_token, db_session, api):
     tool = await _tool(client, admin_token, api)
-    assert tool["has_secret"] and "secret" not in json.dumps(tool).lower().replace("has_secret", "")
+    assert not tool["has_secret"] and tool["credential_source"] == "none"
     entry = (await db_session.execute(select(ToolRegistryEntry).where(
         ToolRegistryEntry.id == tool["registry_entry_id"]))).scalar_one()
     assert entry.status == "approved" and entry.pinned_digest == tool["digest"]
@@ -118,7 +120,7 @@ async def test_the_agent_calls_through_provenza_and_never_sees_the_key(client, a
     assert out["decision"] == "allowed" and out["status"] == 200 and out["body"]["customer"]["tier"] == "gold"
     sent = api.calls[-1]
     assert sent["method"] == "PATCH" and sent["path"] == "/customers/c%2F42"       # one encoded path segment
-    assert sent["headers"]["Authorization"] == SECRET                              # injected here
+    assert "Authorization" not in sent["headers"]   # no credential here: one is opened by an egress proxy
     assert json.loads(sent["body"]) == {"id": "c/42", "tier": "gold"}
     assert "X-Agent-Key" not in sent["headers"]
     # the permit goes along, for exactly this call - an API behind provenza.permit accepts it
@@ -212,4 +214,4 @@ async def test_admin_rules(client, admin_token, approver_token, db_session, api)
     assert (await _call(client, agent)).status_code == 404
     row = await db_session.get(HttpTool, tool["id"])
     await db_session.refresh(row)
-    assert row.enabled is False and row.auth_secret_encrypted and SECRET not in row.auth_secret_encrypted
+    assert row.enabled is False

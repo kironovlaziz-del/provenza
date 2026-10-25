@@ -12,7 +12,6 @@ from app.api.deps import get_current_user, require_role
 from app.models.user import UserRole
 from app.models.ai_provider import AIProvider
 from app.models.organization import Organization
-from app.core.crypto import decrypt_secret
 from app.services import provider_policy
 import httpx
 from app.core.outbound import error_detail, guarded_async_client
@@ -137,9 +136,10 @@ async def list_provider_models(
     if not provider:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Provider not found")
 
-    api_key = decrypt_secret(provider.api_key_encrypted) if provider.api_key_encrypted else None
-    if not api_key:
-        return {"models": [], "note": "No API key stored for this provider."}
+    if provider.has_credentials:
+        # the key is sealed to the egress proxies: this server cannot use it
+        return {"models": [], "note": "The key is sealed to the egress proxies; type the model name."}
+    api_key = None
 
     # resolve base url per type
     base = provider.base_url
@@ -154,7 +154,7 @@ async def list_provider_models(
     url = base.rstrip("/") + "/models"
     try:
         async with guarded_async_client(internal_only=self_hosted, timeout=20) as client:
-            resp = await client.get(url, headers={"Authorization": f"Bearer {api_key}"})
+            resp = await client.get(url, headers={"Authorization": f"Bearer {api_key}"} if api_key else {})
     except (httpx.HTTPError, httpx.InvalidURL) as e:
         raise HTTPException(status_code=502, detail=f"Could not list models: {e}")
     if resp.status_code >= 400:

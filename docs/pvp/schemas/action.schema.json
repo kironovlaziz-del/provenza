@@ -64,6 +64,48 @@
       ],
       "title": "PVPSignature",
       "type": "object"
+    },
+    "PVPWitness": {
+      "additionalProperties": false,
+      "description": "What the executor signed about the action with its own key (an egress\nproxy, app/pvp/witness.py): the statement names the action exactly, and\nsays whether the executor itself verified the agent's key and which signed\npolicy it judged by.",
+      "properties": {
+        "by": {
+          "const": "egress_proxy",
+          "title": "By",
+          "type": "string"
+        },
+        "key_fingerprint": {
+          "title": "Key Fingerprint",
+          "type": "string"
+        },
+        "public_key": {
+          "maxLength": 6000,
+          "minLength": 4,
+          "pattern": "^[A-Za-z0-9+/]+={0,2}$",
+          "title": "Public Key",
+          "type": "string"
+        },
+        "signature": {
+          "maxLength": 6000,
+          "minLength": 4,
+          "pattern": "^[A-Za-z0-9+/]+={0,2}$",
+          "title": "Signature",
+          "type": "string"
+        },
+        "statement": {
+          "title": "Statement",
+          "type": "object"
+        }
+      },
+      "required": [
+        "by",
+        "key_fingerprint",
+        "public_key",
+        "statement",
+        "signature"
+      ],
+      "title": "PVPWitness",
+      "type": "object"
     }
   },
   "$id": "urn:provenza:pvp:1:action.schema.json",
@@ -150,7 +192,8 @@
             "mcp_gateway",
             "a2a_gateway",
             "egress_proxy",
-            "http_gateway"
+            "http_gateway",
+            "llm_gateway"
           ],
           "type": "string"
         },
@@ -236,6 +279,17 @@
       "default": "action",
       "title": "Type",
       "type": "string"
+    },
+    "witness": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/PVPWitness"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
     }
   },
   "required": [

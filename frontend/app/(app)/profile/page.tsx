@@ -1,7 +1,8 @@
 "use client";
 
-// The signed-in user's own account: who they are here, and their password.
-// Changing it ends every other session (a stolen session ends with it).
+// The signed-in user's own account: who they are here, two-factor sign-in,
+// passkeys (for people who sign), and their password. Changing the password
+// ends every other session (a stolen session ends with it).
 
 import React, { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
@@ -9,13 +10,14 @@ import { useTranslation } from "react-i18next";
 import { Form } from "@/components/Form";
 import { PageHeader } from "@/components/PageHeader";
 import { MfaPanel } from "@/components/profile/MfaPanel";
+import { PasskeysPanel } from "@/components/profile/PasskeysPanel";
 import { changeMyPassword } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { errorMessage } from "@/lib/errors";
 
 function Profile() {
   const { t } = useTranslation();
-  const { user } = useAuth();
+  const { user, refreshSession } = useAuth();
   const mfaRequired = useSearchParams().get("mfa") === "required";
   const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");
@@ -35,6 +37,7 @@ function Profile() {
     setBusy(true);
     try {
       await changeMyPassword(current, next);
+      await refreshSession();     // a new session: confirm it with the passkey again
       setCurrent("");
       setNext("");
       setAgain("");
@@ -64,6 +67,8 @@ function Profile() {
         </div>
 
         <MfaPanel required={mfaRequired} />
+
+        <PasskeysPanel />
 
         <div className="panel">
           <div className="panel-header"><h2>{t("profile.password_title")}</h2></div>

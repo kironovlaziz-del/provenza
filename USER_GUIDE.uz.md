@@ -36,6 +36,26 @@ Rollarni admin **Settings → Users** sahifasida beradi. Agar tashkilot ikki
 bosqichli kirishni "tasdiqlovchilar uchun" talab qilsa, bu auditor va
 muvofiqlik mas’uliga ham tegishli.
 
+### Passkey va bitta seans (admin va tasdiqlovchilar)
+
+Administrator va tasdiqlovchilar o‘z amallarini **passkey** bilan
+tasdiqlaydi: bu telefon yoki kompyuterda saqlanadigan va PIN-kod yoki
+barmoq izi bilan ochiladigan kalit. Uni **My profile → Passkeys** bo‘limida
+qo‘shing (parol qayta so‘raladi; ikkinchi passkeydan boshlab mavjudi uni
+tasdiqlaydi). Telefon yo‘qolsa kira olmay qolmaslik uchun turli
+qurilmalarda ikkita qo‘shing.
+
+- Har kirishdan keyin brauzer passkeyni bir marta so‘raydi; ungacha banner
+  kirish tasdiqlanmaganini ko‘rsatadi.
+- Bir vaqtda **faqat bitta seans** bo‘ladi. Seans ochiq turganda siz (yoki
+  parolingizni bilgan kishi) boshqa joydan kirsangiz, yangi kirish kutib
+  turadi, ochiq seansda esa vaqt, manzil va brauzer ko‘rsatilgan qizil
+  banner chiqadi: **Kiritish** (passkey bilan) yoki **Rad etish**. Hodisa
+  (incident) ochiladi va `session_conflict` bildirishnomasi yuboriladi.
+- Agar ochiq seans endi qo‘lingizda bo‘lmagan qurilmada bo‘lsa, kutayotgan
+  kirish **boshqa seansni yakunlashi** mumkin - faqat passkey bilan.
+- Chiqish yoki parolni o‘zgartirish seansni va uning kalitini yakunlaydi.
+
 ---
 
 ## 2. Boshqaruv paneli (Dashboard)
@@ -80,9 +100,24 @@ Agentlar AI provayderni shlyuz orqali chaqira olishidan oldin ulanish qo‘shing
 1. Yon menyu → **AI inventory → Connections**.
 2. **New provider** → turini tanlang (OpenAI, Anthropic, Azure OpenAI
    yoki Shaxsiy), nom bering va API kalitni joylashtiring.
-3. Kalit **shifrlangan holda saqlanadi** va boshqa hech qachon
-   ko‘rsatilmaydi — interfeys faqat kalit o‘rnatilgan-o‘rnatilmaganini
-   bildiradi.
+3. Kalit **brauzeringizda** egress proksilarning o‘z kalitlariga
+   **muhrlanadi** (Gateways → Egress → Proxies har bir proksi kalitining
+   barmoq izini ko‘rsatadi; uni proksi o‘z xostida chiqargani bilan
+   solishtiring). Provenza faqat o‘zi ocha olmaydigan narsani saqlaydi,
+   kalitdan esa proksilar foydalanadi — shuning uchun kalitli ulanish egress
+   proksi orqali chaqiriladi. Kalit talab qilmaydigan o‘z serveringizdagi
+   model kalitsiz ishlaydi. Egress marshrutlari, MCP serverlari, A2A
+   hamkorlari va HTTP vositalarining hisob ma’lumotlari ham xuddi shunday.
+   Muhrlash sizning imzoingizni (ushbu sessiya kaliti) so‘raydi: enforce
+   rejimidagi proksi faqat imzolangan siyosat administratori muhrlagan
+   narsani ochadi. Server avval saqlagan kalitdan o‘zi muhrlagan hisob
+   ma’lumoti uchun *Vouch for it* tugmasi chiqadi.
+4. Keyin agentlar o‘z kaliti bilan egress proksi orqali chaqiradi:
+   OpenAI base URL sifatida `http://<proxy>/_llm/v1`, MCP uchun `/_mcp`,
+   A2A uchun `/_a2a/<peer>`, HTTP vositalari uchun esa SDK’ning
+   `egress_proxy` sozlamasi (`PROVENZA_EGRESS_PROXY`). Hisob ma’lumotini
+   saqlaydigan MCP serverlari va A2A hamkorlarini proksilar sinxronlaydi;
+   ularning vositalari va kartalarini Provenza’da odatdagidek tasdiqlang.
 
 Provayder xavfini kuzatish uchun SLA va xavf balini ham belgilashingiz
 mumkin.
@@ -105,6 +140,43 @@ jurnalida. Batafsil: docs/policies.md.
 Policies → **Agent policies** agent amallari uchun vizual tuzilgan
 qoidalarni saqlaydi (vositani taqiqlash, faqat ayrim vositalarga ruxsat,
 tasdiq talab qilish, limitlar).
+
+**Imzolangan siyosat** (Policy hierarchy sahifasining yuqorisi).
+Administratorlar ruxsat yoki rad etishni hal qiladigan hamma narsani -
+agentlar huquqlari, siyosatlar, Tool Registry, shlyuzlar va ularning
+yo'nalishlari - hamda kalitlarni *relizga* muzlatib, passkey bilan
+imzolaydi (**Prepare the first release**, keyin **Sign with passkey**).
+Reliz kuchga kirgach:
+
+- qattiqlashtiruvchi o'zgarish (agentni to'xtatish, vositani olib tashlash,
+  taqiq qoidasi) darhol kuchga kiradi;
+- yumshatuvchi o'zgarish (yangi agent yoki vosita, yangi yo'nalish yoki MCP
+  server, yuqoriroq limit) kvorum keyingi relizni imzolaguncha kutadi; panel
+  va banner hali imzolanmaganlarni ko'rsatadi;
+- yangi agent yoki agentning yangi kaliti faqat imzolangandan keyin ishlaydi.
+
+Kvorumni (nechta administrator imzolashi kerak; 2 va undan ko'p tavsiya
+etiladi), reliz amal qilish muddatini va oflayn vaqtni *Quorum, validity,
+offline time, mode* bo'limida belgilang: ular keyingi relizdan qo'llaniladi. Oflayn
+vaqt - egress proksi (enforce rejimida) va pin qilingan sensorlar ushbu
+serversiz qancha ishlashi: undan keyin ular to'xtaydi - *lokal kill switch*.
+To'xtagan proksi Gateways → Egress → Proxies ostida shu orada nima
+o'zgargani bilan ko'rinadi; u uzilishdan oldin ushlab turgan reliz
+administratorlari uni passkey bilan yechadi va hech bir imzolangan reliz
+tushuntirmaydigan har bir o'zgarishni qabul qiladi.
+Muddati tugashidan oldin relizni yangilang - aks holda yangisi
+imzolanmaguncha hech bir agent amaliga ruxsat berilmaydi.
+`tools/provenza_audit.py release` relizni oflayn tekshiradi.
+
+Shu sozlamalardagi *Mode*: **Enforce** - agentning o'z imzosi va imzolangan
+siyosatsiz hech bir amal bajarilmaydi. Shunda Provenzaning o'z shlyuzlari
+hech narsani bajarmaydi, agentning o'zi qilgan tekshiruvi esa faqat kuzatadi:
+har bir amal agent imzolagan holda enforce rejimidagi egress proksi orqali
+o'tadi - SDKlar imzolaydi; imzolay olmaydigan mijoz (oddiy OpenAI yoki MCP
+mijozi) uchun uning yonida proksining agent rejimini ishga tushiring
+(`provenza-proxy -agent-identity …`, `proxy/README.md` ga qarang). Yoqish
+darhol kuchga kiradi; o'chirish uchun imzolangan reliz kerak. Yoqishdan
+oldin barcha agentlarni proksi ortiga o'tkazing.
 
 ---
 
@@ -143,8 +215,16 @@ yuqori xavfli har bir tizim uchun sinovni talab qiladi.
 
 Siyosat inson tasdig'ini talab qilgan agent amali **Overview →
 Approvals**da kutadi. Admin va tasdiqlovchilar uni argumentlari bo'yicha
-baholab, sabab bilan **Approve** yoki **Reject** qiladi; agent faqat
-tasdiqdan keyin davom etadi. Barcha qarorlar auditga yoziladi.
+baholab, sabab bilan **Approve** yoki **Reject** qiladi. Tasdiq seans
+kalitingiz bilan imzolanadi, uni esa kirishda passkeyingiz tasdiqlagan:
+avval **My profile**da passkey qo'shing va kirishni tasdiqlang (yuqoridagi
+banner), shundan keyin tasdiqlang. Bajarilgan amal kvitansiyasida imzolangan
+tasdiq bo'ladi va `tools/provenza_audit.py receipt --approver-passkey` uni
+oflayn tekshiradi (barmoq izlari My profile → Passkeys da). Tasdiqlashning
+o'zi hech narsani ishga tushirmaydi: agent aynan shu chaqiruvni (o'sha
+argumentlar, o'sha zanjir) takrorlaydi va u tasdiqdan keyin bir soat
+ichida bir marta bajariladi - istalgan shlyuz yoki SDK orqali
+(`wait_for_approval` qarorni kutadi). Barcha qarorlar auditga yoziladi.
 
 ---
 
@@ -446,8 +526,21 @@ jarayonlari) qayerga ulana olishini yadro darajasida belgilaydi.
    **enforce** (bloklash).
 3. Sensor qatorida oxirgi heartbeat, ulangan hooklar va ogohlantirishlar
    ko‘rinadi; qatorni ochib, imzolangan buyruq bilan **Dump state**,
-   **Restart** yoki **Detach** qilish mumkin
-   ([batafsil](docs/sensor-commands.md)).
+   **Restart** yoki **Detach** qilish mumkin - buyruqni seansingiz
+   imzolaydi ([batafsil](docs/sensor-commands.md)).
+
+Har bir sensorga imzolangan siyosat pinini bering (`install.sh --policy-pin <SHA-256>`,
+qiymat **Signed policy** ostida ko‘rsatiladi). Shunda sensor relizlarni
+o‘zi tekshiradi: faqat administrator imzolagan buyruqlarni bajaradi
+(tarixda 🔏), har bir ish yuklamasini uning imzolangan versiyasi
+doirasida ushlaydi (server uni darhol qattiqlashtira oladi, yumshatish
+keyingi relizni kutadi), `provenza-sensor --proxy run` bilan ishga
+tushirilgan egress proksi xostida esa proksini faqat u imzolangan siyosat
+sozlamalaridagi *egress proksi binar fayllari* ro‘yxatidagi binarni
+*egress proksi konfiguratsiyalari* ro‘yxatidagi konfiguratsiya bilan
+(`sha256sum proxy.json`) ishlatganda tashqariga chiqaradi. Ochilgan qatorda sensor tekshirgan reliz
+va har bir proksining holati ko‘rinadi
+([batafsil](sensor/README.md#the-signed-policy)).
 
 Sozlamalar sensorlar siyosatni qanchalik tez-tez olishini (30-300 s) va
 heartbeat yuborishini (30-120 s) belgilaydi. Ketma-ket uchta heartbeatni

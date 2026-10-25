@@ -47,7 +47,7 @@ async def setup_checklist(db: AsyncSession = Depends(get_db),
 
     mfa = await db.scalar(select(Organization.mfa_required).where(Organization.id == org_id))
     items = [
-        {"key": "provider", "done": await count(AIProvider, AIProvider.api_key_encrypted.isnot(None)) > 0,
+        {"key": "provider", "done": await count(AIProvider, AIProvider.credential_source != "none") > 0,
          "href": "/providers"},
         {"key": "policy", "done": await count(PolicyLayer, PolicyLayer.document != text("'{}'::jsonb")) > 0,
          "href": "/policy-hierarchy"},

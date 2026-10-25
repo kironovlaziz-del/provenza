@@ -63,6 +63,7 @@ SELECT 'action.recorded'::text AS event_type, a.id AS source_id, a.org_id, a.age
        NULL::varchar AS model, NULL::varchar AS status, NULL::integer AS prompt_tokens,
        NULL::integer AS completion_tokens, NULL::integer AS to_agent_id
   FROM {AgentAction.__tablename__} a
+ WHERE a.action_type IS DISTINCT FROM 'model_call'
 UNION ALL
 SELECT 'action.checked', c.id, c.org_id, c.agent_id, c.chain_id,
        {check_ts}, c.action_type, c.tool_name,
@@ -71,7 +72,7 @@ SELECT 'action.checked', c.id, c.org_id, c.agent_id, c.chain_id,
        NULL, NULL, NULL, NULL, NULL, NULL, NULL
   FROM {ActionCheck.__tablename__} c
 UNION ALL
-SELECT 'llm.call', l.id, l.org_id, l.agent_id, NULL,
+SELECT 'llm.call', l.id, l.org_id, l.agent_id, l.chain_id,
        l.created_at, 'model_call', NULL,
        NULL, {g(col="coalesce(l.reason, '') || ' ' || coalesce(l.flags::text, '')")},
        NULL, NULL, l.latency_ms, NULL,

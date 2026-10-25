@@ -188,7 +188,9 @@ docs/        documentation
 | `REDIS_HOST` / `REDIS_PORT` / `REDIS_PASSWORD` | Celery broker and backend |
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | session token lifetime, default 30 |
 | `ENVIRONMENT` / `DEBUG` | `production` turns off `/docs` and refuses default secrets |
-| `CORS_ORIGINS` | comma-separated origins allowed to call the API |
+| `CORS_ORIGINS` | comma-separated origins allowed to call the API; the first one's host is the passkey relying party |
+| `WEBAUTHN_RP_ID` | passkey relying party (a host name such as `provenza.example.com`), when it is not the host of the first `CORS_ORIGINS` entry. Changing it makes existing passkeys unusable |
+| `APPROVAL_REDEEM_MINUTES` | how long an approved call may be repeated to run, default 60 |
 | `PUBLIC_BASE_URL` | the public address, when a reverse proxy does not pass the original host (single sign-on redirects) |
 | `ALLOW_PUBLIC_SIGNUP` | default `false`. When `true`, anyone who can reach the site can create an organization and become its admin |
 | `TRUSTED_PROXIES` | peers whose forwarding headers are trusted, default `127.0.0.1,::1` |

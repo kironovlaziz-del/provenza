@@ -8,6 +8,7 @@ import React, { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useDialog } from "@/components/Dialog";
 import { Form } from "@/components/Form";
+import { SealedCredential, sealNew } from "@/components/gateways/SealedCredential";
 import { errorMessage } from "@/lib/errors";
 import {
   apiUrl,
@@ -151,7 +152,9 @@ export function McpServers() {
             <Form onSubmit={(e) => {
               e.preventDefault();
               act("new", async () => {
-                await createMcpServer({ ...form, auth_secret: form.auth_secret || undefined });
+                const { auth_secret, ...fields } = form;
+                const server = await createMcpServer(fields);
+                await sealNew("mcp_server", server.id, auth_secret);   // sealed here, never sent in clear
                 setForm(EMPTY);
                 setShowForm(false);
               });
@@ -188,7 +191,8 @@ export function McpServers() {
                 <div className="field">
                   <label htmlFor="mcp-secret">{t("gw.secret")}</label>
                   <input id="mcp-secret" type="password" autoComplete="new-password" maxLength={4000} value={form.auth_secret}
-                         placeholder={t("gw.secret_placeholder")} onChange={(e) => setForm({ ...form, auth_secret: e.target.value })} />
+                         placeholder={t("sealed.placeholder", "Sealed in this browser; the server never sees it")}
+                         onChange={(e) => setForm({ ...form, auth_secret: e.target.value })} />
                 </div>
                 <div className="field" style={{ maxWidth: 140 }}>
                   <label htmlFor="mcp-timeout">{t("gw.timeout")}</label>
@@ -224,7 +228,8 @@ export function McpServers() {
                 <tr>
                   <td>
                     <strong>{s.name}</strong>
-                    <div className="hint-text u-mono">{s.slug}{s.has_secret ? ` · ${t("gw.has_secret")}` : ""}</div>
+                    <div className="hint-text u-mono">{s.slug}</div>
+                    <SealedCredential obj="mcp_server" id={s.id} />
                   </td>
                   <td className="u-mono" style={{ wordBreak: "break-all" }}>
                     {s.url}
@@ -247,14 +252,20 @@ export function McpServers() {
                   <td className="u-mono u-nowrap">{when(s.last_synced_at, i18n.language, t("gw.never"))}</td>
                   <td className="u-nowrap">
                     <div className="u-btn-row">
-                      <button className="btn btn-sm btn-primary" disabled={busy === s.id}
-                              onClick={() => act(s.id, async () => {
-                                const r = await syncMcpServer(s.id);
-                                setReports((prev) => ({ ...prev, [s.id]: r }));
-                                setOpen(s.id);
-                              })}>
-                        {t("gw.sync")}
-                      </button>
+                      {s.credential_source === "none" ? (
+                        <button className="btn btn-sm btn-primary" disabled={busy === s.id}
+                                onClick={() => act(s.id, async () => {
+                                  const r = await syncMcpServer(s.id);
+                                  setReports((prev) => ({ ...prev, [s.id]: r }));
+                                  setOpen(s.id);
+                                })}>
+                          {t("gw.sync")}
+                        </button>
+                      ) : (
+                        <span className="hint-text" title={t("gw.synced_by_proxy_hint", "Its credential is sealed to the egress proxies: they sync it every minute and agents call it through them (/_mcp).")}>
+                          {t("gw.synced_by_proxy", "synced by the egress proxies")}
+                        </span>
+                      )}
                       <button className="btn btn-sm" onClick={() => setOpen(open === s.id ? null : s.id)}>
                         {open === s.id ? t("gw.mcp.hide_tools") : t("gw.mcp.tools")}
                       </button>

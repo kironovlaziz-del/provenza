@@ -11,14 +11,20 @@ it and refuses anything other than exactly the checked request.
     httpx.post("http://127.0.0.1:8443/stripe/v1/charges", content=payload, headers=chk.proxy_headers)
 
 `path` and `query` are exactly what goes on the wire (percent-encoding kept),
-`body` the exact bytes: the proxy hashes what it receives.
+`body` the exact bytes: the proxy hashes what it receives. The headers carry
+the agent's signed request too: a proxy that enforces the signed policy
+verifies the agent's signature itself (docs/pvp/edge.md, section 4).
 """
 
+import base64
 import hashlib
+import json
 from typing import Any, Dict, Optional, Union
 
 ACTION_TYPE = "proxy"
 HEADER = "X-Provenza-Check-Id"
+# the agent's signed action.request, for a proxy that enforces the signed policy
+REQUEST_HEADER = "X-Provenza-Request"
 Bytes = Union[bytes, str, None]
 
 
@@ -45,3 +51,9 @@ def descriptor(route: str, method: str, path: str, *, query: Bytes = None, body:
 
 def tool_name(route: str) -> str:
     return "proxy." + route
+
+
+def request_header(request: Dict[str, Any]) -> str:
+    """base64url (unpadded) of the signed request's JSON."""
+    raw = json.dumps(request, separators=(",", ":")).encode()
+    return base64.urlsafe_b64encode(raw).rstrip(b"=").decode()

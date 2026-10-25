@@ -18,6 +18,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/kironovlaziz-del/provenza/sensor/internal/config"
@@ -29,6 +30,18 @@ type Client struct {
 	base string
 	key  string
 	http *http.Client
+
+	// when Provenza last answered, on the monotonic clock (the local kill
+	// switch counts the time offline from it)
+	mu       sync.Mutex
+	answered time.Time
+}
+
+// Answered: when Provenza last answered (zero: not since the start).
+func (c *Client) Answered() time.Time {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.answered
 }
 
 func New(s config.Settings) (*Client, error) {
@@ -84,6 +97,13 @@ func (c *Client) do(ctx context.Context, method, path string, body any, hdr map[
 	resp, err := c.http.Do(req)
 	if err != nil {
 		return nil, err
+	}
+	// a refused key (a revoked sensor, or someone answering in Provenza's place) is no
+	// contact: the offline time keeps running and the kill switch engages
+	if resp.StatusCode < 500 && resp.StatusCode != http.StatusUnauthorized && resp.StatusCode != http.StatusForbidden {
+		c.mu.Lock()
+		c.answered = time.Now()
+		c.mu.Unlock()
 	}
 	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
 		resp.Body.Close()
@@ -183,6 +203,30 @@ type Heartbeat struct {
 	AllowedPerMin  uint64           `json:"allowed_per_min"`
 	DeniedPerMin   uint64           `json:"denied_per_min"`
 	ObservedPerMin uint64           `json:"observed_per_min"`
+
+	// The signed policy this sensor follows (nil: none configured) and the
+	// egress proxies it lets out (docs/pvp/edge.md, section 5).
+	SignedPolicy *SignedPolicyReport `json:"signed_policy,omitempty"`
+	ProxyRuns    []ProxyRunReport    `json:"proxy_runs,omitempty"`
+}
+
+// SignedPolicyReport: what the sensor verified itself.
+type SignedPolicyReport struct {
+	Pin     string `json:"pin"`               // "pinned" or "tofu"
+	Release int    `json:"release,omitempty"` // the last release verified here; 0: none yet
+	Error   string `json:"error,omitempty"`
+	// set while the local kill switch isolates every workload
+	KillSwitch string `json:"kill_switch,omitempty"`
+}
+
+// ProxyRunReport is one `provenza-sensor --proxy run` cgroup.
+type ProxyRunReport struct {
+	Cgroup    string `json:"cgroup"`
+	State     string `json:"state"` // verified | held
+	Reason    string `json:"reason,omitempty"`
+	Processes int    `json:"processes"`
+	SHA256    string `json:"sha256,omitempty"`        // the binary that was let out
+	Config    string `json:"config_sha256,omitempty"` // the configuration it runs with
 }
 
 type WorkloadReport struct {
@@ -241,6 +285,24 @@ func (c *Client) AckCommand(ctx context.Context, id int, status string, result a
 		body["error"] = errMsg
 	}
 	return c.post(ctx, fmt.Sprintf("/commands/%d/ack", id), body)
+}
+
+// PolicyRelease fetches the signed policy releases after release `after`
+// (GET /policy-release): the raw body, which the caller verifies itself.
+func (c *Client) PolicyRelease(ctx context.Context, after int) ([]byte, error) {
+	resp, err := c.do(ctx, http.MethodGet, fmt.Sprintf("/policy-release?after=%d", after), nil, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 64<<20))
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode/100 != 2 {
+		return nil, fmt.Errorf("/policy-release: HTTP %d", resp.StatusCode)
+	}
+	return body, nil
 }
 
 // SigningKey fetches the public half of the organization's command signing
@@ -400,6 +462,9 @@ type Command struct {
 	Kind      string         `json:"kind"`
 	Payload   CommandPayload `json:"payload"`
 	Signature string         `json:"signature"`
+	// Proof: the administrator's signed command (internal/trust.VerifyCommand),
+	// kept as sent - its numbers must stay as the server wrote them.
+	Proof json.RawMessage `json:"proof,omitempty"`
 }
 
 // HeartbeatResponse is what the control plane sends back for a heartbeat.

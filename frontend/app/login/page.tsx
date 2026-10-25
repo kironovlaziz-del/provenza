@@ -9,11 +9,12 @@ import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { translateApiError } from "@/lib/errors";
 import { getAuthConfig, ssoInfo, ssoStartUrl } from "@/lib/api";
 import { Logo } from "@/components/Logo";
+import { BlockedSignIn } from "@/components/BlockedSignIn";
 
 const LAST_ORG_KEY = "ai_ct_last_org";
 
 export default function LoginPage() {
-  const { login, completeMfa } = useAuth();
+  const { login, completeMfa, session } = useAuth();
   const { t } = useTranslation();
   const [orgSlug, setOrgSlug] = useState("");
   const [email, setEmail] = useState("");
@@ -28,8 +29,10 @@ export default function LoginPage() {
   const [sso, setSso] = useState<{ sso: boolean; password: boolean } | null>(null);
 
   useEffect(() => {
-    const ssoError = new URLSearchParams(window.location.search).get("sso_error");
+    const params = new URLSearchParams(window.location.search);
+    const ssoError = params.get("sso_error");
     if (ssoError) setError(translateApiError(ssoError, t, t("auth.sso_failed")));
+    if (params.get("ended")) setError(t("session.ended_notice", "This sign-in was ended - refused, taken over or expired. Sign in again."));
   }, [t]);
 
   useEffect(() => {
@@ -81,7 +84,9 @@ export default function LoginPage() {
         <div className="auth-brand" style={{ display: "flex", justifyContent: "center", marginBottom: 8 }}><Logo size="lg" center /></div>
         <LanguageSwitcher variant="light" />
         <h1 className="auth-title">{t("auth.login_title")}</h1>
-        {mfaToken ? (
+        {session?.status === "blocked" ? (
+          <BlockedSignIn />
+        ) : mfaToken ? (
           <form onSubmit={handleSubmit}>
             <p className="hint-text">{t("auth.mfa_prompt")}</p>
             <div className="field">

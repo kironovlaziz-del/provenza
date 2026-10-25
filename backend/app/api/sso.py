@@ -115,11 +115,12 @@ async def exchange(data: ExchangeIn, request: Request, db: AsyncSession = Depend
         raise invalid
     if user.sessions_valid_after is not None and payload.get("iat", 0) < user.sessions_valid_after.timestamp():
         raise invalid
-    claims = {"sub": str(user.id), "amr": ["sso"]}
+    claims = {"amr": ["sso"]}
     if payload.get("idp_mfa"):
         claims["idp_mfa"] = True
-    return {"access_token": create_access_token(claims, expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)),
-            "token_type": "bearer"}
+    from app.services import signing_sessions
+
+    return {"access_token": await signing_sessions.issue_token(db, user, request, claims), "token_type": "bearer"}
 
 
 @public_router.get("/{org_slug}/start")

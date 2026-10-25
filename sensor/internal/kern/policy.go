@@ -227,3 +227,17 @@ func PathHash(path string) uint64 {
 	}
 	return h
 }
+
+// EgressProxy is the workload of a verified egress proxy
+// (internal/daemon/proxyrun.go): out to any address on any TCP or UDP port,
+// in on any TCP port - the proxy enforces its own routes.
+func EgressProxy(id uint32) Workload {
+	var rules []Rule
+	for _, n := range []netip.Prefix{netip.MustParsePrefix("0.0.0.0/0"), netip.MustParsePrefix("::/0")} {
+		rules = append(rules,
+			Rule{Dir: bpfobj.DirEgress, Proto: 6, Net: n},
+			Rule{Dir: bpfobj.DirEgress, Proto: 17, Net: n},
+			Rule{Dir: bpfobj.DirIngress, Proto: 6, Net: n})
+	}
+	return Workload{ID: id, Mode: bpfobj.ModeEnforce, DNS: bpfobj.DNSOff, Rules: rules}
+}

@@ -84,6 +84,13 @@ class ChainView:
 # Tools that invoke a model and therefore trigger the model-allowlist
 # check. Kept explicit rather than guessed from the name.
 _MODEL_INVOKING_TOOLS = {"openai.chat", "anthropic.messages", "model.invoke", "llm.chat"}
+# A call through the LLM gateway: the tool is "llm.<model>", the model's right
+# is allowed_models / models.allow, not a tool allow list.
+MODEL_ACTION = "model_call"
+
+
+def _invokes_model(ctx: "ActionContext") -> bool:
+    return ctx.action_type == MODEL_ACTION or ctx.tool_name in _MODEL_INVOKING_TOOLS
 
 
 def evaluate_custom_rule(rule: Dict[str, Any], ctx: ActionContext) -> str:
@@ -130,16 +137,19 @@ def evaluate_custom_rule(rule: Dict[str, Any], ctx: ActionContext) -> str:
     if "deny_tools" in rule:
         if tool in set(rule.get("deny_tools") or []):
             return "deny"
-    if "allow_only_tools" in rule:
+    # a model call's right is the model allow list, not the tool allow list;
+    # deny and approval lists still apply to its tool ("llm.<model>")
+    model_call = ctx.action_type == MODEL_ACTION
+    if "allow_only_tools" in rule and not model_call:
         if tool not in set(rule.get("allow_only_tools") or []):
             return "deny"
     if "deny_tool_patterns" in rule:
         if tool and matches(tool, rule.get("deny_tool_patterns") or []):
             return "deny"
-    if "allow_only_tool_patterns" in rule:
+    if "allow_only_tool_patterns" in rule and not model_call:
         if not tool or not matches(tool, rule.get("allow_only_tool_patterns") or []):
             return "deny"
-    if "allow_only_model_patterns" in rule and tool in _MODEL_INVOKING_TOOLS:
+    if "allow_only_model_patterns" in rule and _invokes_model(ctx):
         model = (ctx.input_data or {}).get("model")
         if model and not matches(str(model), rule.get("allow_only_model_patterns") or []):
             return "deny"
@@ -181,8 +191,8 @@ def check_action(
         return Decision(DENIED, f"Tool '{ctx.tool_name}' is not in the agent's allowed tools",
                         "policy_violation")
 
-    # 2. model allowlist (only for model-invoking tools)
-    if ctx.tool_name in _MODEL_INVOKING_TOOLS:
+    # 2. model allowlist (only for model-invoking tools and model calls)
+    if _invokes_model(ctx):
         model = ctx.input_data.get("model")
         if model and model not in set(agent.allowed_models or []):
             return Decision(DENIED, f"Model '{model}' is not in the agent's allowed models",

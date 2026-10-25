@@ -8,6 +8,7 @@
 import React, { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Form } from "@/components/Form";
+import { SealedCredential, sealNew } from "@/components/gateways/SealedCredential";
 import { errorMessage } from "@/lib/errors";
 import {
   apiUrl,
@@ -32,8 +33,6 @@ export function HttpTools() {
   const [showForm, setShowForm] = useState(false);
   const [busy, setBusy] = useState<number | "new" | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [secretFor, setSecretFor] = useState<number | null>(null);
-  const [newSecret, setNewSecret] = useState("");
 
   const refresh = () => listHttpTools().then(setTools).finally(() => setLoading(false));
   useEffect(() => { refresh(); }, []);
@@ -83,8 +82,10 @@ export function HttpTools() {
                 return;
               }
               act("new", async () => {
-                await createHttpTool({ ...form, input_schema: schema, description: form.description || undefined,
-                                       auth_secret: form.auth_secret || undefined });
+                const { auth_secret, ...fields } = form;
+                const tool = await createHttpTool({ ...fields, input_schema: schema,
+                                                    description: form.description || undefined });
+                await sealNew("http_tool", tool.id, auth_secret);   // sealed here, never sent in clear
                 setForm(EMPTY);
                 setShowForm(false);
               });
@@ -129,7 +130,7 @@ export function HttpTools() {
                 <div className="field">
                   <label htmlFor="ht-secret">{t("gw.secret")}</label>
                   <input id="ht-secret" type="password" autoComplete="new-password" maxLength={4000} value={form.auth_secret}
-                         placeholder={t("gw.secret_placeholder")} onChange={(e) => setForm({ ...form, auth_secret: e.target.value })} />
+                         placeholder={t("sealed.placeholder", "Sealed in this browser; the server never sees it")} onChange={(e) => setForm({ ...form, auth_secret: e.target.value })} />
                 </div>
                 <div className="field" style={{ maxWidth: 140 }}>
                   <label htmlFor="ht-timeout">{t("gw.timeout")}</label>
@@ -172,10 +173,10 @@ export function HttpTools() {
                 </td>
                 <td style={{ maxWidth: 360 }}>
                   <div className="u-mono" style={{ wordBreak: "break-all" }}><strong>{h.method}</strong> {h.url}</div>
-                  <div className="hint-text">
-                    {h.has_secret ? t("gw.has_secret") : t("gw.http.no_secret")}
-                    {h.send_permit && ["POST", "PUT", "PATCH"].includes(h.method) ? ` · ${t("gw.http.permit_sent")}` : ""}
-                  </div>
+                  {h.send_permit && ["POST", "PUT", "PATCH"].includes(h.method) && (
+                    <div className="hint-text">{t("gw.http.permit_sent")}</div>
+                  )}
+                  <SealedCredential obj="http_tool" id={h.id} />
                 </td>
                 <td>
                   <span className={`pill ${h.enabled ? "pill-low" : "pill-neutral"}`}>
@@ -184,31 +185,12 @@ export function HttpTools() {
                   <div className="hint-text u-mono" title={h.digest}>{h.digest.slice(0, 12)}</div>
                 </td>
                 <td className="u-nowrap">
-                  {secretFor === h.id ? (
-                    <div className="u-btn-row">
-                      <input type="password" autoComplete="new-password" maxLength={4000} value={newSecret}
-                             placeholder={t("gw.secret_placeholder")} onChange={(e) => setNewSecret(e.target.value)} />
-                      <button className="btn btn-sm btn-primary" disabled={!newSecret || busy === h.id}
-                              onClick={() => act(h.id, async () => {
-                                await updateHttpTool(h.id, { auth_secret: newSecret });
-                                setSecretFor(null);
-                                setNewSecret("");
-                              })}>
-                        {t("common.save")}
-                      </button>
-                      <button className="btn btn-sm" onClick={() => { setSecretFor(null); setNewSecret(""); }}>{t("common.cancel")}</button>
-                    </div>
-                  ) : (
-                    <div className="u-btn-row">
-                      <button className="btn btn-sm" disabled={busy === h.id} onClick={() => setSecretFor(h.id)}>
-                        {t("gw.http.replace_secret")}
-                      </button>
-                      <button className="btn btn-sm" disabled={busy === h.id}
-                              onClick={() => act(h.id, () => updateHttpTool(h.id, { enabled: !h.enabled }))}>
-                        {h.enabled ? t("gw.disable") : t("gw.enable")}
-                      </button>
-                    </div>
-                  )}
+                  <div className="u-btn-row">
+                    <button className="btn btn-sm" disabled={busy === h.id}
+                            onClick={() => act(h.id, () => updateHttpTool(h.id, { enabled: !h.enabled }))}>
+                      {h.enabled ? t("gw.disable") : t("gw.enable")}
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}

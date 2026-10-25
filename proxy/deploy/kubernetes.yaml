@@ -12,6 +12,9 @@ metadata:
 type: Opaque
 stringData:
   proxy.key: "pvz_proxy_..."   # from Provenza: Egress -> Proxies -> New (shown once)
+  # the proxy's own signing key, made once with `provenza-proxy -genkey`: a pod
+  # has no lasting disk, and Provenza keeps the first key a proxy registers
+  signing.key: "..."
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -21,7 +24,10 @@ data:
   proxy.json: |
     {"server_url": "https://provenza.example.com",
      "proxy_key_file": "/etc/provenza/secret/proxy.key",
-     "listen": "127.0.0.1:8443"}
+     "signing_key_file": "/etc/provenza/secret/signing.key",
+     "state_dir": "/var/lib/provenza-proxy",
+     "listen": "127.0.0.1:8443",
+     "policy": {"mode": "enforce", "pin": "<the manifest SHA-256 from Policies -> Signed policy>"}}
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -55,7 +61,10 @@ spec:
           volumeMounts:
             - {name: config, mountPath: /etc/provenza/proxy.json, subPath: proxy.json, readOnly: true}
             - {name: secret, mountPath: /etc/provenza/secret, readOnly: true}
+            - {name: state, mountPath: /var/lib/provenza-proxy}   # receipt log, last verified release
       volumes:
+        - name: state
+          emptyDir: {}
         - name: config
           configMap: {name: provenza-proxy}
         - name: secret

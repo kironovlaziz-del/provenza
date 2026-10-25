@@ -238,8 +238,9 @@ def message_to_wire(m: dict, version: str) -> dict:
 
 
 def _message_from_peer(m: Any, version: str) -> dict:
-    """A message a peer sent back: converted, loosely (it is scanned and
-    recorded; the agent gets it in its own version)."""
+    """A message a peer sent back: converted, loosely (it is checked for
+    unstorable structures and recorded; the agent gets it in its own
+    version)."""
     if not isinstance(m, dict):
         raise A2AError(INVALID_AGENT_RESPONSE, "the agent returned a malformed message")
     if version == V1:
@@ -302,7 +303,7 @@ def task_to_wire(t: dict, version: str) -> dict:
 def send_params_from_wire(params: Any, version: str) -> dict:
     """SendMessage params in canonical form. Push-notification configs are
     refused: the peer would deliver to a URL Provenza never sees, outside
-    output scanning and the audit trail."""
+    the audit trail."""
     if not isinstance(params, dict):
         raise A2AError(INVALID_PARAMS, "params must be an object")
     cfg = _obj(params.get("configuration"), "configuration") or {}

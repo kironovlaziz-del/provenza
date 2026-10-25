@@ -5,8 +5,10 @@ import { useTranslation } from "react-i18next";
 import { PageHeader } from "@/components/PageHeader";
 import { ProviderPolicyPanel } from "@/components/ProviderPolicyPanel";
 import { Form } from "@/components/Form";
+import { SealedCredential, sealNew } from "@/components/gateways/SealedCredential";
 import { createProvider, listProviders, updateProvider, listProviderModels } from "@/lib/api";
 import type { Provider } from "@/lib/types";
+import { errorMessage } from "@/lib/errors";
 
 const TYPE_DEFAULTS: Record<string, { base_url: string; default_model: string }> = {
   openai: { base_url: "https://api.openai.com/v1", default_model: "gpt-4o-mini" },
@@ -47,12 +49,11 @@ function ConnectionCard({
 }: {
   provider: Provider;
   onToggle: () => void;
-  onSaveCredentials: (fields: { api_key?: string; base_url?: string; default_model?: string }) => Promise<void>;
+  onSaveCredentials: (fields: { base_url?: string; default_model?: string }) => Promise<void>;
   busy: boolean;
 }) {
   const { t } = useTranslation();
   const [editing, setEditing] = useState(false);
-  const [apiKey, setApiKey] = useState("");
   const [baseUrl, setBaseUrl] = useState(provider.base_url || "");
   const [defaultModel, setDefaultModel] = useState(provider.default_model || "");
   const [saving, setSaving] = useState(false);
@@ -75,11 +76,9 @@ function ConnectionCard({
     setSaving(true);
     try {
       await onSaveCredentials({
-        api_key: apiKey || undefined,
         base_url: baseUrl,
         default_model: defaultModel,
       });
-      setApiKey("");
       setEditing(false);
     } finally {
       setSaving(false);
@@ -117,16 +116,8 @@ function ConnectionCard({
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           <div className="field" style={{ margin: 0 }}>
-            <label>
-              {t("connections.api_key")}{" "}
-              {provider.has_credentials && t("connections.leave_blank")}
-            </label>
-            <input
-              type="password"
-              value={apiKey}
-              onChange={(e) => setApiKey(e.target.value)}
-              placeholder="sk-..."
-            />
+            <label>{t("connections.api_key_sealed", "API key")}</label>
+            <SealedCredential obj="provider" id={provider.id} />
           </div>
           <div className="field" style={{ margin: 0 }}>
             <label>{t("connections.base_url")}</label>
@@ -218,7 +209,7 @@ export default function ConnectionsPage() {
 
   async function handleSaveCredentials(
     p: Provider,
-    fields: { api_key?: string; base_url?: string; default_model?: string }
+    fields: { base_url?: string; default_model?: string }
   ) {
     setBusyId(p.id);
     try {
@@ -234,14 +225,15 @@ export default function ConnectionsPage() {
     setError(null);
     setSubmitting(true);
     try {
-      await createProvider({
+      const created = await createProvider({
         name,
         type,
         sla: sla || undefined,
         base_url: baseUrl || undefined,
         default_model: defaultModel || undefined,
-        api_key: apiKey || undefined,
       });
+      // the key is sealed here to the egress proxies: the server never receives it in clear text
+      await sealNew("provider", created.id, apiKey);
       setName("");
       setSla("");
       setApiKey("");
@@ -250,8 +242,8 @@ export default function ConnectionsPage() {
       setType("openai");
       setShowForm(false);
       refresh();
-    } catch {
-      setError(t("connections.failed"));
+    } catch (err) {
+      setError(errorMessage(err, t, t("connections.failed")));
     } finally {
       setSubmitting(false);
     }
@@ -348,7 +340,7 @@ export default function ConnectionsPage() {
                     type="password"
                     value={apiKey}
                     onChange={(e) => setApiKey(e.target.value)}
-                    placeholder="sk-..."
+                    placeholder={t("sealed.placeholder", "Sealed in this browser; the server never sees it")}
                   />
                 </div>
                 <div className="field">

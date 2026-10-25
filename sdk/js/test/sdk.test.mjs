@@ -3,6 +3,7 @@
 // Part of Provenza — https://github.com/kironovlaziz-del/provenza
 
 import assert from "node:assert/strict";
+import { createPublicKey, verify as cryptoVerify } from "node:crypto";
 import { chmodSync, mkdtempSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -158,9 +159,20 @@ describe("governed tools", () => {
     assert.equal((await agent.delegate(7, "summarize", ["read"], { tools: ["db.read", "db.read"], expiresIn: 600 })).verified, true);
   });
 
+  test("waits for a person's decision", async () => {
+    const server = new FakeProvenza();
+    const { agent } = await connected(server);
+    server.decisions.set(7, ["pending_approval", "approved"]);
+    assert.equal((await agent.waitForApproval(7, { intervalMs: 1 })).decision, "approved");
+    assert.equal((await agent.waitForApproval(8, { timeoutMs: 0 })).decision, "pending_approval");
+    await assert.rejects(() => agent.approval(0), RangeError);
+  });
+
   test("gateway and MCP settings", async () => {
     const { agent } = await connected(new FakeProvenza());
     assert.deepEqual(gatewayOptions(agent), { baseURL: SERVER + "/api/v1/gateway/v1", apiKey: "pvz_agent_key" });
+    assert.deepEqual(gatewayOptions(agent, { chainId: 9 }).defaultHeaders, { "X-Provenza-Chain-Id": "9" });
+    assert.throws(() => gatewayOptions(agent, { chainId: 0 }), RangeError);
     assert.deepEqual(connection(agent), { url: SERVER + "/api/v1/mcp", headers: { Authorization: "Bearer pvz_agent_key" } });
   });
 });
@@ -227,7 +239,37 @@ describe("egress proxy, SDK mode", () => {
     assert.equal(sent.tool_name, "proxy.stripe");
     assert.deepEqual(sent.input, proxyDescriptor("stripe", "POST", "/v1/charges", { body }));
     assert.equal(chk.decision, "allowed");
-    assert.deepEqual(proxyHeaders(chk), { "X-Provenza-Check-Id": chk.checkId });
+    const headers = proxyHeaders(chk);
+    assert.equal(headers["X-Provenza-Check-Id"], chk.checkId);
+    // the agent's signed request, which a proxy enforcing the signed policy verifies itself
+    const req = JSON.parse(Buffer.from(headers["X-Provenza-Request"], "base64url").toString("utf8"));
+    assert.equal(req.payload.type, "action.request");
+    assert.equal(req.payload.tool_name, "proxy.stripe");
+    assert.equal(req.payload.nonce, sent.nonce);
+    assert.equal(req.payload.input_sha256, contentHash(sent.input));
+    assert.equal(req.signature, sent.signature);
+    const key = createPublicKey({ key: Buffer.concat([Buffer.from("302a300506032b6570032100", "hex"),
+                                                      Buffer.from(req.public_key, "base64")]), format: "der", type: "spki" });
+    assert.ok(cryptoVerify(null, Buffer.from(canonical(req.payload)), key, Buffer.from(req.signature, "base64")));
+  });
+});
+
+describe("the egress proxy while Provenza is unreachable", () => {
+  test("proxyRequestHeaders: a check online, the signed request alone offline", async () => {
+    const server = new FakeProvenza();
+    const { agent } = await connected(server);
+    const online = await agent.proxyRequestHeaders("stripe", "POST", "/v1/charges", { body: "x" });
+    assert.deepEqual(Object.keys(online).sort(), ["X-Provenza-Check-Id", "X-Provenza-Request"]);
+    server.down.add("/agents/actions/check");
+    const offline = await agent.proxyRequestHeaders("stripe", "POST", "/v1/charges", { body: "x" });
+    assert.deepEqual(Object.keys(offline), ["X-Provenza-Request"]);
+    const req = JSON.parse(Buffer.from(offline["X-Provenza-Request"], "base64url").toString("utf8"));
+    assert.equal(req.payload.tool_name, "proxy.stripe");
+    assert.equal(req.payload.action_type, "proxy");
+    assert.equal(req.payload.input_sha256, contentHash(proxyDescriptor("stripe", "POST", "/v1/charges", { body: "x" })));
+    const key = createPublicKey({ key: Buffer.concat([Buffer.from("302a300506032b6570032100", "hex"),
+                                                      Buffer.from(req.public_key, "base64")]), format: "der", type: "spki" });
+    assert.ok(cryptoVerify(null, Buffer.from(canonical(req.payload)), key, Buffer.from(req.signature, "base64")));
   });
 });
 
@@ -243,6 +285,38 @@ describe("HTTP tools through Provenza", () => {
     await assert.rejects(agent.invoke("crm.delete", { id: "42" }), (e) => e instanceof ProvenzaDenied && e.actionId === 10);
     server.verdicts.set("crm.wipe", "pending_approval");
     await assert.rejects(agent.invoke("crm.wipe", {}), ProvenzaApprovalRequired);
+  });
+
+  test("invoke goes to the egress proxy when one is set (it holds the tools' credentials)", async () => {
+    const server = new FakeProvenza();
+    const sent = [];
+    const fetchBoth = async (url, init) => {
+      if (String(url).startsWith("http://proxy.local:8443/")) {
+        sent.push({ url: String(url), key: init.headers["x-agent-key"], body: JSON.parse(init.body),
+                    raw: init.body, signed: init.headers["X-Provenza-Request"] });
+        return new Response(JSON.stringify({ decision: "allowed", action_id: 3, status: 200, body: { ok: 1 } }),
+                            { status: 200, headers: { "content-type": "application/json" } });
+      }
+      return server.fetch(url, init);
+    };
+    const { agent } = await connected(server, { fetch: fetchBoth, egressProxy: "http://proxy.local:8443" });
+    const out = await agent.invoke("crm.set_tier", { id: "c/42" });
+    assert.deepEqual(out.body, { ok: 1 });
+    assert.equal(sent[0].url, "http://proxy.local:8443/_tools/call");
+    assert.equal(sent[0].key, "pvz_agent_key");
+    assert.equal(sent[0].body.tool_name, "crm.set_tier");
+    assert.deepEqual(sent[0].body.input, { id: "c/42" });
+    assert.ok(sent[0].body.signature && sent[0].body.nonce);
+    assert.equal((server.invoked ?? []).length, 0);   // nothing went to the server's gateway
+    // the HTTP request itself, signed: what a proxy in enforce mode requires on every path
+    const req = JSON.parse(Buffer.from(sent[0].signed, "base64url").toString("utf8"));
+    assert.equal(req.payload.tool_name, "proxy._tools");
+    assert.equal(req.payload.action_type, "proxy");
+    const desc = proxyDescriptor("_tools", "POST", "/call", { body: Buffer.from(sent[0].raw, "utf8") });
+    assert.equal(req.payload.input_sha256, contentHash(desc));
+    assert.ok(cryptoVerify(null, Buffer.from(canonical(req.payload)), {
+      key: Buffer.concat([Buffer.from("302a300506032b6570032100", "hex"), Buffer.from(req.public_key, "base64")]),
+      format: "der", type: "spki" }, Buffer.from(req.signature, "base64")));
   });
 });
 

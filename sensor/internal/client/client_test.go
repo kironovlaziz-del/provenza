@@ -245,3 +245,27 @@ func TestHeartbeatOmitsEmptySlices(t *testing.T) {
 		}
 	}
 }
+
+// A refused key is no contact: a revoked sensor, or someone answering in
+// Provenza's place, does not keep the local kill switch away.
+func TestARefusedKeyIsNoContact(t *testing.T) {
+	status := http.StatusUnauthorized
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(status)
+		_, _ = w.Write([]byte(`{"chain":[]}`))
+	}))
+	defer srv.Close()
+	c := newTestClient(t, srv.URL)
+	for _, s := range []int{http.StatusUnauthorized, http.StatusForbidden} {
+		status = s
+		_, _ = c.PolicyRelease(context.Background(), 0)
+		if !c.Answered().IsZero() {
+			t.Fatalf("HTTP %d counted as contact", s)
+		}
+	}
+	status = http.StatusOK
+	_, _ = c.PolicyRelease(context.Background(), 0)
+	if c.Answered().IsZero() {
+		t.Fatal("an answer did not count as contact")
+	}
+}

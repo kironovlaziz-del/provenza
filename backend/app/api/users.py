@@ -1,14 +1,14 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from typing import List
 from app.core import rate_limit
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.errors import api_error
 from app.core.pagination import PaginationParams
-from app.core.security import create_access_token, get_password_hash, verify_password
+from app.core.security import get_password_hash, verify_password
 from app.schemas.pagination import Page
 from app.schemas.user import (
     MeOut,
@@ -124,8 +124,12 @@ async def change_my_password(
         current_user.org_id, user_id, "user", user_id,
         "password_changed", {"other_sessions": "ended"},
     )
-    token = create_access_token(data={"sub": str(user_id)},
-                                expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES))
+    # every session ended with the password; this sign-in goes on in a new one
+    from app.services import signing_sessions
+
+    await signing_sessions.end_all(db, user_id, "password_changed")
+    user = await db.get(User, user_id)
+    token = await signing_sessions.issue_token(db, user, request)
     return {"status": "ok", "access_token": token, "token_type": "bearer"}
 
 

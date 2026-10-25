@@ -34,7 +34,37 @@ type Settings struct {
 	SigningPublicKeyFile string `json:"signing_key_file"`
 	SensorIDFile         string `json:"sensor_id_file"`
 
+	// The signed policy (docs/pvp/edge.md, section 5). With a pin, the
+	// sensor follows the organization's signed policy releases itself and
+	// accepts only commands an administrator signed with a passkey listed
+	// in it; a proxy host lets out only the egress proxy binaries its
+	// manifest names. Without one, commands are verified with the server's
+	// command key, and ProxyBinaries below names the proxy binaries.
+	Policy SignedPolicy `json:"policy"`
+
+	// SHA-256 (hex) of the egress proxy binaries `provenza-sensor --proxy run`
+	// lets out, when no policy pin is set. With a pin, the signed manifest's
+	// list is used instead and this one is ignored.
+	ProxyBinaries []string `json:"proxy_binaries"`
+	// ... and of its configuration files (sha256sum proxy.json): a pinned
+	// binary run with another configuration (another server, policy.mode
+	// "off") is held.
+	ProxyConfigs []string `json:"proxy_configs"`
+
+	// Users (names or uids) who may start `provenza-sensor --proxy run`,
+	// besides root: the egress proxy's own user (provenza-proxy in the
+	// systemd unit). Anyone else could run the pinned binary with a
+	// configuration of their own.
+	ProxyUsers []string `json:"proxy_users"`
+
 	Key string `json:"-"`
+}
+
+// SignedPolicy: Pin is the SHA-256 of a release's key manifest you trust
+// (Policies -> Signed policy), or "tofu" to trust the first release the
+// server shows (trust on first use); "" leaves the signed policy out.
+type SignedPolicy struct {
+	Pin string `json:"pin"`
 }
 
 func Defaults() Settings {
@@ -117,7 +147,33 @@ func (s Settings) validate() error {
 	if !strings.HasPrefix(s.Key, "pvz_sensor_") {
 		return errors.New("the sensor key (pvz_sensor_...) is missing or malformed")
 	}
+	if p := s.Policy.Pin; p != "" && p != "tofu" && !IsSHA256(p) {
+		return errors.New("policy.pin: the manifest's SHA-256 (64 hex characters) or \"tofu\"")
+	}
+	for _, h := range s.ProxyBinaries {
+		if !IsSHA256(h) {
+			return fmt.Errorf("proxy_binaries: %q is not a SHA-256 (64 lowercase hex characters)", h)
+		}
+	}
+	for _, h := range s.ProxyConfigs {
+		if !IsSHA256(h) {
+			return fmt.Errorf("proxy_configs: %q is not a SHA-256 (64 lowercase hex characters)", h)
+		}
+	}
 	return nil
+}
+
+// IsSHA256 reports whether s is 64 lowercase hex characters.
+func IsSHA256(s string) bool {
+	if len(s) != 64 {
+		return false
+	}
+	for _, c := range s {
+		if (c < '0' || c > '9') && (c < 'a' || c > 'f') {
+			return false
+		}
+	}
+	return true
 }
 
 func isLoopback(h string) bool {
@@ -147,6 +203,13 @@ type Workload struct {
 	Mode           string   `json:"mode"` // observe | alert | enforce
 	Isolated       bool     `json:"isolated"`
 	IsolatedReason *string  `json:"isolated_reason"`
+
+	// Set by the sensor for a workload the verified signed release names
+	// (internal/daemon/signedwl.go): its own patterns and users take
+	// precedence; the server's additions come after everything signed.
+	Signed        bool     `json:"-"`
+	ExtraPatterns []string `json:"-"`
+	ExtraUsers    []string `json:"-"`
 }
 
 // Allow: Dest is a network or a host name (egress; "*.corp.internal" too),
@@ -160,6 +223,10 @@ type Allow struct {
 
 const SchemaVersion = 1
 
+// ReservedWorkloads: workload ids from here up are the sensor's own (the
+// egress proxy's, internal/daemon/proxyrun.go).
+const ReservedWorkloads uint32 = 0xFFFFFF00
+
 func (p *Policy) Check() error {
 	if p.Schema != SchemaVersion {
 		return fmt.Errorf("policy schema %d: this sensor understands %d (upgrade it)", p.Schema, SchemaVersion)
@@ -168,6 +235,9 @@ func (p *Policy) Check() error {
 	for _, w := range p.Workloads {
 		if w.ID == 0 || seen[w.ID] {
 			return fmt.Errorf("workload id %d: missing or repeated", w.ID)
+		}
+		if w.ID >= ReservedWorkloads {
+			return fmt.Errorf("workload id %d: reserved for the sensor itself", w.ID)
 		}
 		seen[w.ID] = true
 		switch w.Mode {

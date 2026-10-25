@@ -26,6 +26,7 @@ func main() {
 	var (
 		cfgPath   = flag.String("config", "/etc/provenza-sensor/sensor.json", "path to sensor.json")
 		agentID   = flag.Int64("agent", 0, "agent id (run subcommand)")
+		proxyRun  = flag.Bool("proxy", false, "run the egress proxy: let out only a pinned proxy binary (run subcommand)")
 		showVer   = flag.Bool("version", false, "print version and exit")
 		uninstall = flag.Bool("uninstall", false, "detach the sensor and remove its state")
 	)
@@ -70,11 +71,11 @@ func main() {
 			slog.Error("run: no command")
 			os.Exit(2)
 		}
-		if *agentID == 0 {
-			slog.Error("run: --agent N is required")
+		if (*agentID == 0) == !*proxyRun {
+			slog.Error("run: --agent N or --proxy is required (one of them)")
 			os.Exit(2)
 		}
-		if err := daemon.RunCommand(ctx, *cfgPath, *agentID, cmd); err != nil {
+		if err := daemon.RunCommand(ctx, *cfgPath, *agentID, *proxyRun, cmd); err != nil {
 			slog.Error("run", "err", err)
 			os.Exit(1)
 		}

@@ -29,6 +29,7 @@ export class FakeProvenza {
   publicKey = null;
   nonces = new Set();
   n = 0;
+  decisions = new Map();  // action id -> states answered in turn (the last one repeats)
 
   fetch = async (url, init = {}) => {
     const path = new URL(url).pathname.replace(/^\/api\/v1/, "");
@@ -110,6 +111,13 @@ export class FakeProvenza {
       chk.used = true;
       this.records.push(body);
       return ok(200, { id: this.records.length, policy_check_result: chk.decision });
+    }
+    const decided = path.match(/^\/agents\/actions\/(\d+)\/decision$/);
+    if (decided) {
+      const id = Number(decided[1]);
+      const states = this.decisions.get(id) ?? ["pending_approval"];
+      const state = states.length > 1 ? states.shift() : states[0];
+      return ok(200, { action_id: id, decision: state, decided_at: null, used: false, redeemable_until: null });
     }
     if (path.endsWith("/delegate")) {
       const payload = { from_agent_id: 42, to_agent_id: body.to_agent_id, task: body.task,

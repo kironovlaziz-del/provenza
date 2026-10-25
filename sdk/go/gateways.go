@@ -11,13 +11,19 @@ package provenza
 // GatewayPath is the OpenAI-compatible LLM gateway.
 const GatewayPath = "/api/v1/gateway/v1"
 
+// ChainHeader carries the delegation chain of an LLM gateway call.
+const ChainHeader = "X-Provenza-Chain-Id"
+
 // MCPPath is the MCP gateway (Streamable HTTP).
 const MCPPath = "/api/v1/mcp"
 
 // LLMGateway returns the base URL and API key for any OpenAI-compatible client,
 // e.g. openai-go: openai.NewClient(option.WithBaseURL(base), option.WithAPIKey(key)).
-// Every call is then checked by the server (allowed models and providers,
-// policies, limits). The gateway does not stream yet.
+// Every call is then a PVP action of the agent ("model_call" on "llm.<model>"),
+// decided by the server like any other action (allowed models and providers,
+// agent policies, quarantine, the breaker, limits). Calls inside a delegation
+// chain send the chain id in the ChainHeader header. The gateway does not
+// stream yet.
 func LLMGateway(a *Agent) (baseURL, apiKey string, err error) {
 	server, key, err := a.Credentials()
 	if err != nil {

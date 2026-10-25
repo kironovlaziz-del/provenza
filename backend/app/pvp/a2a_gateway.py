@@ -12,17 +12,15 @@ through Provenza (docs/pvp/spec.md, section 5.2).
 
 Each operation is a PVP action of the calling agent on the tool
 "a2a.<peer>", so agent rights, policies (who may talk to whom), the Tool
-Registry, ASI01/ASI05 on what is sent, the behaviour baseline and the
-breaker all apply, and every exchange is recorded:
+Registry, the behaviour baseline and the breaker all apply, and every exchange is recorded:
 
   a2a.send          SendMessage / message/send
   a2a.get_task      GetTask / tasks/get
   a2a.cancel_task   CancelTask / tasks/cancel
 
-Guarantees beyond the MCP gateway's (credentials stay here, the approved
-card is what is served, the live card is re-checked before each call, the
-answer is scanned and withheld in enforce mode when it carries injected
-instructions):
+Guarantees beyond the MCP gateway's (no credential is held here, the approved
+card is what is served, the live card is re-checked before each call, an
+answer that could not be stored is withheld):
 
   tasks are owned  a task belongs to the agent that created it. GetTask,
                    CancelTask, a follow-up message (taskId) or a reference
@@ -30,7 +28,7 @@ instructions):
                    TaskNotFound - checked before anything else, so it
                    reveals nothing (A2A 1.0, 13.1)
   no side channels push-notification configs are refused: the peer would
-                   deliver to a URL outside scanning and audit. Streaming
+                   deliver to a URL outside the audit trail. Streaming
                    and resubscription are not offered.
 """
 
@@ -42,7 +40,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.crypto import decrypt_secret
+from app.pvp import enforcement
 from app.core.outbound import validate_url
 from app.models.a2a_gateway import A2APeer, A2ATask
 from app.models.agent import Agent
@@ -78,9 +76,12 @@ def _now():
 
 
 def _auth(peer: A2APeer) -> Dict[str, str]:
-    if not peer.auth_secret_encrypted:
-        return {}
-    return {peer.auth_header: decrypt_secret(peer.auth_secret_encrypted)}
+    """This server holds no peer credential (app/pvp/sealed.py): a peer that
+    takes one is reached through an egress proxy only."""
+    if (peer.credential_source or "none") != "none":
+        raise UpstreamError("upstream.credential_at_proxy",
+                            "its credential is sealed to the egress proxies: reach it through one")
+    return {}
 
 
 async def fetch_card(peer: A2APeer) -> dict:
@@ -103,6 +104,16 @@ class A2AGateway:
         drifts (incident) until an admin approves it again."""
         try:
             card = await fetch_card(peer)
+        except UpstreamError as exc:
+            peer.last_error = f"{exc.code}: {str(exc)[:300]}"
+            await self.db.commit()
+            raise
+        return await self.apply_card(org_id, peer, card)
+
+    async def apply_card(self, org_id: int, peer: A2APeer, card: dict) -> dict:
+        """A card a sync fetched - by this gateway, or by an egress proxy for a
+        peer whose credential is sealed to it (POST /egress-proxy/a2a/sync)."""
+        try:
             try:
                 endpoint, version = w.card_endpoint(card)
             except w.A2AError as exc:
@@ -205,13 +216,14 @@ class A2AGateway:
             A2ATask.peer_id == peer_id, A2ATask.task_id == task["id"]))).scalar_one()
         return owner == agent_id
 
-    async def handle(self, agent: Agent, peer: A2APeer, canonical: str, params: dict,
-                     chain_id: Optional[int]) -> Tuple[str, dict]:
-        """One governed operation. Returns ("task" | "message", canonical
-        object) or raises A2AError."""
+    async def prepare(self, agent: Agent, peer: A2APeer, canonical: str, params: dict, chain_id: Optional[int],
+                      live: Optional[str], live_error: Optional[str], executor: str):
+        """Everything decided before the message goes to the peer - for this
+        gateway, or an egress proxy that holds the peer's credential (it
+        fetched the live card itself). A refusal is recorded and raised as
+        A2AError; otherwise (orc, check, the JSON-RPC request to send)."""
         org_id, agent_id, slug = agent.org_id, agent.id, peer.slug
-        peer_id, endpoint, version, pinned = peer.id, peer.endpoint_url, peer.protocol_version, peer.card_digest
-        auth, timeout = _auth(peer), float(peer.timeout_seconds)
+        endpoint, version, pinned = peer.endpoint_url, peer.protocol_version, peer.card_digest
 
         # ownership first: nothing below may tell whether someone else's task exists
         if canonical == "SendMessage":
@@ -222,24 +234,21 @@ class A2AGateway:
         else:
             await self._own(agent_id, peer, [params["id"]])
 
-        try:
-            live, live_error = await self._live_digest(peer), None
-        except UpstreamError as exc:
-            live, live_error = None, exc.code
-
         orc = PVPOrchestrator(self.db)
         check = await orc.check(org_id, PVPActionRequest(
             agent_id=agent_id, chain_id=chain_id, action_type=ACTION_TYPES[canonical], tool_name=tool_name(slug),
             input=params, tool_digest=live))
 
         refusal = None
-        if live_error:
+        if executor == EXECUTOR and await enforcement.enforced(self.db, org_id):
+            refusal = "A2A gateway: " + enforcement.REFUSAL
+        elif live_error:
             refusal = f"A2A gateway: the remote agent's card could not be confirmed ({live_error})"
         elif live != pinned:
             refusal = "A2A gateway: the remote agent's card changed since it was approved (ASI04)"
         if check.decision != ALLOWED or refusal:
             action = await orc.record_executed(org_id, check, input_data=params, output=None, duration_ms=None,
-                                                  executed_by=EXECUTOR, refusal=refusal)
+                                                  executed_by=executor, refusal=refusal)
             if check.decision == PENDING_APPROVAL and not refusal:
                 raise w.A2AError(REFUSED, "This call needs a human approval and was not sent",
                                  {"action_id": action.id, "reason": check.reason})
@@ -247,13 +256,18 @@ class A2AGateway:
 
         wire_params = w.send_params_to_wire(params, version) if canonical == "SendMessage" else params
         body = {"jsonrpc": "2.0", "id": next(_ids), "method": w.wire_method(canonical, version), "params": wire_params}
-        headers = {**auth, **({"A2A-Version": "1.0"} if version == w.V1 else {})}
-        started = time.monotonic()
+        headers = {"A2A-Version": "1.0"} if version == w.V1 else {}
+        return orc, check, {"url": endpoint, "body": body, "headers": headers, "timeout": float(peer.timeout_seconds)}
+
+    async def finish(self, org_id: int, agent_id: int, peer_id: int, canonical: str, version: str,
+                     status_code: Optional[int], msg: Optional[dict], upstream_error: Optional[str]):
+        """What the peer answered: (kind, canonical object, output to record, error for the agent)."""
         kind, obj, output, peer_error = "task", None, None, None
         try:
-            status, _, msg = await jsonrpc(endpoint, body, headers=headers, timeout=timeout)
+            if upstream_error:
+                raise UpstreamError(upstream_error)
             if msg is None:
-                raise UpstreamError("upstream.bad_response", f"HTTP {status}, no JSON-RPC response")
+                raise UpstreamError("upstream.bad_response", f"HTTP {status_code}, no JSON-RPC response")
             if "error" in msg:
                 err = msg.get("error") or {}
                 code = err.get("code") if isinstance(err.get("code"), int) else REFUSED
@@ -267,7 +281,6 @@ class A2AGateway:
                                                                                   "be reached", {"reason": exc.code})
         except w.A2AError as exc:
             output, peer_error = {"invalid_agent_response": exc.message[:200]}, exc
-        duration = int((time.monotonic() - started) * 1000)
 
         bad = structure_findings(output, "$.output")
         if bad:
@@ -279,6 +292,29 @@ class A2AGateway:
             # the peer answered with another caller's task: never hand it over
             output, obj = {"withheld": ["a2a.foreign_task"]}, None
             peer_error = w.A2AError(w.INVALID_AGENT_RESPONSE, "The remote agent returned a task of another caller")
+        return kind, obj, output, peer_error
+
+    async def handle(self, agent: Agent, peer: A2APeer, canonical: str, params: dict,
+                     chain_id: Optional[int]) -> Tuple[str, dict]:
+        """One governed operation. Returns ("task" | "message", canonical
+        object) or raises A2AError."""
+        org_id, agent_id, peer_id, version = agent.org_id, agent.id, peer.id, peer.protocol_version
+        try:
+            # no credential here: a peer that takes one fails here (upstream.credential_at_proxy)
+            # and the call is refused and recorded
+            live, live_error = await self._live_digest(peer), None
+        except UpstreamError as exc:
+            live, live_error = None, exc.code
+        orc, check, req = await self.prepare(agent, peer, canonical, params, chain_id, live, live_error, EXECUTOR)
+        started = time.monotonic()
+        status_code, msg, upstream_error = None, None, None
+        try:
+            status_code, _, msg = await jsonrpc(req["url"], req["body"], headers=req["headers"], timeout=req["timeout"])
+        except UpstreamError as exc:
+            upstream_error = exc.code
+        duration = int((time.monotonic() - started) * 1000)
+        kind, obj, output, peer_error = await self.finish(org_id, agent_id, peer_id, canonical, version, status_code,
+                                                          msg, upstream_error)
         action = await orc.record_executed(org_id, check, input_data=params, output=output,
                                                    duration_ms=duration, executed_by=EXECUTOR)
         if peer_error is not None:

@@ -28,6 +28,7 @@ class FakeProvenza:
         self.down = set()           # paths that fail with 503
         self.record_failures = 0    # record answers 503 this many times first
         self.n = 0
+        self.decisions = {}         # action id -> list of states answered in turn (the last one repeats)
 
     def _json(self, status, body):
         return httpx.Response(status, json=body)
@@ -88,6 +89,12 @@ class FakeProvenza:
             chk["used"] = True
             self.records.append(body)
             return self._json(200, {"id": len(self.records), "policy_check_result": chk["decision"]})
+        if path.startswith("/agents/actions/") and path.endswith("/decision"):
+            action_id = int(path.split("/")[3])
+            states = self.decisions.get(action_id) or ["pending_approval"]
+            state = states.pop(0) if len(states) > 1 else states[0]
+            return self._json(200, {"action_id": action_id, "decision": state, "decided_at": None,
+                                    "used": False, "redeemable_until": None})
         if path.endswith("/delegate"):
             payload = {k: body[k] for k in ("to_agent_id", "task", "chain_id", "nonce", "issued_at", "expires_in")}
             payload.update(from_agent_id=42, delegated_capabilities=sorted(body["delegated_capabilities"]))

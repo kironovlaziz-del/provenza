@@ -8,6 +8,7 @@ import React, { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useDialog } from "@/components/Dialog";
 import { Form } from "@/components/Form";
+import { SealedCredential, sealNew } from "@/components/gateways/SealedCredential";
 import { errorMessage } from "@/lib/errors";
 import {
   A2aPeer,
@@ -69,7 +70,9 @@ export function A2aPeers() {
             <Form onSubmit={(e) => {
               e.preventDefault();
               act("new", async () => {
-                await createA2aPeer({ ...form, auth_secret: form.auth_secret || undefined });
+                const { auth_secret, ...fields } = form;
+                const peer = await createA2aPeer(fields);
+                await sealNew("a2a_peer", peer.id, auth_secret);   // sealed here, never sent in clear
                 setForm(EMPTY);
                 setShowForm(false);
               });
@@ -99,7 +102,8 @@ export function A2aPeers() {
                 <div className="field">
                   <label htmlFor="a2a-secret">{t("gw.secret")}</label>
                   <input id="a2a-secret" type="password" autoComplete="new-password" maxLength={4000} value={form.auth_secret}
-                         placeholder={t("gw.secret_placeholder")} onChange={(e) => setForm({ ...form, auth_secret: e.target.value })} />
+                         placeholder={t("sealed.placeholder", "Sealed in this browser; the server never sees it")}
+                         onChange={(e) => setForm({ ...form, auth_secret: e.target.value })} />
                 </div>
                 <div className="field" style={{ maxWidth: 140 }}>
                   <label htmlFor="a2a-timeout">{t("gw.timeout")}</label>
@@ -136,7 +140,8 @@ export function A2aPeers() {
                 <tr key={p.id}>
                   <td>
                     <strong>{p.name}</strong>
-                    <div className="hint-text u-mono">{p.tool_name}{p.has_secret ? ` · ${t("gw.has_secret")}` : ""}</div>
+                    <div className="hint-text u-mono">{p.tool_name}</div>
+                    <SealedCredential obj="a2a_peer" id={p.id} />
                   </td>
                   <td style={{ maxWidth: 320 }}>
                     {card.name ? <div>{card.name}</div> : null}
@@ -155,9 +160,15 @@ export function A2aPeers() {
                   <td className="u-mono u-nowrap">{p.last_synced_at ? new Date(p.last_synced_at).toLocaleString(i18n.language) : t("gw.never")}</td>
                   <td className="u-nowrap">
                     <div className="u-btn-row">
-                      <button className="btn btn-sm" disabled={busy === p.id} onClick={() => act(p.id, () => syncA2aPeer(p.id))}>
-                        {t("gw.sync")}
-                      </button>
+                      {p.credential_source === "none" ? (
+                        <button className="btn btn-sm" disabled={busy === p.id} onClick={() => act(p.id, () => syncA2aPeer(p.id))}>
+                          {t("gw.sync")}
+                        </button>
+                      ) : (
+                        <span className="hint-text" title={t("gw.synced_by_proxy_a2a_hint", "Its credential is sealed to the egress proxies: they fetch its card every minute and agents reach it through them (/_a2a/<peer>).")}>
+                          {t("gw.synced_by_proxy", "synced by the egress proxies")}
+                        </span>
+                      )}
                       {(p.status === "pending" || p.status === "drifted") && (
                         <button className="btn btn-sm btn-primary" disabled={busy === p.id} onClick={() => act(p.id, () => approveA2aPeer(p.id))}>
                           {p.status === "drifted" ? t("gw.approve_change") : t("gw.approve")}

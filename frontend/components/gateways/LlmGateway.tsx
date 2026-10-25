@@ -23,6 +23,7 @@ const STATUS_PILL: Record<string, string> = {
   blocked: "pill-critical",
   denied: "pill-critical",
   rate_limited: "pill-medium",
+  pending_approval: "pill-medium",
   failed: "pill-neutral",
 };
 const LIST: React.CSSProperties = { maxHeight: 420, overflowY: "auto", overflowX: "auto" };
@@ -89,7 +90,7 @@ export function LlmGateway() {
         <p className="hint-text" style={{ marginTop: 0 }}>
           {t(
             "gateway.hint",
-            "An OpenAI-compatible endpoint for agents. Point an agent's base URL here and use its own key: every call is checked against the agent's allowed models, the policy hierarchy and the rate limits, and recorded - who, which model, the verdict, tokens - without what was sent or answered.",
+            "An OpenAI-compatible endpoint for agents. Point an agent's base URL here and use its own key: every call is a PVP action, decided like any other agent action - allowed models, agent policies, the policy hierarchy, the delegation chain (X-Provenza-Chain-Id header), quarantine and the circuit breaker - then providers and rate limits. Only metadata is recorded (model, outcome, tokens, time, a hash of the messages) - never the prompt or the answer.",
           )}
         </p>
         {error && <div className="panel" style={{ marginBottom: 16, borderColor: "#ef4444" }}><div className="panel-body" style={{ color: "#ef4444" }}>{error}</div></div>}

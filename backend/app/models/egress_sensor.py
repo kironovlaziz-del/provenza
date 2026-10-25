@@ -34,6 +34,9 @@ class EgressSensor(Base):
     errors = Column(JSONB)
     dropped_events = Column(Integer, nullable=False, default=0)
     config_version = Column(String(64))
+    # What the sensor verified itself (docs/pvp/edge.md, section 5), as its last
+    # heartbeat reported: {"signed_policy": {pin, release, error}, "proxy_runs": [...]}.
+    trust = Column(JSONB)
 
     # Governed socket decisions since the sensor started. BigInteger because
     # a long-running host on a busy network passes 2^31 quickly.
@@ -330,3 +333,11 @@ class EgressSensorCommand(Base):
 
     result = Column(JSONB)                             # dump-state: the sensor's full status
     error = Column(String(500))
+    # The administrator's signed command (egress_sensor_commands.signed_proof):
+    # what a sensor that follows the signed policy checks instead of the key above.
+    proof = Column(JSONB)
+
+    @property
+    def signed_by(self):
+        """The administrator who signed it, or None (the server's key only)."""
+        return ((self.proof or {}).get("statement") or {}).get("user_id")

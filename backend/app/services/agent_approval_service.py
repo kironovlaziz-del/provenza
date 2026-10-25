@@ -20,6 +20,10 @@ action in harmless words, and a tired reviewer clicks "approve". Defences:
   4. Pending approvals expire (APPROVAL_TTL_HOURS) - a stale approval is a risk.
   5. High-risk cases and approval fatigue (many approvals in a short time)
      require typing the tool name to confirm.
+  6. An approval is signed with the reviewer's session key, which their
+     passkey certified (docs/pvp/edge.md, section 3): the server cannot make
+     one up, and only a signed approval lets the call run
+     (app/pvp/approvals.py). A denial is signed when the session can sign.
 """
 
 import os
@@ -31,6 +35,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.agent_signing import content_hash, verify_agent_signature
+from app.services import signing_sessions
 from app.models.agent import Agent, AgentPolicy
 from app.models.agent_action import AgentAction, AgentIncident
 from app.models.ai_system import AISystem
@@ -219,7 +224,7 @@ class AgentApprovalService:
             "decision": None if decision is None else {
                 "decision": decision.decision, "decided_by": decision.decided_by,
                 "decided_at": decision.decided_at, "reason": decision.reason,
-                "self_approved": decision.self_approved,
+                "self_approved": decision.self_approved, "signed": decision.signed is not None,
             },
             "reviewer": {
                 "can_decide": action.policy_check_result == "pending_approval" and blocked_reason is None,
@@ -229,6 +234,9 @@ class AgentApprovalService:
                 "confirmation_text": action.tool_name or "",
                 "flags": flags,
                 "expires_at": self.expires_at(action),
+                # an approval is signed with the session key: the session
+                # must be confirmed with the passkey first
+                "session_certified": bool(getattr(getattr(user, "_signing_session", None), "certificate", None)),
             },
         }
 
@@ -246,8 +254,24 @@ class AgentApprovalService:
                                 detail="The arguments differ from what was reviewed; reload and review again")
         return packet, action
 
-    async def approve(self, org_id: int, action_id: int, user: User,
-                      input_sha256: str, confirmation: Optional[str]) -> dict:
+    async def statement(self, org_id: int, action_id: int, user: User, decision: str) -> dict:
+        """The statement the reviewer's session key signs to decide."""
+        session = signing_sessions.require_certified(getattr(user, "_signing_session", None))
+        if decision == "approved":
+            packet = await self.review(org_id, action_id, user)
+            if packet["reviewer"]["blocked_reason"]:
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
+                                    detail=packet["reviewer"]["blocked_reason"])
+        action = await self._action(org_id, action_id)
+        if action.policy_check_result != "pending_approval":
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT,
+                                detail=f"Action is '{action.policy_check_result}', not pending approval")
+        return signing_sessions.approval_statement(user, session, action, content_hash(action.input_data or {}),
+                                                   decision)
+
+    async def approve(self, org_id: int, action_id: int, user: User, input_sha256: str,
+                      confirmation: Optional[str], statement: Optional[dict] = None,
+                      signature: Optional[str] = None) -> dict:
         packet, action = await self._guard(org_id, action_id, user, input_sha256)
         rv = packet["reviewer"]
         typed = False
@@ -259,30 +283,47 @@ class AgentApprovalService:
                            f"({', '.join(rv['flags'])})",
                 )
             typed = True
+        session = getattr(user, "_signing_session", None)
+        signed = await signing_sessions.verify_signed(
+            self.db, session,
+            signing_sessions.approval_statement(user, signing_sessions.require_certified(session), action,
+                                                input_sha256, "approved"),
+            statement, signature)
         action.policy_check_result = "allowed"
         action.reason = (action.reason or "") + f" | approved by user #{user.id}"
         self.db.add(AgentActionApproval(
             org_id=org_id, action_id=action.id, decision="approved", decided_by=user.id,
             input_sha256=input_sha256, self_approved=rv["self_approval"],
-            typed_confirmation=typed, flags=rv["flags"] or None,
+            typed_confirmation=typed, flags=rv["flags"] or None, signed=signed,
         ))
         await self.db.commit()
         return {"flags": rv["flags"], "self_approved": rv["self_approval"]}
 
-    async def deny(self, org_id: int, action_id: int, user: User,
-                   input_sha256: Optional[str], reason: Optional[str]) -> None:
+    async def deny(self, org_id: int, action_id: int, user: User, input_sha256: Optional[str],
+                   reason: Optional[str], statement: Optional[dict] = None,
+                   signature: Optional[str] = None) -> None:
         action = await self._action(org_id, action_id)
         await self._expire_if_stale(action)
         action = await self._action(org_id, action_id)
         if action.policy_check_result != "pending_approval":
             raise HTTPException(status_code=status.HTTP_409_CONFLICT,
                                 detail=f"Action is '{action.policy_check_result}', not pending approval")
-        # denying is always allowed (also for the owner) - refusing can't be exploited
+        # denying is always allowed (also for the owner) - refusing can't be
+        # exploited; signed when the browser could sign it
+        input_sha = content_hash(action.input_data or {})
+        signed = None
+        if statement is not None or signature is not None:
+            session = getattr(user, "_signing_session", None)
+            signed = await signing_sessions.verify_signed(
+                self.db, session,
+                signing_sessions.approval_statement(user, signing_sessions.require_certified(session), action,
+                                                    input_sha, "denied"),
+                statement, signature)
         action.policy_check_result = "denied"
         action.reason = (action.reason or "") + f" | denied by user #{user.id}: {reason or 'no reason given'}"
         self.db.add(AgentActionApproval(
             org_id=org_id, action_id=action.id, decision="denied", decided_by=user.id,
-            input_sha256=content_hash(action.input_data or {}), reason=reason,
+            input_sha256=input_sha, reason=reason, signed=signed,
         ))
         self.db.add(AgentIncident(
             org_id=org_id, chain_id=action.chain_id, agent_id=action.agent_id,

@@ -9,6 +9,11 @@ Wants=network-online.target
 [Service]
 User=provenza-proxy
 ExecStart=/usr/local/bin/provenza-proxy -config /etc/provenza/proxy.json
+# With the egress sensor on this host, let only a pinned proxy binary out
+# (proxy/README.md, "On a host with the egress sensor"; provenza-proxy in the
+# sensor's proxy_users):
+#SupplementaryGroups=provenza
+#ExecStart=/usr/local/bin/provenza-sensor --proxy run -- /usr/local/bin/provenza-proxy -config /etc/provenza/proxy.json
 Restart=on-failure
 RestartSec=2s
 NoNewPrivileges=yes
@@ -25,6 +30,10 @@ LockPersonality=yes
 MemoryDenyWriteExecute=yes
 CapabilityBoundingSet=
 ReadOnlyPaths=/etc/provenza
+# the proxy's own signing key, its receipt log and the last verified signed
+# policy: /var/lib/provenza-proxy (state_dir), kept across restarts
+StateDirectory=provenza-proxy
+StateDirectoryMode=0700
 
 [Install]
 WantedBy=multi-user.target

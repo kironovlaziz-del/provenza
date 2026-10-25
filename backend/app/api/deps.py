@@ -55,6 +55,15 @@ async def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
     user = await _user_from_token(token, db)
+    # a signer's sign-in is a signing session: ended ones are refused, a blocked
+    # one may only wait for its admission (app/services/signing_sessions.py)
+    from app.services import signing_sessions
+
+    session = await signing_sessions.check(db, user, getattr(user, "_token_payload", {}))
+    user._signing_session = session
+    if session is not None and session.status == "blocked" and not signing_sessions.blocked_path_allowed(
+            request.url.path):
+        raise api_error(status.HTTP_403_FORBIDDEN, "auth.session_blocked")
     # a sign-in where the identity provider vouched for a second factor needs no TOTP of ours
     if not user.totp_enabled and not getattr(user, "_idp_mfa", False) and not request.url.path.endswith(MFA_SETUP_PATHS):
         from app.services import mfa
@@ -99,6 +108,7 @@ async def _user_from_token(token: str, db: AsyncSession) -> User:
     if user is None:
         raise credentials_exception
     user._idp_mfa = payload.get("idp_mfa") is True   # transient, this request only (app/api/sso.py)
+    user._token_payload = payload                     # transient: the signing session ("sid")
     # every session from before a password change has ended
     if user.sessions_valid_after is not None:
         issued = payload.get("iat")

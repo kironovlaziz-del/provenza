@@ -9,6 +9,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -80,4 +81,44 @@ func Walk(root string) ([]Dir, error) {
 		return nil
 	})
 	return out, err
+}
+
+// Under is where root sits inside its cgroup v2 hierarchy ("" when root is the
+// mount point itself): the kernel names cgroups by their path in the
+// hierarchy, Walk by their path under root.
+func Under(root string) string {
+	f, err := os.Open("/proc/self/mountinfo")
+	if err != nil {
+		return ""
+	}
+	defer f.Close()
+	return under(f, root)
+}
+
+func under(mountinfo io.Reader, root string) string {
+	root = filepath.Clean(root)
+	best := ""
+	sc := bufio.NewScanner(mountinfo)
+	for sc.Scan() {
+		// id parent major:minor root mountpoint options ... - fstype source options
+		fields := strings.Fields(sc.Text())
+		sep := -1
+		for i, x := range fields {
+			if x == "-" {
+				sep = i
+				break
+			}
+		}
+		if sep < 5 || sep+1 >= len(fields) || fields[sep+1] != "cgroup2" {
+			continue
+		}
+		mp := filepath.Clean(fields[4])
+		if (root == mp || strings.HasPrefix(root, mp+"/")) && len(mp) > len(best) {
+			best = mp
+		}
+	}
+	if best == "" {
+		return ""
+	}
+	return strings.Trim(strings.TrimPrefix(root, best), "/")
 }

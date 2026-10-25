@@ -157,11 +157,15 @@ async def _team_chain(db: AsyncSession, org_id: int, team_id: Optional[int]) -> 
 
 
 async def chain(db: AsyncSession, org_id: int, *, team_id: Optional[int] = None, agent: Optional[Agent] = None,
-                gateway: bool = True, draft: Optional[Tuple[str, Optional[int], Dict[str, Any]]] = None
-                ) -> List[Dict[str, Any]]:
+                gateway: bool = True, draft: Optional[Tuple[str, Optional[int], Dict[str, Any]]] = None,
+                signed=None) -> List[Dict[str, Any]]:
     """The levels that govern an agent (or a team's agents), topmost first:
     [{"source", "scope", "id", "document"}]. `draft` (scope, target id,
-    document) replaces that level's stored document - for previews."""
+    document) replaces that level's stored document - for previews.
+    `signed` (app/pvp/signed_policy.py): the levels and teams of the signed
+    policy instead of the working copy."""
+    if signed is not None:
+        return signed_chain(signed, team_id=team_id, agent=agent, gateway=gateway)
     rows = {(r.scope, r.team_id if r.scope == "team" else r.agent_id): r for r in (await db.execute(
         select(PolicyLayer).where(PolicyLayer.org_id == org_id))).scalars()}
 
@@ -188,20 +192,37 @@ async def chain(db: AsyncSession, org_id: int, *, team_id: Optional[int] = None,
     return levels
 
 
-def combine(levels: List[Dict[str, Any]]) -> Dict[str, Any]:
-    return policy_doc.resolve([(lv["source"], lv["document"]) for lv in levels])
+def signed_chain(signed, *, team_id: Optional[int] = None, agent=None, gateway: bool = True) -> List[Dict[str, Any]]:
+    """chain() over a signed policy alone - no database (app/pvp/bundle_eval.py,
+    and the enforcement points that evaluate the bundle themselves)."""
+    levels: List[Dict[str, Any]] = []
+    if gateway:
+        levels.append({"source": GATEWAY_SOURCE, "scope": "gateway", "id": None,
+                       "document": _gateway_level(signed.gateway_settings())})
+    levels.append({"source": ORG_SOURCE, "scope": "org", "id": None, "document": signed.layer("org", None)})
+    if agent is not None:
+        team_id = agent.team_id
+    teams, seen, current = [], set(), team_id
+    while current is not None and current not in seen and len(teams) < 20:
+        seen.add(current)
+        t = signed.team(current)
+        if t is None:
+            break
+        teams.append((current, t))
+        current = t.get("parent_id")
+    for tid, t in reversed(teams):
+        levels.append({"source": f"team {t['name']}", "scope": "team", "id": tid,
+                       "document": signed.layer("team", tid)})
+    if agent is not None:
+        levels.append({"source": f"agent {agent.name}", "scope": "agent", "id": agent.id,
+                       "document": signed.layer("agent", agent.id)})
+    return levels
 
 
-async def for_agent(db: AsyncSession, agent: Agent) -> Effective:
-    """Everything that governs this agent, combined."""
-    return Effective(combine(await chain(db, agent.org_id, agent=agent)))
-
-
-async def engine_policies(db: AsyncSession, agent: Agent) -> Tuple[List[Dict[str, Any]], Optional[int]]:
-    """The hierarchy as agent_policy_engine custom policies - one per level
-    that has tool or model rules, so every level must pass on its own (and a
-    refusal names the level) - and the delegation depth limit."""
-    levels = await chain(db, agent.org_id, agent=agent, gateway=False)
+def engine_rules(levels: List[Dict[str, Any]]) -> Tuple[List[Dict[str, Any]], Optional[int]]:
+    """Levels as agent_policy_engine custom policies - one per level that has
+    tool or model rules, so every level must pass on its own (and a refusal
+    names the level) - and the delegation depth limit."""
     policies: List[Dict[str, Any]] = []
     for lv in levels:
         doc = lv["document"]
@@ -217,8 +238,35 @@ async def engine_policies(db: AsyncSession, agent: Agent) -> Tuple[List[Dict[str
             rules["allow_only_model_patterns"] = models["allow"]
         if rules:
             policies.append({"id": None, "name": f"{lv['source']} policy", "rules": rules})
-    depth = Effective(combine(levels)).limit("limits.max_delegation_depth")
-    return policies, depth
+    return policies, Effective(combine(levels)).limit("limits.max_delegation_depth")
+
+
+def combine(levels: List[Dict[str, Any]]) -> Dict[str, Any]:
+    return policy_doc.resolve([(lv["source"], lv["document"]) for lv in levels])
+
+
+async def for_agent(db: AsyncSession, agent: Agent) -> Effective:
+    """Everything that governs this agent, combined - with the signed policy,
+    once the organization has one in force: both levels' chains, so the
+    stricter value of each applies (lower levels can only tighten)."""
+    from app.pvp import signed_policy
+
+    levels = await chain(db, agent.org_id, agent=agent)
+    signed = await signed_policy.in_force(db, agent.org_id)
+    if signed is not None:
+        view, _ = signed.agent(agent)
+        if view is not None:
+            levels = [dict(lv, source=f"signed {lv['source']}") for lv in
+                      await chain(db, agent.org_id, agent=view, signed=signed)] + levels
+    return Effective(combine(levels))
+
+
+async def engine_policies(db: AsyncSession, agent: Agent, signed=None) -> Tuple[List[Dict[str, Any]], Optional[int]]:
+    """The hierarchy as agent_policy_engine custom policies - one per level
+    that has tool or model rules, so every level must pass on its own (and a
+    refusal names the level) - and the delegation depth limit. `signed`:
+    of the signed policy instead of the working copy."""
+    return engine_rules(await chain(db, agent.org_id, agent=agent, gateway=False, signed=signed))
 
 
 async def preview(db: AsyncSession, org_id: int, scope: str, target_id: Optional[int],

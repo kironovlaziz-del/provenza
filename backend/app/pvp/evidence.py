@@ -46,6 +46,7 @@ def action_view(action, check_token: Optional[str] = None) -> PVPAction:
         signed_by=signature_of(action.signature, action.pq_signature,
                                action.signer_public_key, action.signer_pq_public_key),
         executed_by=action.executed_by,
+        witness=action.witness,
     )
 
 

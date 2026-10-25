@@ -408,6 +408,12 @@ async def ingest_heartbeat(
     sensor.dropped_events = data.dropped_events
     sensor.config_version = data.config_version
     sensor.last_seen_at = now_utc()
+    trust = {}
+    if data.signed_policy is not None:
+        trust["signed_policy"] = data.signed_policy.model_dump(exclude_none=True)
+    if data.proxy_runs:
+        trust["proxy_runs"] = [r.model_dump(exclude_none=True) for r in data.proxy_runs]
+    sensor.trust = trust or None
     if data.allowed_total is not None:
         sensor.allowed_total = data.allowed_total
     if data.denied_total is not None:

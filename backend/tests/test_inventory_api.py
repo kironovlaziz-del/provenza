@@ -50,7 +50,7 @@ class TestAutoDiscovery:
         assert agent.status_code == 200, agent.text
         prov = await client.post(
             "/api/v1/providers/",
-            json={"name": "Inv OpenAI", "type": "openai", "api_key": "sk-test-inventory"},
+            json={"name": "Inv OpenAI", "type": "openai"},
             headers=auth_headers(admin_token),
         )
         assert prov.status_code in (200, 201), prov.text

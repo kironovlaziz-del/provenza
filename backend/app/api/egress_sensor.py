@@ -42,6 +42,7 @@ from app.schemas.egress_sensor import (
     CommandAckIn,
     CommandForSensor,
     CommandIn,
+    CommandStatementIn,
     CommandOut,
     HeartbeatIn,
     HeartbeatResponseOut,
@@ -785,10 +786,18 @@ async def create_sensor_command(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_role(UserRole.admin)),
 ):
+    """With `statement` and `signature` the administrator signed it (POST
+    .../commands/statement, then the session key): a sensor that follows the
+    signed policy runs only such a command. Without them it carries only the
+    organization's key, which such a sensor refuses."""
     sensor = await _get_org_sensor(db, sensor_id, current_user.org_id, include_revoked=True)
+    proof = None
     try:
-        row = await cmd_svc.create_command(db, sensor, data.kind, current_user.id)
-    except cmd_svc.UnknownKind as e:
+        if data.statement is not None or data.signature is not None:
+            proof = await cmd_svc.signed_proof(db, current_user, getattr(current_user, "_signing_session", None),
+                                               sensor, data.kind, data.statement, data.signature)
+        row = await cmd_svc.create_command(db, sensor, data.kind, current_user.id, proof=proof)
+    except cmd_svc.CommandError as e:
         raise api_error(status.HTTP_422_UNPROCESSABLE_CONTENT, e.code, **e.context)
 
     await AuditService(db).log(
@@ -798,10 +807,31 @@ async def create_sensor_command(
             "sensor_name": sensor.name,
             "kind": row.kind,
             "expires_at": row.expires_at.isoformat(),
+            "signed": proof is not None,
+            "signed_in_session": proof["statement"]["session_id"] if proof else None,
         },
     )
     await db.refresh(row)
     return row
+
+
+@admin_router.post(
+    "/sensors/{sensor_id}/commands/statement",
+    summary="The statement an administrator signs to command one sensor",
+)
+async def sensor_command_statement(
+    sensor_id: int,
+    data: CommandStatementIn,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role(UserRole.admin)),
+):
+    """Sign it with this session's key and send it with the command
+    (docs/pvp/edge.md, section 5). Valid for five minutes."""
+    from app.services import signing_sessions
+
+    sensor = await _get_org_sensor(db, sensor_id, current_user.org_id, include_revoked=True)
+    session = signing_sessions.require_certified(getattr(current_user, "_signing_session", None))
+    return {"statement": cmd_svc.new_statement(current_user, session, sensor.id, data.kind)}
 
 
 @admin_router.get(
@@ -898,6 +928,7 @@ async def post_heartbeat(
             payload=row.payload,
             signature=row.signature,
             expires_at=row.expires_at,
+            proof=row.proof,
         ))
         delivered_ids.append(row.id)
     if delivered_ids:
@@ -953,6 +984,23 @@ async def get_signing_key(
         previous_fingerprint=key.previous_fingerprint,
         previous_valid_until=key.previous_valid_until,
     )
+
+
+@sensor_router.get(
+    "/policy-release",
+    summary="The signed policy releases after `after`, for the sensor to verify itself",
+)
+async def sensor_policy_release(
+    after: int = Query(0, ge=0),
+    db: AsyncSession = Depends(get_db),
+    sensor: EgressSensor = Depends(get_current_sensor),
+):
+    """The same chain an egress proxy gets (GET /egress-proxy/policy-release).
+    A sensor with policy.pin checks every step itself: who may command it
+    and which proxy binaries it lets out come from the manifest it verified."""
+    from app.services import policy_release as pr
+
+    return await pr.chain_after(db, sensor.org_id, after)
 
 
 @sensor_router.post(

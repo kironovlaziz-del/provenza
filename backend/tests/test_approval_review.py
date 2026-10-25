@@ -12,6 +12,7 @@ from sqlalchemy import update
 
 from app.models.agent import Agent
 from app.services import agent_approval_service as approval_module
+from tests import signer
 from tests.conftest import auth_headers
 from tests.delegation_helpers import action_record_body, delegation_body
 
@@ -55,10 +56,7 @@ async def _review(client, token, action_id):
 
 
 async def _approve(client, token, action_id, sha, confirmation=None):
-    body = {"input_sha256": sha}
-    if confirmation is not None:
-        body["confirmation"] = confirmation
-    return await client.post(f"{A}/actions/{action_id}/approve", json=body, headers=auth_headers(token))
+    return await signer.approve(client, token, action_id, sha, confirmation)
 
 
 async def _set_owner(db_session, agent_id, user_id):

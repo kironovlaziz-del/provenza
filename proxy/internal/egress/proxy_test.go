@@ -6,19 +6,26 @@ package egress
 
 import (
 	"context"
+	"crypto/ed25519"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/kironovlaziz-del/provenza/proxy/internal/canon"
 )
 
 const (
@@ -38,6 +45,27 @@ type fakeProvenza struct {
 	completed []map[string]any
 	checks    int
 	routes    []Route
+	publicKey string                                              // the proxy key registered (/egress-proxy/key)
+	encKey    string                                              // its encryption key, signed by publicKey
+	sealTo    map[string]any                                      // context override for the envelopes served (a server that cheats)
+	sealed    []sealedObject                                      // other objects' credentials it serves sealed
+	plans     map[string]func(body map[string]any) map[string]any // /egress-proxy/<kind>/plan
+	planned   []map[string]any                                    // what the proxy sent to plan endpoints (with the agent key)
+	mcpSyncs  []map[string]any                                    // what the proxy reported of the MCP servers it syncs
+	releases  []map[string]any                                    // what /egress-proxy/policy-release serves (all of them)
+	approval  map[string]any                                      // returned with checks, when set
+	agentID   any                                                 // the agent checks are issued for (default 5)
+	// offline operation and the kill switch (offline.go, killswitch.go)
+	down       bool             // answer every call with 503
+	offline    []map[string]any // the offline actions handed over
+	reconState map[string]any   // GET /egress-proxy/reconciliation
+	ksPosts    []map[string]any // POST /egress-proxy/kill-switch
+	liftSigs   []any            // what GET /egress-proxy/kill-switch/lift serves
+	liftSHA    string
+	liftedSHA  string
+	headers    map[string]http.Header // the last request's headers, by path
+	creds      []map[string]any       // what /egress-proxy/credentials serves instead, when set
+	orgID      any                    // the organization the proxy's registration names (default 3)
 }
 
 func (f *fakeProvenza) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -48,11 +76,101 @@ func (f *fakeProvenza) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(status)
 		_ = json.NewEncoder(w).Encode(v)
 	}
+	if f.headers == nil {
+		f.headers = map[string]http.Header{}
+	}
+	f.headers[r.URL.Path] = r.Header.Clone()
+	if f.down {
+		reply(503, nil)
+		return
+	}
 	var body map[string]any
 	_ = json.NewDecoder(r.Body).Decode(&body)
 	byProxy := r.Header.Get("X-Proxy-Key") == proxyKey
 	byAgent := r.Header.Get("X-Agent-Key") == agentKey
 	switch r.URL.Path {
+	case "/api/v1/egress-proxy/key":
+		if !byProxy {
+			reply(401, nil)
+			return
+		}
+		if f.publicKey != "" && f.publicKey != body["public_key"] {
+			reply(409, map[string]any{"detail": "egress.proxy_key_changed"})
+			return
+		}
+		f.publicKey, _ = body["public_key"].(string)
+		enc, _ := body["encryption_key"].(string)
+		sig, _ := base64.StdEncoding.DecodeString(fmt.Sprint(body["encryption_key_signature"]))
+		pub, _ := base64.StdEncoding.DecodeString(f.publicKey)
+		stmt, _ := keyStatement(enc)
+		if enc == "" || len(pub) != ed25519.PublicKeySize || !ed25519.Verify(pub, stmt, sig) {
+			reply(422, map[string]any{"detail": "egress.bad_proxy_encryption_key"})
+			return
+		}
+		f.encKey = enc
+		org := f.orgID
+		if org == nil {
+			org = 3
+		}
+		reply(200, map[string]any{"proxy_id": 1, "org_id": org})
+	case "/api/v1/egress-proxy/credentials":
+		if !byProxy {
+			reply(401, nil)
+			return
+		}
+		if f.creds != nil {
+			reply(200, map[string]any{"credentials": f.creds})
+			return
+		}
+		out := []map[string]any{}
+		for _, rt := range f.routes {
+			if !sealedSource(rt.CredentialSource) || f.encKey == "" {
+				continue
+			}
+			id, _ := rt.ID.Int64()
+			ctx := map[string]any{"org_id": 3, "object": "route", "object_id": id, "proxy_id": 1,
+				"upstream": origin(rt.UpstreamURL)}
+			if f.sealTo != nil {
+				ctx = f.sealTo
+			}
+			out = append(out, map[string]any{"object": "route", "object_id": id,
+				"envelope": sealForTest(f.encKey, ctx, secret)})
+		}
+		for _, o := range f.sealed {
+			if f.encKey == "" {
+				continue
+			}
+			ctx := map[string]any{"org_id": 3, "object": o.object, "object_id": o.id, "proxy_id": 1,
+				"upstream": o.upstream}
+			out = append(out, map[string]any{"object": o.object, "object_id": o.id,
+				"envelope": sealForTest(f.encKey, ctx, o.value)})
+		}
+		reply(200, map[string]any{"credentials": out})
+	case "/api/v1/egress-proxy/check-info":
+		want, ok := f.checked[body["check_id"].(string)]
+		if !byProxy || !ok {
+			reply(404, map[string]any{"detail": "egress.unknown_check"})
+			return
+		}
+		parsed, _ := canon.Of(want)
+		sha, _ := canon.SHA256(parsed)
+		reply(200, map[string]any{"agent_id": f.agent(), "chain_id": nil, "action_type": "proxy",
+			"tool_name": "proxy." + want["route"].(string), "input_sha256": sha, "decision": "allowed",
+			"approval": f.approval})
+	case "/api/v1/egress-proxy/policy-release":
+		after, _ := strconv.Atoi(r.URL.Query().Get("after"))
+		chain := []map[string]any{}
+		for _, doc := range f.releases {
+			n, _ := strconv.Atoi(fmt.Sprint(doc["release"].(map[string]any)["number"]))
+			if n > after {
+				chain = append(chain, doc)
+			}
+		}
+		var current any
+		if len(f.releases) > 0 {
+			current = f.releases[len(f.releases)-1]["release"].(map[string]any)["number"]
+		}
+		reply(200, map[string]any{"current": current, "chain": chain})
 	case "/api/v1/egress-proxy/config":
 		if !byProxy {
 			reply(401, map[string]any{"detail": "egress.bad_proxy_key"})
@@ -71,7 +189,8 @@ func (f *fakeProvenza) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if f.deny != "" {
 			decision = "denied"
 		}
-		reply(200, map[string]any{"decision": decision, "reason": f.deny, "check_id": id})
+		reply(200, map[string]any{"decision": decision, "reason": f.deny, "check_id": id, "agent_id": f.agent(),
+			"chain_id": nil, "approval": f.approval})
 	case "/api/v1/egress-proxy/redeem":
 		if !byProxy {
 			reply(401, nil)
@@ -103,12 +222,63 @@ func (f *fakeProvenza) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		reply(418, map[string]any{"method": r.Method, "query": r.URL.RawQuery, "body": body,
 			"agent_key": r.Header.Get("X-Agent-Key"), "proxy_key": r.Header.Get("X-Proxy-Key"),
 			"cookie": r.Header.Get("Cookie")})
+	case "/api/v1/egress-proxy/http-tools/plan", "/api/v1/egress-proxy/llm/plan", "/api/v1/egress-proxy/mcp/plan",
+		"/api/v1/egress-proxy/a2a/plan":
+		kind := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/api/v1/egress-proxy/"), "/plan")
+		if !byProxy || !byAgent {
+			reply(401, map[string]any{"detail": "egress.agent_key_invalid"})
+			return
+		}
+		f.planned = append(f.planned, body)
+		h := f.plans[kind]
+		if h == nil {
+			reply(404, nil)
+			return
+		}
+		reply(200, h(body))
+	case "/api/v1/egress-proxy/mcp/sync":
+		if !byProxy {
+			reply(401, nil)
+			return
+		}
+		f.mcpSyncs = append(f.mcpSyncs, body)
+		reply(200, map[string]any{"synced": true})
 	case "/api/v1/egress-proxy/complete":
 		f.completed = append(f.completed, body)
 		reply(200, map[string]any{"action_id": 2})
+	case "/api/v1/egress-proxy/offline-actions":
+		results := []map[string]any{}
+		for _, a := range body["actions"].([]any) {
+			f.offline = append(f.offline, a.(map[string]any))
+			results = append(results, map[string]any{"status": "recorded"})
+		}
+		reply(200, map[string]any{"results": results})
+	case "/api/v1/egress-proxy/reconciliation":
+		reply(200, f.reconState)
+	case "/api/v1/egress-proxy/kill-switch":
+		f.ksPosts = append(f.ksPosts, body)
+		reply(200, map[string]any{"id": 1})
+	case "/api/v1/egress-proxy/kill-switch/lift":
+		reply(200, map[string]any{"report_sha256": f.liftSHA, "signatures": f.liftSigs})
+	case "/api/v1/egress-proxy/kill-switch/lifted":
+		f.liftedSHA, _ = body["report_sha256"].(string)
+		reply(200, map[string]any{"ok": true})
 	default:
 		reply(404, nil)
 	}
+}
+
+// sealedObject: a credential the fake server serves sealed to the proxy.
+type sealedObject struct {
+	object, upstream, value string
+	id                      int64
+}
+
+func (f *fakeProvenza) agent() any {
+	if f.agentID != nil {
+		return f.agentID
+	}
+	return 5
 }
 
 type upstream struct {
@@ -133,13 +303,13 @@ func newUpstream(t *testing.T, h func(w http.ResponseWriter, r *http.Request)) *
 
 func setup(t *testing.T, up *upstream, mutate func(*Route, *Config), extra ...Route) (*fakeProvenza, *httptest.Server, *httptest.Server) {
 	t.Helper()
-	route := Route{Slug: "stripe", UpstreamURL: up.srv.URL, Methods: []string{"GET", "POST"},
-		PathPrefixes: []string{"/v1/charges"}, CredentialSource: "server", AuthHeader: "Authorization",
-		Secret: secret, MaxBodyBytes: 100}
+	route := Route{ID: "7", Slug: "stripe", UpstreamURL: up.srv.URL, Methods: []string{"GET", "POST"},
+		PathPrefixes: []string{"/v1/charges"}, CredentialSource: "sealed", AuthHeader: "Authorization",
+		MaxBodyBytes: 100}
 	fake := &fakeProvenza{checked: map[string]map[string]any{}}
 	srv := httptest.NewServer(fake)
 	t.Cleanup(srv.Close)
-	cfg := &Config{ServerURL: srv.URL}
+	cfg := &Config{ServerURL: srv.URL, StateDir: t.TempDir()}
 	if mutate != nil {
 		mutate(&route, cfg)
 	}
@@ -253,7 +423,7 @@ func TestLocalCredential(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, _, front := setup(t, up, func(r *Route, c *Config) {
-		r.CredentialSource, r.Secret = "local", ""
+		r.CredentialSource = "local"
 		c.LocalSecrets = map[string]LocalSecret{"stripe": {Header: "X-Api-Key", ValueFile: file}}
 	})
 	send(t, front, "GET", "/stripe/v1/charges", "", map[string]string{"X-Agent-Key": agentKey})
@@ -426,5 +596,49 @@ func TestRelayIsOffByDefault(t *testing.T) {
 	_, _, front := setup(t, up, nil)
 	if resp := send(t, front, "GET", "/_provenza/api/v1/relay-echo", "", nil); resp.StatusCode != 404 {
 		t.Fatalf("relay off: %d", resp.StatusCode)
+	}
+}
+
+// On a proxy host the sensor holds the proxy for a moment (docs/pvp/edge.md,
+// section 5): a server not reachable yet at start is tried again.
+func TestStartWaitsForTheServerBriefly(t *testing.T) {
+	up := newUpstream(t, ok)
+	fake := &fakeProvenza{checked: map[string]map[string]any{},
+		routes: []Route{{ID: "7", Slug: "stripe", UpstreamURL: up.srv.URL, Methods: []string{"GET"},
+			PathPrefixes: []string{"/v1"}, CredentialSource: "none", AuthHeader: "Authorization", MaxBodyBytes: 100}}}
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	addr := l.Addr().String()
+	l.Close() // nothing listens yet
+	cfg := &Config{ServerURL: "http://" + addr, StateDir: t.TempDir()}
+	if err := cfg.normalize(); err != nil {
+		t.Fatal(err)
+	}
+	p := New(cfg, proxyKey, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	done := make(chan error, 1)
+	start := time.Now()
+	go func() { done <- p.Start(ctx) }()
+	time.Sleep(400 * time.Millisecond)
+	l, err = net.Listen("tcp", addr)
+	if err != nil {
+		t.Skipf("the port was taken meanwhile: %v", err)
+	}
+	srv := &http.Server{Handler: fake}
+	go srv.Serve(l)
+	defer srv.Close()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("Start did not finish")
+	}
+	if time.Since(start) < 400*time.Millisecond || p.reg.ProxyID.String() == "" {
+		t.Fatalf("started without the server (%v, %+v)", time.Since(start), p.reg)
 	}
 }

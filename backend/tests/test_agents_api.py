@@ -12,6 +12,7 @@ import pytest
 import pytest_asyncio
 from httpx import AsyncClient
 
+from tests import signer
 from tests.conftest import _create_org_with_admin_and_approver, _login, auth_headers
 from tests.delegation_helpers import action_record_body, delegation_body
 
@@ -169,11 +170,7 @@ class TestDelegateAndActionsFlow:
         # ASI09: the reviewer sees the exact arguments and approves their hash
         review = await client.get(f"/api/v1/agents/actions/{action_id}/review", headers=auth_headers(approver_token))
         assert review.status_code == 200, review.text
-        appr = await client.post(
-            f"/api/v1/agents/actions/{action_id}/approve",
-            json={"input_sha256": review.json()["verified"]["input_sha256"]},
-            headers=auth_headers(approver_token),
-        )
+        appr = await signer.approve(client, approver_token, action_id, review.json()["verified"]["input_sha256"])
         assert appr.status_code == 200 and appr.json()["policy_check_result"] == "allowed", appr.text
 
 

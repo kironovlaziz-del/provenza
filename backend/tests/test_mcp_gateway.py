@@ -29,6 +29,7 @@ from sqlalchemy import select
 from app.models.agent_action import AgentAction, AgentIncident
 from app.models.tool_registry import ToolRegistryEntry
 from app.pvp import mcp_client, mcp_gateway, upstream_http
+from tests import signer
 from tests.conftest import auth_headers
 
 MCP = "/api/v1/mcp"
@@ -75,7 +76,8 @@ class FakeMCP:
             raise httpx.ConnectError("down")
         body = json.loads(request.content)
         self.requests.append((dict(request.headers), body))
-        assert request.headers.get("authorization") == SECRET  # the gateway injects the secret
+        # the server holds no upstream credential (app/pvp/sealed.py); one that takes it is behind a proxy
+        assert request.headers.get("authorization") is None
         method, rid, params = body["method"], body.get("id"), body.get("params") or {}
         if "id" not in body:
             return httpx.Response(202)
@@ -131,7 +133,7 @@ async def _agent(client, token, tools=("files.read",)):
 
 async def _server(client, token, slug="files", **extra):
     r = await client.post(SERVERS, json={"slug": slug, "name": "Shared drive", "url": UPSTREAM,
-                                         "auth_secret": SECRET, **extra}, headers=auth_headers(token))
+                                         **extra}, headers=auth_headers(token))
     assert r.status_code == 200, r.text
     return r.json()
 
@@ -420,11 +422,14 @@ class TestAgentEndpoint:
 
 class TestAdmin:
     @pytest.mark.asyncio
-    async def test_secret_is_never_returned(self, client, admin_token, fake):
+    async def test_a_secret_is_never_taken_in_clear_text(self, client, admin_token, fake):
         s = await _server(client, admin_token)
-        assert s["has_secret"] is True and SECRET not in json.dumps(s)
-        listed = await client.get(SERVERS, headers=auth_headers(admin_token))
-        assert SECRET not in listed.text
+        assert s["has_secret"] is False and s["credential_source"] == "none"
+        r = await client.post(SERVERS, json={"slug": "other", "name": "Other", "url": UPSTREAM, "auth_secret": SECRET},
+                              headers=auth_headers(admin_token))
+        assert r.status_code == 422 and r.json()["detail"] == "credential.plaintext_refused"
+        r = await client.patch(f"{SERVERS}/{s['id']}", json={"auth_secret": SECRET}, headers=auth_headers(admin_token))
+        assert r.status_code == 422
 
     @pytest.mark.asyncio
     async def test_admin_only(self, client, approver_token, fake):
@@ -485,3 +490,31 @@ async def test_gateway_call_has_a_receipt_and_an_honest_trace(client, admin_toke
                               headers=auth_headers(admin_token))).json()
     claims, _ = tool.check_trace(trace, tool.Trust())
     assert claims["appraisal"]["status"] == "warning" and claims["policy"]["enforcement_mode"] == "enforce"
+
+
+@pytest.mark.asyncio
+async def test_an_approved_call_runs_when_repeated_once(client, admin_token, approver_token, db_session, fake):
+    from app.core.agent_signing import content_hash
+
+    _, agent = await _ready(client, admin_token, fake)
+    r = await client.post("/api/v1/agents/policies/", json={"name": "hold reads", "agent_id": agent["id"],
+                                                            "rules": {"require_approval_tools": ["files.read"]}},
+                          headers=auth_headers(admin_token))
+    assert r.status_code == 200, r.text
+    args = {"name": "files.read", "arguments": {"path": "a.txt"}}
+    r = await _call(client, agent, "tools/call", args)
+    assert "needs a human approval" in json.dumps(r.json())
+    held = (await db_session.execute(select(AgentAction).where(AgentAction.agent_id == agent["id"]))).scalar_one()
+    assert held.policy_check_result == "pending_approval"
+    upstream_calls = lambda: [b for _, b in fake.requests if b["method"] == "tools/call"]   # noqa: E731
+    assert upstream_calls() == []
+
+    r = await signer.approve(client, approver_token, held.id, content_hash(held.input_data))
+    assert r.status_code == 200, r.text
+
+    r = await _call(client, agent, "tools/call", args)
+    assert r.json()["result"].get("isError") is not True, r.text
+    assert len(upstream_calls()) == 1
+    r = await _call(client, agent, "tools/call", args)
+    assert "needs a human approval" in json.dumps(r.json())
+    assert len(upstream_calls()) == 1

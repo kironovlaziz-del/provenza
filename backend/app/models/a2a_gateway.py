@@ -30,6 +30,9 @@ class A2APeer(Base):
     card_url = Column(String(500), nullable=False)     # where the peer's agent card is fetched
     auth_header = Column(String(100), nullable=False, default="Authorization")
     auth_secret_encrypted = Column(Text)
+    # where the credential lives: none, sealed (to egress proxies), local (a proxy's configuration);
+    # auth_secret_encrypted is kept only until it is sealed (POST /egress/credentials/seal-legacy)
+    credential_source = Column(String(10), nullable=False, default="none", server_default="none")
     enabled = Column(Boolean, nullable=False, default=True)
     timeout_seconds = Column(Integer, nullable=False, default=60)
     card = Column(JSONB)                               # as last synced (signatures removed)

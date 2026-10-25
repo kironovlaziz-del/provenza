@@ -54,6 +54,7 @@ DENIAL_WINDOW = timedelta(hours=1)
 DENIAL_MIN_ATTEMPTS, DENIAL_FLOOR, DENIAL_MULTIPLIER = 10, 0.3, 3
 DEDUP = timedelta(minutes=10)
 QUARANTINE_INCIDENT = "rogue_agent_quarantined"
+MODEL_ACTION = "model_call"
 
 
 def _aware(dt: Optional[datetime]) -> Optional[datetime]:
@@ -102,10 +103,15 @@ class BehaviorMonitor:
     # ------------------------------------------------------------------ event sources
     # Every attempt = a /actions/check, plus legacy records made without one.
     # All aggregation happens in SQL - a busy agent can have millions of rows.
+    # LLM gateway calls (action type "model_call") are not counted: their
+    # volume is the gateway's rate limit, and counting them would make every
+    # chatty agent look like a burst of new tools.
     @staticmethod
     def _sources(agent_id: int, since: datetime, until: Optional[datetime]):
-        c = [ActionCheck.agent_id == agent_id, ActionCheck.created_at >= since]
-        a = [AgentAction.agent_id == agent_id, AgentAction.check_id.is_(None), AgentAction.created_at >= since]
+        c = [ActionCheck.agent_id == agent_id, ActionCheck.created_at >= since,
+             ActionCheck.action_type.is_distinct_from(MODEL_ACTION)]
+        a = [AgentAction.agent_id == agent_id, AgentAction.check_id.is_(None), AgentAction.created_at >= since,
+             AgentAction.action_type.is_distinct_from(MODEL_ACTION)]
         if until is not None:
             c.append(ActionCheck.created_at < until)
             a.append(AgentAction.created_at < until)

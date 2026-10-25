@@ -50,8 +50,16 @@ def policy_name(value: Optional[str]) -> str:
 
 
 async def org_policy(db: AsyncSession, org_id: int) -> str:
-    value = (await db.execute(select(Organization.ai_provider_policy).where(Organization.id == org_id))).scalar()
-    return policy_name(value)
+    """The policy that applies: "self_hosted" when the working copy or - once
+    a signed policy is in force - the signed one says so (app/pvp/signed_policy.py)."""
+    value = policy_name((await db.execute(select(Organization.ai_provider_policy)
+                                          .where(Organization.id == org_id))).scalar())
+    from app.pvp import signed_policy
+
+    signed = await signed_policy.in_force(db, org_id)
+    if signed is not None and signed.provider_policy() == "self_hosted":
+        return "self_hosted"
+    return value
 
 
 async def self_hosted_required(db: AsyncSession, org_id: int) -> bool:

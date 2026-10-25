@@ -300,3 +300,18 @@ class TestBackgroundRecords:
         assert len(server.records) == 3
         await agent.adelegate(7, "summarize", ["read"])
         await agent.aclose()
+
+
+class TestApprovals:
+    def test_wait_for_approval_returns_the_decision(self, agent, server):
+        server.decisions[7] = ["pending_approval", "pending_approval", "approved"]
+        state = agent.wait_for_approval(7, timeout=10, interval=0.01)
+        assert state["decision"] == "approved" and server.decisions[7] == ["approved"]
+
+    def test_wait_for_approval_gives_up_at_the_timeout(self, agent, server):
+        state = agent.wait_for_approval(8, timeout=0, interval=0.01)
+        assert state["decision"] == "pending_approval"
+
+    async def test_async_wait(self, agent, server):
+        server.decisions[9] = ["pending_approval", "denied"]
+        assert (await agent.await_for_approval(9, timeout=10, interval=0.01))["decision"] == "denied"
