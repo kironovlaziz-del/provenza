@@ -75,7 +75,7 @@ export function SessionBanner() {
         </span>
         {waiting.map((p) => (
           <span key={p.session_id} style={{ display: "inline-flex", gap: 8, alignItems: "center" }}>
-            <span>{describe(p, t)}</span>
+            <span>{describe(p, (k, d) => t(k, d ?? k))}</span>
             <button className="btn btn-sm" disabled={busy} onClick={() => admit(p)}>
               {session.has_passkey ? t("session.admit_passkey", "Let in (passkey)") : t("session.admit", "Let in")}
             </button>

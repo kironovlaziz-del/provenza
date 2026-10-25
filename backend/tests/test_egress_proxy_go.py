@@ -193,7 +193,9 @@ async def test_the_go_proxy_against_this_server(client, admin_token, db_session,
 
     port = _free_port()
     cfg = tmp_path / "proxy.json"
-    cfg.write_text(json.dumps({"server_url": api_url, "listen": f"127.0.0.1:{port}"}))
+    # its key and logs in this test's directory (the default, /var/lib/provenza-proxy, needs root)
+    cfg.write_text(json.dumps({"server_url": api_url, "listen": f"127.0.0.1:{port}",
+                               "state_dir": str(tmp_path / "proxy-state")}))
     proc = await asyncio.create_subprocess_exec(str(proxy_binary), "-config", str(cfg),
                                                 env={**os.environ, "PROVENZA_PROXY_KEY": proxy["key"]},
                                                 stderr=asyncio.subprocess.PIPE)

@@ -12,8 +12,11 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"io"
 	"log/slog"
+	"net"
+	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
@@ -136,11 +139,15 @@ func enforcing(t *testing.T, mutate func(*Config), releases func(v map[string]an
 	return fake, front, v
 }
 
-func enforcingProxy(t *testing.T, mutate func(*Config), releases func(v map[string]any) []map[string]any) (*fakeProvenza, *httptest.Server, map[string]any, *Proxy) {
+func enforcingProxy(t *testing.T, mutate func(*Config), releases func(v map[string]any) []map[string]any,
+	server ...func(*fakeProvenza)) (*fakeProvenza, *httptest.Server, map[string]any, *Proxy) {
 	t.Helper()
 	v := trustVectors(t)
 	up := newUpstream(t, ok)
 	fake := &fakeProvenza{checked: map[string]map[string]any{}}
+	for _, f := range server {
+		f(fake) // before the proxy starts: nothing reads it yet
+	}
 	if releases != nil {
 		fake.releases = releases(v)
 	}
@@ -157,6 +164,8 @@ func enforcingProxy(t *testing.T, mutate func(*Config), releases func(v map[stri
 		t.Fatal(err)
 	}
 	p := New(cfg, proxyKey, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	// the signed releases name https://api.stripe.com: a test never reaches the internet
+	p.upstream.Transport = loopbackOnly{}
 	now, _ := v["now"].(json.Number).Int64()
 	p.now = func() time.Time { return time.Unix(now, 0) }
 	ctx, cancel := context.WithCancel(context.Background())
@@ -295,4 +304,15 @@ func TestASigningKeyFromAFile(t *testing.T) {
 	if got := "SHA256:" + base64.RawStdEncoding.EncodeToString(sum[:]); got != fp {
 		t.Fatalf("registered %s, the file's key is %s", got, fp)
 	}
+}
+
+// loopbackOnly: the upstream transport of the tests - a request to anything but
+// this host fails as an unreachable upstream does, wherever the tests run.
+type loopbackOnly struct{}
+
+func (loopbackOnly) RoundTrip(r *http.Request) (*http.Response, error) {
+	if ip := net.ParseIP(r.URL.Hostname()); ip == nil || !ip.IsLoopback() {
+		return nil, errors.New("tests do not reach " + r.URL.Host)
+	}
+	return http.DefaultTransport.RoundTrip(r)
 }

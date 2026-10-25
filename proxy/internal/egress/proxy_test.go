@@ -65,6 +65,7 @@ type fakeProvenza struct {
 	liftedSHA  string
 	headers    map[string]http.Header // the last request's headers, by path
 	creds      []map[string]any       // what /egress-proxy/credentials serves instead, when set
+	orgID      any                    // the organization the proxy's registration names (default 3)
 }
 
 func (f *fakeProvenza) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -107,7 +108,11 @@ func (f *fakeProvenza) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		f.encKey = enc
-		reply(200, map[string]any{"proxy_id": 1, "org_id": 3})
+		org := f.orgID
+		if org == nil {
+			org = 3
+		}
+		reply(200, map[string]any{"proxy_id": 1, "org_id": org})
 	case "/api/v1/egress-proxy/credentials":
 		if !byProxy {
 			reply(401, nil)

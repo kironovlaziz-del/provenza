@@ -320,8 +320,8 @@ func TestOnlyAVouchedCredentialOpens(t *testing.T) {
 	fake, _, _, p := enforcingProxy(t, func(c *Config) {
 		c.Policy.Pin = ev["pin"].(string)
 		c.SigningKeyFile = keyFile
-	}, func(map[string]any) []map[string]any { return docs(ev) })
-	p.reg.OrgID = json.Number("1") // the organization the vectors' release is of
+	}, func(map[string]any) []map[string]any { return docs(ev) },
+		func(f *fakeProvenza) { f.orgID = 1 }) // the organization the vectors' release is of
 	cred := map[string]any{"object": "route", "object_id": 9, "envelope": s["envelope"], "sealer": s["proof"]}
 	serve := func(c map[string]any) map[credKey]openedCredential {
 		fake.mu.Lock()
