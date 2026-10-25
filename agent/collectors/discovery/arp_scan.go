@@ -103,15 +103,15 @@ func buildARPRequest(srcMAC net.HardwareAddr, srcIP, targetIP net.IP) []byte {
 	// Ethernet header
 	copy(frame[0:6], []byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff}) // dst: broadcast
 	copy(frame[6:12], srcMAC)                                    // src: us
-	binary.BigEndian.PutUint16(frame[12:14], 0x0806)            // EtherType ARP
+	binary.BigEndian.PutUint16(frame[12:14], 0x0806)             // EtherType ARP
 
 	// ARP payload
 	binary.BigEndian.PutUint16(frame[14:16], 1)      // HTYPE: Ethernet
 	binary.BigEndian.PutUint16(frame[16:18], 0x0800) // PTYPE: IPv4
-	frame[18] = 6                                     // HLEN
-	frame[19] = 4                                     // PLEN
+	frame[18] = 6                                    // HLEN
+	frame[19] = 4                                    // PLEN
 	binary.BigEndian.PutUint16(frame[20:22], 1)      // OPER: 1 = REQUEST (never 2)
-	copy(frame[22:28], srcMAC)                        // sender MAC
+	copy(frame[22:28], srcMAC)                       // sender MAC
 	copy(frame[28:32], srcIP.To4())                  // sender IP
 	// target MAC left zero (unknown - that's what we're asking)
 	copy(frame[38:42], targetIP.To4()) // target IP

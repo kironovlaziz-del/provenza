@@ -13,6 +13,7 @@ from app.schemas.shadow_ai import ShadowSightingCreate
 from app.schemas.telemetry import (
     AGENT_EVENT_TYPE,
     DOMAIN_EVENT_TYPE,
+    HEARTBEAT_EVENT_TYPE,
     LOCAL_SIGNAL_EVENT_TYPES,
     TelemetryEventIn,
     TelemetryIngestResponse,
@@ -121,6 +122,9 @@ class TelemetryService:
        (Claude Code, Cursor, CrewAI, ...) found running; recorded per
        device in discovered_agents for review in Discovery -> Agents Found.
 
+    4. "agent_heartbeat" (endpoint agent >= 1.4.0) - the agent is alive:
+       its device is refreshed and nothing else is recorded.
+
     Every event also refreshes its device (endpoint_devices), so the list
     of reporting machines keeps itself current.
     """
@@ -146,6 +150,8 @@ class TelemetryService:
         devices = await self._upsert_devices(org_id, ingestion_source_id, events)
 
         for event in events:
+            if event.event_type == HEARTBEAT_EVENT_TYPE:
+                continue  # the device was refreshed above; nothing else to record
             if event.event_type == AGENT_EVENT_TYPE:
                 self._log_raw_event(org_id, ingestion_source_id, event, matched_policy_status=None)
                 found = await self._handle_agent_detected(org_id, devices[_host_id(event)], event)

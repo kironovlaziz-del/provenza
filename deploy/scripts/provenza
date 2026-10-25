@@ -19,6 +19,9 @@
 #   provenza backup                database and files backup now
 #   provenza run <command...>      one-off backend command (create-admin, alembic, ...)
 #   provenza units                 re-render the units after editing deploy/.env
+#   provenza edge setup|refresh|status
+#                                  the egress proxy and the endpoint agent on this
+#                                  host, keys included (deploy/scripts/edge.sh)
 #
 # Services: postgres redis migrate backend worker beat frontend caddy
 #           prometheus grafana alertmanager
@@ -155,6 +158,7 @@ cmd_rebuild() {
   systemctl start provenza.target --no-block
   wait_ready 300 backend worker frontend || die "not healthy after the restart: provenza logs backend"
   podman image prune -f >/dev/null 2>&1 || true  # the previous build's layers
+  bash "$DEPLOY_DIR/scripts/edge.sh" refresh || warn "the edge services were not refreshed: provenza edge refresh"
   ok "running $rev (provenza status)"
 }
 
@@ -188,6 +192,7 @@ case "$cmd" in
   backup)  exec "$DEPLOY_DIR/scripts/backup.sh" ;;
   run)     exec "$DEPLOY_DIR/scripts/run.sh" "$@" ;;
   units)   exec "$DEPLOY_DIR/scripts/units.sh" install ;;
+  edge)    exec bash "$DEPLOY_DIR/scripts/edge.sh" "$@" ;;
   -h|--help|help|"") usage ;;
   *) usage; die "unknown command: $cmd" ;;
 esac

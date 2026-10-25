@@ -30,6 +30,7 @@ Grafana and Alertmanager on the loopback interface.
 | `scripts/run.sh` | One-off backend commands (`create-admin`, key rotation, `alembic`) |
 | `scripts/backup.sh`, `restore.sh` | Backups |
 | `scripts/migrate-from-docker.sh` | Moves an existing Docker compose installation to Podman |
+| `scripts/edge.sh`, `edge/` | The egress proxy and the endpoint agent on this host, keys included (`provenza edge setup`; see docs/self-hosting.md) |
 
 Each container is a systemd service named after it: `provenza-postgres`,
 `provenza-backend`, `provenza-caddy`, and so on. They are all part of

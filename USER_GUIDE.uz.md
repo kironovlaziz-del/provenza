@@ -291,6 +291,11 @@ kompyuteriga) o‘rnatiladigan kichik native dastur. U lokal AI
 vositalarini (ishlayotgan jarayonlar, tinglayotgan portlar, model
 fayllari) aniqlaydi va yoqilgan bo‘lsa, tarmoq xizmatlarini kashf qiladi.
 
+Provenza serverining o‘zida hech narsa qilish shart emas: o‘rnatuvchi
+agentni u yerda kaliti bilan ishga tushiradi (`provenza edge setup`,
+[Self-hosting](docs/self-hosting.md) ga qarang) va uning qurilmasi darhol
+ro‘yxatda paydo bo‘ladi. Boshqa har qanday mashinada:
+
 1. *Endpoint agent* turidagi **Ingestion Source** yarating va kalitni
    nusxalang.
 2. Kalit va server manzilini agentning `config.json` fayliga kiriting

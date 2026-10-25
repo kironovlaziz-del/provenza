@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"shadow-ai-agent/collectors"
 	"shadow-ai-agent/collectors/discovery"
@@ -52,6 +53,8 @@ func main() {
 		log.Println("[Init] Network discovery disabled (set discovery_enabled=true to enable)")
 	}
 
+	go heartbeat(cfg, reporter, stopChan)
+
 	log.Println("[Init] All background collectors initialized successfully.")
 
 	// Handle graceful shutdown on OS signals
@@ -63,4 +66,20 @@ func main() {
 	close(stopChan)
 	reporter.Stop()
 	log.Println("[Shutdown] Agent stopped cleanly.")
+}
+
+// heartbeat: the agent is alive - its device is listed (Discovery -> Devices)
+// even when nothing AI-related runs on it.
+func heartbeat(cfg *config.AgentConfig, rep *reporters.Reporter, stop <-chan struct{}) {
+	t := time.NewTicker(time.Duration(cfg.HeartbeatSec) * time.Second)
+	defer t.Stop()
+	for {
+		rep.Submit(reporters.TelemetryEvent{EventType: "agent_heartbeat", ActionTaken: "monitored",
+			UserID: os.Getenv("USER")})
+		select {
+		case <-stop:
+			return
+		case <-t.C:
+		}
+	}
 }

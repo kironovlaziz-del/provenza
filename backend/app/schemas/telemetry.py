@@ -13,7 +13,10 @@ LOCAL_SIGNAL_EVENT_TYPES = {"process_detected", "network_conn", "local_model_fou
 # An AI agent product found running (endpoint agent >= 1.2.0); payload
 # {"product": "<catalog id>", "process_name", "matched_by"}.
 AGENT_EVENT_TYPE = "agent_detected"
-KNOWN_EVENT_TYPES = {DOMAIN_EVENT_TYPE, AGENT_EVENT_TYPE} | LOCAL_SIGNAL_EVENT_TYPES
+# The endpoint agent is alive (agent >= 1.4.0): its device is listed even when
+# nothing AI-related runs there. It refreshes the device only - nothing is logged.
+HEARTBEAT_EVENT_TYPE = "agent_heartbeat"
+KNOWN_EVENT_TYPES = {DOMAIN_EVENT_TYPE, AGENT_EVENT_TYPE, HEARTBEAT_EVENT_TYPE} | LOCAL_SIGNAL_EVENT_TYPES
 
 
 class TelemetryEventIn(BaseModel):

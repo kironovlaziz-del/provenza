@@ -1,6 +1,6 @@
 #!/bin/sh
 # Provenza backend entrypoint. One image, several roles:
-#   api | worker | beat | migrate | create-admin [args] | <any command>
+#   api | worker | beat | migrate | create-admin [args] | edge-keys [args] | <any command>
 # Refuses to start with missing or well-known default secrets.
 set -eu
 
@@ -54,7 +54,7 @@ role="${1:-api}"
 [ "$#" -gt 0 ] && shift
 
 case "$role" in
-  api|worker|beat|migrate|create-admin)
+  api|worker|beat|migrate|create-admin|edge-keys)
     check_secrets
     wait_for "${POSTGRES_HOST:-postgres}" "${POSTGRES_PORT:-5432}" postgres
     ;;
@@ -90,6 +90,9 @@ case "$role" in
     ;;
   create-admin)
     exec python scripts/create_admin.py "$@"
+    ;;
+  edge-keys)
+    exec python scripts/edge_keys.py "$@"
     ;;
   *)
     exec "$role" "$@"
