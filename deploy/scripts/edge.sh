@@ -28,7 +28,9 @@
 # signed policy release (Policies -> Signed policy), for sensors that follow
 # the signed policy; they take effect when the administrators sign it.
 
-set -euo pipefail
+set -Eeuo pipefail
+# never stop without a word (set -e)
+trap 'printf "edge.sh: failed at line %s: %s\n" "$LINENO" "$BASH_COMMAND" >&2' ERR
 # shellcheck source=deploy/scripts/lib.sh
 . "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib.sh"
 
@@ -46,9 +48,10 @@ UNIT_SRC="$DEPLOY_DIR/edge"
 ORG="" WANT_PROXY=1 WANT_AGENT=1 WANT_SENSOR=0 SENSOR_GUARD=""
 CHANGED_PROXY=0 CHANGED_AGENT=0 CHANGED_SENSOR=0
 
-usage() { sed -n '2,/^set -e/p' "$0" | grep '^#' | sed 's/^# \{0,1\}//'; exit 0; }
+usage() { sed -n '2,/^set -/p' "$0" | grep '^#' | sed 's/^# \{0,1\}//'; exit 0; }
 
-conf_get() { sed -n "s/^$1=//p" "$EDGE_CONF" 2>/dev/null | tail -n1; }
+# A value from /etc/provenza-edge.conf; nothing when the file does not exist yet.
+conf_get() { [ -f "$EDGE_CONF" ] || return 0; sed -n "s/^$1=//p" "$EDGE_CONF" | tail -n1; }
 conf_set() {
   touch "$EDGE_CONF"; chmod 644 "$EDGE_CONF"
   if grep -q "^$1=" "$EDGE_CONF"; then sed -i "s|^$1=.*|$1=$2|" "$EDGE_CONF"; else echo "$1=$2" >>"$EDGE_CONF"; fi
