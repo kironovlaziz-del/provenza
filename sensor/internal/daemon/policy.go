@@ -26,20 +26,24 @@ import (
 // redirected queries to 127.0.0.1:<dnsBasePort+index>.
 const dnsBasePort = 15353
 
-// pattern is a workload pattern plus the workload it points to.
+// pattern is a workload pattern plus the workload it points to. Signed
+// patterns (prio 0, signedwl.go) are matched before the server's (prio 1).
 type pattern struct {
-	p   cgroups.Pattern
-	wid uint32
+	p    cgroups.Pattern
+	wid  uint32
+	prio int
 }
 
 func (p pattern) Match(rel string) bool { return p.p.Match(rel) }
 
 // applyPolicy pushes a new policy into the kernel and updates all local
 // state (patterns, cgroup map, uid map, DNS names).
-func (d *Daemon) applyPolicy(ctx context.Context, p *config.Policy) error {
-	if err := p.Check(); err != nil {
+func (d *Daemon) applyPolicy(ctx context.Context, server *config.Policy) error {
+	if err := server.Check(); err != nil {
 		return fmt.Errorf("policy check: %w", err)
 	}
+	// held to the signed release, when this sensor follows one (signedwl.go)
+	p, notes := d.effectivePolicy(server)
 
 	// Build patterns and the list of kernel workloads.
 	var pats []pattern
@@ -47,8 +51,15 @@ func (d *Daemon) applyPolicy(ctx context.Context, p *config.Policy) error {
 	wls := make(map[uint32]*wlState, len(p.Workloads))
 	idx := 0
 	for _, w := range p.Workloads {
+		prio := 1
+		if w.Signed {
+			prio = 0
+		}
 		for _, raw := range w.CgroupPatterns {
-			pats = append(pats, pattern{p: cgroups.NewPattern(raw, w.ID), wid: w.ID})
+			pats = append(pats, pattern{p: cgroups.NewPattern(raw, w.ID), wid: w.ID, prio: prio})
+		}
+		for _, raw := range w.ExtraPatterns {
+			pats = append(pats, pattern{p: cgroups.NewPattern(raw, w.ID), wid: w.ID, prio: 1})
 		}
 		kw := kern.Workload{
 			ID:       w.ID,
@@ -71,7 +82,8 @@ func (d *Daemon) applyPolicy(ctx context.Context, p *config.Policy) error {
 		wls[w.ID] = ws
 		idx++
 	}
-	sort.Slice(pats, func(i, j int) bool { return pats[i].p.Raw < pats[j].p.Raw })
+	pats = sortPatterns(pats)
+	kws = append(kws, proxyWorkload()) // proxyrun.go: always there, used only by verified proxies
 
 	if err := d.kernel.ApplyPolicy(kws); err != nil {
 		return fmt.Errorf("apply policy: %w", err)
@@ -79,23 +91,20 @@ func (d *Daemon) applyPolicy(ctx context.Context, p *config.Policy) error {
 
 	// Rewrite the uid->workload map: keep only the current set.
 	newUIDs := map[uint32]uint32{}
-	for _, w := range p.Workloads {
-		for _, name := range w.RunAsUsers {
-			uid, err := lookupUID(name)
-			if err != nil {
-				slog.Warn("run_as_user", "name", name, "err", err)
-				continue
-			}
-			newUIDs[uid] = w.ID
-			if !d.uidSet[uid] {
-				if err := d.kernel.SetUID(uid, w.ID); err != nil {
-					slog.Warn("set uid", "uid", uid, "err", err)
-				}
-			} else {
-				if err := d.kernel.SetUID(uid, w.ID); err != nil {
-					slog.Warn("set uid", "uid", uid, "err", err)
-				}
-			}
+	signedUID := map[uint32]bool{}
+	for _, u := range userAssignments(p.Workloads) {
+		uid, err := lookupUID(u.name)
+		if err != nil {
+			slog.Warn("run_as_user", "name", u.name, "err", err)
+			continue
+		}
+		if signedUID[uid] {
+			continue // a signed workload has it
+		}
+		signedUID[uid] = u.signed
+		newUIDs[uid] = u.wid
+		if err := d.kernel.SetUID(uid, u.wid); err != nil {
+			slog.Warn("set uid", "uid", uid, "err", err)
 		}
 	}
 	for uid := range d.uidSet {
@@ -111,6 +120,8 @@ func (d *Daemon) applyPolicy(ctx context.Context, p *config.Policy) error {
 	// Store the current state before walking cgroups: the walk uses patterns.
 	d.mu.Lock()
 	d.policy = p
+	d.serverPolicy = server
+	d.signedNotes = notes
 	d.patterns = pats
 	d.wls = wls
 	d.lastPolicyAt = time.Now()
@@ -126,7 +137,7 @@ func (d *Daemon) applyPolicy(ctx context.Context, p *config.Policy) error {
 		slog.Warn("bump epoch", "err", err)
 	}
 
-	if err := client.SavePolicy(d.cfg.StateDir, p); err != nil {
+	if err := client.SavePolicy(d.cfg.StateDir, server); err != nil {
 		slog.Warn("save policy", "err", err)
 	}
 
@@ -136,7 +147,8 @@ func (d *Daemon) applyPolicy(ctx context.Context, p *config.Policy) error {
 }
 
 // resyncCgroups walks every cgroup and rewrites the governed set so it
-// matches the current patterns. Run cgroups (provenza-agent-N-*) are kept.
+// matches the current patterns. Run cgroups (provenza-agent-N-*) are kept,
+// and so are egress proxy run cgroups (provenza-proxy-*, proxyrun.go).
 func (d *Daemon) resyncCgroups() error {
 	dirs, err := cgroups.Walk(d.cfg.CgroupRoot)
 	if err != nil {
@@ -154,6 +166,8 @@ func (d *Daemon) resyncCgroups() error {
 		var ok bool
 		if agent, isRun := cgroups.RunAgent(dir.Rel, dir.UID); isRun {
 			wid, ok = d.workloadForAgent(agent)
+		} else if cgroups.RunProxy(dir.Rel, dir.UID) {
+			wid, ok = d.proxyWid(dir.ID, dir.Rel), true
 		} else {
 			wid, ok = matchPattern(pats, dir.Rel)
 		}
@@ -197,19 +211,61 @@ func (d *Daemon) cgroupWalkLoop(ctx context.Context) {
 	}
 }
 
-// workloadForAgent returns the workload whose agent_id is n.
+// workloadForAgent returns the workload whose agent_id is n (a signed one first).
 func (d *Daemon) workloadForAgent(n int64) (uint32, bool) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	if d.policy == nil {
 		return 0, false
 	}
-	for _, w := range d.policy.Workloads {
-		if w.AgentID != nil && *w.AgentID == n {
-			return w.ID, true
+	for _, signed := range []bool{true, false} {
+		for _, w := range d.policy.Workloads {
+			if w.Signed == signed && w.AgentID != nil && *w.AgentID == n {
+				return w.ID, true
+			}
 		}
 	}
 	return 0, false
+}
+
+type userAssignment struct {
+	name   string
+	wid    uint32
+	signed bool
+}
+
+// userAssignments: which workload governs each run_as_user - a signed
+// workload's own users first, then everything the server added.
+func userAssignments(ws []config.Workload) []userAssignment {
+	var out []userAssignment
+	for _, w := range ws {
+		if w.Signed {
+			for _, u := range w.RunAsUsers {
+				out = append(out, userAssignment{u, w.ID, true})
+			}
+		}
+	}
+	for _, w := range ws {
+		users := w.RunAsUsers
+		if w.Signed {
+			users = w.ExtraUsers
+		}
+		for _, u := range users {
+			out = append(out, userAssignment{u, w.ID, false})
+		}
+	}
+	return out
+}
+
+// sortPatterns: signed first, then by text (a stable order across polls).
+func sortPatterns(pats []pattern) []pattern {
+	sort.Slice(pats, func(i, j int) bool {
+		if pats[i].prio != pats[j].prio {
+			return pats[i].prio < pats[j].prio
+		}
+		return pats[i].p.Raw < pats[j].p.Raw
+	})
+	return pats
 }
 
 // matchPattern returns the workload id of the first pattern matching rel.

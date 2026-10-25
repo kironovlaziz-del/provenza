@@ -159,6 +159,12 @@ python tools/provenza_audit.py checkpoint checkpoint.json --fingerprint SHA256:.
 
 # today's log extends the checkpoint you saved last month
 python tools/provenza_audit.py consistency consistency.json --pinned saved-checkpoint.json
+
+# a signed policy release (GET /policy-releases/{id}): the quorum's passkeys signed exactly it
+python tools/provenza_audit.py release release.json --passkey SHA256:...
+
+# an approved action's receipt, with the approver's passkey
+python tools/provenza_audit.py receipt receipt.json --approver-passkey SHA256:...
 ```
 
 Exit status 0 = verified, 1 = not verified, 2 = bad input. Take the

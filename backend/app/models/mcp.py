@@ -31,6 +31,9 @@ class MCPServer(Base):
     detected_version = Column(String(20))              # what the last sync spoke
     auth_header = Column(String(100), nullable=False, default="Authorization")
     auth_secret_encrypted = Column(Text)               # full header value, e.g. "Bearer ..."
+    # where the credential lives: none, sealed (to egress proxies), local (a proxy's configuration);
+    # auth_secret_encrypted is kept only until it is sealed (POST /egress/credentials/seal-legacy)
+    credential_source = Column(String(10), nullable=False, default="none", server_default="none")
     enabled = Column(Boolean, nullable=False, default=True)
     timeout_seconds = Column(Integer, nullable=False, default=30)
     server_info = Column(JSONB)                        # self-reported by the server: display only

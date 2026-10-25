@@ -8,7 +8,12 @@ from app.core.security import verify_password, create_access_token
 from app.core.config import settings
 import jwt
 
+from typing import Any, Dict, Optional
+
+from pydantic import BaseModel
+
 from app.core import rate_limit, sessions
+from app.services import signing_sessions
 from app.schemas.user import LoginResult, MfaLogin, Token, UserLogin
 from app.models.user import User
 from app.models.organization import Organization
@@ -124,10 +129,7 @@ async def login(
                                         expires_delta=timedelta(minutes=MFA_TOKEN_MINUTES))
         return {"mfa_required": True, "mfa_token": mfa_token}
 
-    access_token = create_access_token(
-        data={"sub": str(user.id)},
-        expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES),
-    )
+    access_token = await signing_sessions.issue_token(db, user, request)
     return {"access_token": access_token, "token_type": "bearer"}
 
 
@@ -159,16 +161,22 @@ async def login_second_factor(data: MfaLogin, request: Request, db: AsyncSession
     org_id, uid = user.org_id, user.id
     await db.commit()
     await AuditService(db).log(org_id, uid, "user", uid, "login_second_factor", {"with": used})
-    access_token = create_access_token(data={"sub": str(uid)},
-                                       expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES))
+    user = await db.get(User, uid)
+    access_token = await signing_sessions.issue_token(db, user, request)
     return {"access_token": access_token, "token_type": "bearer"}
 
 
+class LogoutIn(BaseModel):
+    # the session key's own revocation: {"statement": {"type": "provenza.session.revoke",
+    # "v", "session_id", "issued_at"}, "signature"} (app/services/signing_sessions.py)
+    revocation: Optional[Dict[str, Any]] = None
+
+
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
-async def logout(request: Request):
+async def logout(request: Request, data: Optional[LogoutIn] = None, db: AsyncSession = Depends(get_db)):
     """End this session: its token is refused from now on, not only forgotten
-    by the browser (app/core/sessions.py). Always 204 - a token that is already
-    invalid has nothing left to end."""
+    by the browser (app/core/sessions.py), and a signer's signing session
+    ends. Always 204 - a token that is already invalid has nothing left to end."""
     auth = request.headers.get("Authorization", "")
     if auth.lower().startswith("bearer "):
         try:
@@ -177,4 +185,11 @@ async def logout(request: Request):
         except jwt.PyJWTError:
             return None
         sessions.revoke(payload.get("jti"), payload.get("exp"))
+        sid = payload.get("sid")
+        if isinstance(sid, str) and not payload.get("purpose"):
+            from app.models.signing import SigningSession
+
+            s = await db.get(SigningSession, sid)
+            if s is not None and str(s.user_id) == str(payload.get("sub")):
+                await signing_sessions.sign_out(db, s, data.revocation if data else None)
     return None

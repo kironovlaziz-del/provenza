@@ -413,3 +413,67 @@ func sendUDP(addr *net.UDPAddr) error {
 	_, err = c.Write([]byte("x"))
 	return err
 }
+
+// An egress proxy run cgroup (internal/daemon/proxyrun.go): held - governed,
+// under no workload - nothing gets out; verified, it may connect anywhere
+// and accept connections; held again, nothing gets out again.
+func TestEgressProxyHeldAndVerified(t *testing.T) {
+	e := setup(t)
+	const held, verified = uint32(0xFFFFFF00), uint32(0xFFFFFF01)
+
+	outside, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	defer outside.Close()
+	go acceptAll(outside)
+	addr := outside.Addr().(*net.TCPAddr)
+
+	if err := e.k.ApplyPolicy([]kern.Workload{kern.EgressProxy(verified)}); err != nil {
+		t.Fatalf("ApplyPolicy: %v", err)
+	}
+	cg := e.newWorkloadCgroup("proxy")
+	e.govern(cg, held)
+	if err := dialTCP(addr, time.Second); err == nil {
+		t.Fatal("a held proxy got out")
+	}
+
+	e.govern(cg, verified)
+	if err := e.k.BumpEpoch(); err != nil {
+		t.Fatal(err)
+	}
+	if err := dialTCP(addr, 2*time.Second); err != nil {
+		t.Fatalf("a verified proxy could not connect: %v", err)
+	}
+	if err := sendUDP(&net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: addr.Port}); err != nil {
+		t.Fatalf("a verified proxy could not send UDP: %v", err)
+	}
+	// it accepts connections (a listener made in its cgroup)
+	in, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen in the proxy's cgroup: %v", err)
+	}
+	defer in.Close()
+	go acceptAll(in)
+	if err := dialTCP(in.Addr().(*net.TCPAddr), 2*time.Second); err != nil {
+		t.Fatalf("the verified proxy did not accept a connection: %v", err)
+	}
+
+	e.govern(cg, held)
+	if err := e.k.BumpEpoch(); err != nil {
+		t.Fatal(err)
+	}
+	if err := dialTCP(addr, time.Second); err == nil {
+		t.Fatal("a proxy held again got out")
+	}
+}
+
+func acceptAll(ln net.Listener) {
+	for {
+		c, err := ln.Accept()
+		if err != nil {
+			return
+		}
+		_ = c.Close()
+	}
+}

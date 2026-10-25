@@ -19,6 +19,7 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/kironovlaziz-del/provenza/sensor/internal/bpfobj"
 	"github.com/kironovlaziz-del/provenza/sensor/internal/cgroups"
@@ -26,9 +27,14 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-// runRequest is what `provenza-sensor run --agent N -- cmd` asks the daemon.
+// runRequest is what `provenza-sensor run --agent N -- cmd` (or
+// `--proxy run -- provenza-proxy ...`, proxyrun.go) asks the daemon.
 type runRequest struct {
-	AgentID int64 `json:"agent_id"`
+	AgentID int64 `json:"agent_id,omitempty"`
+	Proxy   bool  `json:"proxy,omitempty"`
+	// ProxyConfig: the egress proxy itself, telling the SHA-256 of the
+	// configuration it read (proxyrun.go)
+	ProxyConfig string `json:"proxy_config,omitempty"`
 }
 
 type runResponse struct {
@@ -42,7 +48,7 @@ type runResponse struct {
 // before it answers; the command is then exec'd in place. exec keeps the
 // cgroup, so there is no moment at which the command or anything it starts
 // runs ungoverned, and the caller needs no write access to cgroup.procs.
-func RunCommand(ctx context.Context, cfgPath string, agentID int64, argv []string) error {
+func RunCommand(ctx context.Context, cfgPath string, agentID int64, proxy bool, argv []string) error {
 	cfg, err := config.LoadClient(cfgPath)
 	if err != nil {
 		return err
@@ -54,7 +60,7 @@ func RunCommand(ctx context.Context, cfgPath string, agentID int64, argv []strin
 	}
 	defer conn.Close()
 
-	if err := json.NewEncoder(conn).Encode(runRequest{AgentID: agentID}); err != nil {
+	if err := json.NewEncoder(conn).Encode(runRequest{AgentID: agentID, Proxy: proxy}); err != nil {
 		return err
 	}
 	var resp runResponse
@@ -83,7 +89,12 @@ func RunCommand(ctx context.Context, cfgPath string, agentID int64, argv []strin
 		return err
 	}
 	_ = ctx
-	return syscall.Exec(path, argv, os.Environ())
+	env := os.Environ()
+	if proxy {
+		// the egress proxy reports the configuration it read here (proxyrun.go)
+		env = append(env, "PROVENZA_SENSOR_SOCKET="+cfg.RunSocket)
+	}
+	return syscall.Exec(path, argv, env)
 }
 
 // startRunServer listens on cfg.RunSocket and answers run requests. Started
@@ -182,6 +193,19 @@ func (s *runServer) handle(conn net.Conn) {
 	if err := json.NewDecoder(bufio.NewReader(conn)).Decode(&req); err != nil {
 		return
 	}
+	if req.ProxyConfig != "" {
+		rel, err := s.d.reportConfig(int(cred.Pid), req.ProxyConfig)
+		if err != nil {
+			_ = json.NewEncoder(conn).Encode(runResponse{Error: err.Error()})
+			return
+		}
+		_ = json.NewEncoder(conn).Encode(runResponse{Cgroup: rel})
+		return
+	}
+	if req.Proxy {
+		s.handleProxy(conn, cred)
+		return
+	}
 	if req.AgentID <= 0 {
 		_ = json.NewEncoder(conn).Encode(runResponse{Error: "invalid agent id"})
 		return
@@ -233,6 +257,78 @@ func (s *runServer) handle(conn net.Conn) {
 	}
 	slog.Info("run", "agent", req.AgentID, "uid", cred.Uid, "pid", cred.Pid, "cgroup", rel)
 	_ = json.NewEncoder(conn).Encode(runResponse{Cgroup: rel})
+}
+
+// handleProxy: a cgroup for the egress proxy, held until what runs in it is
+// a pinned proxy binary (proxyrun.go).
+func (s *runServer) handleProxy(conn net.Conn, cred *unix.Ucred) {
+	if !proxyUserAllowed(cred.Uid, s.d.cfg.ProxyUsers, lookupUID) {
+		_ = json.NewEncoder(conn).Encode(runResponse{Error: fmt.Sprintf(
+			"uid %d may not start the egress proxy (proxy_users in sensor.json)", cred.Uid)})
+		return
+	}
+	if _, why := s.d.pinnedProxyBinaries(); why != "" {
+		_ = json.NewEncoder(conn).Encode(runResponse{Error: why})
+		return
+	}
+	if _, why := s.d.pinnedProxyConfigs(); why != "" {
+		_ = json.NewEncoder(conn).Encode(runResponse{Error: why})
+		return
+	}
+	rel, err := cgroups.NewProxyRun(s.d.cfg.CgroupRoot, "")
+	if err != nil {
+		_ = json.NewEncoder(conn).Encode(runResponse{Error: err.Error()})
+		return
+	}
+	fail := func(what string, err error) {
+		_ = cgroups.Remove(s.d.cfg.CgroupRoot, rel)
+		_ = json.NewEncoder(conn).Encode(runResponse{Error: fmt.Sprintf("%s: %v", what, err)})
+	}
+	id, err := cgroups.ID(filepath.Join(s.d.cfg.CgroupRoot, rel))
+	if err != nil {
+		fail("cgroup id", err)
+		return
+	}
+	// held in the kernel before anything runs in it
+	if err := s.d.kernel.SetCgroup(id, bpfobj.CgEntry{Wid: widProxyHeld, Kind: bpfobj.CgGoverned}); err != nil {
+		fail("govern cgroup", err)
+		return
+	}
+	s.d.mu.Lock()
+	s.d.proxies[id] = &proxyRun{rel: rel, id: id, since: time.Now(), reason: "starting"}
+	s.d.cgWid[id] = widProxyHeld
+	s.d.mu.Unlock()
+	if err := s.d.kernel.BumpEpoch(); err != nil {
+		slog.Warn("bump epoch", "err", err)
+	}
+	if err := cgroups.Move(s.d.cfg.CgroupRoot, rel, int(cred.Pid)); err != nil {
+		s.d.mu.Lock()
+		delete(s.d.proxies, id)
+		delete(s.d.cgWid, id)
+		s.d.mu.Unlock()
+		_ = s.d.kernel.DeleteCgroup(id)
+		fail("move into cgroup", err)
+		return
+	}
+	slog.Info("run: egress proxy", "uid", cred.Uid, "pid", cred.Pid, "cgroup", rel)
+	_ = json.NewEncoder(conn).Encode(runResponse{Cgroup: rel})
+	s.d.kickProxyCheck()
+}
+
+// proxyUserAllowed: root, or a user proxy_users names (by name or uid).
+func proxyUserAllowed(uid uint32, users []string, lookup func(string) (uint32, error)) bool {
+	if uid == 0 {
+		return true
+	}
+	for _, u := range users {
+		if n, err := strconv.ParseUint(u, 10, 32); err == nil && uint32(n) == uid {
+			return true
+		}
+		if n, err := lookup(u); err == nil && n == uid {
+			return true
+		}
+	}
+	return false
 }
 
 // peerIsClient checks that pid is still a provenza-sensor process of user uid.

@@ -108,14 +108,14 @@ async def test_sdk_invokes_an_http_tool_through_provenza(client, admin_token, tm
     api = _Api()
     try:
         r = await client.post("/api/v1/http-tools", json={
-            "name": "db.read", "method": "POST", "url": api.base + "/query", "auth_secret": "Bearer db-key",
+            "name": "db.read", "method": "POST", "url": api.base + "/query",
             "input_schema": {"type": "object", "required": ["query"], "properties": {"query": {"type": "string"}}},
         }, headers=auth_headers(admin_token))
         assert r.status_code == 200, r.text
         agent = await _sdk_agent(client, admin_token, tmp_path)
         out = await agent.ainvoke("db.read", {"query": "select 1"})
         assert out["status"] == 200 and out["body"]["ok"] is True and out["action_id"]
-        assert api.calls[-1]["headers"]["Authorization"] == "Bearer db-key"
+        assert "Authorization" not in api.calls[-1]["headers"]   # no credential here (app/pvp/sealed.py)
         with pytest.raises(ProvenzaDenied):
             await agent.ainvoke("db.read", {"query": 1})
         assert len(api.calls) == 1

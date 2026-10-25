@@ -66,7 +66,8 @@ class FakePeer:
     def handle(self, request: httpx.Request) -> httpx.Response:
         if self.down:
             raise httpx.ConnectError("down")
-        assert request.headers.get("authorization") == SECRET   # the gateway injects the peer's secret
+        # the server holds no peer credential (app/pvp/sealed.py): a peer that takes one is reached via a proxy
+        assert request.headers.get("authorization") is None
         if request.method == "GET":
             return httpx.Response(200, json={**self.card(), "signatures": [{"protected": "x", "signature": "y"}]})
         body = json.loads(request.content)
@@ -117,7 +118,7 @@ async def _agent(client, token, tools=("a2a.helper",)):
 
 async def _peer(client, token, **extra):
     r = await client.post(PEERS, json={"slug": "helper", "name": "Helper", "card_url": CARD_URL,
-                                       "auth_secret": SECRET, **extra}, headers=auth_headers(token))
+                                       **extra}, headers=auth_headers(token))
     assert r.status_code == 200, r.text
     return r.json()
 
@@ -385,9 +386,9 @@ class TestAdmin:
     async def test_secret_never_returned_and_card_pinned(self, client, admin_token, peer):
         p = await _ready(client, admin_token)
         listed = await client.get(PEERS, headers=auth_headers(admin_token))
-        assert SECRET not in listed.text
         row = listed.json()[0]
-        assert row["has_secret"] and row["served"] and row["protocol_version"] == "1.0"
+        assert not row["has_secret"] and row["credential_source"] == "none"
+        assert row["served"] and row["protocol_version"] == "1.0"
         assert row["endpoint_url"] == ENDPOINT and "signatures" not in row["card"]
 
     @pytest.mark.asyncio

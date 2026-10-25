@@ -32,7 +32,7 @@ import { createHash } from "node:crypto";
 import { beacon as egressBeacon, connect as egressConnect, egressPayload } from "./egressCheck.js";
 import { ProvenzaApprovalRequired, ProvenzaConfigError, ProvenzaDenied, ProvenzaRequestError, ProvenzaUnavailable } from "./errors.js";
 import * as ids from "./identity.js";
-import { PROXY_ACTION_TYPE, proxyDescriptor, RawBytes } from "./proxy.js";
+import { PROXY_ACTION_TYPE, PROXY_REQUEST_HEADER, proxyDescriptor, proxyHeaders, RawBytes } from "./proxy.js";
 import { trimEnd } from "./text.js";
 
 export interface ToolSpec {
@@ -54,6 +54,17 @@ export interface Check {
   policyId: number | null;
   /** Allowed: the signed permit the tool verifies (permitHeaders(check), see permit.ts). */
   permit: string | null;
+  /** The agent's signed action.request behind this check, with its public key(s):
+   *  an egress proxy that enforces the signed policy verifies it itself (proxyHeaders). */
+  request?: SignedRequest | null;
+}
+
+export interface SignedRequest {
+  payload: Record<string, Json>;
+  signature: string;
+  public_key: string;
+  pq_signature?: string;
+  pq_public_key?: string;
 }
 
 export interface AgentOptions {
@@ -69,6 +80,8 @@ export interface AgentOptions {
   recordMode?: "sync" | "background";
   timeoutMs?: number;
   fetch?: Fetch;
+  /** an egress proxy (http://host:8443): HTTP tools are called there - it holds their credentials */
+  egressProxy?: string;
 }
 
 export interface CallOptions {
@@ -108,6 +121,7 @@ export class Agent {
   readonly identityPath: string;
   readonly auditLog: AuditLog;
   private readonly pending = new Set<Promise<unknown>>();
+  private toolsClient: Client | null = null;
 
   private constructor(readonly identity: ids.Identity, private readonly client: Client | null, opts: Required<Pick<AgentOptions,
     "failOpen" | "recordMode">> & { name: string; mode: "connected" | "standalone"; identityPath: string;
@@ -162,8 +176,11 @@ export class Agent {
       }
       client = new Client(serverUrl, identity.apiKey, timeoutMs, fetchImpl);
     }
-    return new Agent(identity, client, { name, mode, identityPath, auditLog, failOpen: Boolean(options.failOpen), recordMode,
-                                         allowedTools: options.allowedTools ?? null });
+    const agent = new Agent(identity, client, { name, mode, identityPath, auditLog, failOpen: Boolean(options.failOpen),
+                                                recordMode, allowedTools: options.allowedTools ?? null });
+    const proxyUrl = options.egressProxy || env.PROVENZA_EGRESS_PROXY;
+    if (proxyUrl && client) agent.toolsClient = new Client(proxyUrl, identity.apiKey, Math.max(timeoutMs, 60_000), fetchImpl, "");
+    return agent;
   }
 
   get agentId(): number | null {
@@ -204,27 +221,38 @@ export class Agent {
   // ------------------------------------------------------------------ protocol
 
   private checkBody(spec: ToolSpec, input: Json, chainId: number | null) {
+    return this.signedCheck(spec, input, chainId).body;
+  }
+
+  /** The check body, and the signed request as an egress proxy verifies it. */
+  private signedCheck(spec: ToolSpec, input: Json, chainId: number | null) {
     const actionType = spec.actionType ?? "tool_call";
     // signed, with a single-use nonce and the time: the server refuses a check
     // the agent did not sign, so a stolen API key alone gets nothing
     const nonce = randomBytes(16).toString("hex");
     const issuedAt = Math.floor(Date.now() / 1000);
-    const [signature, pqSignature] = this.identity.keys.sign({
+    const payload: Record<string, Json> = {
       type: "action.request", agent_id: this.agentId, chain_id: chainId, action_type: actionType,
       tool_name: spec.name, input_sha256: contentHash(input), tool_version: spec.version ?? null,
       tool_digest: spec.digest ?? null, nonce, issued_at: issuedAt,
-    });
-    return {
+    };
+    const keys = this.identity.keys;
+    const [signature, pqSignature] = keys.sign(payload);
+    const body = {
       agent_id: this.agentId, chain_id: chainId, action_type: actionType, tool_name: spec.name, input,
       ...(spec.version ? { tool_version: spec.version } : {}), ...(spec.digest ? { tool_digest: spec.digest } : {}),
       nonce, issued_at: issuedAt, signature, ...(pqSignature ? { pq_signature: pqSignature } : {}),
     };
+    const request: SignedRequest = { payload, signature, public_key: keys.publicKey,
+      ...(pqSignature ? { pq_signature: pqSignature, pq_public_key: keys.pqPublicKey ?? undefined } : {}) };
+    return { body, request };
   }
 
-  private static checkOf(res: any, spec: ToolSpec, input: Json, chainId: number | null): Check {
+  private static checkOf(res: any, spec: ToolSpec, input: Json, chainId: number | null,
+                         request: SignedRequest | null = null): Check {
     return { checkId: res.check_id, decision: res.decision, reason: res.reason ?? "", tool: spec.name,
              actionType: spec.actionType ?? "tool_call", input, chainId, incidentType: res.incident_type ?? null,
-             policyId: res.policy_id ?? null, permit: res.permit ?? null };
+             policyId: res.policy_id ?? null, permit: res.permit ?? null, request };
   }
 
   /** Ask before doing something that is not a governed tool. */
@@ -232,8 +260,8 @@ export class Agent {
     const spec = { name: tool, actionType: opts.actionType };
     const inp = asInput(input);
     const chainId = opts.chainId !== undefined ? opts.chainId : chainStore.getStore() ?? null;
-    return Agent.checkOf(await this.connected().post("/agents/actions/check", this.checkBody(spec, inp, chainId)), spec, inp,
-                         chainId);
+    const { body, request } = this.signedCheck(spec, inp, chainId);
+    return Agent.checkOf(await this.connected().post("/agents/actions/check", body), spec, inp, chainId, request);
   }
 
   /** Check a request to send through the egress proxy (SDK mode). Send it with
@@ -244,9 +272,30 @@ export class Agent {
     return this.check("proxy." + route, input, { actionType: PROXY_ACTION_TYPE, chainId: opts.chainId });
   }
 
+  /** The headers for a request through the egress proxy: a check when
+   *  Provenza answers (proxyCheck); while it is unreachable, only the agent's
+   *  signed request - a proxy that enforces the signed policy then judges it by
+   *  the signed release alone, for at most the release's offline time, and
+   *  Provenza records it when it is back (docs/pvp/edge.md, section 6). */
+  async proxyRequestHeaders(route: string, method: string, path: string,
+                            opts: { query?: RawBytes; body?: RawBytes; chainId?: number | null } = {}):
+    Promise<Record<string, string>> {
+    try {
+      return proxyHeaders(await this.proxyCheck(route, method, path, opts));
+    } catch (exc) {
+      if (!(exc instanceof ProvenzaUnavailable)) throw exc;
+      const input = proxyDescriptor(route, method, path, opts) as unknown as Json;
+      const chainId = opts.chainId !== undefined ? opts.chainId : chainStore.getStore() ?? null;
+      const { request } = this.signedCheck({ name: "proxy." + route, actionType: PROXY_ACTION_TYPE }, input, chainId);
+      return { [PROXY_REQUEST_HEADER]: Buffer.from(JSON.stringify(request), "utf8").toString("base64url") };
+    }
+  }
+
   /**
-   * Call an HTTP tool registered in Provenza: the server checks, calls the API
-   * with the credential it holds and records - in one operation. Allowed:
+   * Call an HTTP tool registered in Provenza: checked, called and recorded in
+   * one operation - by the egress proxy, which holds the tool's credential
+   * (egressProxy / PROVENZA_EGRESS_PROXY), or by Provenza's gateway for a tool
+   * that takes none. Allowed:
    * { decision, reason, action_id, status, body } ("error" / "withheld" instead
    * of "body" when the API failed or the answer was refused). A refusal throws
    * ProvenzaDenied (ProvenzaApprovalRequired when it waits for a human).
@@ -255,7 +304,14 @@ export class Agent {
     const spec = { name: tool };
     const inp = asInput(args);
     const chainId = opts.chainId !== undefined ? opts.chainId : chainStore.getStore() ?? null;
-    const res = await this.connected().post("/http-tools/call", this.checkBody(spec, inp, chainId));
+    const res = this.toolsClient
+      ? await this.toolsClient.post("/_tools/call", this.checkBody(spec, inp, chainId), true, (raw) => {
+        // the HTTP request itself, signed: a proxy in enforce mode requires it on every path
+        const desc = proxyDescriptor("_tools", "POST", "/call", { body: raw }) as unknown as Json;
+        const { request } = this.signedCheck({ name: "proxy._tools", actionType: PROXY_ACTION_TYPE }, desc, chainId);
+        return { [PROXY_REQUEST_HEADER]: Buffer.from(JSON.stringify(request), "utf8").toString("base64url") };
+      })
+      : await this.connected().post("/http-tools/call", this.checkBody(spec, inp, chainId));
     if (res.decision !== "allowed") {
       const Cls = res.decision === "pending_approval" ? ProvenzaApprovalRequired : ProvenzaDenied;
       throw new Cls(tool, res.reason ?? "", res.decision ?? "denied", res.incident_type ?? null, null, res.action_id ?? null);
@@ -299,6 +355,29 @@ export class Agent {
     return c.post(`/agents/egress-check/${started.check_id}/report`, {
       results, beacon_reached: beaconReached, signature, ...(pqSignature ? { pq_signature: pqSignature } : {}),
     });
+  }
+
+  /** Where a held call stands: { action_id, decision (pending_approval, approved, denied, expired),
+   *  decided_at, used, redeemable_until }. */
+  async approval(actionId: number): Promise<any> {
+    if (!Number.isSafeInteger(actionId) || actionId < 1) throw new RangeError("actionId must be a positive integer");
+    return this.connected().get(`/agents/actions/${actionId}/decision`);
+  }
+
+  /**
+   * Wait until a person decides on a held call (ProvenzaApprovalRequired.actionId) or the
+   * timeout passes, and return the last state. When it is "approved", make exactly the
+   * same call again - same arguments, same chain - before redeemable_until: it runs once.
+   * Nothing is replayed for you.
+   */
+  async waitForApproval(actionId: number, opts: { timeoutMs?: number; intervalMs?: number } = {}): Promise<any> {
+    const deadline = Date.now() + (opts.timeoutMs ?? 600_000);
+    for (;;) {
+      const state = await this.approval(actionId);
+      if (state.decision !== "pending_approval" || Date.now() >= deadline) return state;
+      const wait = Math.max(500, Math.min(opts.intervalMs ?? 5_000, deadline - Date.now()));
+      await new Promise((r) => setTimeout(r, wait));
+    }
   }
 
   /** The HTTP tools this agent may invoke: name, description, method, input_schema. */

@@ -35,7 +35,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import require_role
 from app.core.config import settings
-from app.core.crypto import encrypt_secret
 from app.core.database import get_db
 from app.core.errors import api_error
 from app.core.outbound import validate_url
@@ -233,7 +232,7 @@ class MCPServerIn(BaseModel):
     url: str = Field(max_length=500)
     protocol: Protocol = "auto"
     auth_header: str = "Authorization"
-    auth_secret: Optional[str] = Field(default=None, min_length=1, max_length=4000)
+    auth_secret: Optional[str] = Field(default=None, max_length=4000)   # refused: sealed in the browser
     timeout_seconds: int = Field(default=30, ge=1, le=120)
     enabled: bool = True
 
@@ -254,7 +253,7 @@ class MCPServerUpdate(BaseModel):
     url: Optional[str] = Field(default=None, max_length=500)
     protocol: Optional[Protocol] = None
     auth_header: Optional[str] = None
-    auth_secret: Optional[str] = Field(default=None, min_length=1, max_length=4000)
+    auth_secret: Optional[str] = Field(default=None, max_length=4000)   # refused: sealed in the browser
     clear_secret: bool = False
     timeout_seconds: Optional[int] = Field(default=None, ge=1, le=120)
     enabled: Optional[bool] = None
@@ -278,7 +277,8 @@ class MCPServerOut(BaseModel):
     protocol: str
     detected_version: Optional[str]
     auth_header: str
-    has_secret: bool          # the secret itself is never returned
+    has_secret: bool          # a credential is configured (never readable here)
+    credential_source: str    # none, sealed (to the egress proxies), local (in their configuration)
     enabled: bool
     timeout_seconds: int
     server_info: Optional[Dict[str, Any]]
@@ -304,7 +304,8 @@ class MCPToolOut(BaseModel):
 def _server_out(s: MCPServer) -> MCPServerOut:
     return MCPServerOut(
         id=s.id, slug=s.slug, name=s.name, url=s.url, protocol=s.protocol, detected_version=s.detected_version,
-        auth_header=s.auth_header, has_secret=bool(s.auth_secret_encrypted), enabled=s.enabled,
+        auth_header=s.auth_header, has_secret=s.credential_source != "none",
+        credential_source=s.credential_source, enabled=s.enabled,
         timeout_seconds=s.timeout_seconds, server_info=s.server_info, last_synced_at=s.last_synced_at,
         last_error=s.last_error, created_at=s.created_at)
 
@@ -342,10 +343,13 @@ async def list_servers(db: AsyncSession = Depends(get_db), user: User = Depends(
 
 @admin_router.post("", response_model=MCPServerOut)
 async def create_server(data: MCPServerIn, db: AsyncSession = Depends(get_db), user: User = Depends(_admin)):
+    from app.services import credentials
+
+    if data.auth_secret is not None:
+        raise credentials.plaintext_refused()
     org_id, user_id = user.org_id, user.id
     server = MCPServer(org_id=org_id, slug=data.slug, name=data.name, url=data.url, protocol=data.protocol,
                        auth_header=data.auth_header, timeout_seconds=data.timeout_seconds, enabled=data.enabled,
-                       auth_secret_encrypted=encrypt_secret(data.auth_secret, org_id) if data.auth_secret else None,
                        created_by=user_id)
     db.add(server)
     try:
@@ -354,30 +358,33 @@ async def create_server(data: MCPServerIn, db: AsyncSession = Depends(get_db), u
         await db.rollback()
         raise api_error(status.HTTP_409_CONFLICT, "mcp.slug_taken", slug=data.slug)
     await AuditService(db).log(org_id, user_id, "mcp_server", server.id, "created",
-                               {"slug": data.slug, "url": data.url, "has_secret": bool(data.auth_secret)})
+                               {"slug": data.slug, "url": data.url})
     return _server_out(await _get_server(db, org_id, server.id))
 
 
 @admin_router.patch("/{server_id}", response_model=MCPServerOut)
 async def update_server(server_id: int, data: MCPServerUpdate, db: AsyncSession = Depends(get_db),
                         user: User = Depends(_admin)):
+    from app.services import credentials
+
+    if data.auth_secret is not None:
+        raise credentials.plaintext_refused()
     org_id, user_id = user.org_id, user.id
     server = await _get_server(db, org_id, server_id)
     changes = data.model_dump(exclude_unset=True, exclude={"auth_secret", "clear_secret"})
     for key, value in changes.items():
         if value is not None:
             setattr(server, key, value)
-    if data.auth_secret:
-        server.auth_secret_encrypted = encrypt_secret(data.auth_secret, org_id)
-    elif data.clear_secret:
-        server.auth_secret_encrypted = None
+    if data.clear_secret:
+        await credentials.forget(db, "mcp_server", server_id)
+        server.credential_source, server.auth_secret_encrypted = "none", None
     if "url" in changes or "protocol" in changes:
         server.detected_version = None  # detect again: it may be another server now
     await db.commit()
     _forget(server_id)
     await AuditService(db).log(org_id, user_id, "mcp_server", server_id, "updated",
-                               {"fields": sorted(changes), "secret": "set" if data.auth_secret
-                                else "cleared" if data.clear_secret else "unchanged"})
+                               {"fields": sorted(changes), "secret": "cleared" if data.clear_secret
+                                else "unchanged"})
     return _server_out(await _get_server(db, org_id, server_id))
 
 
@@ -386,6 +393,9 @@ async def delete_server(server_id: int, db: AsyncSession = Depends(get_db), user
     org_id, user_id = user.org_id, user.id
     server = await _get_server(db, org_id, server_id)
     slug = server.slug
+    from app.services import credentials
+
+    await credentials.forget(db, "mcp_server", server_id)
     await db.delete(server)
     await db.commit()
     _forget(server_id)
@@ -397,6 +407,9 @@ async def delete_server(server_id: int, db: AsyncSession = Depends(get_db), user
 async def sync_server(server_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(_admin)):
     org_id, user_id = user.org_id, user.id
     server = await _get_server(db, org_id, server_id)
+    if (server.credential_source or "none") != "none":
+        # this server cannot reach it: the egress proxies holding its credential sync it
+        raise api_error(status.HTTP_409_CONFLICT, "mcp.synced_by_proxy")
     _forget(server_id)
     try:
         report = await MCPGateway(db).sync(org_id, server)

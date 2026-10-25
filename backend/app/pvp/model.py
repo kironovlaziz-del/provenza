@@ -300,6 +300,30 @@ class PVPActionRecord(_ActionShape):
         }
 
 
+class PVPWitness(BaseModel):
+    """What the executor signed about the action with its own key (an egress
+    proxy, app/pvp/witness.py): the statement names the action exactly, and
+    says whether the executor itself verified the agent's key and which signed
+    policy it judged by."""
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    by: Literal["egress_proxy"]
+    key_fingerprint: StrictStr
+    public_key: Base64
+    statement: Dict[StrictStr, Any]
+    signature: Base64
+
+    def problems(self, action: Dict[str, Any]) -> List[str]:
+        from app.pvp import witness
+
+        out = witness.problems(self.statement, action)
+        if key_fingerprint(self.public_key) != self.key_fingerprint:
+            out.append("witness_fingerprint")
+        if not verify_agent_signature(self.statement, self.signature, None, self.public_key, None):
+            out.append("witness_signature_invalid")
+        return out
+
+
 class PVPAction(_ActionShape):
     """A recorded action - allowed or not: refused attempts are recorded too."""
     type: Literal["action"] = "action"
@@ -317,7 +341,10 @@ class PVPAction(_ActionShape):
     # None = the agent performed the call and reported it; a gateway name =
     # Provenza performed it on the agent's behalf (no agent signature: the
     # gateway is the witness, and the audit log holds its record)
-    executed_by: Optional[Literal["mcp_gateway", "a2a_gateway", "egress_proxy", "http_gateway"]] = None
+    executed_by: Optional[Literal["mcp_gateway", "a2a_gateway", "egress_proxy", "http_gateway",
+                                  "llm_gateway"]] = None
+    # the executor's own signed receipt, when it has a key (an egress proxy)
+    witness: Optional[PVPWitness] = None
 
     @model_validator(mode="after")
     def _evidence(self):
@@ -331,9 +358,11 @@ class PVPAction(_ActionShape):
         this very action. Empty for a consistent signed record - and for an
         action a Provenza gateway executed, which no agent signs (the gateway
         is the witness; a seal commits to its record)."""
-        if self.signed_by is None:
-            return [] if self.executed_by is not None and self.signed_payload is None else ["unsigned"]
         out = []
+        if self.witness is not None:
+            out += self.witness.problems(self.model_dump(mode="json"))
+        if self.signed_by is None:
+            return out if self.executed_by is not None and self.signed_payload is None else out + ["unsigned"]
         p = self.signed_payload or {}
         expected = {"check_id": self.check_id, "agent_id": self.agent_id, "chain_id": self.chain_id,
                     "action_type": self.action_type, "tool_name": self.tool_name,
@@ -458,7 +487,13 @@ class PVPReceipt(_Message):
         audit log (audit_proof, provenza.audit.proof/1) -> signed checkpoint
 
     current_decision is what the action's verdict is now (a human approval
-    may have changed a pending one) - informational, not part of the proof."""
+    may have changed a pending one) - informational, not part of the proof.
+
+    approval: when a person's approval let the call run, that approval as
+    signed - {"approval_id", "action_id", "statement", "signature",
+    "session_public_key", "certificate", "passkey"}: the session key signed
+    the decision on exactly this call, and the passkey certified that key
+    (docs/pvp/edge.md, section 3)."""
     type: Literal["receipt"] = "receipt"
     action: PVPAction
     check: Optional[PVPCheck] = None
@@ -466,6 +501,7 @@ class PVPReceipt(_Message):
     audit_proof: Optional[Dict[StrictStr, Any]] = None
     checkpoint: Optional[PVPCheckpoint] = None
     current_decision: Optional[Decision] = None
+    approval: Optional[Dict[StrictStr, Any]] = None
 
     def problems(self) -> List[str]:
         a = self.action

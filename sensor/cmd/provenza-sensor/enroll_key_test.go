@@ -7,6 +7,7 @@ package main
 import (
 	"io"
 	"os"
+	"strings"
 	"testing"
 )
 
@@ -38,5 +39,26 @@ func TestResolveKey(t *testing.T) {
 	// no key and no terminal to ask on: an error, not a hang
 	if _, err := resolveKey("", pipeWith(t, ""), io.Discard); err == nil {
 		t.Fatal("want an error without a key or a terminal")
+	}
+}
+
+func TestEnrollKeepsTheSignedPolicy(t *testing.T) {
+	before := map[string]any{"policy": map[string]any{"pin": "tofu"}, "proxy_binaries": []any{"ab"}, "cgroup_root": "/x"}
+	o := enrollOpts{CgroupRoot: "/sys/fs/cgroup"}
+	cfg := enrollConfig(o, "https://p", before)
+	if cfg["policy"].(map[string]any)["pin"] != "tofu" || cfg["proxy_binaries"] == nil || cfg["cgroup_root"] != "/sys/fs/cgroup" {
+		t.Fatalf("%v", cfg)
+	}
+	o.Pin = strings.Repeat("a", 64)
+	if cfg := enrollConfig(o, "https://p", before); cfg["policy"].(map[string]any)["pin"] != o.Pin {
+		t.Fatalf("%v", cfg)
+	}
+	o.Pin = "none"
+	if _, ok := enrollConfig(o, "https://p", before)["policy"]; ok {
+		t.Fatal("--policy-pin none kept the pin")
+	}
+	if err := enroll(t.Context(), enrollOpts{URL: "https://p", Key: "pvz_sensor_x", Pin: "nope"}); err == nil ||
+		!strings.Contains(err.Error(), "--policy-pin") {
+		t.Fatalf("a bad pin: %v", err)
 	}
 }

@@ -125,9 +125,19 @@ func (d *Daemon) handleMkdir(raw []byte) {
 	}
 	path := strings.TrimRight(string(m.Path[:]), "\x00")
 	rel := strings.TrimPrefix(path, "/")
+	if d.cgUnder != "" {
+		// the kernel names it in the whole hierarchy; patterns are under cgroup_root
+		var ok bool
+		if rel, ok = strings.CutPrefix(rel, d.cgUnder+"/"); !ok {
+			return
+		}
+	}
 
 	switch m.Type {
 	case bpfobj.EvMkdir:
+		if d.runCgroupOfOurs(rel) {
+			return // governed by the daemon when it made it, not by a pattern
+		}
 		d.mu.Lock()
 		pats := append([]pattern(nil), d.patterns...)
 		d.mu.Unlock()
@@ -146,6 +156,7 @@ func (d *Daemon) handleMkdir(raw []byte) {
 		}
 		d.mu.Lock()
 		delete(d.cgWid, m.Cgid)
+		delete(d.proxies, m.Cgid)
 		d.mu.Unlock()
 	}
 }

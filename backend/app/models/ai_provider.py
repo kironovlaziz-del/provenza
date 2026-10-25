@@ -14,10 +14,14 @@ class AIProvider(Base):
     risk_score = Column(Float, default=0.0)
     base_url = Column(String(500))
     default_model = Column(String(255))
+    # kept only until it is sealed to the egress proxies (POST /egress/credentials/seal-legacy);
+    # nothing reads it otherwise
     api_key_encrypted = Column(Text)
+    # where the API key lives: none, sealed (to egress proxies), local (a proxy's configuration)
+    credential_source = Column(String(10), nullable=False, default="none", server_default="none")
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
     @property
     def has_credentials(self) -> bool:
-        return bool(self.api_key_encrypted)
+        return (self.credential_source or "none") != "none"

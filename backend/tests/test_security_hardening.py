@@ -151,6 +151,12 @@ async def test_a_password_change_ends_the_other_sessions(client, db_session, org
     org, admin = org_and_users["org"], org_and_users["admin"]
     phone = await _login(client, org.slug, admin.email, "TestPass123!")
     laptop = await _login(client, org.slug, admin.email, "TestPass123!")
+    # an administrator's second sign-in waits until the open session lets it in
+    sid = (await client.get("/api/v1/auth/session", headers=auth_headers(laptop))).json()["session_id"]
+    r = await client.post("/api/v1/auth/session/admit", json={"blocked_session_id": sid,
+                                                              "password": "TestPass123!"},
+                          headers=auth_headers(phone))
+    assert r.status_code == 204, r.text
     r = await client.post("/api/v1/users/me/password", json={"current_password": "TestPass123!",
                                                              "new_password": "NewPass456!x"},
                           headers=auth_headers(laptop))

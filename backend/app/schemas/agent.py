@@ -273,6 +273,9 @@ class ActionRecordRequest(BaseModel):
 
 class ActionDenyRequest(BaseModel):
     reason: Optional[str] = None
+    # signed when the reviewer's session can sign (see ApprovalDecision)
+    statement: Optional[Dict[str, Any]] = None
+    signature: Optional[str] = Field(default=None, max_length=200)
 
 
 class ActionOut(BaseModel):
@@ -376,6 +379,14 @@ class ApprovalDecision(BaseModel):
     """ASI09: the reviewer approves the exact arguments they saw."""
     input_sha256: str = Field(min_length=64, max_length=64)
     confirmation: Optional[str] = Field(default=None, max_length=255)
+    # the provenza.approval statement (POST /actions/{id}/statement) and the
+    # session key's signature over it (base64 Ed25519)
+    statement: Optional[Dict[str, Any]] = None
+    signature: Optional[str] = Field(default=None, max_length=200)
+
+
+class DecisionStatementIn(BaseModel):
+    decision: Literal["approved", "denied"]
 
 
 class KeyRevokeIn(BaseModel):

@@ -26,6 +26,9 @@ class HttpTool(Base):
     input_schema = Column(JSONB)                              # JSON Schema of the arguments (object)
     auth_header = Column(String(100), nullable=False, default="Authorization")
     auth_secret_encrypted = Column(Text)                      # the full header value, e.g. "Bearer ..."
+    # where the credential lives: none, sealed (to egress proxies), local (a proxy's configuration);
+    # auth_secret_encrypted is kept only until it is sealed (POST /egress/credentials/seal-legacy)
+    credential_source = Column(String(10), nullable=False, default="none", server_default="none")
     timeout_seconds = Column(Integer, nullable=False, default=30)
     max_response_bytes = Column(Integer, nullable=False, default=1024 * 1024)
     send_permit = Column(Boolean, nullable=False, default=True)   # forward the signed permit (body methods)

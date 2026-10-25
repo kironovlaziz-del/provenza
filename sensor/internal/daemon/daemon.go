@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/cilium/ebpf/ringbuf"
+	"github.com/kironovlaziz-del/provenza/sensor/internal/cgroups"
 	"github.com/kironovlaziz-del/provenza/sensor/internal/client"
 	"github.com/kironovlaziz-del/provenza/sensor/internal/config"
 	"github.com/kironovlaziz-del/provenza/sensor/internal/kern"
@@ -70,6 +71,28 @@ type Daemon struct {
 	// previousValidUntil bounds it; a zero time means unbounded.
 	previousSigningKey ed25519.PublicKey
 	previousValidUntil time.Time
+
+	// The signed policy this sensor follows itself (nil: no policy.pin) and
+	// the administrators' commands it carried out (signed.go).
+	signed *signedPolicy
+	seen   *seenCommands
+	ks     *sensorKill // the local kill switch (killswitch.go); nil without a pin
+	// under mu: the policy as the server sent it (d.policy is what is
+	// enforced: it held to the signed release) and what that left out
+	serverPolicy *config.Policy
+	signedNotes  []string
+
+	// Egress proxy run cgroups by cgroup id, under mu (proxyrun.go).
+	proxies   map[uint64]*proxyRun
+	proxyKick chan struct{}
+	exes      *exeHashes
+
+	// where cgroup_root sits in its hierarchy (cgroups.Under): "" normally
+	cgUnder string
+
+	// tests: the clock (nil: time.Now) and what runs a verified signed command (nil: execute)
+	clock    func() time.Time
+	executor func(context.Context, client.Command) error
 }
 
 // wlState holds the per-workload data the daemon needs at runtime.
@@ -114,6 +137,21 @@ func New(cfgPath, version string) (*Daemon, error) {
 		act:       newActivityBuffer(cl),
 		stats:     newStatsRing(),
 		startTime: time.Now(),
+		signed:    newSignedPolicy(cfg.Policy.Pin, cfg.StateDir),
+		seen:      newSeenCommands(cfg.StateDir),
+		proxies:   map[uint64]*proxyRun{},
+		proxyKick: make(chan struct{}, 1),
+		exes:      newExeHashes(),
+		cgUnder:   cgroups.Under(cfg.CgroupRoot),
+	}
+	if d.signed != nil {
+		if err := d.signed.load(); err != nil {
+			return nil, fmt.Errorf("signed policy: %w", err)
+		}
+		d.ks = newSensorKill(cfg.StateDir)
+	} else {
+		slog.Warn("no policy.pin: commands are verified with the server's command key, " +
+			"not an administrator's passkey (docs/pvp/edge.md, section 5)")
 	}
 	d.dns = newDNSServers(d)
 
@@ -162,8 +200,19 @@ func (d *Daemon) Run(ctx context.Context) error {
 	} else if err := d.applyPolicy(ctx, p); err != nil {
 		slog.Error("apply cached policy", "err", err)
 	}
+	d.refreshSigned(ctx)
 	if err := d.refreshPolicy(ctx); err != nil {
 		slog.Warn("initial policy fetch failed", "err", err)
+	}
+	d.checkKillSwitch(ctx) // offline for too long before this start: isolated at once
+	d.mu.Lock()
+	none := d.policy == nil
+	d.mu.Unlock()
+	if none {
+		// no policy yet: a verified egress proxy can still get out
+		if err := d.kernel.ApplyPolicy([]kern.Workload{proxyWorkload()}); err != nil {
+			slog.Warn("apply proxy workload", "err", err)
+		}
 	}
 
 	if err := d.kernel.Attach(kern.Options{
@@ -206,6 +255,8 @@ func (d *Daemon) Run(ctx context.Context) error {
 	start(d.viol.run)
 	start(d.act.run)
 	start(d.statsLoop)
+	start(d.proxyLoop)
+	start(d.killLoop)
 	d.dns.start(ctx, &wg)
 
 	<-ctx.Done()
@@ -235,6 +286,7 @@ func (d *Daemon) policyLoop(ctx context.Context) {
 			return
 		case <-time.After(interval):
 		}
+		d.refreshSigned(ctx)
 		if err := d.refreshPolicy(ctx); err != nil {
 			if errors.Is(err, client.ErrUnauthorized) {
 				slog.Error("policy: sensor key rejected, keeping current policy")

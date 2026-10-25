@@ -9,6 +9,7 @@ import React, { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useDialog } from "@/components/Dialog";
 import { Form } from "@/components/Form";
+import { SealedCredential, sealNew } from "@/components/gateways/SealedCredential";
 import { EgressLockdown } from "@/components/gateways/EgressLockdown";
 import { errorMessage } from "@/lib/errors";
 import {
@@ -20,16 +21,20 @@ import {
   EgressProxy as Proxy,
   EgressRedemption,
   EgressRoute,
+  getKillSwitch,
+  type KillSwitch,
   listEgressProxies,
+  signKillSwitchLift,
   listEgressRedemptions,
   listEgressRoutes,
   revokeEgressProxy,
   updateEgressRoute,
 } from "@/lib/gateways_api";
+import { getLegacyCredentials, sealLegacyCredentials } from "@/lib/sealing";
 
 const EMPTY = {
   slug: "", name: "", upstream_url: "", methods: ["GET", "POST"] as string[], prefixes: "/",
-  credential_source: "server" as CredentialSource, auth_header: "Authorization", secret: "", max_mb: 8,
+  credential_source: "sealed" as CredentialSource, auth_header: "Authorization", secret: "", max_mb: 8,
 };
 
 function lines(text: string) {
@@ -79,12 +84,13 @@ function Routes() {
           <Form onSubmit={(e) => {
             e.preventDefault();
             act("new", async () => {
-              await createEgressRoute({
+              const route = await createEgressRoute({
                 slug: form.slug, name: form.name, upstream_url: form.upstream_url, methods: form.methods,
                 path_prefixes: lines(form.prefixes), credential_source: form.credential_source,
                 auth_header: form.auth_header, max_body_bytes: Math.round(form.max_mb * 1024 * 1024),
-                ...(form.credential_source === "server" && form.secret ? { secret: form.secret } : {}),
               });
+              // sealed here, to the proxies' keys: the server never receives it in clear text
+              if (form.credential_source === "sealed") await sealNew("route", route.id, form.secret);
               setForm(EMPTY);
               setShowForm(false);
             });
@@ -127,7 +133,7 @@ function Routes() {
                 <label htmlFor="eg-source">{t("gw.egress.credential")}</label>
                 <select id="eg-source" value={form.credential_source}
                         onChange={(e) => setForm({ ...form, credential_source: e.target.value as CredentialSource })}>
-                  {(["server", "local", "none"] as CredentialSource[]).map((c) => (
+                  {(["sealed", "local", "none"] as CredentialSource[]).map((c) => (
                     <option key={c} value={c}>{t(`gw.egress.cred_${c}`)}</option>
                   ))}
                 </select>
@@ -140,11 +146,12 @@ function Routes() {
                   <label htmlFor="eg-header">{t("gw.auth_header")}</label>
                   <input id="eg-header" maxLength={100} value={form.auth_header} onChange={(e) => setForm({ ...form, auth_header: e.target.value })} />
                 </div>
-                {form.credential_source === "server" && (
+                {form.credential_source === "sealed" && (
                   <div className="field">
                     <label htmlFor="eg-secret">{t("gw.secret")}</label>
                     <input id="eg-secret" type="password" autoComplete="new-password" maxLength={8000} value={form.secret}
-                           placeholder={t("gw.secret_placeholder")} onChange={(e) => setForm({ ...form, secret: e.target.value })} />
+                           placeholder={t("sealed.placeholder", "Sealed in this browser; the server never sees it")}
+                           onChange={(e) => setForm({ ...form, secret: e.target.value })} />
                   </div>
                 )}
                 <div className="field" style={{ maxWidth: 160 }}>
@@ -185,10 +192,7 @@ function Routes() {
                 <div className="hint-text">{r.path_prefixes.join(", ")}</div>
               </td>
               <td>
-                {t(`gw.egress.cred_${r.credential_source}`)}
-                {r.credential_source === "server" && (
-                  <div className="hint-text">{r.has_secret ? t("gw.has_secret") : t("gw.egress.no_secret")}</div>
-                )}
+                <SealedCredential obj="route" id={r.id} onChange={() => act(r.id, async () => undefined)} />
               </td>
               <td className="u-nowrap">
                 <div className="u-btn-row">
@@ -214,6 +218,86 @@ function Routes() {
   );
 }
 
+/** A proxy stopped by its local kill switch: its reconciliation report, lifted
+ *  by the passkeys of the quorum of the release it held before the outage. */
+function KillSwitchRow({ proxy, onChange }: { proxy: Proxy; onChange: () => void }) {
+  const { t, i18n } = useTranslation();
+  const [ks, setKs] = useState<KillSwitch | null>(null);
+  const [accept, setAccept] = useState<Record<string, boolean>>({});
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => { getKillSwitch(proxy.id).then(setKs).catch(() => setKs(null)); }, [proxy.id, proxy.last_seen_at]);
+  if (!ks) return null;
+  const all = ks.unsigned.every((id) => accept[id]);
+  return (
+    <tr>
+      <td colSpan={5}>
+        <div className="panel" style={{ borderColor: "var(--risk-critical)" }}>
+          <div className="panel-body">
+            <p className="error-text">
+              {t("gw.ks.stopped", { when: new Date(ks.engaged_at).toLocaleString(i18n.language), reason: ks.reason || "",
+                defaultValue: `Stopped by its local kill switch since ${ks.engaged_at} (${ks.reason || ""}): it refuses every request.` })}
+            </p>
+            <p className="hint-text">
+              {t("gw.ks.hint", { n: ks.release_before, defaultValue: `Its reconciliation report compares what this server states now with release #${ks.release_before}, which it held before the outage. A difference no signed release explains must be accepted here, or undone (the proxy then sends a new report). The quorum of release #${ks.release_before} lifts it.` })}
+            </p>
+            <table className="table-cards" style={{ fontSize: 12 }}>
+              <thead><tr><th>{t("gw.ks.item", "Item")}</th><th>{t("gw.status")}</th><th></th></tr></thead>
+              <tbody>
+                {ks.differences.length === 0 && <tr><td colSpan={3}>{t("gw.ks.none", "Nothing changed.")}</td></tr>}
+                {ks.differences.map((d) => (
+                  <tr key={d.id}>
+                    <td>{d.area} · {d.section} · <strong>{d.label}</strong>
+                      <div className="hint-text u-mono">{d.before ? d.before.slice(0, 12) : "—"} → {d.now ? d.now.slice(0, 12) : "—"}</div>
+                    </td>
+                    <td>
+                      <span className={`pill ${d.signed ? "pill-low" : "pill-high"}`}>
+                        {d.signed ? t("gw.ks.signed", "signed release") : t("gw.ks.unsigned", "not signed")}
+                      </span>
+                    </td>
+                    <td>
+                      {!d.signed && (
+                        <label style={{ fontSize: 12 }}>
+                          <input type="checkbox" checked={!!accept[d.id]}
+                                 onChange={(e) => setAccept({ ...accept, [d.id]: e.target.checked })} />{" "}
+                          {t("gw.ks.accept", "I accept it")}
+                        </label>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <p className="hint-text u-mono" style={{ fontSize: 12 }}>
+              {t("gw.ks.report", "Report")} {ks.report_sha256.slice(0, 16)}… · {t("gw.ks.signatures", {
+                n: ks.signers.length, q: ks.quorum, defaultValue: `${ks.signers.length} of ${ks.quorum} signatures` })}
+              {ks.signers.length > 0 && ` (${ks.signers.map((s) => s.email).join(", ")})`}
+            </p>
+            {ks.can_sign && (
+              <button className="btn btn-sm btn-primary" disabled={busy || !all} onClick={async () => {
+                setBusy(true);
+                setError(null);
+                try {
+                  setKs(await signKillSwitchLift(proxy.id, ks.unsigned.filter((id) => accept[id])));
+                  onChange();
+                } catch (err) {
+                  setError(errorMessage(err, t, t("gw.failed")));
+                } finally {
+                  setBusy(false);
+                }
+              }}>{t("gw.ks.sign", "Lift: sign with passkey")}</button>
+            )}
+            <p className="hint-text" style={{ fontSize: 12 }}>
+              {t("gw.ks.after", "The proxy checks the signatures itself and starts again; then sign a new policy release.")}
+            </p>
+            {error && <p className="error-text">{error}</p>}
+          </div>
+        </div>
+      </td>
+    </tr>
+  );
+}
+
 function Proxies() {
   const { t, i18n } = useTranslation();
   const { dialog, confirm } = useDialog();
@@ -223,7 +307,12 @@ function Proxies() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const refresh = () => listEgressProxies().then(setProxies);
+  const [legacy, setLegacy] = useState<{ count: number; proxies_with_keys: number } | null>(null);
+
+  const refresh = () => {
+    listEgressProxies().then(setProxies);
+    getLegacyCredentials().then(setLegacy).catch(() => setLegacy(null));
+  };
   useEffect(() => { refresh(); }, []);
 
   return (
@@ -232,6 +321,30 @@ function Proxies() {
       <div className="panel-header"><h2>{t("gw.egress.proxies")}</h2></div>
       <div className="panel-body">
         <p className="hint-text">{t("gw.egress.proxies_hint")}</p>
+        {legacy && legacy.count > 0 && (
+          <div className="panel u-mb-12" style={{ borderColor: "var(--risk-high)" }}>
+            <div className="panel-body">
+              <p>{t("sealed.legacy", { n: legacy.count, defaultValue: `This server still holds ${legacy.count} credentials from before. Nothing uses them until they are sealed to the proxies; then they are erased here.` })}</p>
+              {legacy.proxies_with_keys === 0
+                ? <p className="hint-text">{t("sealed.no_keys", "No egress proxy has registered its key yet: start one first.")}</p>
+                : (
+                  <button className="btn btn-sm btn-primary" disabled={busy} onClick={async () => {
+                    if (!(await confirm(t("sealed.legacy_confirm", { n: legacy.proxies_with_keys, defaultValue: `Seal them to the ${legacy.proxies_with_keys} proxies with a key and erase them here? A proxy added later needs them entered again.` })))) return;
+                    setBusy(true);
+                    setError(null);
+                    try {
+                      await sealLegacyCredentials();
+                      refresh();
+                    } catch (err) {
+                      setError(errorMessage(err, t, t("gw.failed")));
+                    } finally {
+                      setBusy(false);
+                    }
+                  }}>{t("sealed.legacy_seal", "Seal and erase")}</button>
+                )}
+            </div>
+          </div>
+        )}
         {revealed && (
           <div className="panel u-mb-12" style={{ borderColor: "var(--risk-critical)" }}>
             <div className="panel-body">
@@ -285,9 +398,22 @@ function Proxies() {
         <tbody>
           {proxies.length === 0 && <tr className="empty-row"><td colSpan={5}>{t("gw.egress.no_proxies")}</td></tr>}
           {proxies.map((p) => (
-            <tr key={p.id}>
+            <React.Fragment key={p.id}>
+            <tr>
               <td>{p.name}</td>
-              <td className="u-mono">{p.key_prefix}…</td>
+              <td className="u-mono">
+                {p.key_prefix}…
+                {p.key_fingerprint && (
+                  <div className="hint-text" title={t("gw.egress.signing_key_hint", "The proxy's own signing key: its receipts are checked with it")}>
+                    {p.key_fingerprint}
+                  </div>
+                )}
+                {p.encryption_key_fingerprint && (
+                  <div className="hint-text" title={t("gw.egress.encryption_key_hint", "The key credentials are sealed to: compare it with what the proxy logs on its host")}>
+                    🔒 {p.encryption_key_fingerprint}
+                  </div>
+                )}
+              </td>
               <td>
                 <span className={`pill ${p.enabled ? "pill-low" : "pill-neutral"}`}>
                   {p.enabled ? t("gw.enabled") : t("gw.egress.revoked")}
@@ -308,6 +434,8 @@ function Proxies() {
                 )}
               </td>
             </tr>
+            {p.enabled && <KillSwitchRow proxy={p} onChange={refresh} />}
+            </React.Fragment>
           ))}
         </tbody>
       </table>

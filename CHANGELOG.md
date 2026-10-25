@@ -8,6 +8,151 @@ this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **Enforce mode and the proxy's agent mode** ([docs/pvp/edge.md](docs/pvp/edge.md),
+  section 4.2). A setting of the signed policy (Policies → Signed policy →
+  settings, *Mode*; the bundle's `enforcement` section): in enforce mode no
+  action runs without the agent's own signature and the signed policy.
+  Provenza's own gateways execute nothing; `/agents/actions/check` only
+  observes (no permit, the reason says so) and what an agent records itself is
+  an observation; an egress proxy with `policy.mode` "enforce" takes on every
+  path - egress routes, `/_tools`, `/_llm`, `/_mcp`, `/_a2a` - only requests
+  the agent signed over the HTTP request itself (`X-Provenza-Request`,
+  `tool_name` "proxy.<first path segment>"), verified with the key the release
+  names and again by the server with the agent's registered key; a proxy
+  says `X-Provenza-Proxy-Mode: enforce` or takes part in nothing; a check the
+  agent did not sign is not redeemed; an action reported without a receipt
+  naming a signed release and the agent's verified signature raises a
+  critical `unenforced_action` incident. Switching it on takes effect at once,
+  switching it off needs a signed release. **Agent mode**: `provenza-proxy
+  -agent-identity <identity> -listen unix:<path> -upstream <proxy>` (a socket of
+  mode 0600; a loopback TCP address with a warning) signs
+  for clients that cannot (stock OpenAI, MCP, A2A clients, plain HTTP). The
+  SDKs sign `invoke` through a proxy as well. Migration `a7b8c9d0e1f2`
+  (`policy_signing_settings.enforcement`, `action_checks.agent_signed`).
+- **Closing the remaining bypasses** (edge.md §4.1, §5, §6-7).
+  The egress proxy's configuration is pinned like its binary: the proxy
+  reports the SHA-256 of the configuration it read to the sensor
+  (`PROVENZA_SENSOR_SOCKET`, set by `--proxy run`), and the run stays held
+  until the hash is in the signed manifest (`proxy_configs`, Policies →
+  Signed policy → egress proxy configurations; or `proxy_configs` in
+  sensor.json). Sealed credentials carry the sealing administrator's
+  session-key signature over the envelopes (`provenza.credential.sealed`;
+  `POST /egress/credentials/{object}/{id}/statement`, `.../countersign` for
+  envelopes sealed from credentials the server held): an enforcing proxy
+  opens only envelopes an administrator of its signed manifest vouched for,
+  and such a re-seal during an outage is a signed difference. An enforcing
+  proxy hashes the A2A card it fetched itself. Agent mode listens on a unix
+  socket of mode 0600 (`-listen unix:<path>`). Signed sensor commands are
+  valid for 4 minutes (a sensor takes at most 5); lift signatures for 12
+  hours (`expires_at`); a refused key (401, for a sensor also 403) is no
+  contact for the offline time. Migration `a7b8c9d0e1f2` also adds
+  `policy_signing_settings.proxy_configs` and `sealed_credentials.sealer`.
+- **Passkeys and one session per signer** ([docs/pvp/edge.md](docs/pvp/edge.md),
+  section 2). Administrators and approvers add passkeys in My profile -
+  a key kept on their phone or computer and unlocked with its PIN; Provenza
+  keeps only the public key. Each sign-in is confirmed once with the
+  passkey, which certifies a session key made in the browser
+  (non-extractable) and deleted at sign-out; sign-out is signed by it. A
+  signer has one session at a time: a second sign-in waits until the open
+  session lets it in with the passkey or refuses it, the attempt opens a
+  `session_conflict` incident and notification, and the waiting sign-in can
+  end the other session only with the passkey. API: `/auth/session`,
+  `/users/me/passkeys`. Setting `WEBAUTHN_RP_ID`.
+- **Working without the server; the local kill switch** (edge.md §6-7). An
+  egress proxy with `policy.mode` "enforce" sends, while Provenza is
+  unreachable, the egress-route requests an agent signed itself (the SDKs
+  fall back to that: `proxy_request_headers` / `proxyRequestHeaders`),
+  judged by the signed release alone (the agent's key from its manifest,
+  once; no approval, no delegation chain), keeps them with its receipts and
+  hands them over when the server answers (`POST /egress-proxy/offline-actions`):
+  they become actions, an unverifiable one with a critical incident. After the
+  release's `offline_seconds` it stops - also across restarts - and, when the
+  server answers, sends a reconciliation report signed with its key (the
+  manifest, Tool Registry and sealed credentials compared with the release
+  held before the outage; an incident per difference). The quorum of that
+  release lifts it under Egress → Proxies with their passkeys, accepting
+  every difference no signed release explains; the proxy checks them itself.
+  Pinned sensors isolate every workload after `offline_seconds` without the
+  server, or when the release has expired, and lift themselves when it answers.
+- **The egress sensor follows the signed policy** (edge.md §5). With
+  `policy.pin` (`enroll --policy-pin`, `install.sh --policy-pin`) a sensor
+  verifies the signed releases itself (`GET /egress-sensor/policy-release`)
+  and: runs a command only when an administrator signed it with a
+  passkey-certified session key (`provenza.sensor.command`, the signer an
+  administrator in the signed manifest, once per nonce); holds every
+  workload to its signed version (`egress_workloads` in the bundle - the
+  server can tighten, not loosen; signed patterns, users and agents first);
+  and on a proxy host started with `provenza-sensor --proxy run --
+  provenza-proxy ...` lets the proxy out only while every process runs a
+  binary whose SHA-256 the manifest pins (`proxy_binaries`, set with the
+  quorum) and none is traced. The sensor reports what it verified with its
+  heartbeat; the Runtime page shows it and marks signed commands 🔏. API:
+  `POST /egress-sensor/sensors/{id}/commands/statement`, `statement` and
+  `signature` on `POST .../commands`, `proof` on delivered commands,
+  `proxy_binaries` in `PUT /policy-releases/settings`.
+- **Credentials sealed to the egress proxies** (edge.md §4.1). A
+  credential typed in the interface - of an egress route, AI connection, MCP
+  server, A2A peer or HTTP tool - is sealed in the browser to each proxy's
+  own encryption key (X25519, HKDF-SHA256, AES-256-GCM, bound to the object
+  and the proxy); the server stores envelopes it cannot open and each proxy
+  opens only its own. The proxy derives its encryption key from its signing
+  key, registers it signed, and its fingerprint is in the signed manifest.
+  API: `/egress/proxy-keys`, `/egress/credentials/...`,
+  `GET /egress-proxy/credentials`. Credential source `sealed` (formerly
+  `server`), `local`, `none`. Each envelope is bound to the upstream's
+  origin: an object pointed elsewhere does not take its credential along.
+- **The gateways' protocols through the egress proxy** (spec.md §5.5): HTTP
+  tools (`/_tools/call`; SDKs: `egress_proxy` / `egressProxy` /
+  `PROVENZA_EGRESS_PROXY`), OpenAI chat completions to every connection type
+  (`/_llm/v1`), MCP (`/_mcp`) and A2A (`/_a2a/<peer>`). The server decides
+  each call from a plan - for LLM calls the messages' count and hash only -
+  and the proxy executes it with the credential sealed to it, judges it
+  under the signed policy when enforcing, and records metadata and hashes
+  with its receipt. Proxies sync the MCP servers and A2A peers they serve.
+  `local_secrets` take `"<object>:<id>"` keys and an optional `upstream`.
+- **AI connections in the signed policy** (`ai_providers`: type, base URL,
+  status): a release signed from now on fixes where a model's prompts go.
+- **The egress proxy enforces the signed policy itself** (spec.md §5.5,
+  edge.md §4). It verifies policy releases (quorum of the pinned manifest),
+  agents' signed requests (`X-Provenza-Request`, sent by the Python and JS
+  SDKs) and human approvals itself, evaluates the bundle with a Go port of
+  the server's evaluator (`proxy/internal/policy`, shared vectors
+  `sdk/testdata/policy-vectors.json`) and forwards only what both it and the
+  server allow, to the signed route. `policy.mode: "enforce"`, `policy.pin`,
+  `policy.require_agent_signature`.
+- **Proxy receipts.** The proxy has its own Ed25519 key (generated on its
+  host or `signing_key_file`, `provenza-proxy -genkey`), registered once;
+  every forwarded or refused request carries its signed receipt, kept in
+  the action's sealed evidence (`witness`) and in the proxy's hash-chained
+  log; `tools/provenza_audit.py receipt --proxy-fingerprint` checks it.
+  Fingerprints under Egress → Proxies and in the key manifest. API:
+  `/egress-proxy/key`, `/egress-proxy/policy-release`, `/egress-proxy/check-info`.
+- **Signed policy releases** ([docs/pvp/edge.md](docs/pvp/edge.md), section
+  3.1). Administrators freeze what decides allow or deny (agents' rights,
+  policies, the policy hierarchy, the Tool Registry, identity and provider
+  settings, the AI domain catalog, gateway settings and routes, MCP servers,
+  A2A peers, HTTP tools, egress routes) and the keys (signers' passkeys, the
+  quorum, agent key fingerprints, proxies, sensors) into a release and sign
+  it with their passkeys, up to a quorum. Once one is in force, an action
+  needs both the working copy and the release: tightening applies at once,
+  loosening only when signed; agents, agent keys and the rows that carry a
+  call must be the signed ones; approvals count only from passkeys in the
+  manifest. A release that does not verify or has expired allows nothing.
+  The *Signed policy* panel on the Policy hierarchy page and a banner for
+  administrators; API `/policy-releases`; `tools/provenza_audit.py release`
+  verifies a release offline. Notification event `policy_release`.
+- **Approvals are signed.** An approval of a held agent action is signed
+  with the reviewer's session key (certified by their passkey); only a
+  signed approval, checked again against exactly the repeated call, lets it
+  run. The receipt of the call carries the signed approval, and
+  `tools/provenza_audit.py receipt --approver-passkey <fingerprint>` checks
+  it offline. Passkeys show their fingerprint in My profile. API:
+  `POST /agents/actions/{id}/statement`.
+- **Approved calls run once.** After an approver allows a held call, the
+  agent repeats the same call (same agent, chain, tool and input) within
+  `APPROVAL_REDEEM_MINUTES` (default 60) and it runs, once. The agent asks
+  `GET /agents/actions/{id}/decision`; the SDKs wait with
+  `wait_for_approval` / `waitForApproval`.
 - **Agents Found and Devices (Discovery).** The endpoint agent (v1.2.0)
   recognizes AI agents running on a machine - coding agents (Claude Code,
   Cursor, GitHub Copilot, Codex CLI, Gemini CLI, Aider, Goose, OpenCode,
@@ -165,6 +310,25 @@ this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- **The egress proxy waits for Provenza at start**: a network failure of
+  its first contact is retried for up to 30 s (a sensor holds a proxy for a
+  moment until it has checked the binary) instead of exiting at once.
+- **What is recorded of a call a proxy executed is metadata**: status, token
+  counts, response hashes - not the tool's or the peer's answer, which the
+  server gateways recorded.
+- **The server no longer reads upstream credentials.** A credential sent in
+  clear text is refused (`credential.plaintext_refused`) by the routes,
+  AI connections, MCP servers, A2A peers and HTTP tools APIs; the proxy's
+  configuration no longer carries one. The server's own LLM, MCP, A2A and
+  HTTP tool gateways serve only upstreams that take no credential; one with a
+  sealed credential is refused there. Listing an AI connection's models does
+  not work with a sealed key.
+- **LLM calls go through the protocol (PVP).** Every gateway call is an
+  action `model_call` on tool `llm.<model>`: checked against the agent's
+  allowed models and its deny and approval rules, issued a single-use check
+  and recorded with its outcome in the sealed audit evidence. An agent can
+  pass its delegation chain in `X-Provenza-Chain-Id`. Model calls are not
+  counted in tool allow-lists, the Tool Registry or the behaviour baseline.
 - **The LLM gateway keeps metadata only.** A call is recorded with agent,
   model, outcome, tokens and time; the prompt and the answer pass through
   and are never stored or scanned.
@@ -240,6 +404,11 @@ this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- **Sensor: cgroups created while it runs, with `cgroup_root` below the
+  cgroup mount**, were matched against the patterns by their path in the
+  whole hierarchy and missed; they are matched relative to `cgroup_root`. A
+  pattern can no longer take a sensor's own run cgroup. The sensor README
+  gave `run --agent N` in the wrong order: it is `--agent N run -- cmd`.
 - **Browser verification of non-ASCII payloads.** The browser now checks the
   exact signed bytes, and its canonical JSON matches the server's byte for
   byte (`\uXXXX` escaping, keys sorted at every level), so delegations with
@@ -337,6 +506,53 @@ this project adheres to [Semantic Versioning](https://semver.org/).
   reported hosts must be bare hostnames or IPs.
 
 ### Upgrade notes
+
+- **Offline time.** `offline_seconds` in the signed policy settings (default
+  900, at least 60) now stops enforce-mode proxies and pinned sensors when
+  Provenza is unreachable for longer: set it to what an outage may last, and
+  keep administrators who can sign at hand. Migration `f5a6b7c8d9e0` can be
+  downgraded (the kill switch reports and signatures go).
+- **Sensors: pin the signed policy.** Upgrade the sensors, then give each
+  one `policy.pin` (`provenza-sensor enroll --policy-pin <SHA-256>`, or edit
+  `sensor.json`; a re-enroll keeps it). Sign a release after the upgrade: an
+  earlier one does not state workloads, so it constrains none. On an
+  egress proxy host, add the proxy binary's SHA-256 under *egress proxy
+  binaries*, sign, set `kernel.yama.ptrace_scope=3` and start the proxy
+  through `provenza-sensor --proxy run` (commented in the systemd unit);
+  sign a release with the new hash before upgrading the proxy. A pinned
+  sensor refuses commands the server signed alone, including
+  `update-signing-key`. Migration `e4f5a6b7c8d9` can be downgraded.
+- **Credentials held by the server stop being used until they are sealed.**
+  After the upgrade, upgrade and start the egress proxies (they register
+  their encryption key), then an administrator opens Gateways → Egress →
+  Proxies and chooses *Seal and erase*: the credentials are sealed to every
+  proxy with a key and erased from the server. Until then, upstreams that
+  take a credential are refused; afterwards they are reached through the
+  proxies only - point agents at the proxy (`/_tools`, `/_llm/v1`, `/_mcp`,
+  `/_a2a/<peer>`). A proxy added later needs the credentials entered again.
+  Releases signed before this version do not state AI connections; sign a
+  new one to cover them.
+  Migration `d3e4f5a6b7c8` can be downgraded, but the erased credentials do
+  not come back: enter them again.
+- **Egress proxies need a writable `state_dir`** (default
+  `/var/lib/provenza-proxy`; the systemd unit and the Docker image provide
+  it, Kubernetes needs a volume and, for a stable key, `signing_key_file`).
+  Migration `c2d3e4f5a6b7` can be downgraded.
+- **Signed policy is opt-in until the first release is signed.** Nothing
+  changes on upgrade. After the first release, a new agent, a new agent key,
+  a new route or anything else that loosens the policy works only after the
+  next release is signed; renew releases before `validity_days` (default 90)
+  run out. Migration `b1c2d3e4f5a6` can be downgraded.
+- **Approving needs a passkey.** Approvers and administrators add one in My
+  profile and confirm the sign-in before approving; denying works without.
+- **Administrators and approvers sign in one session at a time.** After the
+  upgrade a second sign-in of the same person waits for the open session to
+  let it in. Ask them to add a passkey in My profile (two devices, so a lost
+  phone does not lock them out). Passkeys are bound to the site's host: the
+  first `CORS_ORIGINS` entry, or `WEBAUTHN_RP_ID`; changing it later makes
+  the existing passkeys unusable.
+- Migrations `f9a0b1c2d3e4` (model calls and approvals) and `a0b1c2d3e4f5`
+  (passkeys and signing sessions) can be downgraded.
 
 - **Data of the removed features is deleted.** Migration `e8f9a0b1c2d3`
   drops the tables of the Prompt Firewall, blocked terms, guards, Usage log,

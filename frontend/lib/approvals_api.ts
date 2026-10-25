@@ -1,6 +1,9 @@
 // ASI09 review-bound approvals. Reuses the shared axios instance from api.ts.
+// A decision is signed with this session's key (docs/pvp/edge.md, section 3):
+// the server builds the statement, this browser signs it, the server checks it.
 import { api } from "./api";
 import { apiErrorText } from "./errors";
+import { signWithSessionKey } from "./signing";
 
 export interface PendingApproval {
   id: number;
@@ -43,7 +46,14 @@ export interface ReviewPacket {
     recent_7d: { actions: number; denied: number; denial_rate: number | null };
   };
   unverified_statements: { source: string; text: string }[];
-  decision: { decision: string; decided_by: number | null; decided_at: string; reason: string | null; self_approved: boolean } | null;
+  decision: {
+    decision: string;
+    decided_by: number | null;
+    decided_at: string;
+    reason: string | null;
+    self_approved: boolean;
+    signed: boolean;
+  } | null;
   reviewer: {
     can_decide: boolean;
     blocked_reason: string | null;
@@ -52,6 +62,8 @@ export interface ReviewPacket {
     confirmation_text: string;
     flags: string[];
     expires_at: string;
+    /** this session's key is certified by the passkey: it can sign an approval */
+    session_certified: boolean;
   };
 }
 
@@ -65,16 +77,43 @@ export async function getReviewPacket(actionId: number) {
   return data;
 }
 
+type Decision = "approved" | "denied";
+
+/** The server's statement for this decision, signed with this session's key. */
+async function signedDecision(actionId: number, decision: Decision) {
+  const { data } = await api.post<{ statement: Record<string, unknown> }>(`/agents/actions/${actionId}/statement`, {
+    decision,
+  });
+  try {
+    const signature = await signWithSessionKey(String(data.statement.session_id), data.statement);
+    return { statement: data.statement, signature };
+  } catch {
+    // the key is not in this browser (cleared storage, another browser)
+    throw { response: { data: { detail: "session.no_key" } } };
+  }
+}
+
 export async function approveReviewed(actionId: number, inputSha256: string, confirmation?: string) {
+  const signed = await signedDecision(actionId, "approved");
   const { data } = await api.post(`/agents/actions/${actionId}/approve`, {
     input_sha256: inputSha256,
     confirmation: confirmation || null,
+    ...signed,
   });
   return data;
 }
 
-export async function denyReviewed(actionId: number, reason?: string) {
-  const { data } = await api.post(`/agents/actions/${actionId}/deny`, { reason: reason || null });
+/** A denial is signed when this session can sign; refusing never waits for it. */
+export async function denyReviewed(actionId: number, reason: string | undefined, canSign: boolean) {
+  let signed = {};
+  if (canSign) {
+    try {
+      signed = await signedDecision(actionId, "denied");
+    } catch {
+      signed = {};
+    }
+  }
+  const { data } = await api.post(`/agents/actions/${actionId}/deny`, { reason: reason || null, ...signed });
   return data;
 }
 

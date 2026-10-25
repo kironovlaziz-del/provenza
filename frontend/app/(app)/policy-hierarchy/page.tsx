@@ -8,6 +8,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { PageHeader } from "@/components/PageHeader";
+import { SignedPolicyPanel } from "@/components/SignedPolicyPanel";
 import { useAuth } from "@/lib/auth";
 import { errorMessage as apiError } from "@/lib/errors";
 import { listAgents } from "@/lib/agent_api";
@@ -243,6 +244,7 @@ export default function PolicyHierarchyPage() {
       <PageHeader title={t("ph.title")} />
       <div className="content agent-page">
         <p className="hint-text u-mb-16">{t("ph.intro")}</p>
+        <SignedPolicyPanel />
         {error && <p className="error-text ag-banner">{error}</p>}
         {notice && <p className="hint-text ag-banner">{notice}</p>}
 

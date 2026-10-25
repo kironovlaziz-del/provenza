@@ -526,6 +526,45 @@ async def get_chain(
 
 # ========================== Actions ==========================
 
+@router.get("/actions/{action_id}/decision")
+async def action_decision(
+    action_id: int,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Where a held call stands, for the agent that made it (its own key) or
+    the organization's users: pending_approval, approved, denied or expired.
+    An approved call runs when the agent makes exactly the same call again,
+    once, before redeemable_until (app/pvp/approvals.py)."""
+    from fastapi import HTTPException, status as st
+    from app.models.agent_action import AgentAction
+    from app.models.approval import AgentActionApproval
+    from app.pvp import approvals
+
+    action = (await db.execute(
+        select(AgentAction).where(AgentAction.id == action_id, AgentAction.org_id == current_user.org_id)
+    )).scalar_one_or_none()
+    acting_agent = getattr(request.state, "agent", None)
+    if not action or (acting_agent is not None and action.agent_id != acting_agent.id):
+        raise HTTPException(status_code=st.HTTP_404_NOT_FOUND, detail="Action not found")
+    approval = (await db.execute(
+        select(AgentActionApproval).where(AgentActionApproval.action_id == action.id)
+    )).scalar_one_or_none()
+    if approval is None:
+        state = action.policy_check_result
+    else:
+        state = approval.decision
+    until = approvals.redeemable_until(approval) if approval is not None else None
+    return {
+        "action_id": action.id,
+        "decision": state,
+        "decided_at": approval.decided_at if approval is not None else None,
+        "used": bool(approval is not None and approval.redeemed_at is not None),
+        "redeemable_until": until,
+    }
+
+
 @router.post("/actions/check", response_model=ActionCheckResponse)
 async def check_action_endpoint(
     data: ActionCheckRequest,
@@ -552,9 +591,15 @@ async def check_action_endpoint(
     # the agent itself (its own key) must sign; a user session acting for an
     # agent - only where the organization relaxed that - cannot
     acting_agent = getattr(request.state, "agent", None)
-    chk = await PVPOrchestrator(db).check(current_user.org_id, req, require_signature=acting_agent is not None)
+    from app.pvp import enforcement
+
+    # enforce mode: the REST path observes - no permit; an enforcement point executes
+    observe = await enforcement.enforced(db, current_user.org_id)
+    chk = await PVPOrchestrator(db).check(current_user.org_id, req, require_signature=acting_agent is not None,
+                                          permit=not observe)
     return ActionCheckResponse(
-        decision=chk.decision, reason=chk.reason, incident_type=chk.incident_type, policy_id=chk.policy_id,
+        decision=chk.decision, reason=chk.reason + (enforcement.OBSERVATION if observe else ""),
+        incident_type=chk.incident_type, policy_id=chk.policy_id,
         check_id=chk.check_id, expires_at=datetime.fromtimestamp(chk.expires_at, tz=timezone.utc),
         permit=chk.permit,
     )
@@ -608,7 +653,7 @@ async def list_actions(
     return Page(items=items, total=total, skip=pagination.skip, limit=pagination.limit)
 
 
-from app.schemas.agent import ApprovalDecision  # noqa: E402  (ASI09)
+from app.schemas.agent import ApprovalDecision, DecisionStatementIn  # noqa: E402  (ASI09)
 from app.services.agent_approval_service import AgentApprovalService  # noqa: E402
 
 
@@ -632,6 +677,19 @@ async def review_action(
     return await AgentApprovalService(db).review(current_user.org_id, action_id, current_user)
 
 
+@router.post("/actions/{action_id}/statement")
+async def decision_statement(
+    action_id: int,
+    data: DecisionStatementIn,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role(UserRole.admin, UserRole.approver)),
+):
+    """The statement to sign with the session key, then send with the
+    decision (docs/pvp/edge.md, section 3). Valid for five minutes."""
+    return {"statement": await AgentApprovalService(db).statement(current_user.org_id, action_id, current_user,
+                                                                  data.decision)}
+
+
 @router.post("/actions/{action_id}/approve", response_model=ActionOut)
 async def approve_action(
     action_id: int,
@@ -641,10 +699,11 @@ async def approve_action(
 ):
     service = AgentApprovalService(db)
     result = await service.approve(current_user.org_id, action_id, current_user,
-                                   data.input_sha256, data.confirmation)
+                                   data.input_sha256, data.confirmation, data.statement, data.signature)
     await AuditService(db).log(
         current_user.org_id, current_user.id, "agent_action", action_id, "approved",
-        {"input_sha256": data.input_sha256, **result},
+        {"input_sha256": data.input_sha256, "signed_in_session": (data.statement or {}).get("session_id"),
+         **result},
     )
     return await service._action(current_user.org_id, action_id)
 
@@ -657,9 +716,11 @@ async def deny_action(
     current_user: User = Depends(require_role(UserRole.admin, UserRole.approver)),
 ):
     service = AgentApprovalService(db)
-    await service.deny(current_user.org_id, action_id, current_user, None, data.reason)
+    await service.deny(current_user.org_id, action_id, current_user, None, data.reason,
+                       data.statement, data.signature)
     await AuditService(db).log(
-        current_user.org_id, current_user.id, "agent_action", action_id, "denied", {"reason": data.reason},
+        current_user.org_id, current_user.id, "agent_action", action_id, "denied",
+        {"reason": data.reason, "signed": data.statement is not None},
     )
     return await service._action(current_user.org_id, action_id)
 

@@ -45,4 +45,6 @@ class ProvenzaDenied(ProvenzaError, PermissionError):
 
 class ProvenzaApprovalRequired(ProvenzaDenied):
     """The call needs a human approval first; it did not run. The pending
-    action is recorded (action_id) for an approver to decide."""
+    action is recorded (action_id) for an approver to decide. Once approved,
+    make exactly the same call again: it runs once (agent.wait_for_approval
+    waits for the decision)."""

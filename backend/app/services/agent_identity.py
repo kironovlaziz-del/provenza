@@ -67,6 +67,7 @@ def _path_id(req: Request, body: Any) -> Any:
 AGENT_ROUTES = [
     ("POST", _P + r"/agents/actions/check/?$", _body("agent_id"), True),
     ("POST", _P + r"/agents/actions/record/?$", _body("agent_id"), True),
+    ("GET", _P + r"/agents/actions/\d+/decision/?$", None, True),
     ("POST", _P + r"/agents/\d+/delegate/?$", _path_id, True),
     # an agent rotating its own signing key (proof with the old and the new key)
     ("POST", _P + r"/agents/\d+/signing-key/(?:challenge|rotate)/?$", _path_id, True),
@@ -141,7 +142,33 @@ def _aware(dt: Optional[datetime]) -> Optional[datetime]:
     return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
 
 
+STRICT_TRUE = ("require_agent_key", "require_pq_signatures", "require_confined_egress")
+STRICT_MIN = ("rotation_grace_minutes", "egress_check_max_age_hours")
+
+
 async def org_settings(db: AsyncSession, org_id: int) -> dict:
+    """The settings that apply: the working copy, and - once a signed policy
+    is in force (app/pvp/signed_policy.py) - the stricter of it and the
+    signed settings, so a setting is loosened only by a signed release."""
+    cfg = await working_settings(db, org_id)
+    from app.pvp import signed_policy
+
+    signed = await signed_policy.in_force(db, org_id)
+    if signed is None:
+        return cfg
+    held = signed.identity()
+    for k in STRICT_TRUE:
+        cfg[k] = bool(cfg.get(k)) or bool(held.get(k))
+    for k in STRICT_MIN:
+        if held.get(k) is not None:
+            cfg[k] = min(cfg[k], held[k])
+    cfg["allow_direct_registration"] = bool(cfg.get("allow_direct_registration")) and \
+        bool(held.get("allow_direct_registration"))
+    return cfg
+
+
+async def working_settings(db: AsyncSession, org_id: int) -> dict:
+    """The settings as admins edited them."""
     row = (await db.execute(
         select(AgentIdentitySettings).where(AgentIdentitySettings.org_id == org_id)
     )).scalar_one_or_none()
@@ -379,4 +406,4 @@ class AgentIdentityService:
                 "key_revoked_at": a.api_key_revoked_at,
                 "previous_key_valid_until": prev_until if prev_until and prev_until > now else None,
             })
-        return {"settings": await org_settings(self.db, org_id), "agents": rows}
+        return {"settings": await working_settings(self.db, org_id), "agents": rows}

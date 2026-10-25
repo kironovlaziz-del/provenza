@@ -168,6 +168,45 @@ The answer is `action.check`: `decision` ∈ {`allowed`, `denied`,
 
 A denied check is still issued, so the attempt can be recorded.
 
+**Signed policy.** Once the organization has a signed policy release in
+force ([edge.md](edge.md), §3.1), the decision is made twice - on the
+working copy and on the release - and the stricter one is the answer: a
+denial or approval requirement of either applies, and a refusal by the
+release says so in `reason` ("signed policy (release #N): …"). An agent
+or agent key not in the release, a carrying row (MCP server, A2A peer,
+HTTP tool, egress route, gateway route) that differs from the release, or
+a release that does not verify or has expired is a denial.
+
+**Held calls run once after approval.** A `pending_approval` check is
+recorded as a pending action for a person to decide on
+(`POST /agents/actions/{id}/approve`, bound to the input hash they saw).
+The decision is **signed with the reviewer's session key**, which their
+passkey certified at sign-in ([edge.md](edge.md), sections 2-3): the browser
+asks `POST /agents/actions/{id}/statement` for the `provenza.approval`
+statement (organization, person, session, held action, agent, chain,
+action type, tool, `input_sha256`, decision, `issued_at`), signs its
+canonical JSON with Ed25519 and sends statement and signature with the
+decision; the server accepts exactly that statement, at most five minutes
+old. The approval keeps the statement, the signature, the session's
+certificate and the passkey's public key. A denial is signed when the
+session can sign; an approval always is. Nothing is replayed by the server. When the agent makes **exactly the same
+call** again (same agent, chain, action type, tool and `input_sha256`)
+within `APPROVAL_REDEEM_MINUTES` (60 by default) of the approval, the policy
+engine still says `pending_approval`, and the orchestrator spends that
+approval - only a signed one whose signature verifies, again, for exactly
+this call: the new check is `allowed`, its reason names the approval and the
+held action, and the approval records the check it was spent on. A repeat
+after that, other arguments or another chain are held again. A denial that
+applies at the time of the repeat (a suspended agent, a tripped breaker, a
+quarantine) still wins: only `pending_approval` can turn into `allowed`. If
+the executor refuses the call after the check (a rate limit, a disabled
+connection, a changed tool), the approval is released for the next repeat.
+This works the same for `/agents/actions/check` and every gateway. The
+agent reads where a held call stands at `GET /agents/actions/{id}/decision`
+(its own key; `pending_approval`, `approved`, `denied` or `expired`, with
+`redeemable_until`); the SDKs wait for it with `wait_for_approval` (Python)
+and `waitForApproval` (JS).
+
 An allowed check also carries a **permit** for the tool: a compact JWS
 (`alg` EdDSA, `typ` `provenza-permit+jwt`) signed by the organization's
 permit key, which is separate from its audit key:
@@ -283,13 +322,20 @@ all of the following hold:
 5. the audit record in `audit_proof` is this seal (`entity_id`, `root`,
    `size`), it hashes to its `record_hash`, and its inclusion path leads
    to the checkpoint's root;
-6. the checkpoint is signed by the organization's audit key.
+6. the checkpoint is signed by the organization's audit key;
+7. when a person's approval let the action run, `approval` carries it as
+   signed: the statement approves exactly this call (agent, chain, type,
+   tool, `input_sha256`), the session key signed it within its
+   certificate's validity, and the certificate is a WebAuthn assertion of
+   the person's passkey (user verified) over that session key.
 
-`PVPReceipt.problems()` runs these checks on the server's side.
+`PVPReceipt.problems()` runs checks 1-6 on the server's side.
 `tools/provenza_audit.py receipt RECEIPT.json` runs them independently: it
 shares no code with the server and needs only `cryptography`. Pass
 `--fingerprint` (the audit key) and `--agent-fingerprint` (the agent's key)
-to check *whose* keys signed, not only that the receipt is signed. Whether
+to check *whose* keys signed, not only that the receipt is signed, and
+`--approver-passkey` (repeatable; the fingerprints in *My profile →
+Passkeys*) for whose passkey approved. Whether
 a key was revoked before the record was made is a question for the key
 history (`GET /agents/key-revocations`), not for the receipt alone.
 
@@ -369,6 +415,7 @@ which tools need a person's approval (ASI09). Nothing is executed in a
 | MCP (Streamable HTTP, JSON-RPC) | P4 ✓ | Provenza is the only MCP server the agent sees: `POST /api/v1/mcp`. See §5.1 |
 | Google A2A 1.0 and 0.3 | P5 ✓ | remote agents are reached only through `/api/v1/a2a-gateway/<peer>`. See §5.2 |
 | TRACE v0.2 (export) | P6 ✓ | a Trust Record per action or per delegation chain. See §5.3 |
+| OpenAI chat completions | ✓ | the LLM gateway `POST /api/v1/gateway/v1/chat/completions`: every call is a PVP action. See §5.7 |
 
 ### 5.1 MCP gateway
 
@@ -398,9 +445,9 @@ does not.
 | the agent never holds credentials | upstream URLs and secrets stay in Provenza, encrypted with the organization's key under BYOK; they are decrypted only for the call |
 | the model reads only approved definitions | `tools/list` shows a tool only while the definition from the last sync hashes to its Tool Registry pin (`approved`). A description changed upstream ("tool poisoning") never reaches the model; the tool disappears until it is re-approved |
 | the tool called is the tool approved | before each call the gateway fetches the live definition (cached 60 s) and hashes it **itself**. The digest goes into the check, so the Tool Registry, which until now relied on a digest reported by the agent, verifies independently. A changed tool is refused and marked `drifted`, with a `supply_chain_drift` incident |
-| every call is governed | each call is a PVP `action.request` through the orchestrator (rights in the chain, policies, Tool Registry, ASI01/05 on the arguments, behaviour, breaker), and the Input Guard runs first |
+| every call is governed | each call is a PVP `action.request` through the orchestrator (rights in the chain, policies, Tool Registry, behaviour, breaker), and the Input Guard runs first |
 | every call is recorded | refused and denied calls too, with `executed_by: "mcp_gateway"`: Provenza is the witness, because an MCP client cannot sign |
-| output | NUL and oversized structures are refused, since they could not even be stored. Injected instructions (ASI01) are recorded, and in enforce mode the output is withheld |
+| output | NUL and oversized structures are refused, since they could not even be stored |
 
 Tools are exposed as `<server slug>.<tool name>`. That name is what agent
 rights, policies and the Tool Registry use. The admin flow is: add a server
@@ -410,8 +457,8 @@ passed in `params._meta["provenza/chain_id"]`.
 
 **Limitations.**
 - A call that needs human approval (ASI09) is recorded as pending and is
-  **not executed**; the agent is told so. The gateway does not yet execute
-  a call after it is approved.
+  **not executed**; the agent is told so, with the action id. After the
+  approval, the same call made again runs once (§3.1).
 - Only tools are proxied. Resources, prompts and subscriptions are not
   offered.
 
@@ -447,15 +494,15 @@ by agent rights and policies, exactly as for tools. A chain is passed in
 | the agent sees only Provenza | `GET …/<peer>/.well-known/agent-card.json` returns the **approved** card, pointing at Provenza and asking for the agent's own key. It never contains the peer's address or security schemes. Streaming and push are switched off |
 | the peer is the one approved | the card is pinned in the Tool Registry (`a2a.<peer>`, signatures excluded). Before each call the live card is fetched (cached 60 s) and hashed by the gateway. A changed card is refused and drifts, with an incident, until it is re-approved. This also covers a card that suddenly points at another endpoint |
 | tasks are owned | a task belongs to the agent that created it, claimed atomically. `GetTask`, `CancelTask`, a follow-up `taskId` or a `referenceTaskIds` entry naming someone else's task returns **TaskNotFound**. This is checked before anything else, so it reveals nothing (A2A 1.0 §13.1). A peer that answers with another caller's task is withheld |
-| no side channels | push-notification configs are refused (`-32003`): the peer would deliver to a URL outside scanning and audit. Streaming, resubscription, `ListTasks` and the extended card return `-32004` |
+| no side channels | push-notification configs are refused (`-32003`): the peer would deliver to a URL outside the audit trail. Streaming, resubscription, `ListTasks` and the extended card return `-32004` |
 | unknown = forbidden | a peer that does not exist, is not approved, or is not in the agent's rights all answer the same 404 |
-| answers | scanned (ASI01) and, in enforce mode, withheld. Unstorable structures are refused. Peer errors are passed through with their code, and the attempt is recorded |
+| answers | unstorable structures are refused. Peer errors are passed through with their code, and the attempt is recorded |
 
 Admin flow: `POST /api/v1/a2a-peers` (card URL + secret) → sync → read the
 card → approve.
 
-**Limitation:** a call that needs human approval is recorded as pending
-and is not sent.
+A call that needs human approval is recorded as pending and is not sent;
+after the approval, the same call made again is sent once (§3.1).
 
 ### 5.3 TRACE export
 
@@ -516,10 +563,11 @@ Code: `proxy/` (the proxy, Go), `backend/app/pvp/egress_proxy.py`
 
 Agents reach an external API only as `http://<proxy>/<route>/<path>`. The
 route is administered in Provenza: upstream URL, methods, path prefixes,
-body limit and credential. The credential is either held by Provenza,
-encrypted, and handed to authenticated proxies, which keep it in memory
-only, or held by the proxy alone. The request chooses neither the upstream
-nor the credential.
+body limit and credential. The credential is either sealed in the browser
+to each proxy's own encryption key - Provenza stores envelopes it cannot
+open, the proxy opens its own and keeps the credential in memory only
+(edge.md §4.1) - or held by the proxy alone. The request chooses neither
+the upstream nor the credential.
 
 Each request is a PVP action with `action_type: "proxy"`, `tool_name:
 "proxy.<route>"` and `input`:
@@ -563,6 +611,94 @@ A reserved check that is never completed stays visible to admins as an
 open redemption (`GET /api/v1/egress/redemptions?open=true`). The proxy is
 fail-closed: without Provenza nothing is sent.
 
+**The proxy's own key and receipts.** The proxy generates an Ed25519 key
+on its host (or reads `signing_key_file`) and registers the public half
+once (`POST /egress-proxy/key`); a different key later is refused
+(`egress.proxy_key_changed`) - a new key is a new proxy. With **complete**
+(and with a refusal of its own, below) it sends its signed receipt
+(`app/pvp/witness.py`):
+
+```json
+{"type": "provenza.proxy.receipt", "v": 1, "check_id": "…", "agent_id": 5, "chain_id": null,
+ "action_type": "proxy", "tool_name": "proxy.stripe", "input_sha256": "…", "output_sha256": "…",
+ "decision": "allowed", "agent_signature": "verified", "policy": {"release": 3, "bundle_sha256": "…"},
+ "log": {"seq": 41, "prev": "<SHA-256 of the previous line of its log>"}, "issued_at": 1760000000}
+```
+
+The server keeps it as the action's `witness` - part of the sealed
+evidence - only when it names exactly the recorded action and verifies with
+the registered key; otherwise it raises a `witness_mismatch` incident. The
+proxy appends the same line to its own hash-chained log
+(`state_dir/receipts.jsonl`). `tools/provenza_audit.py receipt
+--proxy-fingerprint` checks the witness offline; the fingerprint is shown
+under *Egress → Proxies* and in the key manifest.
+
+**Enforcing the signed policy** (`policy.mode: "enforce"` in the proxy's
+configuration, [edge.md](edge.md) §4). The proxy fetches releases
+(`GET /egress-proxy/policy-release?after=N`) and accepts one only when the
+quorum of the manifest it already trusts signed it - the manifest pinned in
+its configuration (`policy.pin`, the SHA-256 shown in the *Signed policy*
+panel) before the first. A request then goes out only when the server's
+check AND the proxy's own evaluation of that release
+(`proxy/internal/policy`, the same decisions as `app/pvp/bundle_eval.py`,
+`sdk/testdata/policy-vectors.json`) allow it; the route's upstream comes from
+the release. A call the release holds for approval needs a human approval
+the proxy verifies itself (`POST /egress-proxy/check-info` hands it over).
+In SDK mode the agent also sends its signed request (`X-Provenza-Request`:
+base64url of `{"payload", "signature", "public_key", …}`), which the proxy
+checks against the key fingerprint in the manifest - its Ed25519 half; the
+server checks both halves of a hybrid key. With `require_agent_signature`
+nothing else is accepted. A refusal of the proxy's own is recorded through
+the check (`redeem` with `enforcement`), its reason prefixed "refused by the
+egress proxy under the signed policy".
+
+**Enforce mode** ([edge.md](edge.md) §4.2). When the signed policy says
+`"enforcement": {"mode": "enforce"}`, the proxy takes on every path only a
+request the agent signed over the HTTP request itself (`tool_name`
+"proxy.<first path segment>", e.g. "proxy._llm"; the SDKs, or the proxy's
+agent mode for clients that cannot sign), and sends Provenza
+`X-Provenza-Proxy-Mode: enforce` on every call. A mediated `POST
+/egress-proxy/check` then needs the agent's `X-Provenza-Request` (verified as
+the agent's own check: `require_signature`), a plan needs it with
+`X-Provenza-Descriptor` (base64url JSON of the request it describes), `redeem`
+refuses a check the agent did not sign, and `complete` raises a critical
+`unenforced_action` incident when the receipt does not name a signed release
+and `agent_signature: "verified"`. `POST /agents/actions/check` still
+answers, without a permit, its reason ending "enforce mode: this check
+authorizes nothing by itself"; the server's own gateways refuse
+(`enforce_mode` for the LLM gateway).
+
+**Sealed credentials** ([edge.md](edge.md) §4.1). The proxy also registers
+an X25519 encryption key, signed by its signing key (`POST /egress-proxy/key`
+with `encryption_key`, `encryption_key_signature`). Credentials are sealed to
+it in the browser (`PUT /api/v1/egress/credentials/{object}/{id}`, one
+envelope per proxy, bound to the object, the proxy and the upstream origin)
+and fetched by the proxy (`GET /egress-proxy/credentials`); the server
+refuses a credential in clear text everywhere and holds none it can read.
+The PUT carries the administrator's session-key signature over the envelopes
+(`statement` from `POST .../statement`, `signature`): `provenza.credential.sealed`
+with the object, its origin and each proxy's envelope SHA-256; it is served
+with each envelope (`sealer`), and an enforcing proxy opens only envelopes an
+administrator of its signed manifest vouched for. Envelopes the server sealed
+from credentials it held are countersigned (`POST .../countersign`).
+
+**The gateways' actions** (`app/pvp/proxy_actions.py`). An HTTP tool, AI
+connection, MCP server or A2A peer that takes a credential is reached
+through a proxy, with the gateway's own protocol (`/_tools/call`,
+`/_llm/v1`, `/_mcp`, `/_a2a/<peer>`). The proxy asks for a plan
+(`POST /egress-proxy/{http-tools,llm,mcp,a2a}/plan`, with the agent's key in
+`X-Agent-Key`): the server decides as the gateway does - the same input is
+recorded (for LLM calls the metadata only) - records a refusal at once and
+reserves an allowed check for that proxy. The proxy completes it
+(`POST /egress-proxy/complete` with `output` - metadata and hashes - or
+`enforcement` when it refused under the signed policy; for A2A
+`POST /egress-proxy/a2a/complete` with the peer's answer, which the server
+reads as its gateway does). MCP servers' tools and A2A peers' cards are
+reported by the proxies (`POST /egress-proxy/mcp/sync`, `/a2a/sync`); the
+server's own sync of such an upstream answers `mcp.synced_by_proxy` /
+`a2a.synced_by_proxy`. `GET /egress-proxy/config` lists the MCP servers and
+peers a proxy serves.
+
 **Limitation:** the proxy governs only what goes through it. Each
 deployment has to close the direct paths to the upstreams with a network
 policy or firewall (`proxy/deploy/`).
@@ -573,8 +709,9 @@ Code: `backend/app/pvp/http_tools.py`, `app/api/http_tools.py`.
 
 An administrator registers an HTTP API as a tool: `name` (the tool name
 that rights, policies and the Tool Registry use), method, URL with optional
-`{argument}` path placeholders, input schema, and a credential that is
-stored encrypted and never returned. Saving it pins the digest of the
+`{argument}` path placeholders and input schema. This server holds no
+credential: a tool that takes one has it sealed to the egress proxies
+(edge.md §4.1) and is refused here. Saving it pins the digest of the
 definition (`name`, `method`, `url`, `input_schema`, `description`) in the
 Tool Registry as approved.
 
@@ -595,9 +732,46 @@ everything in one operation:
 
 The answer is `{decision, reason, action_id, status, body}`. When the API
 failed or the answer was refused, `error` or `withheld` comes instead of
-`body`. A response over the tool's size limit, a redirect, or instructions
-aimed at the agent (ASI01, in enforce mode) never reach the agent. The SDKs
+`body`. A response over the tool's size limit or a redirect never reaches
+the agent. The SDKs
 expose it as `agent.invoke(tool, arguments)`.
+
+### 5.7 LLM gateway
+
+Code: `backend/app/services/gateway_service.py`, `app/api/gateway.py`.
+
+The agent calls an OpenAI-compatible endpoint with its own key
+(`X-Agent-Key`, or `Authorization: Bearer <agent key>` for stock clients).
+Each chat completion is a PVP action of the agent:
+
+| field | value |
+|---|---|
+| `action_type` | `model_call` |
+| `tool_name` | `llm.<model>` (at most 100 characters) |
+| `chain_id` | the `X-Provenza-Chain-Id` header, if the call runs in a delegation chain |
+| `input` | `{"model", "provider", "messages", "messages_sha256", "max_tokens"}`: the message count and the JCS hash of the messages as the client sent them (fields left out are not null) |
+| `executed_by` | `llm_gateway` |
+| output | `{"finish_reason", "prompt_tokens", "completion_tokens", "response_sha256"}`, or `{"provider_error"}` |
+
+The orchestrator decides as for any action: the agent's state (a
+quarantined agent is refused), the chain and its breaker, then the policy
+engine. Model calls are not counted in the behaviour baseline: their volume
+is the gateway's rate limit. The right to
+a model is the model allow list (the agent's `allowed_models` and every
+level's `models.allow`), not the tool list: `allow_only_tools` and
+`tools.allow` do not apply to `model_call`, while deny and approval lists
+apply to `llm.<model>` (`deny_tool_patterns: ["llm.gpt-4*"]`,
+`require_approval_tool_patterns: ["llm.*"]`). The Tool Registry does not
+pin models; the gateway's routes are their list.
+
+After an allowed check the gateway, as executor, refuses a model without a
+route, a disabled connection, a provider outside `providers.allow`, a cloud
+provider under "self-hosted only", and a call over the rate limit. Every
+outcome is recorded as the action (refusals as denied) and as a
+`gateway_calls` row linked to it. A call that needs approval is recorded as
+pending and answered `403 approval_required` with the action id; it is not
+sent. After the approval, the same request (same messages) runs once
+(§3.1). The prompt and the answer are never stored, only their hashes.
 
 ## 6. Versioning
 

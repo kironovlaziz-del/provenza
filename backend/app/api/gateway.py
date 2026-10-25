@@ -9,6 +9,7 @@ stock OpenAI SDK works with base_url=<provenza>/api/v1/gateway/v1. The rest
 is the admin side: overview, settings, routes.
 """
 
+import re
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
@@ -24,6 +25,7 @@ from app.services.audit_service import AuditService
 from app.services.gateway_service import GatewayError, GatewayService
 
 router = APIRouter()
+CHAIN_HEADER = "X-Provenza-Chain-Id"
 
 
 async def gateway_agent(
@@ -43,9 +45,20 @@ async def gateway_agent(
 
 @router.post("/v1/chat/completions")
 async def chat_completions(data: ChatCompletionIn, request: Request, db: AsyncSession = Depends(get_db),
-                           user: User = Depends(gateway_agent)):
+                           user: User = Depends(gateway_agent),
+                           chain: Optional[str] = Header(None, alias=CHAIN_HEADER)):
+    """A chat completion as a PVP action of the calling agent. The delegation
+    chain it runs in comes in the X-Provenza-Chain-Id header (OpenAI clients
+    can send extra headers; the body stays a plain OpenAI request)."""
+    chain_id = None
+    if chain is not None:
+        if not re.fullmatch(r"[0-9]{1,10}", chain) or not 1 <= int(chain) <= 2**31 - 1:
+            err = GatewayError(400, "invalid_chain_id", f"{CHAIN_HEADER} must be a positive integer.")
+            return JSONResponse(status_code=err.http_status, content=err.body())
+        chain_id = int(chain)
     try:
-        return await GatewayService(db).chat(request.state.agent, user, data.model_dump(exclude_none=False))
+        return await GatewayService(db).chat(request.state.agent, user, data.model_dump(exclude_none=False),
+                                             chain_id)
     except GatewayError as err:
         return JSONResponse(status_code=err.http_status, content=err.body())
 

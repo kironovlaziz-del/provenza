@@ -28,3 +28,11 @@ class AgentActionApproval(Base):
     self_approved = Column(Boolean, nullable=False, default=False)
     typed_confirmation = Column(Boolean, nullable=False, default=False)
     flags = Column(JSONB)  # e.g. ["high_risk_system", "argument_rule", "fatigue"]
+    # an approval is spent once: the check that let the approved call run
+    # (app/pvp/approvals.py) - the agent repeats the call, it is not replayed
+    redeemed_at = Column(DateTime(timezone=True))
+    redeemed_check_id = Column(Integer, ForeignKey("agent_action_checks.id", ondelete="SET NULL"))
+    # the decision signed with the reviewer's session key, and what proves it
+    # without the server (app/services/signing_sessions.verify_signed): only
+    # a signed approval lets the call run
+    signed = Column(JSONB)

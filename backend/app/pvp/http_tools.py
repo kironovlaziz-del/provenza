@@ -7,12 +7,13 @@ HTTP tool gateway - an HTTP API as a tool the agent can only reach through
 Provenza.
 
     agent ──signed request──► POST /http-tools/call ──► PVP check ──► the API
-                                                           │      (address and key
+                                                           │      (address
                          record (executed_by="http_gateway") ◄┘     held here)
 
-  credentials   the address and the credential are registered by an admin and
-                stored here (the secret encrypted); the agent sends the tool
-                name and arguments, never sees either
+  credentials   the address is registered by an admin; the agent sends the tool
+                name and arguments. This server holds no credential: a tool
+                that takes one is sealed to the egress proxies
+                (app/pvp/sealed.py) and refused here
   one operation check -> call -> record happen together, here: there is no
                 window in which an agent holds an allowed check and decides
                 not to report what it did. Denied, pending and refused calls
@@ -32,9 +33,7 @@ Provenza.
   the tool too  for body methods the signed permit of the check goes along
                 (Provenza-Permit), so an API behind provenza.permit accepts
                 calls made through Provenza only
-  the output    recorded; oversized or malformed structures are withheld;
-                instructions aimed at the agent (ASI01) are withheld in
-                enforce mode
+  the output    recorded; oversized or malformed structures are withheld
 """
 
 import json
@@ -48,7 +47,7 @@ from fastapi import status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.crypto import decrypt_secret
+from app.pvp import enforcement
 from app.core.errors import api_error
 from app.core.outbound import error_detail, guarded_async_client
 from app.models.agent import Agent
@@ -145,8 +144,6 @@ async def _send(tool: HttpTool, url: str, query: Optional[dict], body: Optional[
         headers["Content-Type"] = "application/json"
         if permit and tool.send_permit:
             headers[permits.HEADER] = permit
-    if tool.auth_secret_encrypted:
-        headers[tool.auth_header] = decrypt_secret(tool.auth_secret_encrypted)
     limit = tool.max_response_bytes
     try:
         async with guarded_async_client(timeout=float(tool.timeout_seconds)) as client:
@@ -223,18 +220,29 @@ class HttpToolGateway:
         return [{"name": t.name, "description": t.description or "", "method": t.method,
                  "input_schema": t.input_schema or {"type": "object"}} for t in rows if t.name in allowed]
 
-    async def call(self, agent: Agent, req: PVPActionRequest) -> Dict[str, Any]:
+    async def _judge(self, agent: Agent, req: PVPActionRequest, executor: str):
+        """The check and everything this gateway refuses before sending. A
+        refusal is recorded here and returned; otherwise (None, the context
+        to send with). `executor`: this gateway, or the egress proxy that
+        will send it (it holds the credential)."""
         org_id = agent.org_id
         orc = PVPOrchestrator(self.db)
         tool = await self.tool(org_id, req.tool_name)
         await orc.verify_signed_request(org_id, agent, req)
+        enforcement.agent_signed.set(True)
         arguments = req.input
         check = await orc.check(org_id, req.model_copy(update={
             "action_type": "tool_call", "tool_digest": tool.digest, "signature": None, "pq_signature": None,
             "nonce": None, "issued_at": None}))
 
         refusal = None
-        if manifest_digest(definition(tool)) != tool.digest:
+        if executor == EXECUTOR and await enforcement.enforced(self.db, org_id):
+            refusal = "HTTP tool gateway: " + enforcement.REFUSAL
+        elif executor == EXECUTOR and (tool.credential_source or "none") != "none":
+            # this server holds no credential (app/pvp/sealed.py): the egress proxy opens it
+            refusal = ("HTTP tool gateway: the tool's credential is sealed to the egress proxies; "
+                       "call it through an egress proxy")
+        elif manifest_digest(definition(tool)) != tool.digest:
             refusal = "HTTP tool gateway: the tool's definition differs from the one pinned (ASI04)"
         problems = argument_problems(tool.input_schema, arguments, tool.url)
         if problems and not refusal:
@@ -247,10 +255,38 @@ class HttpToolGateway:
                 refusal = f"HTTP tool gateway: arguments refused: {exc}"
         if check.decision != ALLOWED or refusal:
             action = await orc.record_executed(org_id, check, input_data=arguments, output=None,
-                                                  duration_ms=None, executed_by=EXECUTOR, refusal=refusal)
+                                                  duration_ms=None, executed_by=executor, refusal=refusal)
             decision = "pending_approval" if check.decision == PENDING_APPROVAL and not refusal else "denied"
             return {"decision": decision, "reason": refusal or check.reason, "action_id": action.id,
-                    "incident_type": None if refusal else check.incident_type}
+                    "incident_type": None if refusal else check.incident_type}, None
+        return None, (orc, check, tool, built, arguments)
+
+    async def plan(self, agent: Agent, req: PVPActionRequest, proxy) -> Dict[str, Any]:
+        """The call an egress proxy is to send (app/pvp/proxy_actions.py): judged
+        here as call() judges it; the proxy builds the request itself from the
+        pinned definition (proxy/internal/egress/tools.go), adds the
+        credential sealed to it and reports back. The arguments are the
+        recorded input, as for call()."""
+        from app.pvp import proxy_actions
+
+        refused, ctx = await self._judge(agent, req, proxy_actions.EXECUTOR)
+        if refused:
+            return refused
+        _orc, check, tool, _built, arguments = ctx
+        await proxy_actions.reserve(self.db, proxy, check.check_id, arguments)
+        out = await proxy_actions.allowed(self.db, proxy, check, arguments)
+        return {**out, "arguments": arguments, "definition": definition(tool), "digest": tool.digest,
+                "permit": check.permit if tool.send_permit and tool.method in BODY_METHODS else None,
+                "timeout_seconds": tool.timeout_seconds, "max_response_bytes": tool.max_response_bytes,
+                "credential": {"object": "http_tool", "id": tool.id, "source": tool.credential_source or "none",
+                               "header": tool.auth_header}}
+
+    async def call(self, agent: Agent, req: PVPActionRequest) -> Dict[str, Any]:
+        refused, ctx = await self._judge(agent, req, EXECUTOR)
+        if refused:
+            return refused
+        orc, check, tool, built, arguments = ctx
+        org_id = agent.org_id
 
         started = time.monotonic()
         output = await _send(tool, *built, check.permit)

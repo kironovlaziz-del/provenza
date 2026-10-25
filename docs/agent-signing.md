@@ -131,11 +131,9 @@ verify** — a forger has to break both schemes.
   the 32 raw Ed25519 bytes **followed by** the 1952 raw ML-DSA bytes. One
   value pins both halves; it differs from the Ed25519-only fingerprint.
 - Requests carry the ML-DSA signature next to the Ed25519 one:
-  `pq_signature` on `/agents/{id}/delegate`, `/agents/actions/record` and
-  `/a2a/send`. For a hybrid agent, `signature` alone does not verify: a
-  delegation or action is refused, and a message counts as having an
-  invalid signature (rejected when the A2A guard is in enforce mode,
-  flagged in monitor mode — the same as any other bad signature).
+  `pq_signature` on `/agents/{id}/delegate` and `/agents/actions/record`.
+  For a hybrid agent, `signature` alone does not verify: the delegation or
+  action is refused.
 
 ```bash
 python tools/provenza_sign.py keygen --hybrid
@@ -151,8 +149,7 @@ An organization can **require** hybrid keys (Agent identity → "Require
 post-quantum signatures", `require_pq_signatures`). Then new keys and key
 changes must be hybrid (`agent.pq_required`), and agents without a hybrid
 key — Ed25519-only, or no signing key at all — are refused when they
-delegate or record actions, and their messages are rejected in every A2A
-guard mode, until they get one. Records signed
+delegate or record actions, until they get one. Records signed
 earlier keep verifying with the key that signed them.
 
 ## Canonical form

@@ -15,6 +15,25 @@ import (
 	"github.com/kironovlaziz-del/provenza/sensor/internal/client"
 )
 
+// noPinWarning: shown on the sensor's page while it trusts the server's key.
+const noPinWarning = "no policy.pin: commands are verified with the server's command key, " +
+	"not an administrator's passkey"
+
+// warnings: the kernel's notes and what weakens this sensor (heartbeat and status).
+func (d *Daemon) warnings() []string {
+	out := append([]string(nil), d.kernel.Notes...)
+	if d.signed == nil {
+		out = append(out, noPinWarning)
+	}
+	if w := ptraceWarning(len(d.proxyReports()) > 0); w != "" {
+		out = append(out, w)
+	}
+	d.mu.Lock()
+	out = append(out, d.signedNotes...)
+	d.mu.Unlock()
+	return out
+}
+
 func (d *Daemon) heartbeatLoop(ctx context.Context) {
 	// Send one immediately so the UI sees us as soon as we are up.
 	d.sendHeartbeat(ctx)
@@ -97,6 +116,8 @@ func (d *Daemon) sendHeartbeat(ctx context.Context) {
 		cfgVer = &v
 	}
 
+	warnings := d.warnings()
+
 	aMin, dMin, oMin := d.stats.rates()
 	h := client.Heartbeat{
 		Hostname:       host,
@@ -106,7 +127,7 @@ func (d *Daemon) sendHeartbeat(ctx context.Context) {
 		Enforcing:      enforcing,
 		Hooks:          d.kernel.Hooks,
 		Workloads:      wls,
-		Warnings:       d.kernel.Notes,
+		Warnings:       warnings,
 		DroppedEvents:  d.kernel.Stat(bpfobj.StatEventsLost) + d.viol.droppedTotal() + d.act.droppedTotal(),
 		AllowedTotal:   d.kernel.Stat(bpfobj.StatAllowed),
 		DeniedTotal:    d.kernel.Stat(bpfobj.StatDenied),
@@ -114,6 +135,8 @@ func (d *Daemon) sendHeartbeat(ctx context.Context) {
 		AllowedPerMin:  aMin,
 		DeniedPerMin:   dMin,
 		ObservedPerMin: oMin,
+		SignedPolicy:   d.signedReport(),
+		ProxyRuns:      d.proxyReports(),
 	}
 	resp, err := d.client.Heartbeat(ctx, h)
 	if err != nil {

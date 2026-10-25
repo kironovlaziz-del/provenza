@@ -6,8 +6,15 @@
 // side (GET /config, POST /heartbeat, POST /violations) is not reached from
 // the browser and lives in the daemon under sensor/.
 import { api } from "./api";
+import { signWithSessionKey } from "./signing";
 
 // ---------------------------------------------------------------- sensors
+
+export interface SensorTrustT {
+  signed_policy?: { pin: "pinned" | "tofu"; release?: number; error?: string; kill_switch?: string };
+  proxy_runs?: { cgroup: string; state: "verified" | "held"; reason?: string; processes: number; sha256?: string;
+                 config_sha256?: string }[];
+}
 
 export interface SensorT {
   id: number;
@@ -27,6 +34,8 @@ export interface SensorT {
   dropped_events: number;
   config_version: string | null;
   last_seen_at: string | null;
+  /** what the sensor verified itself (docs/pvp/edge.md, section 5) */
+  trust: SensorTrustT | null;
 
   allowed_total: number;
   denied_total: number;
@@ -276,13 +285,28 @@ export interface CommandT {
   acked_at: string | null;
   result: Record<string, unknown> | null;
   error: string | null;
+  /** the administrator who signed it with a passkey-certified session */
+  signed_by: number | null;
 }
 
 export const listSensorCommands = async (id: number, limit = 50) =>
   (await api.get<CommandT[]>(`/egress-sensor/sensors/${id}/commands`, { params: { limit } })).data;
 
-export const createSensorCommand = async (id: number, kind: CommandKind) =>
-  (await api.post<CommandT>(`/egress-sensor/sensors/${id}/commands`, { kind })).data;
+/** Every command is signed with this session's key (docs/pvp/edge.md,
+ *  section 5): a sensor that follows the signed policy runs nothing else. */
+export const createSensorCommand = async (id: number, kind: CommandKind) => {
+  const { data } = await api.post<{ statement: Record<string, unknown> }>(
+    `/egress-sensor/sensors/${id}/commands/statement`, { kind });
+  let signature: string;
+  try {
+    signature = await signWithSessionKey(String(data.statement.session_id), data.statement);
+  } catch {
+    // the key is not in this browser (cleared storage, another browser)
+    throw { response: { data: { detail: "session.no_key" } } };
+  }
+  return (await api.post<CommandT>(`/egress-sensor/sensors/${id}/commands`,
+    { kind, statement: data.statement, signature })).data;
+};
 
 // ---------------------------------------------------------------- signing key
 

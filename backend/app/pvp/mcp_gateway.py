@@ -13,7 +13,9 @@ MCP gateway - Provenza as the only MCP server an agent talks to
 What it guarantees, and how:
 
   credentials      the agent knows the gateway and its own key. Upstream
-                   URLs and secrets stay here, encrypted at rest.
+                   URLs stay here; credentials do not: a server that takes
+                   one is sealed to the egress proxies (app/pvp/sealed.py)
+                   and reached through them only.
   what the model   tools/list serves only tools an admin approved, with the
   reads            definition that was approved: a tool is shown while its
                    synced definition hashes to the Tool Registry pin. A
@@ -26,16 +28,14 @@ What it guarantees, and how:
                    incident.
   the decision     every call is a PVP action.request through the
                    orchestrator: rights in the chain, policies, the Tool
-                   Registry, ASI01 / ASI05 on the arguments, the behaviour
-                   baseline, the circuit breaker. Denied and refused calls
-                   are recorded too.
+                   Registry, the behaviour baseline, the circuit breaker.
+                   Denied and refused calls are recorded too.
   the output       NUL characters / oversized structures are refused (they
-                   could not even be stored); instructions hidden in the
-                   output (ASI01) are recorded and, in enforce mode, the
-                   output is withheld from the agent.
+                   could not even be stored).
 
 Pending approval (ASI09): the call is recorded as pending and NOT executed;
-the agent is told so. Approvals are given on the recorded action.
+the agent is told so. Approvals are given on the recorded action; the same
+call made again after the approval runs once (app/pvp/approvals.py).
 
 Errors follow MCP: an unknown tool is a JSON-RPC error; a refusal is a tool
 result with isError, so the model sees why - never the refused content.
@@ -48,7 +48,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.crypto import decrypt_secret
+from app.pvp import enforcement
 from app.models.agent import Agent
 from app.models.agent_action import AgentIncident
 from app.models.mcp import MCPServer, MCPTool
@@ -99,10 +99,14 @@ class MCPGatewayError(Exception):
 
 
 def upstream_for(server: MCPServer) -> mcp_client.MCPUpstream:
-    secret = decrypt_secret(server.auth_secret_encrypted) if server.auth_secret_encrypted else None
+    """This server holds no upstream credential (app/pvp/sealed.py): an MCP
+    server that takes one is reached through an egress proxy only."""
+    if (server.credential_source or "none") != "none":
+        raise mcp_client.UpstreamError("upstream.credential_at_proxy",
+                                       "its credential is sealed to the egress proxies: reach it through one")
     protocol = server.detected_version or server.protocol
     return mcp_client.MCPUpstream(server.id, server.url, protocol=protocol, auth_header=server.auth_header,
-                                  auth_value=secret, timeout=float(server.timeout_seconds))
+                                  auth_value=None, timeout=float(server.timeout_seconds))
 
 
 class MCPGateway:
@@ -124,7 +128,13 @@ class MCPGateway:
             server.last_error = f"{exc.code}: {str(exc)[:300]}"
             await self.db.commit()
             raise
-        server.server_info = up.server_info
+        return await self.apply_sync(org_id, server, tools, up.server_info)
+
+    async def apply_sync(self, org_id: int, server: MCPServer, tools: List[dict],
+                         server_info: Optional[dict]) -> dict:
+        """The tools a sync found - by this gateway, or by an egress proxy for a
+        server whose credential is sealed to it (POST /egress-proxy/mcp/sync)."""
+        server.server_info = server_info
         now = _now()
         rows = {t.name: t for t in (await self.db.execute(
             select(MCPTool).where(MCPTool.server_id == server.id))).scalars()}
@@ -243,6 +253,46 @@ class MCPGateway:
             _live[server.id] = cached
         return cached[1].get(name)
 
+    async def plan(self, agent: Agent, name: str, arguments: Dict[str, Any], chain_id: Optional[int],
+                   live_digest: Optional[str], live_error: Optional[str], proxy) -> dict:
+        """A tool call an egress proxy makes to a server whose credential is
+        sealed to it: decided here as call() decides, with the live
+        definition's digest the proxy computed itself from the upstream."""
+        from app.pvp import proxy_actions
+
+        org_id, agent_id = agent.org_id, agent.id
+        found = await self._approved(org_id, name)
+        if not found:
+            raise MCPGatewayError(-32602, f"Unknown tool: {name}")
+        tool, server = found[0]
+        orc = PVPOrchestrator(self.db)
+        check = await orc.check(org_id, PVPActionRequest(
+            agent_id=agent_id, chain_id=chain_id, action_type="tool_call", tool_name=name, input=arguments,
+            tool_digest=live_digest))
+        refusal = None
+        if live_error:
+            refusal = f"MCP gateway: the upstream server could not confirm the tool ({live_error[:100]})"
+        elif live_digest != tool.digest:
+            refusal = "MCP gateway: the tool's definition changed upstream since it was approved (ASI04)"
+        if check.decision != ALLOWED or refusal:
+            action = await orc.record_executed(org_id, check, input_data=arguments, output=None,
+                                                  duration_ms=None, executed_by=proxy_actions.EXECUTOR,
+                                                  refusal=refusal)
+            if check.decision == PENDING_APPROVAL and not refusal:
+                return {"decision": "refused", "result": _text_result(
+                    f"This call needs a human approval and was not executed (action #{action.id}): {check.reason}")}
+            return {"decision": "refused",
+                    "result": _text_result(f"Refused by Provenza (action #{action.id}): {refusal or check.reason}")}
+        await proxy_actions.reserve(self.db, proxy, check.check_id, arguments)
+        out = await proxy_actions.allowed(self.db, proxy, check, arguments)
+        return {**out, "arguments": arguments, "upstream_name": tool.name,
+                "input_schema": (tool.definition or {}).get("inputSchema"), "pinned_digest": tool.digest,
+                "server": {"id": server.id, "slug": server.slug, "url": server.url,
+                           "protocol": server.detected_version or server.protocol,
+                           "timeout_seconds": server.timeout_seconds},
+                "credential": {"object": "mcp_server", "id": server.id,
+                               "source": server.credential_source or "none", "header": server.auth_header}}
+
     async def call(self, agent: Agent, name: str, arguments: Dict[str, Any], chain_id: Optional[int]) -> dict:
         org_id, agent_id = agent.org_id, agent.id
         found = await self._approved(org_id, name)
@@ -265,7 +315,9 @@ class MCPGateway:
             tool_digest=live_digest))
 
         refusal = None
-        if live_error:
+        if await enforcement.enforced(self.db, org_id):
+            refusal = "MCP gateway: " + enforcement.REFUSAL
+        elif live_error:
             refusal = f"MCP gateway: the upstream server could not confirm the tool ({live_error})"
         elif live_digest != pinned:
             refusal = "MCP gateway: the tool's definition changed upstream since it was approved (ASI04)"

@@ -21,6 +21,28 @@ const RunPrefix = "provenza-agent-"
 
 var runName = regexp.MustCompile(`^provenza-agent-([0-9]{1,12})-[0-9a-f]{16}$`)
 
+// ProxyPrefix names the cgroups made for `provenza-sensor --proxy run`:
+// provenza-proxy-<random>, created by the sensor (owned by root). What runs
+// in one gets out only while every process in it is a pinned egress proxy
+// binary (internal/daemon/proxyrun.go).
+const ProxyPrefix = "provenza-proxy-"
+
+var proxyName = regexp.MustCompile(`^provenza-proxy-[0-9a-f]{16}$`)
+
+// RunProxy reports whether rel is a proxy run cgroup.
+func RunProxy(rel string, owner uint32) bool {
+	return owner == 0 && proxyName.MatchString(filepath.Base(rel))
+}
+
+// NewProxyRun creates a proxy run cgroup, as NewRun does for an agent.
+func NewProxyRun(root, parentRel string) (string, error) {
+	b := make([]byte, 8)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return newRunDir(root, parentRel, ProxyPrefix+hex.EncodeToString(b))
+}
+
 // RunAgent returns the agent id a run cgroup was made for, if rel is one.
 func RunAgent(rel string, owner uint32) (int64, bool) {
 	if owner != 0 {
@@ -42,7 +64,10 @@ func NewRun(root, parentRel string, agentID int64) (string, error) {
 	if _, err := rand.Read(b); err != nil {
 		return "", err
 	}
-	name := fmt.Sprintf("%s%d-%s", RunPrefix, agentID, hex.EncodeToString(b))
+	return newRunDir(root, parentRel, fmt.Sprintf("%s%d-%s", RunPrefix, agentID, hex.EncodeToString(b)))
+}
+
+func newRunDir(root, parentRel, name string) (string, error) {
 	try := []string{}
 	if p := strings.Trim(parentRel, "/"); p != "" {
 		try = append(try, p)
@@ -64,12 +89,27 @@ func NewRun(root, parentRel string, agentID int64) (string, error) {
 		}
 		return filepath.ToSlash(filepath.Join(parent, name)), nil
 	}
-	return "", fmt.Errorf("creating a cgroup for the agent: %w", lastErr)
+	return "", fmt.Errorf("creating a run cgroup: %w", lastErr)
 }
 
 // Move puts a process into the cgroup.
 func Move(root, rel string, pid int) error {
 	return os.WriteFile(filepath.Join(root, rel, "cgroup.procs"), []byte(strconv.Itoa(pid)), 0o644)
+}
+
+// Procs lists the processes in the cgroup.
+func Procs(root, rel string) ([]int, error) {
+	data, err := os.ReadFile(filepath.Join(root, rel, "cgroup.procs"))
+	if err != nil {
+		return nil, err
+	}
+	var out []int
+	for _, f := range strings.Fields(string(data)) {
+		if n, err := strconv.Atoi(f); err == nil {
+			out = append(out, n)
+		}
+	}
+	return out, nil
 }
 
 // Empty reports whether no process is left in the cgroup.

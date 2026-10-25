@@ -32,7 +32,9 @@ In **connected** mode (when `PROVENZA_URL` is set):
    - a denied call rejects with `ProvenzaDenied`;
    - a call that needs a human decision rejects with `ProvenzaApprovalRequired`.
 
-   In both cases the attempt is recorded.
+   In both cases the attempt is recorded. Once a person approves the held
+   call, make exactly the same call again: it runs once, within an hour
+   (`await agent.waitForApproval(err.actionId)` waits for the decision).
 3. The result is recorded and signed with the agent's key.
 
 The SDK **fails closed**: if the server cannot be reached, the tool does
@@ -152,15 +154,29 @@ await fetch("http://127.0.0.1:8443/stripe/v1/charges", { method: "POST", body, h
 `path`, `query` and `body` must be exactly what goes on the wire; the proxy
 refuses any other request under that check, and records it itself.
 
+`await agent.proxyRequestHeaders(...)` (same arguments) returns the headers
+to send: the check's, or, while Provenza is unreachable, only the agent's
+signed request - a proxy that enforces the signed policy judges it by the
+signed release alone until its local kill switch stops it, and Provenza
+records it when it is back (docs/pvp/edge.md, section 6).
+
 ## HTTP tools through Provenza
 
 An API registered in Provenza (**Gateways → HTTP tools**) is called through
-Provenza, and the agent never holds its key:
+Provenza, and the agent never holds its key. A tool that takes a credential
+is called through the egress proxy, which holds it (`egressProxy` or
+`PROVENZA_EGRESS_PROXY`):
 
 ```ts
+const agent = await Agent.create({ name: "billing-bot", egressProxy: "http://127.0.0.1:8443" });
 const out = await agent.invoke("crm.set_tier", { id: "42", tier: "gold" });   // ProvenzaDenied on a refusal
 const tools = await agent.httpTools();   // names, descriptions and input schemas, for the model
 ```
+
+Through a proxy the HTTP request itself is signed too (`X-Provenza-Request`),
+which a proxy in enforce mode requires on every path. For clients that cannot
+sign, run the proxy's agent mode next to the agent (`provenza-proxy
+-agent-identity …`, `proxy/README.md`); it reads the same identity file.
 
 ## Egress self-check
 

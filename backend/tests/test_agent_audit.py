@@ -8,7 +8,6 @@ approve/deny flow for pending actions.
 
 import pytest
 import pytest_asyncio
-from fastapi import HTTPException
 from sqlalchemy import select
 
 from app.services.agent_registry import AgentRegistry
@@ -98,14 +97,6 @@ class TestApproveDeny:
         return audit, action
 
     @pytest.mark.asyncio
-    async def test_approve_pending(self, db_session, agent):
-        audit, action = await self._make_pending(db_session, agent)
-        assert action.policy_check_result == "pending_approval"
-        approved = await audit.approve_action(action.id, agent["org"].id)
-        assert approved.policy_check_result == "allowed"
-        assert "approved" in (approved.reason or "").lower()
-
-    @pytest.mark.asyncio
     async def test_deny_pending_raises_incident(self, db_session, agent):
         audit, action = await self._make_pending(db_session, agent)
         denied = await audit.deny_action(action.id, agent["org"].id, "too risky")
@@ -115,14 +106,3 @@ class TestApproveDeny:
         )
         assert res.scalar_one_or_none() is not None
 
-    @pytest.mark.asyncio
-    async def test_cannot_approve_non_pending(self, db_session, agent):
-        audit = AgentAudit(db_session)
-        d = await audit.check(agent["org"].id, agent["agent"].id, None, "tool_call",
-                              "openai.chat", {"model": "gpt-4o-mini"})
-        action = await audit.record(agent["org"].id, agent["agent"].id, None, "tool_call",
-                                    "openai.chat", {"model": "gpt-4o-mini"}, None, None, None, decision=d)
-        # this action is 'allowed', not pending -> approving is a 409
-        with pytest.raises(HTTPException) as exc:
-            await audit.approve_action(action.id, agent["org"].id)
-        assert exc.value.status_code == 409

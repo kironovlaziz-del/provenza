@@ -6,18 +6,21 @@
 PVPOrchestrator - the one place where agent governance decides (docs/pvp/spec.md).
 
 It understands only PVP messages. Adapters (the REST endpoints in
-app/api/agents.py today; MCP and A2A next) turn their protocol into a PVP
-message, call the orchestrator and turn the result back. Nothing here knows
+app/api/agents.py, the LLM, MCP, A2A and HTTP tool gateways, the egress
+proxy) turn their protocol into a PVP message, call the orchestrator and
+turn the result back. Nothing here knows
 which protocol a request came in on, so every protocol gets exactly the same
 checks in exactly the same order.
 
   check(request)     identity / attestation -> circuit breaker -> behaviour
-                     baseline -> policy engine (+ supply chain, ASI01, ASI05)
+                     baseline -> policy engine (+ supply chain) -> a
+                     pending approval the agent already got for exactly
+                     this call is spent (app/pvp/approvals.py)
                      -> single-use check bound to the action
   record(record)     key required -> check_id + signature required ->
                      attestation -> signature verified BEFORE the check is
                      burned -> check consumed (same action only) -> stored
-                     with the check-time verdict -> output scanned (ASI01)
+                     with the check-time verdict
   delegate(d)        active + keyed -> signed -> PQ rule -> attestation ->
                      signature -> freshness -> single-use nonce -> TTL from
                      the signed issued_at -> rights subset, depth, TTL never
@@ -28,6 +31,7 @@ caller is authenticated before it gets here (app/api/deps.py), and an agent
 key can only act as its own agent (services/agent_identity.py).
 """
 
+import dataclasses
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional
@@ -42,9 +46,9 @@ from app.models.agent import Agent
 from app.models.agent_action import ActionCheck, AgentAction
 from app.models.delegation import ActionNonce, DelegationChain, DelegationHop, DelegationNonce
 from app.pvp.model import PVPAction, PVPActionRecord, PVPActionRequest, PVPCheck, PVPDelegation
-from app.pvp import permits
+from app.pvp import approvals, permits
 from app.services.agent_audit import AgentAudit
-from app.services.agent_policy_engine import DENIED, Decision
+from app.services.agent_policy_engine import ALLOWED, DENIED, PENDING_APPROVAL, Decision
 from app.services.agent_identity import keyless_refused, pq_signature_required
 from app.services.agent_registry import AgentRegistry
 from app.services.delegation_service import DelegationService
@@ -95,7 +99,8 @@ class PVPOrchestrator:
 
     # ------------------------------------------------------------ actions
 
-    async def check(self, org_id: int, req: PVPActionRequest, *, require_signature: bool = False) -> PVPCheck:
+    async def check(self, org_id: int, req: PVPActionRequest, *, require_signature: bool = False,
+                    permit: bool = True) -> PVPCheck:
         """Run the policy engine for a proposed action and issue a single-use
         check bound to exactly this action (agent, chain, tool, input hash,
         capabilities, verdict).
@@ -104,14 +109,19 @@ class PVPOrchestrator:
         the request must carry the agent's signature over
         req.signed_payload(), fresh and with a nonce never used before. A
         signature sent where it is not required is verified all the same.
-        Gateways and the egress proxy call without it: they are the witness."""
+        Gateways and the egress proxy call without it: they are the witness.
+        permit: False issues no permit for the tool (enforce mode's REST path,
+        app/pvp/enforcement.py). A check whose signature was verified says
+        so (agent_signed)."""
         checked = (await self.db.execute(select(Agent).where(
             Agent.id == req.agent_id, Agent.org_id == org_id))).scalar_one_or_none()
+        signed = False
         if checked is not None:
             if await keyless_refused(self.db, checked):
                 raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="agent.key_required")
             if require_signature or req.signature:
                 await self._verify_request(org_id, checked, req)
+                signed = True
             await require_attestation(self.db, checked)
         elif require_signature:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="agent.not_found")
@@ -123,23 +133,42 @@ class PVPOrchestrator:
         # ASI10: score the agent against its behavioural baseline first, so a
         # quarantine decided now already applies to this very request
         from app.services.behavior_monitor import BehaviorMonitor
-        await BehaviorMonitor(self.db).evaluate(org_id, req.agent_id, req.tool_name)
+        # (an LLM call is not a tool of the baseline: no "new tool" for it)
+        await BehaviorMonitor(self.db).evaluate(org_id, req.agent_id,
+                                                None if req.action_type == "model_call" else req.tool_name)
         audit = AgentAudit(self.db)
         decision = await audit.check(
             org_id=org_id, agent_id=req.agent_id, chain_id=req.chain_id, action_type=req.action_type,
             tool_name=req.tool_name, input_data=req.input,
             tool_version=req.tool_version, tool_digest=req.tool_digest,
         )
+        approval = None
+        if decision.result == PENDING_APPROVAL:
+            # a person already approved exactly this call: it may run, once (app/pvp/approvals.py)
+            approval = await approvals.take(self.db, org_id, agent_id=req.agent_id, chain_id=req.chain_id,
+                                            action_type=req.action_type, tool_name=req.tool_name,
+                                            input_data=req.input)
+            if approval is not None:
+                caps = decision.required_capabilities
+                decision = Decision(ALLOWED, f"approved by a person (approval #{approval.id} of action "
+                                             f"#{approval.action_id})", None,
+                                    matched_policy_id=decision.matched_policy_id)
+                decision.required_capabilities = caps
         chk = await audit.issue_check(
             org_id=org_id, agent_id=req.agent_id, chain_id=req.chain_id, action_type=req.action_type,
             tool_name=req.tool_name, input_data=req.input,
             action_capabilities=decision.required_capabilities, decision=decision,
         )
-        permit = None
-        if chk.decision == "allowed":
-            permit = await permits.issue(self.db, chk)
+        if approval is not None:
+            await approvals.bind(self.db, approval.id, chk.id)
+        if signed:
+            chk.agent_signed = True
             await self.db.commit()
-        return self.check_out(chk, permit)
+        token = None
+        if chk.decision == "allowed" and permit:
+            token = await permits.issue(self.db, chk)
+            await self.db.commit()
+        return self.check_out(chk, token)
 
     async def verify_signed_request(self, org_id: int, agent: Agent, req: PVPActionRequest) -> None:
         """The agent's own signed action.request (signature, freshness, nonce) -
@@ -213,6 +242,11 @@ class PVPOrchestrator:
             )
 
         verified = bool(check and rec.signature)
+        from app.pvp import enforcement
+
+        if decision is not None and await enforcement.enforced(self.db, org_id):
+            # enforce mode: what an agent reports it did itself is an observation
+            decision = dataclasses.replace(decision, reason=(decision.reason or "") + enforcement.OBSERVATION)
         action = await audit.record(
             org_id=org_id, agent_id=rec.agent_id, chain_id=rec.chain_id, action_type=rec.action_type,
             tool_name=rec.tool_name, input_data=rec.input, output_data=rec.output,
@@ -247,6 +281,8 @@ class PVPOrchestrator:
         )
         if refusal:
             decision = Decision(DENIED, refusal, None, matched_policy_id=decision.matched_policy_id)
+            # the executor refused after the check: an approval spent on it is not used up
+            await approvals.release(self.db, chk.id)
         action = await audit.record(
             org_id=org_id, agent_id=check.agent_id, chain_id=check.chain_id, action_type=check.action_type,
             tool_name=check.tool_name, input_data=input_data, output_data=output, signature=None,

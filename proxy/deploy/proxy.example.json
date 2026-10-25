@@ -4,6 +4,8 @@
   "listen": "127.0.0.1:8443",
   "upstream_timeout": "60s",
   "server_timeout": "10s",
+  "state_dir": "/var/lib/provenza-proxy",
+  "policy": {"mode": "off"},
   "local_secrets": {
     "internal-crm": {"header": "X-Api-Key", "value_file": "/etc/provenza/crm.key"}
   }

@@ -79,6 +79,15 @@ api.interceptors.response.use(
       clearToken();
       window.location.href = "/login";
     }
+    // a second sign-in of an administrator or approver waits on the sign-in page
+    if (
+      typeof window !== "undefined" &&
+      error?.response?.status === 403 &&
+      error?.response?.data?.detail === "auth.session_blocked" &&
+      window.location.pathname !== "/login"
+    ) {
+      window.location.href = "/login";
+    }
     // the organization requires a second factor this user has not set up yet
     if (
       typeof window !== "undefined" &&
@@ -175,10 +184,10 @@ export const setMfaPolicy = async (mfa_required: MfaPolicy) =>
 export const resetUserMfa = async (userId: number) => (await api.post<User>(`/users/${userId}/mfa/reset`)).data;
 
 /** Ends this session on the server too (the token is revoked), best effort. */
-export async function logoutRequest(token: string | null) {
+export async function logoutRequest(token: string | null, revocation: Record<string, unknown> | null = null) {
   if (!token) return;
   try {
-    await api.post("/auth/logout", null, { headers: { Authorization: `Bearer ${token}` } });
+    await api.post("/auth/logout", revocation ? { revocation } : null, { headers: { Authorization: `Bearer ${token}` } });
   } catch {
     // offline or already invalid: forgetting the token locally still logs out here
   }
@@ -261,7 +270,6 @@ export async function createProvider(payload: {
   risk_score?: number;
   base_url?: string;
   default_model?: string;
-  api_key?: string;
 }) {
   const { data } = await api.post<Provider>("/providers/", payload);
   return data;
@@ -277,7 +285,8 @@ export async function updateProvider(
     risk_score: number;
     base_url: string;
     default_model: string;
-    api_key: string;
+    /** only "": clear the credential (a key is sealed in the browser, lib/sealing.ts) */
+    api_key: "";
   }>
 ) {
   const { data } = await api.put<Provider>(`/providers/${id}`, payload);

@@ -15,7 +15,7 @@ from app.core.metrics import (
 from app.core.config import settings
 from app.pvp.guard import BodyLimitMiddleware
 from app.core.security_headers import SecurityHeadersMiddleware
-from app.api import auth, users, use_cases, incidents
+from app.api import auth, signing, users, use_cases, incidents, policy_release
 from app.api import providers
 from app.api import audit
 from app.api import shadow_ai
@@ -151,6 +151,9 @@ async def metrics_endpoint(db: AsyncSession = Depends(get_db)) -> Response:
 
 
 app.include_router(auth.router, prefix=f"{settings.API_V1_STR}/auth", tags=["auth"])
+app.include_router(signing.session_router, prefix=f"{settings.API_V1_STR}/auth/session", tags=["auth"])
+app.include_router(signing.passkey_router, prefix=f"{settings.API_V1_STR}/users/me/passkeys", tags=["users"])
+app.include_router(policy_release.router, prefix=f"{settings.API_V1_STR}/policy-releases", tags=["policy"])
 app.include_router(users.router, prefix=f"{settings.API_V1_STR}/users", tags=["users"])
 app.include_router(use_cases.router, prefix=f"{settings.API_V1_STR}/use-cases", tags=["use-cases"])
 app.include_router(incidents.router, prefix=f"{settings.API_V1_STR}/incidents", tags=["incidents"])

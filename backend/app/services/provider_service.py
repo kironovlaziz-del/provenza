@@ -4,7 +4,6 @@ from fastapi import HTTPException, status
 from typing import List
 from app.models.ai_provider import AIProvider
 from app.schemas.provider import ProviderCreate, ProviderUpdate
-from app.core.crypto import encrypt_secret
 
 
 class ProviderService:
@@ -12,6 +11,11 @@ class ProviderService:
         self.db = db
 
     async def create_provider(self, org_id: int, data: ProviderCreate) -> AIProvider:
+        from app.services import credentials
+
+        if data.api_key:
+            # the key is sealed in the browser to the egress proxies (PUT /egress/credentials/provider/{id})
+            raise credentials.plaintext_refused()
         provider = AIProvider(
             org_id=org_id,
             name=data.name,
@@ -21,7 +25,6 @@ class ProviderService:
             risk_score=data.risk_score,
             base_url=data.base_url,
             default_model=data.default_model,
-            api_key_encrypted=encrypt_secret(data.api_key, org_id=org_id) if data.api_key else None,
         )
         self.db.add(provider)
         await self.db.commit()
@@ -60,7 +63,12 @@ class ProviderService:
     async def update_provider(
         self, provider_id: int, org_id: int, data: ProviderUpdate
     ) -> AIProvider:
+        from app.services import credentials
+
+        if data.api_key:
+            raise credentials.plaintext_refused()
         provider = await self.get_provider(provider_id, org_id)
+        clear = data.api_key == ""
 
         if data.name is not None:
             provider.name = data.name
@@ -69,7 +77,7 @@ class ProviderService:
             # an OpenAI key sent to Anthropic will just 401. Force the admin
             # to enter a matching key when switching vendors.
             provider.type = data.type
-            provider.api_key_encrypted = None
+            clear = True
         elif data.type is not None:
             provider.type = data.type
         if data.status is not None:
@@ -82,9 +90,10 @@ class ProviderService:
             provider.base_url = data.base_url
         if data.default_model is not None:
             provider.default_model = data.default_model
-        if data.api_key is not None:
-            # empty string clears the stored credential, anything else replaces it
-            provider.api_key_encrypted = encrypt_secret(data.api_key, org_id=provider.org_id) if data.api_key else None
+        if clear:
+            # an empty api_key clears the credential (the proxies' envelopes too)
+            await credentials.forget(self.db, "provider", provider.id)
+            provider.api_key_encrypted, provider.credential_source = None, "none"
 
         await self.db.commit()
         await self.db.refresh(provider)

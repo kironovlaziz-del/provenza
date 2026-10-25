@@ -10,17 +10,31 @@
  *   import { gatewayOptions } from "provenza/integrations/openai";
  *   const client = new OpenAI(gatewayOptions(agent));
  *
- * Every call is then checked by the server (allowed models and providers,
- * policies, limits), and the provider key never reaches
- * the agent. Any provider the organization routed is reached through this
+ * Every call is then a PVP action of the agent ("model_call" on
+ * "llm.<model>"), decided by the server like any other action (allowed models
+ * and providers, agent policies, the delegation chain, quarantine, the breaker,
+ * limits), and the provider key never reaches the agent. Calls made inside a
+ * delegation chain: gatewayOptions(agent, { chainId }). Any provider the organization routed is reached through this
  * one endpoint. The gateway does not stream yet.
  */
 
 import type { Agent } from "../agent.js";
 
 export const GATEWAY_PATH = "/api/v1/gateway/v1";
+export const CHAIN_HEADER = "X-Provenza-Chain-Id";
 
-export function gatewayOptions(agent: Agent): { baseURL: string; apiKey: string } {
+export interface GatewayOptions {
+  baseURL: string;
+  apiKey: string;
+  defaultHeaders?: Record<string, string>;
+}
+
+export function gatewayOptions(agent: Agent, opts: { chainId?: number } = {}): GatewayOptions {
   const c = agent.credentials();
-  return { baseURL: c.serverUrl + GATEWAY_PATH, apiKey: c.apiKey };
+  const out: GatewayOptions = { baseURL: c.serverUrl + GATEWAY_PATH, apiKey: c.apiKey };
+  if (opts.chainId !== undefined) {
+    if (!Number.isSafeInteger(opts.chainId) || opts.chainId < 1) throw new RangeError("chainId must be a positive integer");
+    out.defaultHeaders = { [CHAIN_HEADER]: String(opts.chainId) };
+  }
+  return out;
 }

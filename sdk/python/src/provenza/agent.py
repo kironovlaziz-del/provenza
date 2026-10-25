@@ -86,6 +86,9 @@ class Check:
     policy_id: Optional[int] = None
     # allowed: the signed permit the tool verifies (provenza.permit)
     permit: Optional[str] = field(default=None, repr=False)
+    # the agent's signed action.request behind this check, with its public
+    # key(s): an egress proxy that enforces the signed policy verifies it itself
+    request: Optional[Dict[str, Any]] = field(default=None, repr=False)
 
     @property
     def allowed(self) -> bool:
@@ -99,8 +102,13 @@ class Check:
 
     @property
     def proxy_headers(self) -> Dict[str, str]:
-        """For a proxy check: the header the egress proxy redeems."""
-        return {egress_proxy.HEADER: self.check_id}
+        """For a proxy check: the check id the egress proxy redeems, and the
+        agent's signed request, which a proxy enforcing the signed policy
+        verifies with the key the signed manifest names."""
+        headers = {egress_proxy.HEADER: self.check_id}
+        if self.request is not None:
+            headers[egress_proxy.REQUEST_HEADER] = egress_proxy.request_header(self.request)
+        return headers
 
 
 def _json_value(value: Any, what: str) -> Any:
@@ -173,7 +181,7 @@ class Agent:
                  key_store: str = "file", mode: Optional[str] = None, hybrid: bool = False,
                  allowed_tools: Optional[Iterable[str]] = None, audit_log: Optional[str] = None,
                  fail_open: bool = False, record_mode: str = "sync", timeout: float = 10.0, transport=None,
-                 async_transport=None):
+                 async_transport=None, egress_proxy: Optional[str] = None):
         self.name = name or os.environ.get("PROVENZA_AGENT_NAME") or "agent"
         server_url = server_url or os.environ.get("PROVENZA_URL")
         token = enrollment_token or os.environ.get("PROVENZA_TOKEN")
@@ -190,6 +198,12 @@ class Agent:
         self.allowed_tools = frozenset(allowed_tools) if allowed_tools is not None else None
         self._client: Optional[Client] = None
         self.identity = self._load_identity(server_url, token, key_store, hybrid, timeout, transport, async_transport)
+        # HTTP tools whose credential is sealed to the egress proxies are called through one (/_tools/call)
+        proxy_url = egress_proxy or os.environ.get("PROVENZA_EGRESS_PROXY")
+        self._tools_client: Optional[Client] = None
+        if proxy_url and self._client is not None:
+            self._tools_client = Client(proxy_url, self.identity.api_key, timeout=max(timeout, 60.0),
+                                        transport=transport, async_transport=async_transport, api="")
         self.audit_log = AuditLog(Path(audit_log) if audit_log else self.identity_path.with_suffix(".audit.jsonl"),
                                   self.identity.keys, self.name)
 
@@ -256,6 +270,10 @@ class Agent:
     # ------------------------------------------------------------------ protocol
 
     def _check_body(self, tool: ToolSpec, input: Dict[str, Any], chain_id: Optional[int]) -> Dict[str, Any]:
+        return self._signed_check(tool, input, chain_id)[0]
+
+    def _signed_check(self, tool: ToolSpec, input: Dict[str, Any], chain_id: Optional[int]):
+        """(the check body, the signed request as an egress proxy verifies it)."""
         body = {"agent_id": self.agent_id, "chain_id": chain_id, "action_type": tool.action_type,
                 "tool_name": tool.name, "input": input}
         if tool.version:
@@ -268,18 +286,22 @@ class Agent:
         payload = {"type": "action.request", "agent_id": self.agent_id, "chain_id": chain_id,
                    "action_type": tool.action_type, "tool_name": tool.name, "input_sha256": content_hash(input),
                    "tool_version": tool.version, "tool_digest": tool.digest, "nonce": nonce, "issued_at": issued_at}
-        sig, pq = self.identity.keys.sign(payload)
+        keys = self.identity.keys
+        sig, pq = keys.sign(payload)
         body.update({"nonce": nonce, "issued_at": issued_at, "signature": sig})
+        request = {"payload": payload, "signature": sig, "public_key": keys.public_key}
         if pq:
             body["pq_signature"] = pq
-        return body
+            request.update(pq_signature=pq, pq_public_key=keys.pq_public_key)
+        return body, request
 
     @staticmethod
-    def _check_of(res: Dict[str, Any], tool: ToolSpec, input: Dict[str, Any], chain_id: Optional[int]) -> Check:
+    def _check_of(res: Dict[str, Any], tool: ToolSpec, input: Dict[str, Any], chain_id: Optional[int],
+                  request: Optional[Dict[str, Any]] = None) -> Check:
         return Check(check_id=res["check_id"], decision=res["decision"], reason=res.get("reason") or "",
                      tool=tool.name, action_type=tool.action_type, input=input, chain_id=chain_id,
                      incident_type=res.get("incident_type"), policy_id=res.get("policy_id"),
-                     permit=res.get("permit"))
+                     permit=res.get("permit"), request=request)
 
     def _record_body(self, chk: Check, output: Optional[Dict[str, Any]], duration_ms: Optional[int]) -> Dict[str, Any]:
         payload = {"check_id": chk.check_id, "agent_id": self.agent_id, "chain_id": chk.chain_id,
@@ -300,32 +322,90 @@ class Agent:
         """Ask before doing something that is not a decorated tool."""
         spec, inp = ToolSpec(tool, action_type), _json_value(input, "input")
         cid = chain_id if chain_id is not None else _chain.get()
-        res = self._connected().post("/agents/actions/check", self._check_body(spec, inp, cid))
-        return self._check_of(res, spec, inp, cid)
+        body, request = self._signed_check(spec, inp, cid)
+        res = self._connected().post("/agents/actions/check", body)
+        return self._check_of(res, spec, inp, cid, request)
 
     async def acheck(self, tool: str, input: Dict[str, Any], *, action_type: str = "tool_call",
                      chain_id: Optional[int] = None) -> Check:
         spec, inp = ToolSpec(tool, action_type), _json_value(input, "input")
         cid = chain_id if chain_id is not None else _chain.get()
-        res = await self._connected().apost("/agents/actions/check", self._check_body(spec, inp, cid))
-        return self._check_of(res, spec, inp, cid)
+        body, request = self._signed_check(spec, inp, cid)
+        res = await self._connected().apost("/agents/actions/check", body)
+        return self._check_of(res, spec, inp, cid, request)
+
+    def _tools(self):
+        """Where HTTP tools are called: the egress proxy when one is set
+        (egress_proxy / PROVENZA_EGRESS_PROXY - it holds the tools'
+        credentials), else Provenza's own HTTP tool gateway."""
+        if self._tools_client is not None:
+            return self._tools_client, "/_tools/call"
+        return self._connected(), "/http-tools/call"
 
     def invoke(self, tool: str, arguments: Dict[str, Any], *, chain_id: Optional[int] = None) -> Dict[str, Any]:
-        """Call an HTTP tool registered in Provenza: the server checks, calls the
-        API with the credential it holds, and records - in one operation. The
-        result is {"decision", "reason", "action_id", "status", "body"} for an
-        allowed call ("error" / "withheld" instead of "body" when the API failed
-        or the answer was refused). A refusal raises ProvenzaDenied."""
+        """Call an HTTP tool registered in Provenza: checked, called and
+        recorded in one operation - by the egress proxy, which holds the tool's
+        credential (egress_proxy), or by Provenza's gateway for a tool that
+        takes none. The result is {"decision", "reason", "action_id", "status",
+        "body"} for an allowed call ("error" / "withheld" instead of "body" when
+        the API failed or the answer was refused). A refusal raises ProvenzaDenied."""
         spec, inp = ToolSpec(tool), _json_value(arguments, "arguments")
         cid = chain_id if chain_id is not None else _chain.get()
-        return self._invoked(tool, self._connected().post("/http-tools/call", self._check_body(spec, inp, cid)))
+        client, path = self._tools()
+        return self._invoked(tool, client.post(path, self._check_body(spec, inp, cid), sign=self._proxy_signer(cid)))
 
     async def ainvoke(self, tool: str, arguments: Dict[str, Any], *,
                       chain_id: Optional[int] = None) -> Dict[str, Any]:
         spec, inp = ToolSpec(tool), _json_value(arguments, "arguments")
         cid = chain_id if chain_id is not None else _chain.get()
-        return self._invoked(tool, await self._connected().apost("/http-tools/call",
-                                                                 self._check_body(spec, inp, cid)))
+        client, path = self._tools()
+        return self._invoked(tool, await client.apost(path, self._check_body(spec, inp, cid),
+                                                      sign=self._proxy_signer(cid)))
+
+    def _proxy_signer(self, chain_id: Optional[int]):
+        """Through an egress proxy: the agent's signed request over the HTTP
+        request itself (route "_tools"), which a proxy in enforce mode requires
+        on every path (docs/pvp/edge.md, section 4)."""
+        if self._tools_client is None:
+            return None
+
+        def sign(raw: bytes) -> Dict[str, str]:
+            spec = ToolSpec(egress_proxy.tool_name("_tools"), egress_proxy.ACTION_TYPE)
+            _, request = self._signed_check(spec, egress_proxy.descriptor("_tools", "POST", "/call", body=raw),
+                                            chain_id)
+            return {egress_proxy.REQUEST_HEADER: egress_proxy.request_header(request)}
+        return sign
+
+    # ------------------------------------------------------------ approvals
+
+    def approval(self, action_id: int) -> Dict[str, Any]:
+        """Where a held call stands: {"action_id", "decision" (pending_approval,
+        approved, denied, expired), "decided_at", "used", "redeemable_until"}."""
+        return self._connected().get(f"/agents/actions/{int(action_id)}/decision")
+
+    async def aapproval(self, action_id: int) -> Dict[str, Any]:
+        return await self._connected().aget(f"/agents/actions/{int(action_id)}/decision")
+
+    def wait_for_approval(self, action_id: int, *, timeout: float = 600.0, interval: float = 5.0) -> Dict[str, Any]:
+        """Wait until a person decides on a held call (ProvenzaApprovalRequired.action_id)
+        or the timeout passes, and return the last state. When it is "approved",
+        make exactly the same call again - with the same arguments, in the same
+        chain - before redeemable_until: it runs once. Nothing is replayed for you."""
+        deadline = time.monotonic() + timeout
+        while True:
+            state = self.approval(action_id)
+            if state.get("decision") != "pending_approval" or time.monotonic() >= deadline:
+                return state
+            time.sleep(max(0.5, min(interval, deadline - time.monotonic())))
+
+    async def await_for_approval(self, action_id: int, *, timeout: float = 600.0,
+                                 interval: float = 5.0) -> Dict[str, Any]:
+        deadline = time.monotonic() + timeout
+        while True:
+            state = await self.aapproval(action_id)
+            if state.get("decision") != "pending_approval" or time.monotonic() >= deadline:
+                return state
+            await asyncio.sleep(max(0.5, min(interval, deadline - time.monotonic())))
 
     def attest(self, evidence: str) -> Dict[str, Any]:
         """Prove where this agent runs (provenza.attest has the token sources).
@@ -399,6 +479,34 @@ class Agent:
                            chain_id: Optional[int] = None) -> Check:
         return await self.acheck(egress_proxy.tool_name(route), egress_proxy.descriptor(
             route, method, path, query=query, body=body), action_type=egress_proxy.ACTION_TYPE, chain_id=chain_id)
+
+    def proxy_request_headers(self, route: str, method: str, path: str, *, query=None, body=None,
+                              chain_id: Optional[int] = None) -> Dict[str, str]:
+        """The headers for a request through the egress proxy: a check when
+        Provenza answers (proxy_check); while it is unreachable, only the
+        agent's signed request - a proxy that enforces the signed policy then
+        judges it by the signed release alone, for at most the release's
+        offline time, and Provenza records it when it is back
+        (docs/pvp/edge.md, section 6)."""
+        try:
+            return self.proxy_check(route, method, path, query=query, body=body, chain_id=chain_id).proxy_headers
+        except ProvenzaUnavailable:
+            return self._offline_headers(route, method, path, query, body, chain_id)
+
+    async def aproxy_request_headers(self, route: str, method: str, path: str, *, query=None, body=None,
+                                     chain_id: Optional[int] = None) -> Dict[str, str]:
+        try:
+            return (await self.aproxy_check(route, method, path, query=query, body=body,
+                                            chain_id=chain_id)).proxy_headers
+        except ProvenzaUnavailable:
+            return self._offline_headers(route, method, path, query, body, chain_id)
+
+    def _offline_headers(self, route, method, path, query, body, chain_id) -> Dict[str, str]:
+        spec = ToolSpec(egress_proxy.tool_name(route), egress_proxy.ACTION_TYPE)
+        inp = egress_proxy.descriptor(route, method, path, query=query, body=body)
+        cid = chain_id if chain_id is not None else _chain.get()
+        _, request = self._signed_check(spec, inp, cid)
+        return {egress_proxy.REQUEST_HEADER: egress_proxy.request_header(request)}
 
     def record(self, check: Check, output: Any = None, duration_ms: Optional[int] = None) -> Dict[str, Any]:
         """Record what was done under a check (once). Retries a server that
@@ -640,13 +748,15 @@ class Agent:
 
     def close(self) -> None:
         self.flush()
-        if self._client is not None:
-            self._client.close()
+        for c in (self._client, self._tools_client):
+            if c is not None:
+                c.close()
 
     async def aclose(self) -> None:
         await self.aflush()
-        if self._client is not None:
-            await self._client.aclose()
+        for c in (self._client, self._tools_client):
+            if c is not None:
+                await c.aclose()
 
     def __enter__(self) -> "Agent":
         return self

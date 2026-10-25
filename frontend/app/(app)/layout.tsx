@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "@/lib/auth";
 import { DialogHost } from "@/components/Dialog";
+import { ReleaseBanner } from "@/components/ReleaseBanner";
+import { SessionBanner } from "@/components/SessionBanner";
 import { Sidebar } from "@/components/Sidebar";
 import { SystemHealthBanner } from "@/components/SystemHealthBanner";
 
@@ -42,6 +44,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             {t("roles.auditor_banner", "Auditor: read-only access. You see everything administrators see and change nothing.")}
           </div>
         )}
+        <SessionBanner />
+        <ReleaseBanner />
         <SystemHealthBanner />
         {children}
       </div>

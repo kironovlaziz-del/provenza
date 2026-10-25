@@ -72,6 +72,34 @@ def match_entry(entries: List[ToolRegistryEntry], tool: str) -> Optional[ToolReg
     return max(globs, key=lambda e: len(e.pattern)) if globs else None
 
 
+def verify_against(mode: str, entries: list, tool: Optional[str], version: Optional[str] = None,
+                   digest: Optional[str] = None, where: str = "the Tool Registry") -> Optional[Decision]:
+    """SupplyChain.verify's verdict over given entries, without its side
+    effects (usage counts, discovery, drift marking) - for the signed Tool
+    Registry (app/pvp/signed_policy.py)."""
+    if not tool or mode == "off":
+        return None
+    entry = match_entry(entries, tool)
+    if entry is None:
+        if mode == "enforce":
+            return Decision(DENIED, f"Tool '{tool}' is not approved in {where} (ASI04)", VIOLATION)
+        return None
+    if entry.status == "blocked":
+        return Decision(DENIED, f"Tool '{tool}' is blocked in {where} (ASI04)", VIOLATION)
+    if entry.status == "approved":
+        drift = SupplyChain._drift(entry, version, digest)
+        if drift and mode == "enforce":
+            return Decision(DENIED, f"Tool '{tool}' differs from {where} ({'; '.join(drift)}) (ASI04)", VIOLATION)
+        missing = SupplyChain._missing(entry, version, digest)
+        if missing and mode == "enforce":
+            return Decision(DENIED, f"Tool '{tool}' is pinned in {where}; the request must report its "
+                                    f"{' and '.join(missing)} (ASI04)", VIOLATION)
+        return None
+    if mode == "enforce":
+        return Decision(DENIED, f"Tool '{tool}' is {entry.status} in {where} (ASI04)", VIOLATION)
+    return None
+
+
 class SupplyChain:
     def __init__(self, db: AsyncSession):
         self.db = db

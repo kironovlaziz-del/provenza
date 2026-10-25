@@ -23,7 +23,6 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import require_role
-from app.core.crypto import encrypt_secret
 from app.core.database import get_db
 from app.core.errors import api_error
 from app.core.outbound import validate_url
@@ -121,7 +120,7 @@ class HttpToolIn(BaseModel):
     url: str = Field(max_length=500)
     input_schema: Optional[Dict[str, Any]] = None
     auth_header: str = "Authorization"
-    auth_secret: Optional[str] = Field(default=None, min_length=1, max_length=4000)
+    auth_secret: Optional[str] = Field(default=None, max_length=4000)   # refused: sealed in the browser
     timeout_seconds: int = Field(default=30, ge=1, le=120)
     max_response_bytes: int = Field(default=1024 * 1024, ge=1024, le=8 * 1024 * 1024)
     send_permit: bool = True
@@ -150,7 +149,7 @@ class HttpToolUpdate(BaseModel):
     url: Optional[str] = Field(default=None, max_length=500)
     input_schema: Optional[Dict[str, Any]] = None
     auth_header: Optional[str] = None
-    auth_secret: Optional[str] = Field(default=None, min_length=1, max_length=4000)
+    auth_secret: Optional[str] = Field(default=None, max_length=4000)   # refused: sealed in the browser
     clear_secret: bool = False
     timeout_seconds: Optional[int] = Field(default=None, ge=1, le=120)
     max_response_bytes: Optional[int] = Field(default=None, ge=1024, le=8 * 1024 * 1024)
@@ -182,6 +181,7 @@ class HttpToolOut(BaseModel):
     input_schema: Optional[Dict[str, Any]]
     auth_header: str
     has_secret: bool          # the secret itself is never returned
+    credential_source: str    # none, sealed (to the egress proxies), local (in their configuration)
     timeout_seconds: int
     max_response_bytes: int
     send_permit: bool
@@ -194,7 +194,8 @@ class HttpToolOut(BaseModel):
 
 def _out(t: HttpTool) -> HttpToolOut:
     return HttpToolOut(id=t.id, name=t.name, description=t.description, method=t.method, url=t.url,
-                       input_schema=t.input_schema, auth_header=t.auth_header, has_secret=bool(t.auth_secret_encrypted),
+                       input_schema=t.input_schema, auth_header=t.auth_header, has_secret=t.credential_source != "none",
+                       credential_source=t.credential_source,
                        timeout_seconds=t.timeout_seconds, max_response_bytes=t.max_response_bytes,
                        send_permit=t.send_permit, enabled=t.enabled, digest=t.digest,
                        registry_entry_id=t.registry_entry_id, created_at=t.created_at, updated_at=t.updated_at)
@@ -224,6 +225,10 @@ async def list_tools(db: AsyncSession = Depends(get_db), user: User = Depends(_a
 
 @router.post("", response_model=HttpToolOut)
 async def create_tool(data: HttpToolIn, db: AsyncSession = Depends(get_db), user: User = Depends(_admin)):
+    from app.services import credentials
+
+    if data.auth_secret is not None:
+        raise credentials.plaintext_refused()
     org_id, user_id = user.org_id, user.id
     _placeholders_declared(data.url, data.input_schema)
     clash = (await db.execute(select(MCPTool.id).where(MCPTool.org_id == org_id, MCPTool.exposed_name == data.name,
@@ -232,7 +237,6 @@ async def create_tool(data: HttpToolIn, db: AsyncSession = Depends(get_db), user
         raise api_error(status.HTTP_409_CONFLICT, "http_tool.name_taken", name=data.name)
     tool = HttpTool(org_id=org_id, name=data.name, description=data.description, method=data.method, url=data.url,
                     input_schema=data.input_schema, auth_header=data.auth_header,
-                    auth_secret_encrypted=encrypt_secret(data.auth_secret, org_id) if data.auth_secret else None,
                     timeout_seconds=data.timeout_seconds, max_response_bytes=data.max_response_bytes,
                     send_permit=data.send_permit, enabled=data.enabled, digest="", created_by=user_id)
     try:
@@ -245,14 +249,17 @@ async def create_tool(data: HttpToolIn, db: AsyncSession = Depends(get_db), user
     tool_id = tool.id
     await db.commit()
     await AuditService(db).log(org_id, user_id, "http_tool", tool_id, "created",
-                               {"name": data.name, "method": data.method, "url": data.url,
-                                "has_secret": bool(data.auth_secret)})
+                               {"name": data.name, "method": data.method, "url": data.url})
     return _out(await _get(db, org_id, tool_id))
 
 
 @router.patch("/{tool_id}", response_model=HttpToolOut)
 async def update_tool(tool_id: int, data: HttpToolUpdate, db: AsyncSession = Depends(get_db),
                       user: User = Depends(_admin)):
+    from app.services import credentials
+
+    if data.auth_secret is not None:
+        raise credentials.plaintext_refused()
     org_id, user_id = user.org_id, user.id
     tool = await _get(db, org_id, tool_id)
     changes = data.model_dump(exclude_unset=True, exclude={"auth_secret", "clear_secret"})
@@ -260,17 +267,16 @@ async def update_tool(tool_id: int, data: HttpToolUpdate, db: AsyncSession = Dep
         if value is not None or key == "input_schema":
             setattr(tool, key, value)
     _placeholders_declared(tool.url, tool.input_schema)
-    if data.auth_secret:
-        tool.auth_secret_encrypted = encrypt_secret(data.auth_secret, org_id)
-    elif data.clear_secret:
-        tool.auth_secret_encrypted = None
+    if data.clear_secret:
+        await credentials.forget(db, "http_tool", tool_id)
+        tool.credential_source, tool.auth_secret_encrypted = "none", None
     before = tool.digest
     await HttpToolGateway(db).pin(tool, user_id)
     after = tool.digest
     await db.commit()
     await AuditService(db).log(org_id, user_id, "http_tool", tool_id, "updated",
-                               {"fields": sorted(changes), "secret": "set" if data.auth_secret
-                                else "cleared" if data.clear_secret else "unchanged",
+                               {"fields": sorted(changes), "secret": "cleared" if data.clear_secret
+                                else "unchanged",
                                 "definition_changed": before != after})
     return _out(await _get(db, org_id, tool_id))
 

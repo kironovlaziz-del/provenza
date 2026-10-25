@@ -34,6 +34,7 @@ log = logging.getLogger(__name__)
 EVENT_TYPES = ("action.checked", "action.recorded", "llm.call", "delegation.hop", "incident.created")
 KINDS = {"ActionCheck": "action.checked", "AgentAction": "action.recorded", "AgentIncident": "incident.created",
          "GatewayCall": "llm.call", "DelegationHop": "delegation.hop"}
+MODEL_ACTION = "model_call"
 GUARD_RE = re.compile(r"\bASI(?:0[1-9]|10)\b")
 _KEY = "obs_pending"
 
@@ -64,6 +65,8 @@ def to_event(obj) -> Optional[Tuple[int, dict]]:
     if kind is None:
         return None
     d = obj.__dict__
+    if kind == "action.recorded" and d.get("action_type") == MODEL_ACTION:
+        return None     # an LLM gateway call: published as llm.call by its gateway_calls row
     org_id, ev_id = d.get("org_id"), d.get("id")
     if org_id is None or ev_id is None:
         return None

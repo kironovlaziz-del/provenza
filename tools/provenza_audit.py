@@ -26,11 +26,25 @@ not share code with one, so what it says does not depend on trusting either.
         file): a third party saw exactly that state of the log at that time
 
   receipt RECEIPT.json [--fingerprint SHA256:...]... [--agent-fingerprint SHA256:...]
+                       [--approver-passkey SHA256:...]...
         a PVP receipt (GET /pvp/receipts/{action_id}): the action is signed
         by its agent (or was executed by a Provenza gateway), its signed
         payload names this very action, it matches its check, it is a leaf
         of a seal, the seal is a record of the audit log, and that log is
-        signed - action -> seal -> audit record -> checkpoint
+        signed - action -> seal -> audit record -> checkpoint. When a
+        person's approval let it run, the receipt carries that approval:
+        the reviewer's session key signed it for exactly this call, and the
+        reviewer's passkey (a WebAuthn assertion with the person verified)
+        certified that session key. --approver-passkey pins the passkeys
+        you trust to approve (fingerprints from My profile -> Passkeys).
+        An action an egress proxy with its own key handled carries the
+        proxy's signed receipt (witness); --proxy-fingerprint pins that key
+  release RELEASE.json [--passkey SHA256:...]...
+        a signed policy release (GET /policy-releases/{id}): the policy
+        bundle and key manifest hash to what was signed, and the quorum of
+        the manifest that governs it signed exactly this release with
+        passkeys it lists (user verified). Chain releases by checking each
+        one's governing manifest against the release before it
   trace EXPORT.json [--fingerprint SHA256:...]...
         a TRACE v0.2 Trust Record export (GET /pvp/receipts/{id}/trace or
         /pvp/chains/{id}/trace): the JWT is signed EdDSA by the key in
@@ -450,8 +464,154 @@ TRACE_PROFILE = "tag:agentrust-io.com,2026:trace-v0.2"
 ACTION_FIELDS = ("check_id", "agent_id", "chain_id", "action_type", "tool_name", "input_sha256", "output_sha256")
 
 
-def check_receipt(doc, trust=None, agent_fp=None):
-    """Returns (action, checkpoint, audit key fingerprint)."""
+APPROVAL_TYPE = "provenza.approval"
+CERTIFICATE_TYPE = "provenza.session.certificate"
+APPROVAL_FIELDS = ("agent_id", "chain_id", "action_type", "tool_name", "input_sha256")
+
+
+def passkey_fingerprint(spki_b64) -> str:
+    return "SHA256:" + base64.b64encode(hashlib.sha256(base64.b64decode(spki_b64)).digest()).decode().rstrip("=")
+
+
+def _verify_passkey(passkey, assertion, challenge: bytes):
+    """A WebAuthn assertion (docs/pvp/edge.md, section 2) by this passkey
+    over this challenge, made with the person verified (PIN or biometric)."""
+    from cryptography.exceptions import InvalidSignature
+    from cryptography.hazmat.primitives import hashes, serialization
+    from cryptography.hazmat.primitives.asymmetric import ec, padding
+
+    client_raw = _b64url_decode(assertion["client_data_json"])
+    auth = _b64url_decode(assertion["authenticator_data"])
+    client = json.loads(client_raw.decode("utf-8"))
+    if client.get("type") != "webauthn.get":
+        raise Fail("approval: the passkey certificate is not a WebAuthn assertion")
+    if client.get("challenge") != base64.urlsafe_b64encode(challenge).decode().rstrip("="):
+        raise Fail("approval: the passkey did not sign this session certificate")
+    if len(auth) < 37 or auth[32] & 0x05 != 0x05:
+        raise Fail("approval: the passkey was used without verifying the person (PIN or biometric)")
+    key = serialization.load_der_public_key(base64.b64decode(passkey["public_key"]))
+    signed, sig = auth + hashlib.sha256(client_raw).digest(), _b64url_decode(assertion["signature"])
+    try:
+        if passkey["alg"] == -7:
+            key.verify(sig, signed, ec.ECDSA(hashes.SHA256()))
+        elif passkey["alg"] == -8:
+            key.verify(sig, signed)
+        elif passkey["alg"] == -257:
+            key.verify(sig, signed, padding.PKCS1v15(), hashes.SHA256())
+        else:
+            raise Fail(f"approval: unsupported passkey algorithm {passkey['alg']}")
+    except (InvalidSignature, TypeError, AttributeError):
+        raise Fail("approval: the passkey's signature on the session certificate does not verify")
+
+
+def check_approval(ap, action, check, passkey_fps=None) -> str:
+    """The approval that let the action run: the reviewer's session key
+    signed the decision on exactly this call, and the reviewer's passkey
+    certified that session key. Returns the passkey fingerprint."""
+    st, cert = ap["statement"], ap["certificate"]["statement"]
+    if st.get("type") != APPROVAL_TYPE or st.get("decision") != "approved":
+        raise Fail("approval: not a signed approval")
+    for k in APPROVAL_FIELDS:
+        if st.get(k) != action.get(k):
+            raise Fail(f"approval: it approves another call ({k})")
+    if check is None or check.get("decision") != "allowed":
+        raise Fail("approval: no allowed check to go with it")
+    if cert.get("type") != CERTIFICATE_TYPE or cert.get("public_key") != ap["session_public_key"]:
+        raise Fail("approval: the session certificate is not for the key that signed")
+    for k in ("org_id", "user_id", "session_id"):
+        if st.get(k) != cert.get(k):
+            raise Fail(f"approval: signed in another session than the certificate names ({k})")
+    if not cert["not_before"] <= st["issued_at"] <= cert["not_after"]:
+        raise Fail("approval: signed outside the session's validity")
+    if not _verify_ed25519(ap["session_public_key"], ap["signature"], canonical(st)):
+        raise Fail("approval: the session key's signature does not verify")
+    _verify_passkey(ap["passkey"], ap["certificate"]["assertion"], hashlib.sha256(canonical(cert)).digest())
+    fp = passkey_fingerprint(ap["passkey"]["public_key"])
+    if passkey_fps and fp not in passkey_fps:
+        raise Fail(f"approval: signed with passkey {fp}, not one of the passkeys you gave")
+    return fp
+
+
+RELEASE_TYPE = "provenza.policy.release"
+
+
+def _sha(doc) -> str:
+    return hashlib.sha256(canonical(doc)).hexdigest()
+
+
+def check_release(doc, passkey_fps=None):
+    """A signed policy release (GET /policy-releases/{id}): both documents
+    hash to what was signed, and the quorum of the manifest that governs it
+    (the release before; for the first release its own) signed exactly this
+    release with passkeys that manifest lists, the person verified each
+    time. Returns (release summary, fingerprints of the passkeys that signed)."""
+    rel, bundle, manifest = doc["release"], doc["bundle"], doc["manifest"]
+    if _sha(bundle) != rel["bundle"]["sha256"] or _sha(manifest) != rel["manifest"]["sha256"]:
+        raise Fail("a document does not hash to what the release names")
+    gov = doc.get("governed_by")
+    governing = gov["manifest"] if gov else manifest
+    if gov:
+        if _sha(governing) != gov["manifest_sha256"]:
+            raise Fail("the governing manifest does not hash to its name")
+        if bundle.get("previous") != gov["bundle_sha256"] or bundle.get("version") != gov["bundle_version"] + 1:
+            raise Fail("the bundle does not follow the governing release's")
+        if rel["manifest"]["sha256"] != gov["manifest_sha256"] and (
+                manifest.get("previous") != gov["manifest_sha256"]
+                or manifest.get("version") != governing.get("version", 0) + 1):
+            raise Fail("the manifest does not follow the governing one")
+    signed = {}
+    for s in doc.get("signatures") or []:
+        st = s["statement"]
+        want = {"type": RELEASE_TYPE, "v": 1, "org_id": bundle["org_id"], "user_id": s["user_id"],
+                "release": rel["number"], "bundle": {"version": bundle["version"], "sha256": rel["bundle"]["sha256"]},
+                "manifest": {"version": manifest["version"], "sha256": rel["manifest"]["sha256"]},
+                "not_after": bundle["not_after"], "issued_at": st.get("issued_at")}
+        if st != want:
+            continue
+        person = (governing.get("signers") or {}).get(str(s["user_id"])) or {}
+        key = (person.get("passkeys") or {}).get(s["credential_id"])
+        if person.get("role") != "admin" or not key:
+            continue
+        try:
+            _verify_passkey(key, s["assertion"], hashlib.sha256(canonical(st)).digest())
+        except Fail:
+            continue
+        signed[s["user_id"]] = key["fingerprint"]
+    quorum = max(1, int(governing.get("quorum") or 1))
+    if len(signed) < quorum:
+        raise Fail(f"{len(signed)} valid administrator signature(s); the governing manifest requires {quorum}")
+    if passkey_fps and not set(signed.values()) & set(passkey_fps):
+        raise Fail("none of the passkeys you gave signed this release")
+    return rel, signed
+
+
+WITNESS_TYPE = "provenza.proxy.receipt"
+WITNESS_FIELDS = ("check_id", "agent_id", "chain_id", "action_type", "tool_name", "input_sha256", "output_sha256",
+                  "decision")
+
+
+def check_witness(w, action, proxy_fps=None) -> str:
+    """The executor's own signed receipt (an egress proxy): it names exactly
+    this action and its key signed it. Returns the key fingerprint."""
+    st = w.get("statement") or {}
+    if st.get("type") != WITNESS_TYPE:
+        raise Fail("witness: not a proxy receipt")
+    for k in WITNESS_FIELDS:
+        if st.get(k) != action.get(k):
+            raise Fail(f"witness: the proxy's receipt names another action ({k})")
+    fp = fingerprint(w["public_key"])
+    if fp != w.get("key_fingerprint"):
+        raise Fail("witness: the key fingerprint does not match its key")
+    if not _verify_ed25519(w["public_key"], w["signature"], canonical(st)):
+        raise Fail("witness: the proxy's signature does not verify")
+    if proxy_fps and fp not in proxy_fps:
+        raise Fail(f"witness: signed by proxy key {fp}, not one of the keys you gave")
+    return fp
+
+
+def check_receipt(doc, trust=None, agent_fp=None, passkey_fps=None, proxy_fps=None):
+    """Returns (action, checkpoint, audit key fingerprint); with a signed
+    approval in the receipt, that is checked too (check_approval)."""
     if doc.get("pvp") != "pvp/1" or doc.get("type") != "receipt":
         raise Fail("not a PVP receipt (pvp/1)")
     action, seal = doc.get("action") or {}, doc.get("seal")
@@ -483,6 +643,11 @@ def check_receipt(doc, trust=None, agent_fp=None):
                      signed_by["signature"], signed_by.get("pq_signature"), canonical(sp))
         if agent_fp and fingerprint(signed_by["public_key"], signed_by.get("pq_public_key")) != agent_fp:
             raise Fail("the action was signed by another key than the agent fingerprint you gave")
+    # 3b. the executor's own receipt (an egress proxy with a key)
+    if action.get("witness") is not None:
+        check_witness(action["witness"], action, proxy_fps)
+    elif proxy_fps:
+        raise Fail("the action carries no proxy receipt, yet you gave proxy keys")
     # 4. the check it was recorded under
     check = doc.get("check")
     if check is not None:
@@ -491,6 +656,11 @@ def check_receipt(doc, trust=None, agent_fp=None):
                 raise Fail(f"the action differs from its check ({k})")
         if check.get("decision") != "allowed" and action.get("decision") == "allowed":
             raise Fail("the check refused the action, yet it is recorded as allowed")
+    # 5. the person's approval that let it run, when one did
+    if doc.get("approval") is not None:
+        check_approval(doc["approval"], action, check, passkey_fps)
+    elif passkey_fps:
+        raise Fail("the receipt carries no approval, yet you gave approver passkeys")
     return action, cp, fp
 
 
@@ -599,18 +769,41 @@ def check_trace(doc, trust):
 def cmd_receipt(args) -> int:
     doc = _load(args.file)
     trust = Trust(args.fingerprint)
-    action, cp, fp = check_receipt(doc, trust, args.agent_fingerprint)
+    action, cp, fp = check_receipt(doc, trust, args.agent_fingerprint, args.approver_passkey, args.proxy_fingerprint)
     who = (f"signed by agent key {fingerprint(action['signed_by']['public_key'], action['signed_by'].get('pq_public_key'))}"
            if action.get("signed_by") else f"executed and witnessed by the Provenza {action['executed_by']}")
     print(f"VERIFIED  action {action['action_id']} ({action['tool_name']}, {action['decision']}) of agent "
           f"{action['agent_id']}: {who}")
     print(f"          sealed in seal {doc['seal']['seal_id']}, audit record of organization {cp['org_id']}, "
           f"checkpoint of {cp['tree_size']} records signed by {fp}")
+    if action.get("witness"):
+        w = action["witness"]["statement"]
+        print(f"          witnessed by egress proxy key {action['witness']['key_fingerprint']} (agent signature "
+              f"{w.get('agent_signature')}; signed policy "
+              f"{'release #%s' % w['policy']['release'] if w.get('policy') else 'none'})")
+    if doc.get("approval"):
+        ap = doc["approval"]
+        print(f"          approved by user {ap['statement']['user_id']} (approval {ap['approval_id']}): signed with "
+              f"their session key, certified by passkey {passkey_fingerprint(ap['passkey']['public_key'])}")
+        if not args.approver_passkey:
+            print("note: no --approver-passkey given - this proves a passkey approved it, not whose")
     if doc.get("current_decision") and doc["current_decision"] != action["decision"]:
         print(f"          decided later: {doc['current_decision']} (a human approval; not part of the proof)")
     if not args.agent_fingerprint and action.get("signed_by"):
         print("note: no --agent-fingerprint given - this proves the action was signed, not by whose key")
     _note(trust)
+    return 0
+
+
+def cmd_release(args) -> int:
+    rel, signed = check_release(_load(args.file), args.passkey)
+    print(f"VERIFIED  policy release #{rel['number']}: bundle v{rel['bundle']['version']} "
+          f"{rel['bundle']['sha256'][:16]}, manifest v{rel['manifest']['version']} {rel['manifest']['sha256'][:16]}")
+    for uid, fp in sorted(signed.items()):
+        print(f"          signed by administrator {uid} with passkey {fp}")
+    if not args.passkey:
+        print("note: no --passkey given - this proves the quorum of the manifest it names signed, not that "
+              "the manifest's passkeys are the ones you trust")
     return 0
 
 
@@ -753,13 +946,21 @@ def main(argv=None) -> int:
     r.add_argument("file")
     r.add_argument("--fingerprint", action="append", default=[])
     r.add_argument("--agent-fingerprint")
+    r.add_argument("--proxy-fingerprint", action="append", default=[],
+                   help="fingerprint of an egress proxy key you trust (its receipt must be signed by it); repeatable")
+    r.add_argument("--approver-passkey", action="append", default=[],
+                   help="fingerprint of a passkey trusted to approve (My profile -> Passkeys); repeatable")
+    rr = sub.add_parser("release")
+    rr.add_argument("file")
+    rr.add_argument("--passkey", action="append", default=[],
+                    help="fingerprint of an administrator passkey you trust; repeatable")
     t = sub.add_parser("trace")
     t.add_argument("file")
     t.add_argument("--fingerprint", action="append", default=[])
     args = p.parse_args(argv)
     try:
         return {"verify": cmd_verify, "checkpoint": cmd_checkpoint, "consistency": cmd_consistency,
-                "receipt": cmd_receipt, "trace": cmd_trace}[args.cmd](args)
+                "receipt": cmd_receipt, "trace": cmd_trace, "release": cmd_release}[args.cmd](args)
     except TrustFail as e:
         for line in e.lines:  # the trust chain first: it, not the signature, is the usual culprit
             print(line)

@@ -11,23 +11,36 @@ pytestmark = pytest.mark.asyncio
 async def test_create_provider_requires_admin(client, org_and_users, approver_token):
     resp = await client.post(
         "/api/v1/providers/",
-        json={"name": "OpenAI", "type": "openai", "api_key": "sk-test123"},
+        json={"name": "OpenAI", "type": "openai"},
         headers=auth_headers(approver_token),
     )
     assert resp.status_code == 403
 
 
-async def test_api_key_is_never_returned(client, org_and_users, admin_token):
+async def _sealed(db_session, provider_id: int):
+    """As if an administrator sealed a key to the proxies (tests/test_sealed_credentials.py)."""
+    from app.models.ai_provider import AIProvider
+
+    row = await db_session.get(AIProvider, provider_id)
+    row.credential_source = "sealed"
+    await db_session.commit()
+
+
+async def test_an_api_key_is_never_taken_in_clear_text(client, org_and_users, admin_token):
     resp = await client.post(
         "/api/v1/providers/",
         json={"name": "Anthropic", "type": "anthropic", "api_key": "sk-ant-secret"},
         headers=auth_headers(admin_token),
     )
-    assert resp.status_code == 200
-    body = resp.json()
-    assert "api_key" not in body
-    assert "api_key_encrypted" not in body
-    assert body["has_credentials"] is True
+    assert resp.status_code == 422 and resp.json()["detail"] == "credential.plaintext_refused"
+    created = await client.post("/api/v1/providers/", json={"name": "Anthropic", "type": "anthropic"},
+                                headers=auth_headers(admin_token))
+    body = created.json()
+    assert "api_key" not in body and "api_key_encrypted" not in body
+    assert body["has_credentials"] is False and body["credential_source"] == "none"
+    r = await client.put(f"/api/v1/providers/{body['id']}", json={"api_key": "sk-ant-secret"},
+                         headers=auth_headers(admin_token))
+    assert r.status_code == 422
 
 
 async def test_provider_without_key_has_no_credentials_flag(client, org_and_users, admin_token):
@@ -40,14 +53,11 @@ async def test_provider_without_key_has_no_credentials_flag(client, org_and_user
     assert resp.json()["has_credentials"] is False
 
 
-async def test_changing_provider_type_clears_stored_credential(client, org_and_users, admin_token):
+async def test_changing_provider_type_clears_stored_credential(client, org_and_users, admin_token, db_session):
     create_resp = await client.post(
-        "/api/v1/providers/",
-        json={"name": "Switchable", "type": "openai", "api_key": "sk-openai-key"},
-        headers=auth_headers(admin_token),
-    )
+        "/api/v1/providers/", json={"name": "Switchable", "type": "openai"}, headers=auth_headers(admin_token))
     provider_id = create_resp.json()["id"]
-    assert create_resp.json()["has_credentials"] is True
+    await _sealed(db_session, provider_id)
 
     update_resp = await client.put(
         f"/api/v1/providers/{provider_id}",
@@ -59,13 +69,11 @@ async def test_changing_provider_type_clears_stored_credential(client, org_and_u
     assert update_resp.json()["type"] == "anthropic"
 
 
-async def test_updating_without_type_change_keeps_credential(client, org_and_users, admin_token):
+async def test_updating_without_type_change_keeps_credential(client, org_and_users, admin_token, db_session):
     create_resp = await client.post(
-        "/api/v1/providers/",
-        json={"name": "Stable Type", "type": "openai", "api_key": "sk-openai-key"},
-        headers=auth_headers(admin_token),
-    )
+        "/api/v1/providers/", json={"name": "Stable Type", "type": "openai"}, headers=auth_headers(admin_token))
     provider_id = create_resp.json()["id"]
+    await _sealed(db_session, provider_id)
 
     update_resp = await client.put(
         f"/api/v1/providers/{provider_id}",
@@ -77,13 +85,11 @@ async def test_updating_without_type_change_keeps_credential(client, org_and_use
     assert update_resp.json()["sla"] == "99.9%"
 
 
-async def test_empty_string_api_key_clears_credential(client, org_and_users, admin_token):
+async def test_empty_string_api_key_clears_credential(client, org_and_users, admin_token, db_session):
     create_resp = await client.post(
-        "/api/v1/providers/",
-        json={"name": "Clearable", "type": "openai", "api_key": "sk-openai-key"},
-        headers=auth_headers(admin_token),
-    )
+        "/api/v1/providers/", json={"name": "Clearable", "type": "openai"}, headers=auth_headers(admin_token))
     provider_id = create_resp.json()["id"]
+    await _sealed(db_session, provider_id)
 
     update_resp = await client.put(
         f"/api/v1/providers/{provider_id}",
@@ -114,16 +120,14 @@ async def test_non_admin_can_still_read_providers(client, org_and_users, admin_t
     assert len(resp.json()["items"]) == 1
 
 
-async def test_a_changed_key_is_not_written_to_the_audit_log(client, org_and_users, admin_token):
+async def test_a_cleared_key_is_audited_without_a_value(client, org_and_users, admin_token):
     created = await client.post("/api/v1/providers/", json={"name": "Keyed", "type": "openai"},
                                 headers=auth_headers(admin_token))
     pid = created.json()["id"]
-    r = await client.put(f"/api/v1/providers/{pid}", json={"api_key": "sk-audit-leak-check"},
-                         headers=auth_headers(admin_token))
+    r = await client.put(f"/api/v1/providers/{pid}", json={"api_key": ""}, headers=auth_headers(admin_token))
     assert r.status_code == 200, r.text
     logs = await client.get("/api/v1/audit-logs/", params={"entity_type": "provider", "entity_id": pid},
                             headers=auth_headers(admin_token))
     assert logs.status_code == 200
-    assert "sk-audit-leak-check" not in logs.text
     updated = [e for e in logs.json()["items"] if e["action"] == "updated"]
-    assert updated and updated[0]["metadata_json"]["api_key"] == "set"
+    assert updated and updated[0]["metadata_json"]["api_key"] == "cleared"

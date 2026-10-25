@@ -56,6 +56,13 @@ def test_openai_goes_through_the_gateway(agent):
     assert str(wrapped.base_url).startswith("https://provenza.test/api/v1/gateway/v1")
     assert wrapped.api_key == "pvz_agent_key" and original.api_key == "sk-provider-key"
 
+    chained = gateway_client(agent, chain_id=9, http_client=httpx.Client(transport=httpx.MockTransport(gateway)))
+    chained.chat.completions.create(model="gpt-4o-mini", messages=[{"role": "user", "content": "hello"}])
+    assert seen[-1].headers["x-provenza-chain-id"] == "9"
+    assert "x-provenza-chain-id" not in seen[0].headers
+    with pytest.raises(ValueError):
+        gateway_client(agent, chain_id=0)
+
 
 # ---------------------------------------------------------------------------
 # LangChain

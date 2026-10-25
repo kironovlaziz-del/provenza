@@ -16,11 +16,21 @@ This is deliberately not a generic channel: three kinds are accepted, and
 the only behaviour each triggers on the sensor is fixed. A stolen control
 plane key can at worst detach, restart or dump-state a host - not run
 arbitrary code.
+
+An administrator also signs each command (docs/pvp/edge.md, section 5):
+the statement below, with the session key their passkey certified. The
+proof is delivered with the command, and a sensor that follows the signed
+policy (policy.pin) runs only a command whose signer is an administrator
+its signed manifest lists - the organization's key alone, which this
+server holds, is not enough there.
 """
 
 from __future__ import annotations
 
 import logging
+import re
+import secrets
+import time
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
@@ -57,6 +67,15 @@ COMMAND_TTL = timedelta(minutes=5)
 # will not see the command again, but a delivered-not-acked command is
 # re-sent - the sensor may have crashed between receiving and acking.
 ACTIVE_STATUSES = ("pending", "delivered", "executing")
+
+# What an administrator signs to command a sensor (sensor/internal/trust/command.go).
+SENSOR_COMMAND = "provenza.sensor.command"
+SIGNED_KINDS = ("detach", "restart", "dump-state")
+# Seconds a signed command is valid from its issued_at: the passkey prompt,
+# then delivery on a heartbeat. The sensor refuses more than 5 minutes: a
+# command signed before its signer signed out stays valid only that long.
+SIGNED_COMMAND_LIFE = 240
+_NONCE = re.compile(r"^[A-Za-z0-9_-]{16,64}$")
 
 
 def _utcnow() -> datetime:
@@ -111,6 +130,43 @@ def sign_payload_with(key: EgressSensorSigningKey, payload: Dict[str, Any]) -> s
     return sign_payload(payload, private_b64)
 
 
+# ---------------------------------------------------------------- signed by an administrator
+
+def sensor_command_statement(user, session, sensor_id: int, kind: str, nonce: str,
+                             issued_at: int) -> Dict[str, Any]:
+    """What an administrator signs with their session key to command one sensor."""
+    return {"type": SENSOR_COMMAND, "v": 1, "org_id": user.org_id, "user_id": user.id, "session_id": session.id,
+            "sensor_id": sensor_id, "kind": kind, "nonce": nonce, "issued_at": issued_at,
+            "expires_at": issued_at + SIGNED_COMMAND_LIFE}
+
+
+def new_statement(user, session, sensor_id: int, kind: str) -> Dict[str, Any]:
+    if kind not in SIGNED_KINDS:
+        raise UnknownKind(f"unknown command kind: {kind}", kind=kind)
+    return sensor_command_statement(user, session, sensor_id, kind, secrets.token_urlsafe(16), int(time.time()))
+
+
+async def signed_proof(db: AsyncSession, user, session, sensor: EgressSensor, kind: str, statement: Any,
+                       signature: Any) -> Dict[str, Any]:
+    """The proof for a command an administrator signed (signing_sessions.verify_signed), or a 4xx."""
+    from app.services import signing_sessions
+
+    if kind not in SIGNED_KINDS:
+        raise UnknownKind(f"unknown command kind: {kind}", kind=kind)
+    st = statement if isinstance(statement, dict) else {}
+    nonce, issued = st.get("nonce"), st.get("issued_at")
+    if not isinstance(nonce, str) or not _NONCE.match(nonce) or isinstance(issued, bool) or not isinstance(issued, int):
+        raise CommandError("not a signed command", code="egress_command.not_signed")
+    used = (await db.execute(select(EgressSensorCommand.id).where(
+        EgressSensorCommand.sensor_id == sensor.id,
+        EgressSensorCommand.proof["statement"]["nonce"].astext == nonce))).first()
+    if used is not None:
+        raise CommandError("this signed command was queued already", code="egress_command.replayed")
+    expected = sensor_command_statement(user, signing_sessions.require_certified(session), sensor.id, kind,
+                                        nonce, issued)
+    return await signing_sessions.verify_signed(db, session, expected, statement, signature)
+
+
 # ---------------------------------------------------------------- commands
 
 class CommandError(Exception):
@@ -119,8 +175,10 @@ class CommandError(Exception):
 
     code = "egress_command.error"
 
-    def __init__(self, message: str, **context: Any):
+    def __init__(self, message: str, code: Optional[str] = None, **context: Any):
         super().__init__(message)
+        if code:
+            self.code = code
         self.context = context
 
 
@@ -170,9 +228,14 @@ async def create_command(
     kind: str,
     actor_user_id: int,
     extra: Optional[Dict[str, Any]] = None,
+    proof: Optional[Dict[str, Any]] = None,
 ) -> EgressSensorCommand:
     """Queue a command for one sensor. The sensor sees it on its next
     heartbeat (within refresh_seconds), verifies it, and acks.
+
+    `proof`: the administrator's signed command (signed_proof); the command
+    then expires when the statement does (SIGNED_COMMAND_LIFE after it was
+    signed).
 
     `extra` adds kind-specific fields to the payload (the new public key
     for update-signing-key); anything None is left out so the canonical
@@ -184,6 +247,8 @@ async def create_command(
     key = await signing_key_for(db, sensor.org_id, actor_user_id)
     now = _utcnow()
     expires = now + COMMAND_TTL
+    if proof is not None:
+        expires = datetime.fromtimestamp(proof["statement"]["expires_at"], timezone.utc)
 
     # Two flushes: the first gets the id, the second stores the payload
     # that names the id. Both are inside the caller's transaction, so an
@@ -198,6 +263,7 @@ async def create_command(
         issued_at=now,
         expires_at=expires,
         status="pending",
+        proof=proof,
     )
     db.add(row)
     await db.flush()

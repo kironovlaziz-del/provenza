@@ -2,7 +2,8 @@
 
 // Agent actions held for a human (PVP pending_approval): the reviewer sees
 // what the server verified apart from what the agent claims, and approves the
-// exact arguments (their hash). Admins and approvers.
+// exact arguments (their hash), signed with this session's key - so the
+// session must be confirmed with the passkey first. Admins and approvers.
 
 import Link from "next/link";
 import React, { useCallback, useEffect, useState } from "react";
@@ -17,6 +18,7 @@ import {
   type ReviewPacket,
 } from "@/lib/approvals_api";
 import { promptDialog } from "@/components/Dialog";
+import { useAuth } from "@/lib/auth";
 
 function ExpiresIn({ iso }: { iso: string }) {
   const { t } = useTranslation();
@@ -38,6 +40,7 @@ function Fact({ label, children, bad }: { label: string; children: React.ReactNo
 
 function Review({ id, onDone }: { id: number; onDone: () => void }) {
   const { t } = useTranslation();
+  const { session } = useAuth();
   const [p, setP] = useState<ReviewPacket | null>(null);
   const [confirmation, setConfirmation] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -62,7 +65,7 @@ function Review({ id, onDone }: { id: number; onDone: () => void }) {
           setBusy(false);
           return;
         }
-        await denyReviewed(id, reason);
+        await denyReviewed(id, reason, certified);
       }
       onDone();
     } catch (e) {
@@ -77,6 +80,8 @@ function Review({ id, onDone }: { id: number; onDone: () => void }) {
   const rv = p.reviewer;
   const sig = v.signature;
   const sigOk = sig.present && sig.valid && sig.covers_these_arguments;
+  // confirmed with the passkey since the review was loaded (the banner)
+  const certified = rv.session_certified || !!session?.certified;
 
   return (
     <div style={{ padding: "12px 4px" }}>
@@ -156,6 +161,11 @@ function Review({ id, onDone }: { id: number; onDone: () => void }) {
           {t("agent_approvals.self_approval", "You own this agent and no other reviewer exists — your decision will be recorded as self-approval.")}
         </div>
       )}
+      {rv.can_decide && !certified && (
+        <div style={{ color: "#d97706", fontSize: 13, marginBottom: 8 }}>
+          {t("agent_approvals.needs_passkey", "An approval is signed with your passkey-confirmed session. Confirm this sign-in with your passkey (the banner at the top), or add a passkey in My profile.")}
+        </div>
+      )}
       {rv.requires_typed_confirmation && rv.can_decide && (
         <div className="field" style={{ maxWidth: 420 }}>
           <label htmlFor={`confirm-${id}`}>
@@ -168,7 +178,8 @@ function Review({ id, onDone }: { id: number; onDone: () => void }) {
       <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
         <button
           className="btn btn-primary btn-sm"
-          disabled={busy || !rv.can_decide || (rv.requires_typed_confirmation && confirmation.trim() !== rv.confirmation_text)}
+          disabled={busy || !rv.can_decide || !certified
+            || (rv.requires_typed_confirmation && confirmation.trim() !== rv.confirmation_text)}
           onClick={() => decide("approve")}
         >
           {t("agent_approvals.approve", "Approve these arguments")}

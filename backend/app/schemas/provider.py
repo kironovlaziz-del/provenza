@@ -29,7 +29,7 @@ class ProviderBase(BaseModel):
 
 
 class ProviderCreate(ProviderBase):
-    api_key: Optional[str] = None  # write-only, never returned
+    api_key: Optional[str] = None  # refused: the key is sealed in the browser to the egress proxies
 
 
 class ProviderUpdate(BaseModel):
@@ -40,7 +40,7 @@ class ProviderUpdate(BaseModel):
     risk_score: Optional[float] = None
     base_url: Optional[str] = None
     default_model: Optional[str] = None
-    api_key: Optional[str] = None  # write-only; omit to leave unchanged
+    api_key: Optional[str] = None  # only "" (clear it); a key is sealed in the browser to the egress proxies
 
     @field_validator("base_url")
     @classmethod
@@ -59,6 +59,7 @@ class ProviderOut(BaseModel):
     base_url: Optional[str] = None
     default_model: Optional[str] = None
     has_credentials: bool = False
+    credential_source: str = "none"   # none, sealed (to the egress proxies), local (in their configuration)
     created_at: datetime
     updated_at: Optional[datetime] = None
 

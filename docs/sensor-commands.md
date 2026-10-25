@@ -19,11 +19,46 @@ doing anything. There is no channel back to the sensor other than the
 heartbeat it already sends: the control plane never connects to a host,
 never runs a shell, and cannot ask for anything outside the three kinds.
 
+## Signed by an administrator
+
+The organization's key is kept by the control plane, so a compromised
+server could sign with it. Every command is therefore also signed by the
+administrator who issues it ([docs/pvp/edge.md](pvp/edge.md), section 5):
+the browser asks for the statement (`POST
+/egress-sensor/sensors/{id}/commands/statement`) and signs it with the
+session key the administrator's passkey certified:
+
+    {"type": "provenza.sensor.command", "v": 1, "org_id": 7, "user_id": 3,
+     "session_id": "…", "sensor_id": 4, "kind": "restart",
+     "nonce": "…", "issued_at": 1792897995, "expires_at": 1792898595}
+
+The proof - statement, signature, session key, the passkey's certificate
+of it - is kept with the command and delivered with it. A sensor with
+`policy.pin` (it verifies the signed policy releases itself) runs a
+command only when:
+
+- the statement names this sensor and the kind, and has not expired
+  (at most 5 minutes after it was issued; Provenza makes them valid for 4);
+- the session key signed it inside the certificate's validity, and the
+  passkey that certified the session belongs to an **administrator** in
+  the signed manifest it verified;
+- its nonce was not used before (kept in `state_dir/commands-seen.json`
+  until it expires): the server cannot replay it.
+
+Anything else is acked `failed` with the reason (*not signed by an
+administrator*, *the signer is not an administrator*, …). Such a sensor
+does not take `update-signing-key` either: the organization's key no
+longer commands it. A sensor without `policy.pin` checks only the
+organization's key, as below, and says so in its warnings.
+
 ## Threat model
 
 **What a signed command can do.** Uninstall the sensor from the host it
 is queued for, restart its systemd unit, or ask it to report its own
 status (the same JSON `provenza-sensor status --json` prints locally).
+
+With `policy.pin`, the organization's key alone does nothing (above): what
+follows is the model for a sensor without it.
 
 **What a stolen control plane signing key cannot do:**
 

@@ -35,6 +35,25 @@ An admin gives roles on **Settings → Users**. An organization that requires
 two-factor sign-in "for reviewers" requires it for auditors and compliance
 officers too.
 
+### Passkeys and one session (admins and approvers)
+
+Administrators and approvers confirm what they do with a **passkey**: a key
+kept on their phone or computer and unlocked with its PIN or fingerprint.
+Add one in **My profile → Passkeys** (your password is asked again; from
+the second passkey on, an existing one confirms it). Add two, on different
+devices, so a lost phone does not lock you out.
+
+- After each sign-in the browser asks for the passkey once; until then a
+  banner says the sign-in is not confirmed.
+- You have **one session at a time**. If you (or someone with your
+  password) sign in elsewhere while a session is open, the new sign-in
+  waits and your open session shows a red banner with its time, address
+  and browser: **Let in** (with the passkey) or **Refuse**. An incident is
+  opened and the `session_conflict` notification goes out.
+- If the open session is on a device you no longer have, the waiting
+  sign-in can **end the other session** - only with a passkey.
+- Signing out, or changing your password, ends the session and its key.
+
 ---
 
 ## 2. The dashboard
@@ -77,8 +96,22 @@ connection.
 1. Sidebar → **AI inventory → Connections**.
 2. **New provider** → choose type (OpenAI, Anthropic, Azure OpenAI, or
    Custom), give it a name, and paste the API key.
-3. The key is **encrypted at rest** and never shown again — the UI only
-   indicates whether credentials are set.
+3. The key is **sealed in your browser** to the egress proxies' own keys
+   (Gateways → Egress → Proxies shows each proxy's key fingerprint; compare
+   it with what the proxy prints on its host). Provenza stores only what it
+   cannot open, and the proxies use the key - so a connection with a key is
+   called through an egress proxy. A self-hosted model server that takes no
+   key works without one. The same holds for the credentials of egress
+   routes, MCP servers, A2A peers and HTTP tools. Sealing asks for your
+   signature (this session's key): a proxy in enforce mode opens only what
+   an administrator of the signed policy sealed. A credential the server
+   sealed from one it held before shows *Vouch for it*.
+4. Agents then call through the egress proxy with their own key:
+   `http://<proxy>/_llm/v1` as the OpenAI base URL, `/_mcp` for MCP,
+   `/_a2a/<peer>` for A2A, and the SDKs' `egress_proxy` setting
+   (`PROVENZA_EGRESS_PROXY`) for HTTP tools. The proxies sync MCP servers
+   and A2A peers whose credential they hold; approve their tools and cards
+   in Provenza as usual.
 
 You can also set an SLA and a risk score for vendor-risk tracking.
 
@@ -98,6 +131,40 @@ Details: docs/policies.md.
 
 Policies → **Agent policies** holds the rules for agent actions built
 visually (deny a tool, allow only some tools, require approval, limits).
+
+**Signed policy** (top of the Policy hierarchy page). Administrators freeze
+everything that decides allow or deny - agents' rights, policies, the Tool
+Registry, gateways and their routes - and the keys into a *release* and sign
+it with their passkeys (**Prepare the first release**, then **Sign with
+passkey**). Once a release is in force:
+
+- a change that tightens (suspend an agent, remove a tool, a deny rule)
+  takes effect at once;
+- a change that loosens (a new agent or tool, a new route or MCP server, a
+  higher limit) waits until the quorum signs the next release; the panel
+  and a banner list what is not signed yet;
+- a new agent or a new agent key acts only after signing.
+
+Set the quorum (how many administrators must sign; 2 or more recommended),
+how long a release is valid and the offline time under *Quorum, validity,
+offline time, mode*: they apply from the next release. The offline time is how long an
+egress proxy (in enforce mode) and the pinned sensors keep working without
+this server: past it they stop - a *local kill switch*. A stopped proxy shows
+under Gateways → Egress → Proxies with what changed meanwhile; the
+administrators of the release it held lift it with their passkeys, accepting
+every change no signed release explains. Renew the release before
+it expires - after that no agent action is allowed until a new one is
+signed. `tools/provenza_audit.py release` checks a release offline.
+
+*Mode* in the same settings: **Enforce** means no action runs without the
+agent's own signature and the signed policy. Provenza's own gateways then
+execute nothing, and an agent's check of its own only observes: every
+action goes through an egress proxy in enforce mode, signed by the agent -
+the SDKs sign; for a client that cannot (a stock OpenAI or MCP client) run
+the proxy's agent mode next to it (`provenza-proxy -agent-identity …`, see
+`proxy/README.md`). Switching it on takes effect at once; switching it off
+needs a signed release. Before you switch it on, put every agent behind a
+proxy.
 
 ---
 
@@ -135,8 +202,16 @@ test of every system above minimal risk.
 
 An agent action that a policy marks as needing a person waits under
 **Overview → Approvals**. Admins and approvers judge it by its arguments
-and **Approve** or **Reject** it with a reason; the agent continues only
-after an approval. All decisions are audit-logged.
+and **Approve** or **Reject** it with a reason. An approval is signed with
+your session key, which your passkey confirmed at sign-in: approve only
+after confirming the sign-in (the banner at the top), and add a passkey in
+**My profile** first. The receipt of the action that ran carries the signed
+approval, and `tools/provenza_audit.py receipt --approver-passkey` checks it
+offline (the fingerprints are in My profile → Passkeys). Approving runs
+nothing by itself: the agent repeats exactly the same call (same arguments, same
+chain) and it runs once, within an hour of the approval - through any
+gateway or the SDK (`wait_for_approval` waits for the decision). All
+decisions are audit-logged.
 
 ---
 
@@ -420,7 +495,19 @@ processes, matched by cgroup) may connect.
    the mode - **observe** (record only), **alert** or **enforce** (block).
 3. The sensor's row shows its last heartbeat, attached hooks and
    warnings; expand it to **Dump state**, **Restart** or **Detach** the
-   sensor with a signed command ([details](docs/sensor-commands.md)).
+   sensor with a command your session signs ([details](docs/sensor-commands.md)).
+
+Give each sensor the signed policy's pin (`install.sh --policy-pin <SHA-256>`,
+the value shown under **Signed policy**). It then checks the releases
+itself: it runs only commands an administrator signed (🔏 in the
+history), holds every workload to its signed version (the server can
+tighten one at once, loosening waits for the next release), and on the
+host of an egress proxy started with `provenza-sensor --proxy run` lets
+the proxy out only while it runs a binary listed under *egress proxy
+binaries* in the signed policy settings, with a configuration listed
+under *egress proxy configurations* (`sha256sum proxy.json`). The expanded row shows the
+release the sensor verified and each proxy's state
+([details](sensor/README.md#the-signed-policy)).
 
 The settings set how often sensors fetch the policy (30-300 s) and send a
 heartbeat (30-120 s). A sensor counts as offline after three missed heartbeats, and

@@ -3,8 +3,12 @@
 // Part of Provenza - https://github.com/kironovlaziz-del/provenza
 
 // Commands the control plane can queue for this sensor: detach, restart,
-// dump-state. Every command is signed by the organization's Ed25519 key
-// and verified before anything happens; if a check fails the command is
+// dump-state. With policy.pin set, a command runs only when an administrator
+// signed it with a passkey the signed manifest lists (docs/pvp/edge.md,
+// section 5; internal/trust.VerifyCommand) - the server, which only carries
+// it, cannot make one. Without a pin, every command is signed by the
+// organization's Ed25519 key, which the server holds. Either way it is
+// verified before anything happens; if a check fails the command is
 // dropped and the failure is logged. There is no shell, no generic
 // execution - only the three behaviours below, whichever way the command
 // arrived.
@@ -24,7 +28,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/kironovlaziz-del/provenza/sensor/internal/canon"
 	"github.com/kironovlaziz-del/provenza/sensor/internal/client"
+	"github.com/kironovlaziz-del/provenza/sensor/internal/trust"
 )
 
 // canonicalBytes is the exact byte sequence a command signature covers.
@@ -177,6 +183,9 @@ func (d *Daemon) handleCommands(ctx context.Context, cmds []client.Command) {
 // the command may do, and the three behaviours below are the only things
 // it may trigger.
 func (d *Daemon) handleOneCommand(ctx context.Context, c client.Command) error {
+	if d.signed != nil {
+		return d.handleSignedCommand(ctx, c)
+	}
 	if d.signingKey == nil {
 		return errors.New("no signing key on this host (re-run enroll)")
 	}
@@ -213,7 +222,61 @@ func (d *Daemon) handleOneCommand(ctx context.Context, c client.Command) error {
 	}
 
 	slog.Info("command accepted", "id", c.ID, "kind", c.Kind)
+	return d.execute(ctx, c)
+}
 
+// handleSignedCommand: with a pinned signed policy, only a command an
+// administrator signed runs. A refusal is acked as failed, so the
+// administrator sees why.
+func (d *Daemon) handleSignedCommand(ctx context.Context, c client.Command) error {
+	refuse := func(why string) error {
+		_ = d.client.AckCommand(ctx, c.ID, "failed", nil, why)
+		return errors.New(why)
+	}
+	if d.sensorID == 0 {
+		return errors.New("no sensor id on this host (re-run enroll)")
+	}
+	rel := d.signed.current()
+	if rel == nil {
+		return refuse("no signed policy verified on this sensor yet")
+	}
+	if p := strings.TrimSpace(string(c.Proof)); p == "" || p == "null" {
+		return refuse("not signed by an administrator: this sensor runs only commands an administrator " +
+			"signed with a passkey")
+	}
+	v, err := canon.Parse(c.Proof)
+	proof, _ := v.(map[string]any)
+	if err != nil || proof == nil {
+		return refuse("the signed command is not readable")
+	}
+	now := time.Now()
+	if d.clock != nil {
+		now = d.clock()
+	}
+	cmd, err := trust.VerifyCommand(proof, rel.Manifest, int64(d.sensorID), now)
+	if err != nil {
+		return refuse(err.Error())
+	}
+	if cmd.Kind != c.Kind {
+		return refuse(fmt.Sprintf("the administrator signed %q, not %q", cmd.Kind, c.Kind))
+	}
+	fresh, err := d.seen.use(cmd.Nonce, cmd.ExpiresAt, now)
+	if err != nil {
+		return refuse("could not record the command: " + err.Error())
+	}
+	if !fresh {
+		return refuse("this signed command was carried out already") // a replay
+	}
+	slog.Info("command accepted", "id", c.ID, "kind", c.Kind, "signed_by", cmd.UserID, "passkey", cmd.Passkey,
+		"release", rel.Number)
+	if d.executor != nil {
+		return d.executor(ctx, c)
+	}
+	return d.execute(ctx, c)
+}
+
+// execute runs a verified command.
+func (d *Daemon) execute(ctx context.Context, c client.Command) error {
 	// Acknowledge before doing anything: a detach that stops the daemon
 	// must be visible on the control plane even though no "done" follows.
 	if err := d.client.AckCommand(ctx, c.ID, "executing", nil, ""); err != nil {
@@ -228,6 +291,11 @@ func (d *Daemon) handleOneCommand(ctx context.Context, c client.Command) error {
 	case "detach":
 		return d.execDetach(ctx, c)
 	case "update-signing-key":
+		if d.signed != nil {
+			// the server's key does not command a sensor that follows the signed policy
+			_ = d.client.AckCommand(ctx, c.ID, "failed", nil, "not with a signed policy")
+			return errors.New("update-signing-key: not with a signed policy")
+		}
 		return d.execUpdateSigningKey(ctx, c)
 	default:
 		// The backend refuses unknown kinds; this only fires when a newer

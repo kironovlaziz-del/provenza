@@ -47,7 +47,7 @@ async def _setup(client, token, *, tools=("proxy.stripe",), **route):
     r = await client.post(f"{E}/routes", json={
         "slug": "stripe", "name": "Stripe", "upstream_url": "https://api.stripe.com",
         "methods": ["GET", "POST"], "path_prefixes": ["/v1/charges", "/v1/customers"],
-        "credential_source": "server", "secret": SECRET, **route}, headers=auth_headers(token))
+        "credential_source": "local", **route}, headers=auth_headers(token))
     assert r.status_code == 200, r.text
     p = await client.post(f"{E}/proxies", json={"name": "billing-host"}, headers=auth_headers(token))
     assert p.status_code == 200, p.text
@@ -85,13 +85,14 @@ def test_path_rules():
 @pytest.mark.asyncio
 async def test_the_whole_way(client, admin_token, db_session):
     route, proxy, agent = await _setup(client, admin_token)
-    assert route["tool_name"] == "proxy.stripe" and route["has_secret"] and SECRET not in str(route)
+    assert route["tool_name"] == "proxy.stripe" and route["has_secret"] and route["credential"]["source"] == "local"
     assert proxy["key"].startswith("pvz_proxy_")
 
     cfg = await client.get(f"{P}/config", headers=_px(proxy))
     assert cfg.status_code == 200, cfg.text
     [r] = cfg.json()["routes"]
-    assert r["secret"] == SECRET and r["upstream_url"] == "https://api.stripe.com"   # for the proxy's memory only
+    # never a credential: a sealed one comes as an envelope only the proxy opens (test_sealed_credentials.py)
+    assert "secret" not in r and r["upstream_url"] == "https://api.stripe.com"
 
     chk = await _check(client, agent, charge())
     assert chk["decision"] == "allowed", chk
@@ -192,11 +193,13 @@ async def test_route_admin(client, admin_token):
     route, _, _ = await _setup(client, admin_token)
     for bad in ({"upstream_url": "http://169.254.169.254/"}, {"path_prefixes": ["/v1/../x"]},
                 {"auth_header": "Host"}, {"methods": []}, {"slug": "Bad Slug"},
-                {"credential_source": "local", "secret": "s3cret"}):
+                {"credential_source": "local", "secret": "s3cret"}, {"credential_source": "sealed", "secret": "x"}):
         body = {"slug": "x", "name": "x", "upstream_url": "https://api.example.com", **bad}
         assert (await client.post(f"{E}/routes", json=body, headers=auth_headers(admin_token))).status_code == 422, bad
-    # switching to a local credential drops the server-held secret
-    r = await client.patch(f"{E}/routes/{route['id']}", json={"credential_source": "local"},
+    # a credential is never taken in clear text
+    r = await client.patch(f"{E}/routes/{route['id']}", json={"secret": "s3cret"}, headers=auth_headers(admin_token))
+    assert r.status_code == 422 and r.json()["detail"] == "credential.plaintext_refused"
+    r = await client.patch(f"{E}/routes/{route['id']}", json={"credential_source": "none"},
                            headers=auth_headers(admin_token))
     assert r.status_code == 200 and r.json()["has_secret"] is False
 

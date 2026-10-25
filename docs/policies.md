@@ -72,6 +72,15 @@ A refusal names the level: `Blocked by policy 'team support policy'`,
 * **Form or YAML** — an empty allow list (`allow: []`, "allow nothing") can
   only be written and edited as YAML.
 
+## Signed policy
+
+What is edited here is the working copy. Once administrators have signed a
+policy release ([pvp/edge.md](pvp/edge.md), section 3.1), every level must
+also pass in the release: a level made stricter applies at once, a level
+loosened applies after the quorum signs the next release. *Effective
+policy* and the editor show the working copy; the *Signed policy* panel on
+this page lists what is not signed yet.
+
 ## API
 
 | | |

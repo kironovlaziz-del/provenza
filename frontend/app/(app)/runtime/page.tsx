@@ -962,7 +962,31 @@ export default function RuntimePage() {
                                 <span><em style={{ opacity: 0.6, fontStyle: "normal" }}>{t("rt.sensors.config_version")}</em> {s.config_version ?? "—"}</span>
                                 <span><em style={{ opacity: 0.6, fontStyle: "normal" }}>{t("rt.sensors.dropped_events")}</em> {s.dropped_events}</span>
                                 <span><em style={{ opacity: 0.6, fontStyle: "normal" }}>{t("rt.sensors.last_seen")}</em> {s.last_seen_at ? fmt(s.last_seen_at) : t("rt.sensors.never")}</span>
+                                <span title={s.trust?.signed_policy?.error}>
+                                  <em style={{ opacity: 0.6, fontStyle: "normal" }}>{t("rt.sensors.signed_policy")}</em>{" "}
+                                  {!s.trust?.signed_policy ? t("rt.sensors.signed_none")
+                                    : s.trust.signed_policy.release
+                                      ? t("rt.sensors.signed_release", { n: s.trust.signed_policy.release })
+                                      : t("rt.sensors.signed_waiting")}
+                                  {s.trust?.signed_policy?.error && <span style={{ color: "var(--danger, #c0392b)" }}> ⚠</span>}
+                                </span>
+                                {s.trust?.signed_policy?.kill_switch && (
+                                  <span className="pill pill-critical">
+                                    {t("rt.sensors.kill_switch", { reason: s.trust.signed_policy.kill_switch })}
+                                  </span>
+                                )}
                               </div>
+                              {(s.trust?.proxy_runs ?? []).map((r) => (
+                                <div key={r.cgroup} className="mono" style={{ fontSize: 12, marginTop: 4 }}>
+                                  <span className={`pill ${r.state === "verified" ? "pill-low" : "pill-medium"}`}>
+                                    {t(`rt.sensors.proxy_${r.state}`)}
+                                  </span>{" "}
+                                  {t("rt.sensors.proxy_run")} {r.cgroup} · {r.processes}
+                                  {r.sha256 && <span style={{ opacity: 0.7 }}> · sha256 {r.sha256.slice(0, 16)}…</span>}
+                                  {r.config_sha256 && <span style={{ opacity: 0.7 }}> · {t("rt.sensors.proxy_config", "config")} {r.config_sha256.slice(0, 16)}…</span>}
+                                  {r.reason && <span style={{ opacity: 0.7 }}> · {r.reason}</span>}
+                                </div>
+                              ))}
                             </div>
 
                             <div>
@@ -1050,7 +1074,10 @@ export default function RuntimePage() {
                                     {sensorCommands[s.id]!.map(c => (
                                       <React.Fragment key={c.id}>
                                         <tr>
-                                          <td style={{ padding: "4px 8px" }}>{t(`rt.sensors.cmd_kind.${c.kind}`)}</td>
+                                          <td style={{ padding: "4px 8px" }}>
+                                            {t(`rt.sensors.cmd_kind.${c.kind}`)}
+                                            {c.signed_by !== null && <span title={t("rt.sensors.cmd_signed")}> 🔏</span>}
+                                          </td>
                                           <td style={{ padding: "4px 8px" }}>
                                             <span className={`pill ${CMD_STATUS_PILL[c.status]}`}>
                                               {t(`rt.sensors.cmd_status.${c.status}`)}

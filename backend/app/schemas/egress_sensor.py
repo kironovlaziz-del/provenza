@@ -63,6 +63,8 @@ class SensorOut(BaseModel):
     observed_per_min: Optional[int] = None
     config_version: Optional[str] = None
     last_seen_at: Optional[datetime] = None
+    # what the sensor verified itself: {"signed_policy": ..., "proxy_runs": [...]}
+    trust: Optional[Dict[str, Any]] = None
 
     created_at: datetime
     updated_at: Optional[datetime] = None
@@ -203,7 +205,18 @@ class WorkloadOut(BaseModel):
 
 class CommandIn(BaseModel):
     """Admin input for POST /sensors/{id}/commands. Only the three known
-    kinds are accepted: there is no generic channel."""
+    kinds are accepted: there is no generic channel. `statement` and
+    `signature`: the administrator signed the command with their session key
+    (POST .../commands/statement) - a sensor that follows the signed policy
+    runs nothing else."""
+    model_config = ConfigDict(extra="forbid")
+
+    kind: Literal["detach", "restart", "dump-state"]
+    statement: Optional[Dict[str, Any]] = None
+    signature: Optional[str] = Field(default=None, max_length=200)
+
+
+class CommandStatementIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     kind: Literal["detach", "restart", "dump-state"]
@@ -218,6 +231,8 @@ class CommandForSensor(BaseModel):
     payload: Dict[str, Any]
     signature: str
     expires_at: datetime
+    # the administrator's signed command, when one signed it
+    proof: Optional[Dict[str, Any]] = None
 
 
 class HeartbeatResponseOut(BaseModel):
@@ -240,6 +255,8 @@ class CommandOut(BaseModel):
     acked_at: Optional[datetime] = None
     result: Optional[Dict[str, Any]] = None
     error: Optional[str] = None
+    # who signed it with a passkey-certified session (None: the server's key only)
+    signed_by: Optional[int] = None
 
     class Config:
         from_attributes = True
@@ -374,6 +391,26 @@ class WorkloadReportIn(BaseModel):
     dns_denied: int = Field(default=0, ge=0)
 
 
+class SignedPolicyReportIn(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    pin: Literal["pinned", "tofu"]
+    release: Optional[int] = Field(default=None, ge=0)
+    error: Optional[str] = Field(default=None, max_length=500)
+    kill_switch: Optional[str] = Field(default=None, max_length=300)
+
+
+class ProxyRunReportIn(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    cgroup: str = Field(max_length=500)
+    state: Literal["verified", "held"]
+    reason: Optional[str] = Field(default=None, max_length=500)
+    processes: int = Field(default=0, ge=0)
+    sha256: Optional[str] = Field(default=None, max_length=64)
+    config_sha256: Optional[str] = Field(default=None, max_length=64)
+
+
 class HeartbeatIn(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
@@ -394,6 +431,9 @@ class HeartbeatIn(BaseModel):
     allowed_per_min: Optional[int] = None
     denied_per_min: Optional[int] = None
     observed_per_min: Optional[int] = None
+    # docs/pvp/edge.md, section 5: what the sensor verified itself
+    signed_policy: Optional[SignedPolicyReportIn] = None
+    proxy_runs: Optional[List[ProxyRunReportIn]] = Field(default=None, max_length=50)
 
 
 # ---------------------------------------------------------------- violations (sensor input)

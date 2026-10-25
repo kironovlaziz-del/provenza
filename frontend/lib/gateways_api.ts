@@ -1,6 +1,7 @@
 // Gateways besides the LLM one (lib/gateway_api.ts): MCP servers, A2A peers
 // and the egress proxy. Backend: app/api/mcp.py, a2a_gateway.py, egress_proxy.py.
 import { api } from "./api";
+import { passkeyAssertion, type Challenge } from "./signing";
 
 // ---------------------------------------------------------------- MCP
 
@@ -16,6 +17,7 @@ export interface McpServer {
   detected_version: string | null;
   auth_header: string;
   has_secret: boolean;
+  credential_source: "none" | "sealed" | "local";
   enabled: boolean;
   timeout_seconds: number;
   server_info: Record<string, unknown> | null;
@@ -30,7 +32,6 @@ export interface McpServerInput {
   url?: string;
   protocol?: McpProtocol;
   auth_header?: string;
-  auth_secret?: string;
   clear_secret?: boolean;
   timeout_seconds?: number;
   enabled?: boolean;
@@ -82,6 +83,7 @@ export interface A2aPeer {
   card_url: string;
   auth_header: string;
   has_secret: boolean;
+  credential_source: "none" | "sealed" | "local";
   enabled: boolean;
   timeout_seconds: number;
   card: Record<string, unknown> | null;
@@ -101,7 +103,6 @@ export interface A2aPeerInput {
   name?: string;
   card_url?: string;
   auth_header?: string;
-  auth_secret?: string;
   clear_secret?: boolean;
   timeout_seconds?: number;
   enabled?: boolean;
@@ -123,7 +124,8 @@ export const blockA2aPeer = async (id: number) => (await api.post(`/a2a-peers/${
 // ---------------------------------------------------------------- egress proxy
 
 export const EGRESS_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"] as const;
-export type CredentialSource = "server" | "local" | "none";
+/** sealed: in the browser to the proxies' keys (lib/sealing.ts); local: in their configuration */
+export type CredentialSource = "sealed" | "local" | "none";
 
 export interface EgressRoute {
   id: number;
@@ -149,7 +151,6 @@ export interface EgressRouteInput {
   path_prefixes?: string[];
   credential_source?: CredentialSource;
   auth_header?: string;
-  secret?: string;
   clear_secret?: boolean;
   max_body_bytes?: number;
   enabled?: boolean;
@@ -159,6 +160,10 @@ export interface EgressProxy {
   id: number;
   name: string;
   key_prefix: string;
+  /** the proxy's own signing key (registered by the proxy), for checking its receipts offline */
+  key_fingerprint?: string | null;
+  /** its key credentials are sealed to (signed by the signing key) */
+  encryption_key_fingerprint?: string | null;
   enabled: boolean;
   last_seen_at: string | null;
   revoked_at: string | null;
@@ -187,6 +192,46 @@ export const listEgressProxies = async () => (await api.get<EgressProxy[]>("/egr
 export const createEgressProxy = async (name: string) =>
   (await api.post<EgressProxy & { key: string }>("/egress/proxies", { name })).data;
 export const revokeEgressProxy = async (id: number) => (await api.post<EgressProxy>(`/egress/proxies/${id}/revoke`)).data;
+// ---------------------------------------------------------------- the proxy's local kill switch
+
+/** One item the server states differently from the release the proxy held
+ *  before the outage (docs/pvp/edge.md, section 7). */
+export interface KillSwitchDifference {
+  id: string;
+  area: "manifest" | "bundle" | "credentials";
+  section: string;
+  key: string;
+  label: string;
+  before: string | null;
+  now: string | null;
+  /** the newest release the proxy verified states it so */
+  signed: boolean;
+}
+
+export interface KillSwitch {
+  engaged_at: string;
+  reason: string | null;
+  release_before: number;
+  report_sha256: string;
+  differences: KillSwitchDifference[];
+  unsigned: string[];
+  quorum: number;
+  signers: { user_id: number; email: string }[];
+  can_sign: boolean;
+}
+
+export const getKillSwitch = async (id: number) =>
+  (await api.get<{ kill_switch: KillSwitch | null }>(`/egress/proxies/${id}/kill-switch`)).data.kill_switch;
+
+/** This administrator's passkey over the report and the differences accepted. */
+export async function signKillSwitchLift(id: number, accept: string[]): Promise<KillSwitch | null> {
+  const { data: ch } = await api.post<Challenge>(`/egress/proxies/${id}/kill-switch/challenge`, { accept });
+  const assertion = await passkeyAssertion(ch);
+  const { data } = await api.post<{ kill_switch: KillSwitch | null }>(`/egress/proxies/${id}/kill-switch/sign`,
+    { statement: ch.statement, assertion });
+  return data.kill_switch;
+}
+
 export const listEgressRedemptions = async (open: boolean) =>
   (await api.get<EgressRedemption[]>("/egress/redemptions", { params: { open } })).data;
 
@@ -232,6 +277,7 @@ export interface HttpTool {
   input_schema: Record<string, unknown> | null;
   auth_header: string;
   has_secret: boolean;
+  credential_source: "none" | "sealed" | "local";
   timeout_seconds: number;
   max_response_bytes: number;
   send_permit: boolean;
@@ -249,7 +295,6 @@ export interface HttpToolInput {
   url?: string;
   input_schema?: Record<string, unknown> | null;
   auth_header?: string;
-  auth_secret?: string;
   clear_secret?: boolean;
   timeout_seconds?: number;
   send_permit?: boolean;

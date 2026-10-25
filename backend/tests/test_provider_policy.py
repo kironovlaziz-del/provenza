@@ -41,7 +41,7 @@ async def _policy(client, token, policy):
 
 
 async def _provider(client, token, **fields):
-    body = {"name": "conn-" + secrets.token_hex(3), "type": "openai", "api_key": "sk-test-123",
+    body = {"name": "conn-" + secrets.token_hex(3), "type": "openai",
             "default_model": "gpt-4o-mini", **fields}
     r = await client.post(f"{P}/", json=body, headers=auth_headers(token))
     assert r.status_code == 200, r.text

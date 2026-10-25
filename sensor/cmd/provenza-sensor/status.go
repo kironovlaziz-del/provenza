@@ -100,6 +100,24 @@ type Status struct {
 	Cgroups  CgroupsSection `json:"cgroups"`
 	DNS      []DNSSection   `json:"dns,omitempty"`
 	Stats    StatsSection   `json:"stats"`
+
+	SignedPolicy *SignedPolicySection `json:"signed_policy,omitempty"`
+	ProxyRuns    []ProxyRunSection    `json:"proxy_runs,omitempty"`
+}
+
+type SignedPolicySection struct {
+	Pin        string `json:"pin"`
+	Release    int    `json:"release,omitempty"`
+	Error      string `json:"error,omitempty"`
+	KillSwitch string `json:"kill_switch,omitempty"`
+}
+
+type ProxyRunSection struct {
+	Cgroup    string `json:"cgroup"`
+	State     string `json:"state"`
+	Reason    string `json:"reason,omitempty"`
+	Processes int    `json:"processes"`
+	SHA256    string `json:"sha256,omitempty"`
 }
 
 type HostSection struct {
@@ -238,6 +256,35 @@ func printReport(w *os.File, st *Status) {
 		fmt.Fprintf(w, "Errors (%d)\n", len(st.Errors))
 		for _, s := range st.Errors {
 			fmt.Fprintf(w, "  x %s\n", s)
+		}
+		fmt.Fprintln(w)
+	}
+
+	if sp := st.SignedPolicy; sp != nil {
+		fmt.Fprintf(w, "Signed policy (%s)\n", sp.Pin)
+		if sp.Release > 0 {
+			fmt.Fprintf(w, "  release        #%d (verified here)\n", sp.Release)
+		} else {
+			fmt.Fprintf(w, "  release        none verified yet: commands are refused\n")
+		}
+		if sp.KillSwitch != "" {
+			fmt.Fprintf(w, "  KILL SWITCH    every workload isolated: %s\n", sp.KillSwitch)
+		}
+		if sp.Error != "" {
+			fmt.Fprintf(w, "  ! %s\n", sp.Error)
+		}
+		fmt.Fprintln(w)
+	}
+	if len(st.ProxyRuns) > 0 {
+		fmt.Fprintf(w, "Egress proxies (%d)\n", len(st.ProxyRuns))
+		for _, r := range st.ProxyRuns {
+			fmt.Fprintf(w, "  %-9s %s  processes=%d\n", r.State, r.Cgroup, r.Processes)
+			if r.SHA256 != "" {
+				fmt.Fprintf(w, "            sha256 %s\n", r.SHA256)
+			}
+			if r.Reason != "" {
+				fmt.Fprintf(w, "            %s\n", r.Reason)
+			}
 		}
 		fmt.Fprintln(w)
 	}

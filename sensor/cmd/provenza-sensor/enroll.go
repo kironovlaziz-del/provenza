@@ -19,6 +19,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/kironovlaziz-del/provenza/sensor/internal/config"
 )
 
 type enrollOpts struct {
@@ -35,6 +37,9 @@ type enrollOpts struct {
 
 	SigningKeyFile string
 	SensorIDFile   string
+
+	// "": keep what sensor.json has; "none": take it out
+	Pin string
 
 	NoRestart bool
 }
@@ -61,6 +66,8 @@ func enrollCmd(ctx context.Context, args []string) {
 		"where to write the command signing public key")
 	fs.StringVar(&o.SensorIDFile, "sensor-id-file", "/etc/provenza-sensor/sensor-id",
 		"where to write this sensor's id")
+	fs.StringVar(&o.Pin, "policy-pin", "", "policy.pin: the SHA-256 of the signed key manifest to trust (Policies -> "+
+		"Signed policy), or \"tofu\"; \"none\" removes it; empty keeps what sensor.json has")
 	fs.BoolVar(&o.NoRestart, "no-restart", false, "do not restart provenzasensor.service after writing the config")
 	fs.Usage = func() {
 		fmt.Fprintln(os.Stderr, "usage: provenza-sensor enroll --url URL   (asks for the key)")
@@ -91,6 +98,9 @@ func enroll(ctx context.Context, o enrollOpts) error {
 	if !strings.HasPrefix(o.Key, "pvz_sensor_") {
 		return errors.New("the key must start with pvz_sensor_ (it is shown once when you register the sensor)")
 	}
+	if p := o.Pin; p != "" && p != "none" && p != "tofu" && !config.IsSHA256(p) {
+		return errors.New("--policy-pin: the manifest's SHA-256 (64 lowercase hex characters), \"tofu\" or \"none\"")
+	}
 	url := strings.TrimRight(o.URL, "/")
 
 	slog.Info("checking control plane", "url", url)
@@ -111,19 +121,11 @@ func enroll(ctx context.Context, o enrollOpts) error {
 	}
 	slog.Info("wrote key", "path", o.KeyFile)
 
-	cfg := map[string]any{
-		"provenza_url":     url,
-		"key_file":         o.KeyFile,
-		"cgroup_root":      o.CgroupRoot,
-		"attach_cgroup":    o.CgroupRoot,
-		"pin_dir":          o.PinDir,
-		"state_dir":        o.StateDir,
-		"run_socket":       o.RunSocket,
-		"run_group":        o.RunGroup,
-		"ring_bytes":       uint32(o.RingBytes),
-		"signing_key_file": o.SigningKeyFile,
-		"sensor_id_file":   o.SensorIDFile,
+	var before map[string]any
+	if raw, err := os.ReadFile(o.ConfigPath); err == nil {
+		_ = json.Unmarshal(raw, &before)
 	}
+	cfg := enrollConfig(o, url, before)
 	buf := &bytes.Buffer{}
 	enc := json.NewEncoder(buf)
 	enc.SetIndent("", "  ")
@@ -287,4 +289,35 @@ func prevUntilPath(active string) string {
 		return strings.TrimSuffix(active, ".pub") + ".prev.until"
 	}
 	return active + ".prev.until"
+}
+
+// enrollConfig: sensor.json for these options. A re-enroll keeps the signed
+// policy and the proxy settings the file had (before), unless --policy-pin says otherwise.
+func enrollConfig(o enrollOpts, url string, before map[string]any) map[string]any {
+	cfg := map[string]any{
+		"provenza_url":     url,
+		"key_file":         o.KeyFile,
+		"cgroup_root":      o.CgroupRoot,
+		"attach_cgroup":    o.CgroupRoot,
+		"pin_dir":          o.PinDir,
+		"state_dir":        o.StateDir,
+		"run_socket":       o.RunSocket,
+		"run_group":        o.RunGroup,
+		"ring_bytes":       uint32(o.RingBytes),
+		"signing_key_file": o.SigningKeyFile,
+		"sensor_id_file":   o.SensorIDFile,
+	}
+	for _, k := range []string{"policy", "proxy_binaries", "proxy_configs", "proxy_users"} {
+		if v, ok := before[k]; ok {
+			cfg[k] = v
+		}
+	}
+	switch o.Pin {
+	case "":
+	case "none":
+		delete(cfg, "policy")
+	default:
+		cfg["policy"] = map[string]any{"pin": o.Pin}
+	}
+	return cfg
 }

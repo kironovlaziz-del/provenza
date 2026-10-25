@@ -50,16 +50,17 @@ async def _post(url: str, headers: Dict[str, str], body: Dict[str, Any]) -> Dict
 
 async def chat(provider_type: str, api_key: Optional[str], base_url: Optional[str], model: str,
                messages: List[Dict[str, Any]], params: Dict[str, Any]) -> Tuple[str, str, Dict[str, Any], Dict[str, int]]:
-    """Returns (text, finish_reason, raw_response, usage{prompt_tokens, completion_tokens})."""
-    if not api_key:
-        raise ProviderCallError("No API key is configured for this connection.")
+    """Returns (text, finish_reason, raw_response, usage{prompt_tokens, completion_tokens}).
+    api_key is None for a connection that takes none (a self-hosted model
+    server): this server holds no provider key (app/pvp/sealed.py)."""
     params = {k: v for k, v in params.items() if k in PASS_PARAMS and v is not None}
 
     if provider_type in ("openai", "groq", "azure_openai"):
         if provider_type == "azure_openai" and not base_url:
             raise ProviderCallError("Azure OpenAI connections require a base_url (your resource's endpoint).")
         url = (base_url or DEFAULT_BASE[provider_type]).rstrip("/") + "/chat/completions"
-        headers = {"api-key": api_key} if provider_type == "azure_openai" else {"Authorization": f"Bearer {api_key}"}
+        headers = {} if not api_key else {"api-key": api_key} if provider_type == "azure_openai" \
+            else {"Authorization": f"Bearer {api_key}"}
         msgs = [{k: v for k, v in m.items() if k in ("role", "content", "name", "tool_call_id") and v is not None}
                 for m in messages]
         data = await _post(url, headers, {"model": model, "messages": msgs, **params})
@@ -94,7 +95,8 @@ async def chat(provider_type: str, api_key: Optional[str], base_url: Optional[st
             body["stop_sequences"] = [stop] if isinstance(stop, str) else stop
         body.update(params)
         url = (base_url or DEFAULT_BASE["anthropic"]).rstrip("/") + "/messages"
-        data = await _post(url, {"x-api-key": api_key, "anthropic-version": "2023-06-01"}, body)
+        data = await _post(url, {**({"x-api-key": api_key} if api_key else {}), "anthropic-version": "2023-06-01"},
+                           body)
         try:
             text = "".join(b.get("text", "") for b in data.get("content", []))
         except (AttributeError, TypeError) as exc:
@@ -107,7 +109,7 @@ async def chat(provider_type: str, api_key: Optional[str], base_url: Optional[st
     if not base_url:
         raise ProviderCallError("Custom connections require a base_url pointing at the inference endpoint.")
     prompt = "\n\n".join(f"{m['role']}: {_text(m.get('content'))}" for m in messages)
-    data = await _post(base_url, {"Authorization": f"Bearer {api_key}"},
+    data = await _post(base_url, {"Authorization": f"Bearer {api_key}"} if api_key else {},
                        {"prompt": prompt, "messages": messages, "model": model, **params})
     text = data["response"] if "response" in data else data["text"] if "text" in data else str(data)
     return str(text), "stop", data, {"prompt_tokens": None, "completion_tokens": None}

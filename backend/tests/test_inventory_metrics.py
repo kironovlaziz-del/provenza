@@ -86,7 +86,7 @@ class TestProviderMetrics:
     async def test_denial_rate_of_gateway_calls(self, client, admin_token, db_session):
         prov = await client.post(
             "/api/v1/providers/",
-            json={"name": "Metrics LLM", "type": "openai", "api_key": "sk-metrics"},
+            json={"name": "Metrics LLM", "type": "openai"},
             headers=auth_headers(admin_token),
         )
         assert prov.status_code in (200, 201), prov.text

@@ -47,6 +47,9 @@ class AgentAction(Base):
     # "mcp_gateway" = Provenza made the call on the agent's behalf - the record
     # is the gateway's own witness, not an agent signature
     executed_by = Column(String(20))
+    # what the executor signed with its own key (an egress proxy: app/pvp/witness.py) -
+    # {"by", "key_fingerprint", "public_key", "statement", "signature"}; part of the evidence
+    witness = Column(JSONB)
     # The action as PVP evidence at the moment it was recorded (app/pvp/evidence.py):
     # ids, hashes and signatures only - no content, so retention leaves it alone -
     # and never changed afterwards (an approval later is its own record). Its
@@ -104,6 +107,9 @@ class ActionCheck(Base):
     policy_id = Column(Integer, ForeignKey("agent_policies.id"))
     expires_at = Column(DateTime(timezone=True), nullable=False)
     used_at = Column(DateTime(timezone=True))
+    # the agent's own signed action.request was verified for it (enforce mode
+    # needs that for anything an enforcement point executes)
+    agent_signed = Column(Boolean, nullable=False, default=False, server_default="false")
     # the signed permit issued with an allowed verdict (app/pvp/permits.py):
     # its id, and when a tool redeemed it - once
     permit_jti = Column(String(64), unique=True)

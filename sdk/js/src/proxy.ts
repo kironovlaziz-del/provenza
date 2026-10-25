@@ -11,13 +11,17 @@
  *   await fetch("http://127.0.0.1:8443/stripe/v1/charges", { method: "POST", body, headers: proxyHeaders(chk) });
  *
  * `path` and `query` are exactly what goes on the wire (percent-encoding kept),
- * `body` the exact bytes: the proxy hashes what it receives.
+ * `body` the exact bytes: the proxy hashes what it receives. The headers carry the
+ * agent's signed request too: a proxy that enforces the signed policy verifies the
+ * agent's signature itself (docs/pvp/edge.md, section 4).
  */
 
 import { createHash } from "node:crypto";
 
 export const PROXY_ACTION_TYPE = "proxy";
 export const PROXY_HEADER = "X-Provenza-Check-Id";
+/** The agent's signed action.request, for a proxy that enforces the signed policy. */
+export const PROXY_REQUEST_HEADER = "X-Provenza-Request";
 
 export type RawBytes = string | Uint8Array | null | undefined;
 
@@ -49,7 +53,12 @@ export function proxyDescriptor(route: string, method: string, path: string,
            body_bytes: body.length };
 }
 
-/** The header the egress proxy redeems. */
-export function proxyHeaders(check: { checkId: string }): Record<string, string> {
-  return { [PROXY_HEADER]: check.checkId };
+/** The check id the egress proxy redeems, and the agent's signed request, which
+ *  a proxy enforcing the signed policy verifies with the key the signed manifest names. */
+export function proxyHeaders(check: { checkId: string; request?: unknown }): Record<string, string> {
+  const headers: Record<string, string> = { [PROXY_HEADER]: check.checkId };
+  if (check.request) {
+    headers[PROXY_REQUEST_HEADER] = Buffer.from(JSON.stringify(check.request), "utf8").toString("base64url");
+  }
+  return headers;
 }

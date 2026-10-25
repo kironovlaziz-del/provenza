@@ -39,7 +39,9 @@ class GatewayRoute(Base):
 
 class GatewayCall(Base):
     """One call through the gateway: who, which model, the verdict, tokens and
-    latency. What was sent and answered is not kept."""
+    latency. What was sent and answered is not kept. A call that reached the
+    policy decision is also a PVP action (action_id, executed by the gateway):
+    this row keeps the numbers the LLM charts need."""
 
     __tablename__ = "gateway_calls"
 
@@ -48,10 +50,12 @@ class GatewayCall(Base):
     agent_id = Column(Integer, ForeignKey("agents.id", ondelete="CASCADE"), index=True)
     provider_id = Column(Integer, ForeignKey("ai_providers.id", ondelete="SET NULL"))
     model = Column(String(200))
-    status = Column(String(20), nullable=False)   # completed, failed, rate_limited, denied
+    status = Column(String(20), nullable=False)   # completed, failed, rate_limited, denied, pending_approval
     reason = Column(String(500))
     flags = Column(JSONB, nullable=False)
     latency_ms = Column(Integer)
     prompt_tokens = Column(Integer)
     completion_tokens = Column(Integer)
+    action_id = Column(Integer, ForeignKey("agent_actions.id", ondelete="SET NULL"), index=True)
+    chain_id = Column(Integer, ForeignKey("delegation_chains.id", ondelete="SET NULL"))
     created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
