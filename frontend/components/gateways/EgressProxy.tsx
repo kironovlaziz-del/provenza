@@ -324,9 +324,9 @@ function Proxies() {
         {legacy && legacy.count > 0 && (
           <div className="panel u-mb-12" style={{ borderColor: "var(--risk-high)" }}>
             <div className="panel-body">
-              <p>{t("sealed.legacy", { n: legacy.count, defaultValue: `Credentials this server still holds from before: ${legacy.count}. Nothing uses them until they are sealed to the proxies; then they are erased here.` })}</p>
+              <p>{t("sealed.legacy", { n: legacy.count, defaultValue: `This server still holds ${legacy.count} credentials from before. Nothing uses them until they are sealed to the proxies; then they are erased here.` })}</p>
               {legacy.proxies_with_keys === 0
-                ? <p className="hint-text">{t("sealed.no_keys_legacy", "No egress proxy has registered its key yet: install and start one (proxy/README.md), then seal them here.")}</p>
+                ? <p className="hint-text">{t("sealed.no_keys", "No egress proxy has registered its key yet: start one first.")}</p>
                 : (
                   <button className="btn btn-sm btn-primary" disabled={busy} onClick={async () => {
                     if (!(await confirm(t("sealed.legacy_confirm", { n: legacy.proxies_with_keys, defaultValue: `Seal them to the ${legacy.proxies_with_keys} proxies with a key and erase them here? A proxy added later needs them entered again.` })))) return;

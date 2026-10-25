@@ -285,7 +285,7 @@ The server holds no credential it can read (`backend/app/pvp/sealed.py`,
 - **What the server held before.** Credentials stored before stage 9
   (encrypted with the server's own key) are used by nothing. An
   administrator seals them once to every proxy with a key
-  (Gateways → External APIs → Proxies, *Seal and erase*) and they are erased; a
+  (Gateways → Egress → Proxies, *Seal and erase*) and they are erased; a
   proxy added later needs them entered again.
 - **The server's own gateways** (LLM, MCP, A2A, HTTP tools) serve only
   upstreams that take no credential; one whose credential is sealed is
@@ -474,7 +474,7 @@ switch engaged. A difference the newest release it verified states is marked
 the switch engaged, so it does not change while nothing changes - is signed
 with the proxy's key, kept in its receipt log and sent (`POST
 /egress-proxy/kill-switch`); the server opens an incident for each difference
-and notifies (`kill_switch`). Under Gateways → External APIs → Proxies each
+and notifies (`kill_switch`). Under Gateways → Egress → Proxies each
 administrator of the release held before the outage signs with a passkey
 
     {"type": "provenza.kill_switch.lift", "v": 1, "org_id", "user_id", "proxy_id",

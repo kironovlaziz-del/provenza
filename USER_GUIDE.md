@@ -97,7 +97,7 @@ connection.
 2. **New provider** → choose type (OpenAI, Anthropic, Azure OpenAI, or
    Custom), give it a name, and paste the API key.
 3. The key is **sealed in your browser** to the egress proxies' own keys
-   (Gateways → External APIs → Proxies shows each proxy's key fingerprint; compare
+   (Gateways → Egress → Proxies shows each proxy's key fingerprint; compare
    it with what the proxy prints on its host). Provenza stores only what it
    cannot open, and the proxies use the key - so a connection with a key is
    called through an egress proxy. A self-hosted model server that takes no
@@ -150,7 +150,7 @@ how long a release is valid and the offline time under *Quorum, validity,
 offline time, mode*: they apply from the next release. The offline time is how long an
 egress proxy (in enforce mode) and the pinned sensors keep working without
 this server: past it they stop - a *local kill switch*. A stopped proxy shows
-under Gateways → External APIs → Proxies with what changed meanwhile; the
+under Gateways → Egress → Proxies with what changed meanwhile; the
 administrators of the release it held lift it with their passkeys, accepting
 every change no signed release explains. Renew the release before
 it expires - after that no agent action is allowed until a new one is

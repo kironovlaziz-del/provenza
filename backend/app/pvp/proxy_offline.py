@@ -210,7 +210,7 @@ async def report(db: AsyncSession, proxy: EgressProxy, rep: Any, receipt: Any) -
         db, org_id, NOTIFY_EVENT, "An egress proxy stopped: local kill switch",
         f"Egress proxy {name} could not reach Provenza for longer than the signed policy allows and stopped. "
         f"Its reconciliation report lists {len(rep.get('differences') or [])} differences "
-        f"({len(unsigned_ids(rep))} not signed). Administrators lift it under Gateways -> External APIs -> Proxies.",
+        f"({len(unsigned_ids(rep))} not signed). Administrators lift it under Egress -> Proxies.",
         {"proxy_id": proxy_id, "report_sha256": sha})
     return {"id": rid, "report_sha256": sha}
 
