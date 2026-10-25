@@ -431,11 +431,24 @@ tbody tr.clickable:hover {
 
 .form-row {
   display: flex;
+  flex-wrap: wrap;
   gap: 12px;
 }
 
 .form-row .field {
-  flex: 1;
+  flex: 1 1 180px;
+  min-width: 0;
+}
+
+/* A table wider than its panel scrolls inside it; long keys and fingerprints wrap. */
+.table-scroll {
+  overflow-x: auto;
+  max-width: 100%;
+}
+
+.u-break {
+  word-break: break-all;
+  overflow-wrap: anywhere;
 }
 
 .error-text {

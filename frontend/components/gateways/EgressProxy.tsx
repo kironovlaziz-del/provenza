@@ -168,6 +168,7 @@ function Routes() {
         )}
         {error && <p className="error-text">{error}</p>}
       </div>
+      <div className="table-scroll">
       <table>
         <thead>
           <tr>
@@ -214,6 +215,7 @@ function Routes() {
           ))}
         </tbody>
       </table>
+      </div>
     </div>
   );
 }
@@ -324,9 +326,9 @@ function Proxies() {
         {legacy && legacy.count > 0 && (
           <div className="panel u-mb-12" style={{ borderColor: "var(--risk-high)" }}>
             <div className="panel-body">
-              <p>{t("sealed.legacy", { n: legacy.count, defaultValue: `This server still holds ${legacy.count} credentials from before. Nothing uses them until they are sealed to the proxies; then they are erased here.` })}</p>
+              <p>{t("sealed.legacy", { n: legacy.count, defaultValue: `Credentials this server still holds from before: ${legacy.count}. Nothing uses them until they are sealed to the proxies; then they are erased here.` })}</p>
               {legacy.proxies_with_keys === 0
-                ? <p className="hint-text">{t("sealed.no_keys", "No egress proxy has registered its key yet: start one first.")}</p>
+                ? <p className="hint-text">{t("sealed.no_keys_legacy", "No egress proxy has registered its key yet: install and start one (proxy/README.md), then seal them here.")}</p>
                 : (
                   <button className="btn btn-sm btn-primary" disabled={busy} onClick={async () => {
                     if (!(await confirm(t("sealed.legacy_confirm", { n: legacy.proxies_with_keys, defaultValue: `Seal them to the ${legacy.proxies_with_keys} proxies with a key and erase them here? A proxy added later needs them entered again.` })))) return;
@@ -385,6 +387,7 @@ function Proxies() {
         </Form>
         {error && <p className="error-text">{error}</p>}
       </div>
+      <div className="table-scroll">
       <table>
         <thead>
           <tr>
@@ -401,7 +404,7 @@ function Proxies() {
             <React.Fragment key={p.id}>
             <tr>
               <td>{p.name}</td>
-              <td className="u-mono">
+              <td className="u-mono u-break">
                 {p.key_prefix}…
                 {p.key_fingerprint && (
                   <div className="hint-text" title={t("gw.egress.signing_key_hint", "The proxy's own signing key: its receipts are checked with it")}>
@@ -439,6 +442,7 @@ function Proxies() {
           ))}
         </tbody>
       </table>
+      </div>
     </div>
   );
 }
@@ -451,6 +455,7 @@ function OpenRedemptions() {
     <div className="panel">
       <div className="panel-header"><h2>{t("gw.egress.open")}</h2></div>
       <div className="panel-body"><p className="hint-text">{t("gw.egress.open_hint")}</p></div>
+      <div className="table-scroll">
       <table>
         <thead>
           <tr>
@@ -475,6 +480,7 @@ function OpenRedemptions() {
           ))}
         </tbody>
       </table>
+      </div>
     </div>
   );
 }
