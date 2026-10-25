@@ -168,6 +168,7 @@ function Routes() {
         )}
         {error && <p className="error-text">{error}</p>}
       </div>
+      <div className="table-scroll">
       <table>
         <thead>
           <tr>
@@ -214,6 +215,7 @@ function Routes() {
           ))}
         </tbody>
       </table>
+      </div>
     </div>
   );
 }
@@ -385,6 +387,7 @@ function Proxies() {
         </Form>
         {error && <p className="error-text">{error}</p>}
       </div>
+      <div className="table-scroll">
       <table>
         <thead>
           <tr>
@@ -401,7 +404,7 @@ function Proxies() {
             <React.Fragment key={p.id}>
             <tr>
               <td>{p.name}</td>
-              <td className="u-mono">
+              <td className="u-mono u-break">
                 {p.key_prefix}…
                 {p.key_fingerprint && (
                   <div className="hint-text" title={t("gw.egress.signing_key_hint", "The proxy's own signing key: its receipts are checked with it")}>
@@ -439,6 +442,7 @@ function Proxies() {
           ))}
         </tbody>
       </table>
+      </div>
     </div>
   );
 }
@@ -451,6 +455,7 @@ function OpenRedemptions() {
     <div className="panel">
       <div className="panel-header"><h2>{t("gw.egress.open")}</h2></div>
       <div className="panel-body"><p className="hint-text">{t("gw.egress.open_hint")}</p></div>
+      <div className="table-scroll">
       <table>
         <thead>
           <tr>
@@ -475,6 +480,7 @@ function OpenRedemptions() {
           ))}
         </tbody>
       </table>
+      </div>
     </div>
   );
 }
