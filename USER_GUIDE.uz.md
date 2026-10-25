@@ -101,7 +101,7 @@ Agentlar AI provayderni shlyuz orqali chaqira olishidan oldin ulanish qo‘shing
 2. **New provider** → turini tanlang (OpenAI, Anthropic, Azure OpenAI
    yoki Shaxsiy), nom bering va API kalitni joylashtiring.
 3. Kalit **brauzeringizda** egress proksilarning o‘z kalitlariga
-   **muhrlanadi** (Gateways → Egress → Proxies har bir proksi kalitining
+   **muhrlanadi** (Gateways → External APIs → Proxies har bir proksi kalitining
    barmoq izini ko‘rsatadi; uni proksi o‘z xostida chiqargani bilan
    solishtiring). Provenza faqat o‘zi ocha olmaydigan narsani saqlaydi,
    kalitdan esa proksilar foydalanadi — shuning uchun kalitli ulanish egress
@@ -160,7 +160,7 @@ etiladi), reliz amal qilish muddatini va oflayn vaqtni *Quorum, validity,
 offline time, mode* bo'limida belgilang: ular keyingi relizdan qo'llaniladi. Oflayn
 vaqt - egress proksi (enforce rejimida) va pin qilingan sensorlar ushbu
 serversiz qancha ishlashi: undan keyin ular to'xtaydi - *lokal kill switch*.
-To'xtagan proksi Gateways → Egress → Proxies ostida shu orada nima
+To'xtagan proksi Gateways → External APIs → Proxies ostida shu orada nima
 o'zgargani bilan ko'rinadi; u uzilishdan oldin ushlab turgan reliz
 administratorlari uni passkey bilan yechadi va hech bir imzolangan reliz
 tushuntirmaydigan har bir o'zgarishni qabul qiladi.

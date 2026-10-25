@@ -104,7 +104,7 @@ export function SealedCredential({ obj, id, allowLocal = true, onChange }: {
         </span>
       )}
       {st.awaiting_sealing && (
-        <span className="hint-text"> · {t("sealed.awaiting", "the server still holds the old one: seal it under Egress → Proxies")}</span>
+        <span className="hint-text"> · {t("sealed.awaiting", "the server still holds the old one: seal it under Gateways → External APIs → Proxies")}</span>
       )}
       {!editing && (
         <button type="button" className="btn btn-sm" style={{ marginLeft: 8 }} onClick={open}>

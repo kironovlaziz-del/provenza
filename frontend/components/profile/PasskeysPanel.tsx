@@ -86,7 +86,7 @@ export function PasskeysPanel() {
             </div>
           )}
           <div className="field" style={{ maxWidth: 360 }}>
-            <label htmlFor="pk-password">{t("passkeys.password", "Your password")}</label>
+            <label htmlFor="pk-password">{t("passkeys.password", "Your Provenza password (the one you sign in with, not the device PIN)")}</label>
             <input id="pk-password" type="password" required autoComplete="current-password" value={password}
                    onChange={(e) => setPassword(e.target.value)} />
           </div>
