@@ -19,6 +19,11 @@ updates:
     labels:
       - dependencies
       - frontend
+    # react and react-dom must move together (react-dom pins the same react
+    # version as a peer): one PR for the pair, never one without the other
+    groups:
+      react:
+        patterns: ["react", "react-dom", "@types/react", "@types/react-dom"]
 
   - package-ecosystem: github-actions
     directory: /
