@@ -14,6 +14,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"strconv"
 
 	"github.com/kironovlaziz-del/provenza/proxy/internal/canon"
@@ -30,6 +31,17 @@ type Release struct {
 	ManifestSHA string
 	// the document as the server sent it (kept so a restart can check it again)
 	Doc map[string]any
+}
+
+// smallInt: a number of the signed documents that is an int on every
+// platform (a release number, a quorum, a COSE algorithm): 0 and false for
+// anything else, never a value wrapped around.
+func smallInt(v any) (int, bool) {
+	n, ok := num(v)
+	if !ok || n < math.MinInt32 || n > math.MaxInt32 {
+		return 0, false
+	}
+	return int(n), true
 }
 
 func num(v any) (int64, bool) {
@@ -76,8 +88,8 @@ func GoverningSHA(doc map[string]any) string {
 
 // GovernedByNumber: the number of the release that governs this one (0: none).
 func GovernedByNumber(doc map[string]any) int {
-	n, _ := num(obj(doc["governed_by"])["number"])
-	return int(n)
+	n, _ := smallInt(obj(doc["governed_by"])["number"])
+	return n
 }
 
 // VerifyRelease checks one release document on its own: the hashes, that it
@@ -92,7 +104,7 @@ func VerifyRelease(doc map[string]any) (*Release, []string, error) {
 	if shaOf(bundle) != bsha || shaOf(manifest) != msha || bsha == "" || msha == "" {
 		return nil, nil, errors.New("a document does not hash to what the release names")
 	}
-	number, _ := num(rel["number"])
+	number, _ := smallInt(rel["number"])
 	bversion, _ := num(bundle["version"])
 	mversion, _ := num(manifest["version"])
 	governing := manifest
@@ -137,9 +149,9 @@ func VerifyRelease(doc map[string]any) (*Release, []string, error) {
 		if key == nil {
 			continue
 		}
-		alg, _ := num(key["alg"])
+		alg, _ := smallInt(key["alg"])
 		challenge, err := statementChallenge(st)
-		if err != nil || verifyAssertion(str(key["public_key"]), int(alg), obj(s["assertion"]), challenge) != nil {
+		if err != nil || verifyAssertion(str(key["public_key"]), alg, obj(s["assertion"]), challenge) != nil {
 			continue
 		}
 		signed[uid] = PasskeyFingerprint(str(key["public_key"]))
@@ -156,7 +168,7 @@ func VerifyRelease(doc map[string]any) (*Release, []string, error) {
 	for _, fp := range signed {
 		fps = append(fps, fp)
 	}
-	return &Release{Number: int(number), Bundle: bundle, Manifest: manifest, BundleSHA: bsha, ManifestSHA: msha,
+	return &Release{Number: number, Bundle: bundle, Manifest: manifest, BundleSHA: bsha, ManifestSHA: msha,
 		Doc: doc}, fps, nil
 }
 

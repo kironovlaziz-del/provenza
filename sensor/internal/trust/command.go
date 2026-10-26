@@ -111,12 +111,12 @@ func VerifyCommand(proof map[string]any, manifest map[string]any, sensorID int64
 	if key == nil || str(key["public_key"]) != str(obj(proof["passkey"])["public_key"]) {
 		return nil, errors.New("command: the administrator's passkey is not in the signed manifest")
 	}
-	alg, _ := num(key["alg"])
+	alg, _ := smallInt(key["alg"])
 	challenge, err := statementChallenge(cert)
 	if err != nil {
 		return nil, err
 	}
-	if err := verifyAssertion(str(key["public_key"]), int(alg), obj(certificate["assertion"]), challenge); err != nil {
+	if err := verifyAssertion(str(key["public_key"]), alg, obj(certificate["assertion"]), challenge); err != nil {
 		return nil, fmt.Errorf("command: the passkey did not certify the session: %w", err)
 	}
 	return &Command{Kind: kind, Nonce: nonce, UserID: user, ExpiresAt: time.Unix(expires, 0),
