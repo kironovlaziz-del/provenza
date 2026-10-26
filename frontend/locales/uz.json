@@ -350,6 +350,7 @@
     "source_process": "Lokal jarayon",
     "source_network": "Lokal tarmoq",
     "source_model_file": "Lokal model fayli",
+    "source_domain_visit": "AI saytiga tashrif",
     "col_time": "Aniqlangan vaqt",
     "confirm_register_title": "Sanksiyalangan provayder sifatida ro'yxatga olish",
     "confirm_register_msg": "Bu quyidagi uchun tasdiqlangan AI provayder ulanishini yaratadi:",

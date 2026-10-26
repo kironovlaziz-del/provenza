@@ -183,6 +183,9 @@ export default function ShadowAIPage() {
         return <span className="mono" style={style}>🔌 {t("shadow_ai.source_network")}</span>;
       case "local_model_found":
         return <span className="mono" style={style}>📦 {t("shadow_ai.source_model_file")}</span>;
+      // a visit to an AI site, reported by the browser extension or the endpoint agent
+      case "domain_visit":
+        return <span className="mono" style={style}>🌐 {t("shadow_ai.source_domain_visit")}</span>;
       default:
         return <span className="mono" style={style}>📝 {t("shadow_ai.source_manual")}</span>;
     }
@@ -402,6 +405,7 @@ export default function ShadowAIPage() {
                 <option value="process_detected">{t("shadow_ai.source_process")}</option>
                 <option value="network_conn">{t("shadow_ai.source_network")}</option>
                 <option value="local_model_found">{t("shadow_ai.source_model_file")}</option>
+                <option value="domain_visit">{t("shadow_ai.source_domain_visit")}</option>
                 <option value="manual">{t("shadow_ai.source_manual")}</option>
               </select>
             </div>

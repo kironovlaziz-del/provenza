@@ -332,7 +332,7 @@ function lineParts(e: ObsEvent, name: (id?: number) => string): { text: string; 
       if (e.flags?.length) out.push({ text: ` [${e.flags.join(", ")}]`, color: "#d29922" });
       break;
     case "delegation.hop":
-      out.push({ text: `→ ${name(e.to_agent_id)} depth=${e.depth ?? "?"}${e.capabilities?.length ? ` caps=${e.capabilities.join(",")}` : ""}` });
+      out.push({ text: `→ ${name(e.to_agent_id)} ${e.depth != null ? `depth=${e.depth}` : ""}${e.capabilities?.length ? ` caps=${e.capabilities.join(",")}` : ""}` });
       verdict(e.verified ? "verified" : "unverified");
       break;
     case "incident.created":
