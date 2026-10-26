@@ -53,12 +53,22 @@ sudo ./install.sh
 The installer asks for your domain and the first administrator, generates every
 secret, runs the stack as rootful Podman containers managed by systemd (Quadlet),
 gets an HTTPS certificate and schedules a daily backup.
-Upgrades are one command, `sudo ./upgrade.sh`: it backs up first and rolls back if the
+It also puts the egress proxy and the endpoint agent on the server, with their keys -
+nothing to copy from the interface; add `--sensor` for the eBPF egress sensor.
+Upgrades are one command, `sudo provenza upgrade`: it backs up first and rolls back if the
 new version does not come up. Full guide: [docs/self-hosting.md](docs/self-hosting.md).
 
-**Just looking?** `docker compose -f docker-compose.dev.yml up --build`, then
-http://localhost:3000 with organization `demo`, `admin@demo.com` / `demo12345`
-([development guide](docs/development.md)).
+**Connect an agent** from the interface: Agents → New agent → **Connect an AI client**
+gives one command for the machine where Gemini CLI, Claude Code, Cursor or any
+OpenAI-compatible client runs. The agent's keys are made there and never leave it.
+
+**Govern egress on another Linux host:** Runtime → **Register sensor** gives a
+one-line command that downloads the sensor from your Provenza (no Go, no git there).
+
+**Just looking?** On your own computer, not a server (demo password, development
+secrets): `docker compose -f docker-compose.dev.yml up --build` - or `podman compose`
+with Podman - then http://localhost:3000 with organization `demo`, `admin@demo.com` /
+`demo12345` ([development guide](docs/development.md)).
 
 ## ✨ What makes it different
 
@@ -180,17 +190,3 @@ Copyright 2026 Laziz Kironov.
 
 - [![Awesome AI Governance](https://img.shields.io/badge/Awesome-AI%20Governance-blue?logo=github)](https://github.com/agentrust-io/awesome-ai-governance)
 - [![Awesome AI Agent Governance](https://img.shields.io/badge/Awesome-AI%20Agent%20Governance-blue?logo=github)](https://github.com/systempromptio/awesome-ai-agent-governance)
-
-### Govern egress on any Linux host
-
-The sensor is a separate, per-host install. It loads the eBPF programs that watch outbound connections, then reports to this control plane.
-
-    git clone https://github.com/kironovlaziz-del/provenza.git
-    cd provenza/sensor
-    sudo ./install.sh --url https://your-provenza-domain
-
-It asks for the sensor key: in the UI, Runtime -> Register sensor, copy the
-pvz_sensor_... key and paste it (the input is hidden and stays out of the shell
-history). Press Enter instead to only prepare the host and enroll later with
-`sudo provenza-sensor enroll --url https://your-provenza-domain`.
-
