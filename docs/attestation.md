@@ -68,7 +68,7 @@ POST /agents/{id}/attestation            ──▶  1. challenge (spent by any a
   (the evidence was checked and refused, with the reason) and
   `attestation_refused` (bad challenge, or not signed by the agent's current
   key). Attempts that reached the evidence are also listed under
-  Registry → Attestation.
+  Agents → Attestation.
 * **Rate limited**: 30 challenges and attempts per agent per 10 minutes,
   counted only for the agent itself (nobody else can use up its budget).
 
@@ -77,7 +77,7 @@ POST /agents/{id}/attestation            ──▶  1. challenge (spent by any a
 The token's `aud` must be the policy's audience. Set the same value in:
 
 1. the pod spec (`serviceAccountToken.audience`),
-2. the attestation policy (Registry → Attestation),
+2. the attestation policy (Agents → Attestation),
 3. nothing else to do on the agent: the challenge tells it the audience and
    `provenza_sign.py attest` refuses to send a token for another one.
 
@@ -98,7 +98,7 @@ kubectl get --raw /.well-known/openid-configuration   # "issuer"
 kubectl get --raw /openid/v1/jwks                      # the keys
 ```
 
-Create a policy in Registry → Attestation: the issuer, the audience, and the
+Create a policy in Agents → Attestation: the issuer, the audience, and the
 keys — pasted (private clusters), from a URL, or by OIDC discovery when the
 issuer is publicly reachable (managed clusters: EKS, GKE, AKS). Fetched keys
 and discovery documents are cached for an hour; a token signed with an
@@ -152,7 +152,7 @@ It re-reads the token every time (the kubelet renews it when 80% of its
 lifetime has passed, so a 1-hour token always has at least 12 minutes left)
 and runs until stopped: as a sidecar or a background loop next to the agent.
 
-**Checking a token first.** Registry → Attestation → *Test a token* checks a
+**Checking a token first.** Agents → Attestation → *Test a token* checks a
 token against a policy without recording anything:
 
 ```bash

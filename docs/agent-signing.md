@@ -48,7 +48,7 @@ keys for evidence that does not depend on the server.
 ### Enrollment: the agent proves it holds its key
 
 By default an agent joins only with a **one-time enrollment token** an admin
-issues (Registry -> Agents -> New agent, or `POST /api/v1/agent-enrollment/tokens`).
+issues (Agents → New agent, or `POST /api/v1/agent-enrollment/tokens`).
 The token carries the agent's rights - capabilities, tools, models, depth,
 team - and an expiry; the agent cannot ask for anything else. Where the
 agent runs (add `--hybrid` for the post-quantum scheme below):
@@ -60,6 +60,11 @@ python tools/provenza_sign.py enroll --server https://provenza.example.com --tok
 #   key fingerprint  SHA256:...   <- give this to the auditor
 #   saved to         provenza-agent.json  (private keys + API key, mode 600)
 ```
+
+The simplest: **Connect an AI client** on the token's page gives one command
+for the agent's machine; `provenza-proxy enroll` there makes the keys and
+proves them the same way, then connects the client
+([proxy/README.md](../proxy/README.md), "Connecting a client in one command").
 
 Or press **Enroll in this browser** on the token's page: the keys are
 generated in the browser (WebCrypto Ed25519, bundled ML-DSA-65), the
@@ -145,7 +150,7 @@ python tools/provenza_sign.py sign PRIVATE_KEY payload.json --pq-private-key PQ_
 # {"signature": "...", "pq_signature": "..."}
 ```
 
-An organization can **require** hybrid keys (Agent identity → "Require
+An organization can **require** hybrid keys (Agents → Agent Identity → "Require
 post-quantum signatures", `require_pq_signatures`). Then new keys and key
 changes must be hybrid (`agent.pq_required`), and agents without a hybrid
 key — Ed25519-only, or no signing key at all — are refused when they
@@ -222,7 +227,7 @@ output in the same canonical form.
 
 ## Revoking a key
 
-Registry -> Agents -> an agent -> Signing keys -> **Revoke**, or
+Agents → the agent → *Signing key history* → **Revoke**, or
 `POST /agents/{id}/signing-keys/{key_id}/revoke {"reason": ..., "compromised_since": ...}`.
 
 - The key enters the organization's revocation list (`GET /agents/key-revocations`).

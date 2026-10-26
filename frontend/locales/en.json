@@ -3005,7 +3005,7 @@
     "policy": "Activate a policy",
     "policy_hint": "The policy hierarchy decides which models, providers and tools are allowed, denied or need approval.",
     "agent": "Register your first agent",
-    "agent_hint": "Create an enrollment token, then pip install provenza and enroll the agent with it.",
+    "agent_hint": "Agents → New agent → Issue enrollment token → Connect an AI client: one command on the client's machine enrolls the agent and connects it.",
     "notifications": "Set up notifications",
     "notifications_hint": "Email or a webhook (Slack, Teams) for incidents and approvals.",
     "mfa": "Require two-factor sign-in",

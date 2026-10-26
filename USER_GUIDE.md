@@ -94,8 +94,8 @@ Before agents can call an AI provider through the gateway, add a
 connection.
 
 1. Sidebar → **AI inventory → Connections**.
-2. **New provider** → choose type (OpenAI, Anthropic, Azure OpenAI, or
-   Custom), give it a name, and paste the API key.
+2. **Connect** → choose the type (openai, anthropic, groq, azure_openai or
+   custom), give it a name, and paste the API key.
 3. The key is **sealed in your browser** to the egress proxies' own keys
    (Gateways → External APIs → Proxies shows each proxy's key fingerprint; compare
    it with what the proxy prints on its host). Provenza stores only what it
@@ -249,7 +249,7 @@ Collectors authenticate with a machine key, not a user login.
 
 The catalog decides how a detected domain is treated.
 
-1. Sidebar → **Discovery → AI Domain Catalog** (admin only).
+1. Sidebar → **Shadow AI → AI Domain Catalog** (admin only).
 2. Add a domain and set its policy: **Allowed** (only logged),
    **Blocked** (raises an automatic incident), or **Unknown** (raises a
    sighting for review). Anything not in the catalog is treated as
@@ -259,12 +259,12 @@ The catalog decides how a detected domain is treated.
 
 ### 8.3 Sightings
 
-Sidebar → **Discovery → Shadow AI Sightings**. Each sighting shows the tool, the
+Sidebar → **Shadow AI → Shadow AI Sightings**. Each sighting shows the tool, the
 source (browser extension, endpoint agent, local process/network/model
 file, or manual), the employee hint if known, the status, and a
 "seen N times" counter for repeat detections. For each one you can:
 
-- **Take** it for review,
+- **Take on** it for review,
 - **Register** it as a sanctioned provider (turns it into a real
   connection),
 - **Dismiss** it.
@@ -285,11 +285,13 @@ On any other machine:
 
 1. Create an **Ingestion Source** of type *Endpoint agent* and copy the
    key.
-2. Put the key and your server URL into the agent's `config.json`
-   (see `agent/config.example.json`), then build and run it — full steps
-   are in [Shadow AI collectors](docs/shadow-ai.md).
+2. Download the agent from your Provenza
+   (`https://<provenza>/api/v1/egress-sensor/download/provenza-agent-linux-amd64`,
+   or `-arm64`; checked against `SHA256SUMS` next to it), put your server URL
+   and the key into its `config.json` (see `agent/config.example.json`) and
+   run it - full steps are in [Shadow AI collectors](docs/shadow-ai.md).
 3. New findings appear within a minute: local AI tools under
-   **Discovery → Shadow AI Sightings**, AI agents under **Discovery →
+   **Shadow AI → Shadow AI Sightings**, AI agents under **Discovery →
    Agents Found**, and the machine itself under **Discovery → Devices**.
 
 ### 8.4.1 Agents Found and Devices

@@ -75,6 +75,9 @@ sudo PROVENZA_ADMIN_PASSWORD='…' ./install.sh --yes \
 | `--admin-name NAME` | The administrator's display name. |
 | `--no-backup` | Do not schedule the daily backup (`--no-cron` still works). |
 | `--force` | Go on despite host warnings: low memory or disk, ports 80/443 already in use. |
+| `--sensor` / `--no-sensor` | Install the egress sensor on this host too (enrolled with a key made by the installer), or do not ask. |
+| `--no-edge` | Do not set up the egress proxy and the endpoint agent on this host. |
+| `--dir DIR` | Where to clone the repository when the script runs without it (default `/opt/provenza`). |
 | `PROVENZA_READY_TIMEOUT` | Seconds to wait for the stack to become healthy (default 900). |
 
 **Trying it on your own machine.** Use `localhost` as the domain. Caddy then
@@ -133,12 +136,12 @@ two services next to the stack, with nothing to copy from the interface:
 - **Their keys** are made by the backend (`scripts/edge_keys.py`) and written straight into their files (mode 600). They are never shown; the objects are named after the host and listed in the interface like any other (**Gateways → External APIs → Proxies**, **Settings → Ingestion Sources**), where they are revoked.
 - **What exists is kept:** a key file, a configuration you edited. Run it again at any time.
 - **Upgrades** (`provenza upgrade`, `provenza rebuild`) refresh the binaries and units (`provenza edge refresh`).
-- **The signed policy:** the proxy binary's and configuration's SHA-256 are added to the next release (Policies → Signed policy), for sensors that follow it. They take effect when the release is signed.
+- **The signed policy:** the proxy binary's and configuration's SHA-256 are added to the next release (Policies → Policy hierarchy → Signed policy), for sensors that follow it. They take effect when the release is signed.
 - `provenza edge setup --sensor-guard`: the proxy runs through the egress sensor of this host, which lets it out only while it runs this exact binary with this exact configuration (`proxy_binaries` / `proxy_configs` in `sensor.json`, kept up to date on every refresh). For a sensor without `policy.pin`.
 - `provenza edge status` shows the services and the release the proxy follows.
 
-One step stays yours, because it is what the proxy trusts: **Policies → Signed
-policy → Prepare the first release → Sign with passkey** (add a passkey under
+One step stays yours, because it is what the proxy trusts: **Policies → Policy
+hierarchy → Signed policy → Prepare the first release → Sign with passkey** (add a passkey under
 **My profile** first). Until then the proxy refuses every request.
 
 ### First steps after installing
@@ -151,10 +154,12 @@ policy → Prepare the first release → Sign with passkey** (add a passkey unde
    - set up notifications;
    - require two-factor sign-in.
 3. Under **My profile**, add a passkey and turn on two-factor sign-in for yourself. Then, under **Settings → Users**, require it for admins and approvers.
-4. **Sign the policy:** Policies → Signed policy → Prepare the first release → Sign with passkey. The egress proxy of this host waits for it.
-5. Connect an agent:
-   - **Agents** → create an enrollment token;
-   - on the agent's host, install the SDK: `pip install provenza` (or the JS or Go SDK).
+4. **Sign the policy:** Policies → Policy hierarchy → Signed policy → Prepare the first release → Sign with passkey. The egress proxy of this host waits for it.
+5. Connect an agent: Agents → **New agent** → *Issue enrollment token* →
+   **Connect an AI client** gives one command for the machine where the agent's
+   client runs (Gemini CLI, Claude Code, Cursor, any OpenAI-compatible client).
+   An agent written with the SDK (`pip install provenza`, or the JS or Go SDK)
+   enrolls with the same token.
 
 ## HTTPS
 
@@ -314,7 +319,8 @@ routes the check's beacon (`/egress-beacon/`) to the backend.
 - [ ] Two-factor sign-in is required, at least for admins and approvers.
 - [ ] SSH accepts keys only (`PasswordAuthentication no`), and the firewall allows only 22, 80 and 443.
 - [ ] `ALLOW_PUBLIC_SIGNUP` is left `false`.
-- [ ] You upgrade regularly: `sudo ./upgrade.sh`.
+- [ ] Every administrator has a passkey (two, on different devices), and the signed policy is in force with a quorum of 2 or more.
+- [ ] You upgrade regularly: `sudo provenza upgrade`.
 
 See also [SECURITY.md](../SECURITY.md) and [deploy/README.md](../deploy/README.md)
 for the details of the stack.
