@@ -6,6 +6,8 @@ this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-26
+
 ### Added
 
 - **Agents → Connect an AI client: one command from the interface**
@@ -837,3 +839,6 @@ this project adheres to [Semantic Versioning](https://semver.org/).
 - `cancel_job` and `retry_job` race conditions.
 - `_detect_gpu` fallback when torch is installed but built for CPU only.
 - Various N+1 query fixes via cached model loading (`lru_cache`).
+
+[Unreleased]: https://github.com/kironovlaziz-del/provenza/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/kironovlaziz-del/provenza/releases/tag/v0.3.0
