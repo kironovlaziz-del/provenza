@@ -52,11 +52,11 @@ func VerifyLift(signatures []any, manifest map[string]any, want LiftWant) ([]str
 
 // Quorum of a manifest (at least 1).
 func Quorum(manifest map[string]any) int {
-	n, ok := num(manifest["quorum"])
+	n, ok := smallInt(manifest["quorum"])
 	if !ok || n < 1 {
 		return 1
 	}
-	return int(n)
+	return n
 }
 
 func verifyLift(sig, manifest map[string]any, want LiftWant) (string, error) {
@@ -106,12 +106,12 @@ func verifyLift(sig, manifest map[string]any, want LiftWant) (string, error) {
 	if key == nil {
 		return "", errors.New("the passkey is not in the manifest before the outage")
 	}
-	alg, _ := num(key["alg"])
+	alg, _ := smallInt(key["alg"])
 	challenge, err := statementChallenge(st)
 	if err != nil {
 		return "", err
 	}
-	if err := verifyAssertion(str(key["public_key"]), int(alg), obj(sig["assertion"]), challenge); err != nil {
+	if err := verifyAssertion(str(key["public_key"]), alg, obj(sig["assertion"]), challenge); err != nil {
 		return "", fmt.Errorf("the passkey's signature: %w", err)
 	}
 	return user, nil

@@ -65,12 +65,12 @@ func VerifyApproval(proof map[string]any, manifest map[string]any, call Call) (s
 	if key == nil || str(key["public_key"]) != str(obj(proof["passkey"])["public_key"]) {
 		return "", errors.New("approval: the approver's passkey is not in the signed manifest")
 	}
-	alg, _ := num(key["alg"])
+	alg, _ := smallInt(key["alg"])
 	challenge, err := statementChallenge(cert)
 	if err != nil {
 		return "", err
 	}
-	if err := verifyAssertion(str(key["public_key"]), int(alg), obj(certificate["assertion"]), challenge); err != nil {
+	if err := verifyAssertion(str(key["public_key"]), alg, obj(certificate["assertion"]), challenge); err != nil {
 		return "", fmt.Errorf("approval: the passkey did not certify the session: %w", err)
 	}
 	return PasskeyFingerprint(str(key["public_key"])), nil
