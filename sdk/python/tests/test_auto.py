@@ -44,14 +44,15 @@ class TestHttpx:
     def test_ai_call_is_checked_sent_and_recorded_without_the_prompt(self, agent, server, instrumented):
         provider = Provider()
         with httpx.Client(transport=httpx.MockTransport(provider.handle)) as c:
-            r = c.post("https://api.openai.com/v1/chat/completions?key=abc", json={"prompt": PROMPT})
+            r = c.post("https://api.openai.com/v1/chat/completions?key=sk-query-SECRET", json={"prompt": PROMPT})
         assert r.status_code == 200 and len(provider.hits) == 1
         [chk] = _egress(server)
         assert chk["tool_name"] == "egress.api.openai.com"
         assert chk["input"]["path"] == "/v1/chat/completions" and chk["input"]["method"] == "POST"
         assert len(chk["input"]["body_sha256"]) == 64
         assert PROMPT not in json.dumps(server.checks) + json.dumps(server.records)   # nor the query string
-        assert "abc" not in json.dumps(chk)
+        # a value that hex and base64 (nonces, signatures) can never contain
+        assert "sk-query-SECRET" not in json.dumps(chk)
         assert server.records[-1]["output"]["status"] == 200
 
     def test_other_hosts_are_untouched(self, agent, server, instrumented):
