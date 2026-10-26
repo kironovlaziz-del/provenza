@@ -8,6 +8,14 @@ this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **`provenza-mcp`: the MCP gateway for desktop clients** (Python SDK 0.2.0,
+  [sdk/python/README.md](sdk/python/README.md#integrations)). MCP clients that
+  start servers as a local command (Claude Desktop, Claude Code, Cursor,
+  Gemini CLI, VS Code) run `uvx provenza-mcp` with `PROVENZA_URL` and, on the
+  first start, an enrollment token: the agent enrolls with its own keys and
+  every message goes to the organization's gateway as that agent.
+  `server.json` describes it for the official MCP Registry, `glama.json` for
+  Glama.
 - **A public demo on your own installation** ([docs/self-hosting.md](docs/self-hosting.md),
   "A public demo on this installation"). `provenza demo enable` makes an
   organization of its own and fills it through the API the way real agents
