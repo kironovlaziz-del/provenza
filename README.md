@@ -23,6 +23,7 @@
 </p>
 
 <p align="center">
+  <a href="#-try-the-live-demo"><b>👀 Live demo</b></a> &nbsp;·&nbsp;
   <a href="#-deploy-on-your-server"><b>🚀 Deploy</b></a> &nbsp;·&nbsp;
   <a href="#-what-makes-it-different"><b>✨ Why it's different</b></a> &nbsp;·&nbsp;
   <a href="#-features"><b>🧩 Features</b></a> &nbsp;·&nbsp;
@@ -35,6 +36,14 @@
 > autonomous agents delegating to each other, and no way to *prove* who authorized
 > what. Most governance tools watch one door. **Provenza covers them all,
 > under one set of rules.**
+
+## 👀 Try the live demo
+
+**[stickstock.lol](https://stickstock.lol)** — organization `demo`, e-mail `demo@stickstock.lol`,
+password `provenza-demo`. A read-only login to a demo bank: agents with their own
+keys, a signed delegation chain, denied and held actions, a refused privilege
+escalation, AI tools found on employees' laptops. Open an action and check its
+signature in your browser. The data is made again every night.
 
 ## 🚀 Deploy on your server
 

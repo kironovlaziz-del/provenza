@@ -6,6 +6,19 @@ this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **A public demo on your own installation** ([docs/self-hosting.md](docs/self-hosting.md),
+  "A public demo on this installation"). `provenza demo enable` makes an
+  organization of its own and fills it through the API the way real agents
+  would (`backend/scripts/demo_seed.py`): agents enrolled with their own keys
+  (hybrid where the image has ML-DSA), a signed delegation chain, allowed,
+  denied and held actions, a refused capability escalation, Shadow AI findings.
+  Visitors sign in as its auditor. `DEMO_ACCOUNTS` (comma-separated e-mails)
+  keeps a shared login from changing its own password, second factor or
+  passkeys (`demo.read_only`). The organization is made again every night
+  (`provenza-demo.timer`); only one the demo made is ever deleted.
+
 ## [0.3.0] - 2026-10-26
 
 ### Added

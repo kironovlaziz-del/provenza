@@ -902,6 +902,7 @@
     "export_key.invalid": "Eksport kaliti yaroqsiz yoki bekor qilingan.",
     "export_key.not_found": "Bunday eksport kaliti yo'q.",
     "rbac.read_only": "Faqat o'qish: auditor roli hech narsani o'zgartirmaydi.",
+    "demo.read_only": "Bu ochiq demo: uning hisobini o'zgartirib bo'lmaydi.",
     "impact_assessment.invalid_answer": "\"{{question}}\" savoliga javob noto'g'ri.",
     "impact_assessment.incomplete": "Ba'zi majburiy savollarga hali javob berilmagan.",
     "impact_assessment.no_draft": "Tasdiqlash uchun qoralama yo'q.",

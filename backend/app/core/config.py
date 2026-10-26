@@ -58,6 +58,9 @@ class Settings(BaseSettings):
     # account. Create the first admin with scripts/create_admin.py and add
     # teammates by invitation; turn this on only for a public demo/SaaS.
     ALLOW_PUBLIC_SIGNUP: bool = False
+    # Shared public demo logins (comma-separated e-mails, deploy/scripts/demo.sh):
+    # they cannot change their own password, second factor or passkeys.
+    DEMO_ACCOUNTS: str = ""
 
     # PVP Input Guard (app/pvp/guard.py): requests per minute one agent key -
     # or one user acting for agents - may send to the PVP endpoints
