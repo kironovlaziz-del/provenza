@@ -350,6 +350,7 @@
     "source_process": "Local process",
     "source_network": "Local network",
     "source_model_file": "Local model file",
+    "source_domain_visit": "AI website visit",
     "col_time": "Detected",
     "confirm_register_title": "Register as a sanctioned provider",
     "confirm_register_msg": "This will create an approved AI provider connection for",
