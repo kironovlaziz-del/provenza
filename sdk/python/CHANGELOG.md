@@ -1,7 +1,12 @@
 # Changelog
 
-## Unreleased
+## 0.2.0 (2026-10-26)
 
+- `provenza-mcp`: Provenza's MCP gateway over stdio, for MCP clients that
+  start servers as a local command (`uvx provenza-mcp`). The agent enrolls on
+  the first start with `PROVENZA_TOKEN`; afterwards every message goes to the
+  organization's gateway as this agent - approved tools only, every call
+  checked and recorded.
 - `agent.attest(token)` / `aattest`, and `provenza.attest` token sources: a
   file (Kubernetes), GitHub Actions, the Google Cloud metadata server, Azure
   managed identity.

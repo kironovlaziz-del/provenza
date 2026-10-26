@@ -153,6 +153,9 @@ guarantee is spelled out in the [security model](docs/security-model.md).
 ### 🤖 Agents — autonomous AI
 
 - **Registry** with scoped tools, delegation limits, teams and role templates.
+- **Governed MCP gateway** — clients see only the tools an admin approved, and
+  every call is checked and recorded. Desktop clients (Claude, Cursor, Gemini CLI,
+  VS Code) start it as `uvx provenza-mcp` ([SDK](sdk/python/README.md#integrations)).
 - **Signed delegations and actions**, offline-verifiable (above).
 - **Workload attestation** — Kubernetes, GitHub Actions, Google Cloud, Azure,
   GitLab, SPIFFE: each agent bound to its workload ([docs](docs/attestation.md)).

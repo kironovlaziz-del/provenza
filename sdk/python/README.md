@@ -2,6 +2,8 @@
 
 Governed, signed and auditable actions for AI agents.
 
+<!-- mcp-name: io.github.kironovlaziz-del/provenza -->
+
 ```bash
 pip install provenza
 ```
@@ -266,6 +268,23 @@ client = wrap(existing_client, agent)       # or a copy of one you already confi
 from provenza.integrations.mcp import connection, client_config
 conn = connection(agent)                    # {"url": ".../api/v1/mcp", "headers": {...}}
 ```
+
+**MCP clients that start a local command** (Claude Desktop, Claude Code,
+Cursor, Windsurf, Gemini CLI, VS Code): `provenza-mcp` is the same gateway
+over stdio. Issue an enrollment token in Provenza (**Agents → New agent**)
+and add:
+
+```json
+{"mcpServers": {"provenza": {
+  "command": "uvx", "args": ["provenza-mcp"],
+  "env": {"PROVENZA_URL": "https://provenza.example.com", "PROVENZA_TOKEN": "pvz_enr_..."}}}}
+```
+
+On the first start the agent enrolls: its keys are made on that machine,
+and the token can then be removed. The client sees only the tools an
+administrator approved, and every call is checked against the
+organization's policies and recorded. Set `PROVENZA_AGENT_NAME` to run more
+than one agent on a machine.
 
 Through the LLM gateway, the server checks allowed models and providers,
 policies and limits; it stores no prompt or answer. Every model the organization has

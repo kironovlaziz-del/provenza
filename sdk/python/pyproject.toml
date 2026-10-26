@@ -11,7 +11,7 @@ requires-python = ">=3.10"
 license = "Apache-2.0"
 license-files = ["LICENSE", "NOTICE"]
 authors = [{name = "Laziz Kironov"}]
-keywords = ["ai-governance", "agents", "audit", "mcp", "a2a", "security"]
+keywords = ["ai-governance", "agents", "audit", "mcp", "mcp-server", "mcp-gateway", "a2a", "security"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
@@ -36,6 +36,9 @@ langchain = ["langchain-core>=0.3"]
 autogen = ["autogen-core>=0.4"]
 crewai = ["crewai>=1.0"]
 dev = ["pytest>=8", "pytest-asyncio>=0.23"]
+
+[project.scripts]
+provenza-mcp = "provenza.mcp_stdio:main"   # Provenza's MCP gateway over stdio, for desktop MCP clients
 
 [project.urls]
 Homepage = "https://github.com/kironovlaziz-del/provenza"
