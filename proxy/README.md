@@ -241,6 +241,15 @@ back as the proxy sends them.
 
 ### Connecting a client in one command
 
+From the interface: Agents → **New agent** (or **Issue re-key token** on an
+agent's page) → **Connect an AI client** gives one command for the client's
+machine. It downloads this binary from Provenza
+(`/api/v1/agent-enrollment/connect.sh`, checked against `SHA256SUMS`), enrolls
+the agent there - `provenza-proxy enroll --server <provenza>` with the token in
+`$PROVENZA_ENROLL_TOKEN`: the keys are made on that machine, Ed25519 or
+Ed25519 + ML-DSA-65, and proven to the server over its challenge - and runs
+`connect`. By hand:
+
 ```sh
 provenza-proxy connect gemini-cli      # or: claude-code, cursor, openai
 ```
@@ -248,10 +257,14 @@ provenza-proxy connect gemini-cli      # or: claude-code, cursor, openai
 As the agent's user, with its identity in `~/.config/provenza/provenza-agent.json`
 (or `--identity <file>`, `$PROVENZA_IDENTITY`):
 
+- the egress proxy is the one on this host (`--proxy auto`: `127.0.0.1:8443` when it
+  listens), otherwise Provenza's own gateways (`<server>/api/v1`, from the identity):
+  `/_mcp`, `/_llm`, `/_a2a` and `/_tools` go to them, egress routes need an egress proxy;
 - agent mode runs as a service of this user (`~/.config/systemd/user/provenza-agent-<id>.service`,
   `127.0.0.1:8480` - `--port` - in front of `--proxy`, default `http://127.0.0.1:8443`);
   `sudo loginctl enable-linger <user>` keeps it running after the user logs out.
-  Without a systemd session (`su`, a container: `--no-service`) it prints the command to run;
+  Without a systemd session (`su`, `sudo -u`, a container) it starts in the background
+  (`~/.local/state/provenza/agent-<id>.log`) and says how to bring it back after a restart;
 - the client gets Provenza's MCP endpoint (`http://127.0.0.1:8480/_mcp`), with no key in it:
   Gemini CLI in `~/.gemini/settings.json` (`"httpUrl"`), Cursor in `~/.cursor/mcp.json`,
   Claude Code with `claude mcp add --transport http --scope user provenza ...`. The rest of

@@ -14,6 +14,11 @@
 // service of this user, and Provenza's MCP endpoint in the client's configuration:
 //
 //	provenza-proxy connect gemini-cli [--identity provenza-agent.json] [--proxy http://127.0.0.1:8443]
+//
+// The agent enrolled on this machine with an administrator's one-time token
+// (its keys made here; what Agents -> Connect runs before connect):
+//
+//	provenza-proxy enroll --server https://provenza.example.com --token pvz_enr_... [--name bot]
 package main
 
 import (
@@ -22,6 +27,7 @@ import (
 	"flag"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -37,6 +43,9 @@ import (
 func main() {
 	if len(os.Args) > 1 && os.Args[1] == "connect" {
 		os.Exit(runConnect(os.Args[2:]))
+	}
+	if len(os.Args) > 1 && os.Args[1] == "enroll" {
+		os.Exit(runEnroll(os.Args[2:]))
 	}
 	path := flag.String("config", "/etc/provenza/proxy.json", "configuration file (JSON)")
 	genkey := flag.Bool("genkey", false, "print a new signing key (for signing_key_file; the encryption key "+
@@ -154,7 +163,8 @@ func runConnect(args []string) int {
 		defIdentity = filepath.Join(home, ".config", "provenza", "provenza-agent.json")
 	}
 	identity := fs.String("identity", defIdentity, "the agent's identity file (provenza-agent.json from enrollment, mode 600)")
-	proxy := fs.String("proxy", "http://127.0.0.1:8443", "the egress proxy")
+	proxy := fs.String("proxy", "auto", "the egress proxy; auto: http://127.0.0.1:8443 when one listens there, "+
+		"else Provenza's own gateways (the identity's server)")
 	port := fs.Int("port", 8480, "agent mode's port on 127.0.0.1")
 	remove := fs.Bool("remove", false, "take the client's entry and agent mode out again")
 	noService := fs.Bool("no-service", false, "do not run agent mode as a systemd --user service")
@@ -189,6 +199,13 @@ func runConnect(args []string) int {
 		fmt.Fprintln(os.Stderr, "  Agents -> the agent -> enroll it, save provenza-agent.json here (chmod 600), or pass --identity")
 		return 1
 	}
+	if *proxy == "auto" {
+		*proxy = autoUpstream(id.Server)
+		if *proxy == "" {
+			fmt.Fprintln(os.Stderr, "no egress proxy on 127.0.0.1:8443 and no server in the identity: pass --proxy")
+			return 2
+		}
+	}
 	self, err := os.Executable()
 	if err == nil {
 		self, err = filepath.EvalSymlinks(self)
@@ -212,5 +229,55 @@ func runConnect(args []string) int {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
+	return 0
+}
+
+// autoUpstream: the egress proxy on this host, else Provenza's own gateways.
+func autoUpstream(server string) string {
+	if c, err := net.DialTimeout("tcp", "127.0.0.1:8443", time.Second); err == nil {
+		c.Close()
+		return "http://127.0.0.1:8443"
+	}
+	if server == "" {
+		return ""
+	}
+	return strings.TrimRight(server, "/") + "/api/v1"
+}
+
+// runEnroll: `provenza-proxy enroll` (internal/connect/enroll.go).
+func runEnroll(args []string) int {
+	fs := flag.NewFlagSet("enroll", flag.ContinueOnError)
+	home, _ := os.UserHomeDir()
+	host, _ := os.Hostname()
+	server := fs.String("server", "", "Provenza's address (https://...)")
+	token := fs.String("token", os.Getenv("PROVENZA_ENROLL_TOKEN"), "the one-time enrollment token (pvz_enr_...); "+
+		"$PROVENZA_ENROLL_TOKEN keeps it out of the process list")
+	name := fs.String("name", "agent@"+host, "the agent's name, when the token names none")
+	hybrid := fs.Bool("hybrid", false, "an Ed25519 + ML-DSA-65 key even when not required")
+	identity := fs.String("identity", filepath.Join(home, ".config", "provenza", "provenza-agent.json"),
+		"where the identity file goes (mode 600; one already there is kept as .old)")
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+	if *server == "" || *token == "" {
+		fmt.Fprintln(os.Stderr, "usage: provenza-proxy enroll --server https://<provenza> --token pvz_enr_... [--name NAME]")
+		return 2
+	}
+	id, purpose, err := connect.Enroll(connect.EnrollOptions{Server: *server, Token: *token, Name: *name,
+		Hybrid: *hybrid, Path: *identity})
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	what := "enrolled"
+	if purpose == "rekey" {
+		what = "has a new key"
+	}
+	scheme := "Ed25519"
+	if id.PQPublicKey != "" {
+		scheme = "Ed25519 + ML-DSA-65"
+	}
+	fmt.Printf("  ✓ agent #%d %s (%s, %s); its keys stay on this machine: %s\n", id.AgentID, what, scheme,
+		id.KeyFingerprint, *identity)
 	return 0
 }

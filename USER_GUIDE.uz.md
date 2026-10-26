@@ -357,9 +357,21 @@ faqat adminlar ro‘yxatdan o‘tkazadi yoki e’tiborsiz qoldiradi.
 
 Agents → **New agent**: agent nima qila olishini kiriting
 (imkoniyatlar, vositalar, modellar, delegatsiya chuqurligi, jamoa) va
-**Issue enrollment token** tugmasini bosing. Tokenni agentni ishga
-tushiradigan odamga bering; u o'sha kompyuterda ko'rsatilgan buyruqni
-ishga tushiradi, masalan
+**Issue enrollment token** tugmasini bosing.
+
+Eng oson yo'l — **AI mijozini ulash** (Gemini CLI, Claude Code, Cursor
+yoki istalgan OpenAI-mos mijoz): mijozni tanlang va ko'rsatilgan bitta
+buyruqni nusxalang. Uni mijoz ishlaydigan mashinada, u ishlaydigan
+foydalanuvchi nomidan ishga tushiring (Linux, amd64 yoki arm64). U
+Provenzangizdan `provenza-proxy` ni yuklab oladi va tekshiradi, agent
+kalitlarini o'sha yerda yaratadi, agentni ro'yxatga oladi va mijozni
+proksining agent rejimi orqali ulaydi: har bir chaqiruv agent nomidan
+imzolanadi, tekshiriladi va qayd etiladi. Tugagach sahifada *Connected*
+ko'rinadi. Xuddi shu panel agent sahifasidagi **Issue re-key token**
+uchun ham chiqadi.
+
+Boshqa usullar: tokenni agentni ishga tushiradigan odamga bering; u o'sha
+kompyuterda ko'rsatilgan buyruqni ishga tushiradi, masalan
 
     python tools/provenza_sign.py enroll --server https://provenza.example.com --token pvz_enr_...
 

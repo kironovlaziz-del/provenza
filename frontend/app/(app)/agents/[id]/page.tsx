@@ -352,7 +352,7 @@ export default function AgentDetailPage() {
               ) : (
                 <>
                   <p className="hint-text">{t("enroll.token_once")}</p>
-                  <EnrollPanel token={rekey.token ?? ""} hybrid={rekey.require_hybrid} rekey />
+                  <EnrollPanel token={rekey.token ?? ""} hybrid={rekey.require_hybrid} rekey enrollmentId={rekey.id} />
                 </>
               )}
             </div>

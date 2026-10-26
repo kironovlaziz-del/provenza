@@ -24,10 +24,12 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"os/user"
 	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -86,6 +88,7 @@ type Options struct {
 	Service  bool // run agent mode as a systemd --user service
 	Out      io.Writer
 	Run      func(name string, args ...string) error // runs a command (systemctl, claude)
+	Start    func(o Options) (int, error)            // agent mode in the background, without systemd
 }
 
 func (o Options) listen() string   { return "127.0.0.1:" + strconv.Itoa(o.Port) }
@@ -93,6 +96,72 @@ func (o Options) base() string     { return "http://" + o.listen() }
 func (o Options) MCPURL() string   { return o.base() + "/_mcp" }
 func (o Options) LLMURL() string   { return o.base() + "/_llm/v1" }
 func (o Options) UnitName() string { return fmt.Sprintf("provenza-agent-%d.service", o.AgentID) }
+func (o Options) stateDir() string { return filepath.Join(o.Home, ".local", "state", "provenza") }
+func (o Options) logPath() string {
+	return filepath.Join(o.stateDir(), fmt.Sprintf("agent-%d.log", o.AgentID))
+}
+func (o Options) pidPath() string {
+	return filepath.Join(o.stateDir(), fmt.Sprintf("agent-%d.pid", o.AgentID))
+}
+
+// StartDetached: agent mode as a background process of this user (its own
+// session, a log file); the one this command started before is stopped first.
+func StartDetached(o Options) (int, error) {
+	stopDetached(o)
+	if err := os.MkdirAll(o.stateDir(), 0o700); err != nil {
+		return 0, err
+	}
+	log, err := os.OpenFile(o.logPath(), os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0o600)
+	if err != nil {
+		return 0, err
+	}
+	defer log.Close()
+	cmd := exec.Command(o.Binary, "-agent-identity", o.Identity, "-listen", o.listen(), "-upstream", o.Proxy)
+	cmd.Stdout, cmd.Stderr = log, log
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+	if err := cmd.Start(); err != nil {
+		return 0, err
+	}
+	pid := cmd.Process.Pid
+	_ = cmd.Process.Release()
+	_ = os.WriteFile(o.pidPath(), []byte(strconv.Itoa(pid)+"\n"), 0o600)
+	// it is up when it listens; a bad identity or a taken port shows in the log
+	for i := 0; i < 30; i++ {
+		if c, err := net.DialTimeout("tcp", o.listen(), 200*time.Millisecond); err == nil {
+			c.Close()
+			return pid, nil
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	return 0, fmt.Errorf("it did not start listening on %s: see %s", o.listen(), o.logPath())
+}
+
+// stopDetached: the agent mode StartDetached started before, if it still runs (and is ours).
+func stopDetached(o Options) {
+	raw, err := os.ReadFile(o.pidPath())
+	if err != nil {
+		return
+	}
+	pid, err := strconv.Atoi(strings.TrimSpace(string(raw)))
+	if err != nil || pid < 2 {
+		return
+	}
+	cmdline, err := os.ReadFile(fmt.Sprintf("/proc/%d/cmdline", pid))
+	if err != nil || !strings.Contains(string(cmdline), "-agent-identity") {
+		return // gone, or the number now belongs to something else
+	}
+	if p, err := os.FindProcess(pid); err == nil {
+		_ = p.Signal(syscall.SIGTERM)
+		for i := 0; i < 30; i++ {
+			if _, err := os.Stat(fmt.Sprintf("/proc/%d", pid)); err != nil {
+				break
+			}
+			time.Sleep(100 * time.Millisecond)
+		}
+	}
+	_ = os.Remove(o.pidPath())
+}
+
 func (o Options) unitPath() string {
 	return filepath.Join(o.Home, ".config", "systemd", "user", o.UnitName())
 }
@@ -115,6 +184,13 @@ WantedBy=default.target
 `, o.AgentID, o.AgentID, quote(o.Binary), quote(o.Identity), o.listen(), o.Proxy)
 }
 
+func userName() string {
+	if u, err := user.Current(); err == nil && u.Username != "" {
+		return u.Username
+	}
+	return os.Getenv("USER")
+}
+
 func quote(s string) string {
 	if strings.ContainsAny(s, " \t\"'\\") {
 		return strconv.Quote(s)
@@ -131,6 +207,9 @@ func Do(o Options) error {
 		if err := service(o); err != nil {
 			return err
 		}
+	} else {
+		o.printf("  agent mode, to run yourself:\n    %s -agent-identity %s -listen %s -upstream %s\n",
+			o.Binary, o.Identity, o.listen(), o.Proxy)
 	}
 	return configure(o)
 }
@@ -158,13 +237,24 @@ func service(o Options) error {
 		err = o.Run("systemctl", "--user", "restart", o.UnitName()) // started, or with a changed identity or port
 	}
 	if err != nil {
-		o.printf("  ! systemd --user is not reachable here (%v): start agent mode yourself,\n", err)
-		o.printf("    %s -agent-identity %s -listen %s -upstream %s\n", o.Binary, o.Identity, o.listen(), o.Proxy)
-		o.printf("    or log in as this user over ssh (not su) and run connect again.\n")
+		// no systemd session for this user (su, sudo -u, a container): run it in the background now
+		if o.Start == nil {
+			o.Start = StartDetached
+		}
+		pid, serr := o.Start(o)
+		if serr != nil {
+			o.printf("  ! systemd --user is not reachable here (%v), and agent mode did not start (%v): run it yourself,\n", err, serr)
+			o.printf("    %s -agent-identity %s -listen %s -upstream %s\n", o.Binary, o.Identity, o.listen(), o.Proxy)
+			return nil
+		}
+		o.printf("  ✓ agent mode started in the background (pid %d, log %s)\n", pid, o.logPath())
+		o.printf("    Without a systemd session for this user it does not come back after a restart: then run\n")
+		o.printf("      %s connect %s\n", o.Binary, o.Client.Name)
+		o.printf("    or, once, as root: loginctl enable-linger %s - and log in as %s over ssh, not su.\n", userName(), userName())
 		return nil
 	}
 	o.printf("  ✓ started: systemctl --user status %s\n", o.UnitName())
-	o.printf("    To keep it running after you log out: sudo loginctl enable-linger %s\n", os.Getenv("USER"))
+	o.printf("    To keep it running after you log out, once, as root: loginctl enable-linger %s\n", userName())
 	return nil
 }
 
@@ -176,6 +266,9 @@ func portFree(o Options) error {
 	}
 	if raw, rerr := os.ReadFile(o.unitPath()); rerr == nil && strings.Contains(string(raw), "-listen "+o.listen()+" ") {
 		return nil
+	}
+	if _, rerr := os.Stat(o.pidPath()); rerr == nil {
+		return nil // ours, started without systemd: replaced
 	}
 	return fmt.Errorf("127.0.0.1:%d is taken by another program: choose another with --port", o.Port)
 }
@@ -232,6 +325,10 @@ func remove(o Options) error {
 		}
 	}
 	if o.Service {
+		if _, err := os.Stat(o.pidPath()); err == nil {
+			stopDetached(o)
+			o.printf("  ✓ agent mode stopped (it ran without systemd)\n")
+		}
 		if _, err := os.Stat(o.unitPath()); err == nil {
 			_ = o.Run("systemctl", "--user", "disable", "--now", o.UnitName())
 			if err := os.Remove(o.unitPath()); err != nil {

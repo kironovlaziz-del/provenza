@@ -429,3 +429,45 @@ func TestAgentModeSignsWithAHybridKey(t *testing.T) {
 		t.Fatalf("verify: %v (fingerprint %s, want %s)", err, fp, want)
 	}
 }
+
+// With Provenza itself as upstream (a machine without an egress proxy): each
+// protocol path goes to the server's gateway; egress routes are refused.
+func TestAgentModeToTheServersGateways(t *testing.T) {
+	ev := enforceVectors(t)
+	id, err := LoadAgentIdentity(identityFile(t, agentFields(ev), 0o600))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var paths []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("X-Agent-Key") != agentKey || r.Header.Get(requestHeader) == "" {
+			t.Errorf("not as the agent: %v", r.Header)
+		}
+		paths = append(paths, r.URL.RequestURI())
+		w.Write([]byte("{}"))
+	}))
+	defer srv.Close()
+	h, err := NewAgentMode(id, "127.0.0.1:8480", srv.URL+"/api/v1", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	am := httptest.NewServer(h)
+	defer am.Close()
+	for _, p := range []string{"/_mcp", "/_llm/v1/chat/completions?x=1", "/_a2a/helper", "/_tools/call"} {
+		resp, err := http.Post(am.URL+p, "application/json", strings.NewReader("{}"))
+		if err != nil || resp.StatusCode != 200 {
+			t.Fatalf("%s: %v %v", p, err, resp)
+		}
+	}
+	want := []string{"/api/v1/mcp", "/api/v1/gateway/v1/chat/completions?x=1", "/api/v1/a2a-gateway/helper", "/api/v1/http-tools/call"}
+	if fmt.Sprint(paths) != fmt.Sprint(want) {
+		t.Fatalf("server paths %v, want %v", paths, want)
+	}
+	resp, _ := http.Post(am.URL+"/stripe/v1/charges", "application/json", strings.NewReader("{}"))
+	if resp.StatusCode != 404 {
+		t.Fatalf("an egress route without an egress proxy: %d", resp.StatusCode)
+	}
+	if _, err := NewAgentMode(id, "127.0.0.1:8480", "http://provenza.example.com/api/v1", nil); err == nil {
+		t.Fatal("the agent's key over plain http to a remote server")
+	}
+}

@@ -8,6 +8,17 @@ this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **Agents → Connect an AI client: one command from the interface**
+  ([USER_GUIDE.md](USER_GUIDE.md) 8.4.2). With an enrollment or re-key token
+  the panel gives one command for the client's machine
+  (`/api/v1/agent-enrollment/connect.sh`): it downloads `provenza-proxy` from
+  this server and checks it against `SHA256SUMS`, enrolls the agent there with
+  the token (`provenza-proxy enroll`: the keys are made on that machine and
+  proven over the server's challenge; the token goes through the environment)
+  and connects the client; the page shows *Connected* when the token is spent.
+  Agent mode reaches Provenza's own gateways when the machine has no egress
+  proxy (`--proxy auto`; upstream `https://<provenza>/api/v1`), and starts in the
+  background where the user has no systemd session.
 - **A client connected in one command: `provenza-proxy connect`**
   ([proxy/README.md](proxy/README.md), "Connecting a client in one command").
   `provenza-proxy connect gemini-cli` (or `claude-code`, `cursor`, `openai`),
