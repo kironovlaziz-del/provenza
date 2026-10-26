@@ -106,7 +106,7 @@ export default function RegisterPage() {
                 update("org_slug", e.target.value.toLowerCase());
               }}
               placeholder="acme"
-              pattern="[a-z0-9-]+"
+              pattern="[a-z0-9\-]+"
             />
             <span className="hint-text">{t("register.org_slug_hint")}</span>
           </div>

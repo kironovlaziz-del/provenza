@@ -125,7 +125,7 @@ export default function LoginPage() {
               value={orgSlug}
               onChange={(e) => setOrgSlug(e.target.value.toLowerCase())}
               placeholder="acme"
-              pattern="[a-z0-9-]+"
+              pattern="[a-z0-9\-]+"
             />
             <span className="hint-text">{t("auth.org_slug_hint")}</span>
           </div>

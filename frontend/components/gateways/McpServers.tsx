@@ -166,7 +166,7 @@ export function McpServers() {
                 </div>
                 <div className="field">
                   <label htmlFor="mcp-slug">{t("gw.slug")}</label>
-                  <input id="mcp-slug" required pattern="[a-z0-9][a-z0-9-]{0,39}" value={form.slug}
+                  <input id="mcp-slug" required pattern="[a-z0-9][a-z0-9\-]{0,39}" value={form.slug}
                          placeholder="github" onChange={(e) => setForm({ ...form, slug: e.target.value })} />
                 </div>
               </div>
