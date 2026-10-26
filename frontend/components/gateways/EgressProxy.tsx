@@ -102,7 +102,7 @@ function Routes() {
               </div>
               <div className="field">
                 <label htmlFor="eg-slug">{t("gw.slug")}</label>
-                <input id="eg-slug" required pattern="[a-z0-9][a-z0-9-]{0,39}" value={form.slug} placeholder="stripe"
+                <input id="eg-slug" required pattern="[a-z0-9][a-z0-9\-]{0,39}" value={form.slug} placeholder="stripe"
                        onChange={(e) => setForm({ ...form, slug: e.target.value })} />
               </div>
               <div className="field" style={{ flex: 2 }}>

@@ -42,8 +42,13 @@
 **[stickstock.lol](https://stickstock.lol)** — organization `demo`, e-mail `demo@stickstock.lol`,
 password `provenza-demo`. A read-only login to a demo bank: agents with their own
 keys, a signed delegation chain, denied and held actions, a refused privilege
-escalation, AI tools found on employees' laptops. Open an action and check its
-signature in your browser. The data is made again every night.
+escalation, AI tools found on employees' laptops. In **Agent activity → Live Map**,
+click a delegation and check its signature in your browser. The data is made
+again every night.
+
+<p align="center">
+  <img src="docs/demo.gif" width="860" alt="The live demo: agent activity, a capability escalation refused, a delegation signature (Ed25519 + ML-DSA-65) checked in the browser, Shadow AI and agents found on employees' machines">
+</p>
 
 ## 🚀 Deploy on your server
 

@@ -84,7 +84,7 @@ export function A2aPeers() {
                 </div>
                 <div className="field">
                   <label htmlFor="a2a-slug">{t("gw.slug")}</label>
-                  <input id="a2a-slug" required pattern="[a-z0-9][a-z0-9-]{0,39}" value={form.slug}
+                  <input id="a2a-slug" required pattern="[a-z0-9][a-z0-9\-]{0,39}" value={form.slug}
                          placeholder="travel-agent" onChange={(e) => setForm({ ...form, slug: e.target.value })} />
                 </div>
               </div>
