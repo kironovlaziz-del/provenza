@@ -1364,6 +1364,7 @@
     "tl_reason": "Sabab",
     "expired": "muddati o'tgan",
     "expiring": "muddati tugayapti",
+    "unverified": "imzo tekshirilmagan",
     "status_tripped": "To'xtatilgan (to'xtatgich)",
     "tripped_banner": "Bu zanjir avtomatik to'xtatgich tomonidan to'xtatildi. Administrator uni qayta ishga tushirmaguncha yangi harakatlar va delegatsiyalar rad etiladi.",
     "open_breaker": "Avtomatik to'xtatgichni ochish"

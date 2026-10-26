@@ -6,7 +6,26 @@ import Link from "next/link";
 import { useTranslation } from "react-i18next";
 import { PageHeader } from "@/components/PageHeader";
 import { getChain, listAgentActions, listAgents } from "@/lib/agent_api";
-import type { DelegationChainDetail, AgentActionT, Agent } from "@/lib/agent_types";
+import type { DelegationChainDetail, DelegationHopT, AgentActionT, Agent } from "@/lib/agent_types";
+
+type TreeNode = { key: string; agentId: number; hop?: DelegationHopT; task?: string | null; children: TreeNode[] };
+
+// The chain as a tree: an agent can hand work to several agents (siblings),
+// and each of them on. A hop hangs under the latest earlier hop that brought
+// work to its delegating agent - the root agent's own task when there is none.
+function buildTree(chain: DelegationChainDetail): TreeNode {
+  const root: TreeNode = { key: "root", agentId: chain.root_agent_id, task: chain.root_task, children: [] };
+  const hops = [...chain.hops].sort((a, b) => a.created_at.localeCompare(b.created_at) || a.id - b.id);
+  const latestInto: Record<number, TreeNode> = { [chain.root_agent_id]: root };
+  for (const hop of hops) {
+    const node: TreeNode = { key: `hop-${hop.id}`, agentId: hop.to_agent_id, hop, task: hop.task_description, children: [] };
+    (latestInto[hop.from_agent_id] || root).children.push(node);
+    latestInto[hop.to_agent_id] = node;
+  }
+  return root;
+}
+
+const VERDICT_ICON: Record<string, string> = { denied: "❌", pending_approval: "⏳" };
 
 function expiryBadge(iso: string | null | undefined, expiredLabel: string, expiringLabel: string) {
   if (!iso) return null;
@@ -56,13 +75,61 @@ export default function ChainDetailPage() {
     (actionsByAgent[a.agent_id] = actionsByAgent[a.agent_id] || []).push(a);
   }
 
-  // Build the ordered node list: root agent first, then each hop's target.
-  const nodes: { agentId: number; delegated?: string[] | null; tools?: string[] | null; task?: string | null; expires?: string | null }[] = [
-    { agentId: chain.root_agent_id, task: chain.root_task },
-  ];
-  for (const hop of chain.hops) {
-    nodes.push({ agentId: hop.to_agent_id, delegated: hop.delegated_capabilities, tools: hop.delegated_tools, task: hop.task_description, expires: hop.expires_at });
-  }
+  const tree = buildTree(chain);
+  const shownActions = new Set<number>();   // an agent reached twice lists its actions once
+
+  const renderNode = (node: TreeNode): React.ReactNode => {
+    const acts = shownActions.has(node.agentId) ? [] : actionsByAgent[node.agentId] || [];
+    shownActions.add(node.agentId);
+    const denied = acts.filter((a) => a.policy_check_result === "denied");
+    return (
+      <div key={node.key}>
+        {node.hop && (
+          <div style={{ color: "var(--text-muted,#64748b)", fontSize: 12, margin: "8px 0 4px" }}>
+            ↳ <span className="mono">delegate: {(node.hop.delegated_capabilities || []).join(", ") || "—"}</span>
+            {node.hop.delegated_tools && (
+              <span className="mono"> · tools: {node.hop.delegated_tools.join(", ") || "—"}</span>
+            )}
+            {!node.hop.verified && <span style={{ color: "var(--risk-critical,#c1352f)" }}> · {t("chains.unverified")}</span>}
+          </div>
+        )}
+        <div
+          style={{
+            border: "1px solid var(--border,#e5e7eb)",
+            borderRadius: 8,
+            padding: "10px 14px",
+            background: "var(--bg-panel,#fff)",
+            display: "inline-block",
+            minWidth: 240,
+            maxWidth: "100%",
+          }}
+        >
+          <div style={{ fontWeight: 600 }}>🤖 {nameOf(node.agentId)}</div>
+          {node.task && <div className="hint-text" style={{ fontSize: 12 }}>{node.task}</div>}
+          {expiryBadge(node.hop?.expires_at, t("chains.expired", "expired") as string, t("chains.expiring", "expiring") as string)}
+          {acts.map((a) => (
+            <div key={a.id} style={{ fontSize: 12, marginTop: 4 }}>
+              {VERDICT_ICON[a.policy_check_result || ""] || "✅"}{" "}
+              <span className="mono">{a.tool_name}</span>
+              {a.policy_check_result === "denied" && a.reason && (
+                <span style={{ color: "var(--risk-critical,#c1352f)" }}> — {a.reason}</span>
+              )}
+            </div>
+          ))}
+          {denied.length > 0 && (
+            <div style={{ fontSize: 11, color: "var(--risk-critical,#c1352f)", marginTop: 4 }}>
+              {t("chains.blocked_note")}
+            </div>
+          )}
+        </div>
+        {node.children.length > 0 && (
+          <div style={{ marginLeft: 18, paddingLeft: 16, borderLeft: "1px dashed var(--border,#cbd5e1)" }}>
+            {node.children.map(renderNode)}
+          </div>
+        )}
+      </div>
+    );
+  };
 
   return (
     <>
@@ -90,57 +157,11 @@ export default function ChainDetailPage() {
           </div>
         )}
 
-        {/* Delegation graph — vertical flow of agent -> agent */}
+        {/* Delegation graph: a tree - one agent may delegate to several */}
         <h2 style={{ fontSize: 15, marginBottom: 12 }}>{t("chains.graph_title")}</h2>
         <div className="panel" style={{ marginBottom: 20 }}>
           <div className="panel-body">
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 0 }}>
-              {nodes.map((node, i) => {
-                const acts = actionsByAgent[node.agentId] || [];
-                const denied = acts.filter((a) => a.policy_check_result === "denied");
-                return (
-                  <div key={i} style={{ width: "100%" }}>
-                    {i > 0 && (
-                      <div style={{ paddingLeft: 18, color: "var(--text-muted,#64748b)", fontSize: 12, margin: "4px 0" }}>
-                        │ <span className="mono">delegate: {(node.delegated || []).join(", ") || "—"}</span>
-                        {node.tools && (
-                          <span className="mono"> · tools: {node.tools.join(", ") || "—"}</span>
-                        )}
-                        <div style={{ paddingLeft: 8 }}>▼</div>
-                      </div>
-                    )}
-                    <div
-                      style={{
-                        border: "1px solid var(--border,#e5e7eb)",
-                        borderRadius: 8,
-                        padding: "10px 14px",
-                        background: "var(--bg-panel,#fff)",
-                        display: "inline-block",
-                        minWidth: 260,
-                      }}
-                    >
-                      <div style={{ fontWeight: 600 }}>🤖 {nameOf(node.agentId)}</div>
-                      {node.task && <div className="hint-text" style={{ fontSize: 12 }}>{node.task}</div>}
-                      {expiryBadge(node.expires, t("chains.expired", "expired") as string, t("chains.expiring", "expiring") as string)}
-                      {acts.map((a) => (
-                        <div key={a.id} style={{ fontSize: 12, marginTop: 4 }}>
-                          {a.policy_check_result === "denied" ? "❌" : "✅"}{" "}
-                          <span className="mono">{a.tool_name}</span>
-                          {a.policy_check_result === "denied" && a.reason && (
-                            <span style={{ color: "var(--risk-critical,#c1352f)" }}> — {a.reason}</span>
-                          )}
-                        </div>
-                      ))}
-                      {denied.length > 0 && (
-                        <div style={{ fontSize: 11, color: "var(--risk-critical,#c1352f)", marginTop: 4 }}>
-                          {t("chains.blocked_note")}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+            <div style={{ overflowX: "auto" }}>{renderNode(tree)}</div>
           </div>
         </div>
 
@@ -167,7 +188,7 @@ export default function ChainDetailPage() {
                   <td>{nameOf(a.agent_id)}</td>
                   <td className="mono" style={{ fontSize: 12 }}>{a.tool_name}</td>
                   <td>
-                    <span className={`pill ${a.policy_check_result === "denied" ? "pill-critical" : "pill-low"}`}>
+                    <span className={`pill ${a.policy_check_result === "denied" ? "pill-critical" : a.policy_check_result === "pending_approval" ? "pill-medium" : "pill-low"}`}>
                       {a.policy_check_result}
                     </span>
                   </td>
