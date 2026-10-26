@@ -9,6 +9,12 @@ updates:
     labels:
       - dependencies
       - backend
+    ignore:
+      # passlib 1.7.4 (unmaintained) breaks with bcrypt >= 4.1: its bug probe
+      # hashes a password longer than 72 bytes, which bcrypt 5 refuses. Stays
+      # until password hashing moves off passlib.
+      - dependency-name: bcrypt
+        versions: [">=4.1"]
 
   - package-ecosystem: npm
     directory: /frontend
