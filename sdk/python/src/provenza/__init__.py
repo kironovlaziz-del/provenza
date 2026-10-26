@@ -19,7 +19,7 @@ from provenza.agent import Agent, Check, ProvenzaWarning, ToolSpec
 from provenza.errors import (ProvenzaApprovalRequired, ProvenzaConfigError, ProvenzaDenied, ProvenzaError,
                              ProvenzaRequestError, ProvenzaUnavailable)
 
-__version__ = "0.2.0"
+__version__ = "0.2.1"
 
 __all__ = [
     "Agent", "Check", "ToolSpec", "ProvenzaWarning",

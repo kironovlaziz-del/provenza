@@ -24,6 +24,10 @@ recorded. Nothing else is written to stdout; diagnostics go to stderr.
 
 Environment: PROVENZA_URL, PROVENZA_TOKEN (first start only),
 PROVENZA_AGENT_NAME (default "mcp"), PROVENZA_IDENTITY (identity file path).
+
+Without PROVENZA_URL it still speaks MCP (initialize, ping, an empty
+tools/list), and a tool call answers how to connect it - so a client or a
+directory that starts it unconfigured sees a working server, not a crash.
 """
 
 import base64
@@ -37,6 +41,10 @@ import httpx
 from provenza.integrations.mcp import MCP_PATH
 
 META_VERSION = "io.modelcontextprotocol/protocolVersion"
+VERSIONS = ("2025-11-25", "2025-06-18", "2025-03-26")   # what this server answers when unconfigured
+SETUP = ("Provenza is not connected: set PROVENZA_URL to your Provenza (https://...) and, on the first start, "
+         "PROVENZA_TOKEN to an enrollment token from Agents -> New agent. "
+         "See https://github.com/kironovlaziz-del/provenza")
 
 
 def _log(msg: str) -> None:
@@ -125,12 +133,45 @@ class Bridge:
                 stdout.flush()
 
 
+class Unconfigured:
+    """The server's answers before PROVENZA_URL is set: valid MCP, no tools."""
+
+    def handle(self, msg: Any) -> Optional[Dict[str, Any]]:
+        if not isinstance(msg, dict):
+            return _error(None, -32600, "Invalid Request: one JSON-RPC message per line")
+        if "id" not in msg or "method" not in msg:
+            return None
+        rid, method = msg["id"], msg["method"]
+        params = msg.get("params") if isinstance(msg.get("params"), dict) else {}
+        if method == "initialize":
+            asked = params.get("protocolVersion")
+            from provenza import __version__
+            return {"jsonrpc": "2.0", "id": rid, "result": {
+                "protocolVersion": asked if asked in VERSIONS else VERSIONS[0],
+                "capabilities": {"tools": {"listChanged": False}},
+                "serverInfo": {"name": "provenza-mcp", "title": "Provenza (not connected)", "version": __version__},
+                "instructions": SETUP}}
+        if method == "ping":
+            return {"jsonrpc": "2.0", "id": rid, "result": {}}
+        if method == "tools/list":
+            return {"jsonrpc": "2.0", "id": rid, "result": {"tools": []}}
+        if method == "tools/call":
+            return {"jsonrpc": "2.0", "id": rid,
+                    "result": {"content": [{"type": "text", "text": SETUP}], "isError": True}}
+        return _error(rid, -32601, f"Method not found: {str(method)[:100]}")
+
+    serve = Bridge.serve
+
+
 def main() -> int:
     url = os.environ.get("PROVENZA_URL", "").rstrip("/")
     if not url:
-        _log("set PROVENZA_URL (your Provenza, e.g. https://provenza.example.com) and, on the first start, "
-             "PROVENZA_TOKEN (Agents -> New agent)")
-        return 2
+        _log(SETUP)
+        try:
+            Unconfigured().serve(sys.stdin, sys.stdout)
+        except KeyboardInterrupt:
+            pass
+        return 0
     from provenza import Agent
     from provenza.errors import ProvenzaError
 
