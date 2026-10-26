@@ -63,7 +63,11 @@ binary with `//go:embed`, so the deployed binary is self-contained.
 
 ## Install
 
-The usual way needs neither this repository nor Go: in Provenza, Gateways
+On the Provenza server itself, `sudo ./install.sh --sensor` installs it and
+enrolls it with a key the installer makes - nothing to copy from the
+interface ([docs/self-hosting.md](../docs/self-hosting.md)).
+
+On any other host the usual way needs neither this repository nor Go: in Provenza, Gateways
 → **Runtime** → **Register sensor** gives a key and the command to run on
 the host. The control plane serves the install script, the binary and the
 systemd unit, and the script checks them against its `SHA256SUMS`:
@@ -228,6 +232,10 @@ release made before signed workloads constrains nothing; sign a new one.
 On the host of an egress proxy, start the proxy through the sensor:
 
     provenza-sensor --proxy run -- /usr/local/bin/provenza-proxy -config /etc/provenza/proxy.json
+
+On the Provenza server, `provenza edge setup --sensor-guard` does this for the
+proxy the installer set up, and keeps `proxy_binaries` / `proxy_configs` in
+`sensor.json` up to date on every upgrade.
 
 Only root and the users in `proxy_users` may start it. Its cgroup is held -
 nothing in or out - until every process in it runs a

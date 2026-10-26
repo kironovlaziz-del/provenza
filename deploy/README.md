@@ -69,6 +69,7 @@ podman build -t localhost/provenza/web:local -f frontend.Dockerfile ..
 systemctl start provenza.target
 ./scripts/run.sh create-admin --org "Provenza" --email admin@provenza.example.com --name "Jane Admin"
 systemctl enable --now provenza-backup.timer
+./scripts/edge.sh setup                               # the egress proxy and the endpoint agent, with their keys
 ```
 
 Open `https://provenza.example.com` and sign in. For a trial on your own machine
@@ -139,6 +140,7 @@ for `sudo` by itself):
 | Another admin | `provenza run create-admin --org "Provenza" --email ...` |
 | Rebuild the code on disk | `provenza rebuild` — after a manual `git pull` or a patch: build, back up, restart (no fetch, no rollback) |
 | After editing `.env` | `provenza units && provenza restart` |
+| The egress proxy and the endpoint agent on this host | `provenza edge status` · `provenza edge setup` · `provenza edge refresh` |
 | Shell in the API | `sudo podman exec -it backend sh` |
 
 Services: `postgres redis migrate backend worker beat frontend caddy
@@ -214,5 +216,6 @@ overwritten (the previous ones are saved to `/root/provenza-units-*.tar`).
 ## Notes
 
 - `docker-compose.dev.yml` and `docker-compose.yml` in the repository root are
-  development stacks (the dev one seeds a demo admin). Never use them in
-  production.
+  development stacks (the dev one seeds a demo admin; the other runs only
+  PostgreSQL, Redis and monitoring for running the code from source). Never use
+  them in production.

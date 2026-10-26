@@ -10,8 +10,13 @@ What Provenza protects, how, and where its guarantees stop.
   arguments and outputs) is erased after the retention period set under
   Settings → Data retention, and only an admin sees it, on an explicit
   request that is written to the audit log.
-- **Provider credentials.** They are encrypted at rest with Fernet. The
-  API never returns a key, only `has_credentials: true/false`.
+- **Credentials.** An AI provider's API key, and the credentials of egress
+  routes, MCP servers, A2A peers and HTTP tools, are sealed in the
+  administrator's browser to the egress proxies' own keys: the server stores
+  envelopes it cannot open, and the proxies use them
+  ([pvp/edge.md](pvp/edge.md), §4.1). The API never returns a credential.
+  Secrets the server must use itself, such as the passwords of connected
+  directories, are encrypted at rest with Fernet (`ENCRYPTION_KEY`).
 - **Machine vs. user auth.** Collectors (the endpoint agent and the
   browser extension) authenticate with an `X-Ingestion-Key` tied to an
   Ingestion Source, never with a user's JWT. Keys are stored hashed
@@ -52,8 +57,9 @@ What Provenza protects, how, and where its guarantees stop.
 
 ## Agent governance: guarantees
 
-These apply to agents with a signing key, whether agent-held or generated
-by the server at registration.
+These apply to agents with a signing key. The agent makes its keys itself
+(enrollment); only keys registered by older versions may have been made by
+the server, and they are labelled so.
 
 - **Agent-held keys.** The agent generates its Ed25519 key pair and
   registers only the public key. The server never sees the private key and
@@ -96,26 +102,26 @@ by the server at registration.
 
 What this does **not** do:
 
-- **Tool calls are reported by the agent.** Model calls that go through
-  the LLM gateway are enforced there. Tool calls are seen only when the
-  agent reports them: an agent, or a compromised host, that calls its
-  tools directly without `/actions/check` and `/actions/record` is
-  invisible to Provenza. Two things narrow this gap where they are
-  deployed: [egress lockdown](egress-lockdown.md) leaves an agent one way
-  out, through the Provenza egress proxy, and the
-  [egress sensor](../sensor/README.md) enforces the agent's egress policy
-  in the kernel (cgroup BPF), so a direct call to a destination that is not
-  allowed fails and is reported.
-- **Server-generated keys are a convenience, not evidence.** The
-  quick-start option generates the key pair on the server and returns the
-  private key once. The key is not stored, but the server had it at that
-  moment. Such keys are labelled in the UI and in evidence files; use
-  agent-held keys where independence from the server matters.
+- **Tool calls are reported by the agent - unless the network says
+  otherwise.** Model calls that go through the LLM gateway are enforced
+  there. Tool calls are seen only when the agent reports them: an agent, or
+  a compromised host, that calls its tools directly without
+  `/actions/check` and `/actions/record` is invisible to Provenza. Three
+  things close this gap where they are deployed: [egress
+  lockdown](egress-lockdown.md) leaves an agent one way out, through the
+  Provenza egress proxy; the [egress sensor](../sensor/README.md) enforces
+  the agent's egress policy in the kernel (cgroup BPF), so a direct call to
+  a destination that is not allowed fails and is reported; and the signed
+  policy's *enforce* mode makes the proxy the only place an action runs,
+  signed by the agent ([pvp/edge.md](pvp/edge.md), §4.2).
+- **Server-generated keys are not evidence.** Older versions could generate
+  an agent's key pair on the server. Such keys are labelled
+  (`key_origin: "server"`) in the UI and in evidence files: the server had
+  the private key at that moment. Re-enroll those agents with their own keys
+  where independence from the server matters.
 - **The fingerprint check is yours to do.** A valid signature proves the
   record matches the key. That the key belongs to the agent is
   established by comparing fingerprints with its owner, outside Provenza.
-- **`/actions/check` is not signed.** The binding to a specific action and
-  the agent's signature are enforced when the action is recorded.
 - **Keyless agents** (created without a key) stay on the unsigned,
   cooperative path.
 

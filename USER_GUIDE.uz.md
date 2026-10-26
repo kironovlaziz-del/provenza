@@ -98,8 +98,8 @@ mazmun qancha saqlanishi Settings → Data retention'da belgilanadi.
 Agentlar AI provayderni shlyuz orqali chaqira olishidan oldin ulanish qo‘shing.
 
 1. Yon menyu → **AI inventory → Connections**.
-2. **New provider** → turini tanlang (OpenAI, Anthropic, Azure OpenAI
-   yoki Shaxsiy), nom bering va API kalitni joylashtiring.
+2. **Connect** → turini tanlang (openai, anthropic, groq, azure_openai
+   yoki custom), nom bering va API kalitni joylashtiring.
 3. Kalit **brauzeringizda** egress proksilarning o‘z kalitlariga
    **muhrlanadi** (Gateways → External APIs → Proxies har bir proksi kalitining
    barmoq izini ko‘rsatadi; uni proksi o‘z xostida chiqargani bilan
@@ -264,7 +264,7 @@ autentifikatsiya qiladi.
 
 Katalog aniqlangan domen qanday qayta ishlanishini belgilaydi.
 
-1. Yon menyu → **Discovery → AI Domain Catalog** (faqat admin).
+1. Yon menyu → **Shadow AI → AI Domain Catalog** (faqat admin).
 2. Domen qo‘shing va siyosatini belgilang: **Allowed** (faqat qayd
    etiladi), **Blocked** (avtomatik hodisa yaratadi) yoki **Unknown**
    (ko‘rib chiqish uchun signal yaratadi). Katalogda yo‘q har qanday
@@ -274,13 +274,13 @@ Katalog aniqlangan domen qanday qayta ishlanishini belgilaydi.
 
 ### 8.3 Sightings (aniqlangan holatlar)
 
-Yon menyu → **Discovery → Shadow AI Sightings**. Har bir yozuv vositani, manbani
+Yon menyu → **Shadow AI → Shadow AI Sightings**. Har bir yozuv vositani, manbani
 (brauzer kengaytmasi, endpoint agenti, lokal jarayon/tarmoq/model fayli
 yoki qo‘lda), ma’lum bo‘lsa xodim haqidagi malumotni, holatni va
 takroriy aniqlashlar uchun "seen N times" hisoblagichini ko‘rsatadi. Har
 biri uchun siz:
 
-- uni ko‘rib chiqish uchun **Take** qilishingiz,
+- uni ko‘rib chiqish uchun **Take on** qilishingiz,
 - **Register** orqali sanksiyalangan provayderga aylantirishingiz (haqiqiy
   ulanishga aylanadi),
 - **Dismiss** qilishingiz mumkin.
@@ -301,12 +301,14 @@ ro‘yxatda paydo bo‘ladi. Boshqa har qanday mashinada:
 
 1. *Endpoint agent* turidagi **Ingestion Source** yarating va kalitni
    nusxalang.
-2. Kalit va server manzilini agentning `config.json` fayliga kiriting
-   (`agent/config.example.json` ga qarang), so‘ng uni yig‘ing va ishga
-   tushiring — to‘liq bosqichlar [Shadow AI kollektorlari](docs/shadow-ai.md)
-   da.
+2. Agentni Provenzangizdan yuklab oling
+   (`https://<provenza>/api/v1/egress-sensor/download/provenza-agent-linux-amd64`
+   yoki `-arm64`; yonidagi `SHA256SUMS` bilan tekshiriladi), server manzili
+   va kalitni uning `config.json` fayliga kiriting (`agent/config.example.json`
+   ga qarang) va ishga tushiring — to‘liq bosqichlar
+   [Shadow AI kollektorlari](docs/shadow-ai.md) da.
 3. Yangi topilmalar bir daqiqa ichida paydo bo‘ladi: lokal AI vositalari
-   **Discovery → Shadow AI Sightings**da, AI agentlar **Discovery →
+   **Shadow AI → Shadow AI Sightings**da, AI agentlar **Discovery →
    Agents Found**da, mashinaning o‘zi esa **Discovery → Devices**da.
 
 ### 8.4.1 Topilgan agentlar va qurilmalar

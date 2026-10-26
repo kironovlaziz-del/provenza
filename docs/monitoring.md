@@ -8,7 +8,7 @@ network (Caddy does not route `/metrics`).
 
 ## The Observability page
 
-Monitoring → **Observability**, for the server's operator: the
+Settings → **Observability**, for the server's operator: the
 administrators of the organization that runs it (the first one, made by
 `create-admin`). Administrators of organizations created later by public
 sign-up do not see it - the metrics cover every organization.

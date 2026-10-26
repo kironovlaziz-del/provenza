@@ -46,22 +46,27 @@ Out of scope:
 
 ## Hardening checklist for operators
 
-If you run Provenza in production:
+If you run Provenza in production, install it with `install.sh`
+([docs/self-hosting.md](docs/self-hosting.md)). It already sets
+`ENVIRONMENT=production` (insecure defaults are rejected at startup),
+generates `SECRET_KEY`, `ENCRYPTION_KEY` and the database passwords, keeps
+PostgreSQL and Redis on an internal container network, puts Caddy with
+automatic TLS in front and schedules a daily backup. Then:
 
-- Set `ENVIRONMENT=production` — insecure defaults are rejected at startup.
 - Require two-factor sign-in at least for admins and approvers
-  (Users → Two-factor sign-in policy); each person sets it up under My profile.
-- Set a strong `SECRET_KEY` (48+ random bytes) and `ENCRYPTION_KEY` (Fernet).
-- Bind Postgres and Redis to `127.0.0.1` (the default in `docker-compose.yml`).
-- Put the app behind a TLS-terminating reverse proxy (nginx, Caddy, Traefik).
-- Back up the Postgres volume regularly.
-- Rotate `ENCRYPTION_KEY` using `scripts/rotate_encryption_key.py` if it
-  ever leaks.
+  (Settings → Users → Two-factor sign-in policy); each person sets it up
+  under My profile.
+- Give every administrator a passkey (two, on different devices), sign the
+  policy (Policies → Policy hierarchy → Signed policy) with a quorum of 2 or
+  more.
+- Back up `deploy/.env` and copy `deploy/backups/` off the server.
+- Rotate `ENCRYPTION_KEY` with `provenza run python scripts/rotate_encryption_key.py`
+  if it ever leaks (deploy/README.md).
 - Allow SSH with keys only (`PasswordAuthentication no`), and expose only
-  ports 80 and 443; Postgres, Redis, the API (8000) and the web UI (3000)
-  listen on localhost.
+  ports 22, 80 and 443.
 - The app sends its own security headers (CSP, framing, HSTS in production),
-  so any reverse proxy works. With a bare nginx in front, also limit request
+  so any reverse proxy works. If you put Provenza behind your own nginx
+  (see "Another web server already on 80/443" in self-hosting), also limit request
   rates there - the app's own limits count per account and per key, nginx's
   per client address:
 

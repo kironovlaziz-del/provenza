@@ -22,9 +22,11 @@ Open **http://localhost:3000** and sign in:
 
 ## Local setup (hot reload)
 
-Requirements: Python 3.12, Node.js 20.9+, Docker with Compose v2. Go 1.26+
-only to build the endpoint agent or the egress sensor (the sensor's BPF
-object also needs clang 14+ and Linux 5.15+ with cgroup v2 and BTF to run).
+Requirements: Python 3.12, Node.js 20.9+, Docker with Compose v2 (or
+Podman with `podman compose`). Go only to build the Go parts: 1.27+ for the
+egress proxy and the Go SDK (`crypto/mldsa`), 1.26+ for the endpoint agent
+and the egress sensor (the sensor's BPF object also needs clang 14+ and
+Linux 5.15+ with cgroup v2 and BTF to run).
 
 ### 1. Environment files
 
@@ -70,7 +72,9 @@ REDIS_PASSWORD=change_me_in_dot_env
 docker compose up -d
 ```
 
-Both bind to `127.0.0.1` only.
+`docker-compose.yml` runs PostgreSQL and Redis (on `127.0.0.1` and the Docker
+bridge, for containers) plus Prometheus, Grafana and Alertmanager on
+`127.0.0.1`. It is for development only.
 
 ### 3. Backend
 
@@ -135,7 +139,8 @@ npm run build                 # production build
 ```
 
 CI also runs the SDK tests (`sdk/python`, `sdk/js`, `sdk/go`), the egress
-proxy and sensor tests, a dependency audit and CodeQL.
+proxy, endpoint agent and sensor tests, the install scripts' syntax and
+shellcheck, a dependency audit and CodeQL.
 
 ## Repository layout
 
@@ -155,7 +160,7 @@ sensor/      eBPF egress sensor: a daemon that contains governed workloads per c
 proxy/       egress proxy for agents (Go)
 sdk/         Python, JavaScript and Go SDKs
 tools/       offline verifiers (provenza_sign.py, provenza_audit.py)
-deploy/      production Docker stack (Caddy, non-root containers)
+deploy/      production stack: Podman Quadlet units, install/upgrade scripts, the edge services (edge/)
 docs/        documentation
 ```
 

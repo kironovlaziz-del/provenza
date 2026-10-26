@@ -1,6 +1,6 @@
 # Kill switch
 
-Enforcement → **Kill switch** stops AI at one of four levels and undoes each
+Overview → **Kill switch** stops AI at one of four levels and undoes each
 stop exactly.
 
 | Level | Stops | While in force |

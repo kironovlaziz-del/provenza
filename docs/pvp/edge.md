@@ -9,9 +9,10 @@ and the gateways' protocols executed by the proxy (spec.md §5.5), and
 section 5 (the sensor follows the signed policy, lets out only a pinned
 proxy binary, runs only administrators' signed commands) and sections 6-7
 (offline operation, the local kill switch, the reconciliation and the
-quorum's lift). The rest (the agent mode) is the plan for the stage that
-follows. The current behaviour is described in
-[spec.md](spec.md).
+quorum's lift), and the agent mode with enforce mode (§4, stage 12): the
+proxy signs for clients that cannot, with Ed25519 or hybrid keys
+(`provenza-proxy connect`, `provenza-proxy enroll`; proxy/README.md). The
+current behaviour is described in [spec.md](spec.md).
 
 ## 1. Goal
 
@@ -225,7 +226,9 @@ protocol:
   same binary runs next to an agent as a local adapter, signing with the
   agent's key for clients that cannot sign (stock MCP, OpenAI and A2A
   clients, plain HTTP for an egress route): `provenza-proxy -agent-identity
-  <the SDK's identity file> -listen unix:<path> -upstream <proxy>`. It
+  <the agent's identity file> -listen unix:<path> -upstream <proxy>`, with
+  an Ed25519 or a hybrid (Ed25519 + ML-DSA-65) key; `provenza-proxy connect
+  <client>` runs it for a client and writes the client's configuration. It
   listens on a unix socket of mode 0600 (only the agent's user reaches it;
   a loopback TCP address is allowed, with a warning: any local process
   reaches that), signs each request as below and passes it
