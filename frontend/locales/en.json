@@ -1364,6 +1364,7 @@
     "tl_reason": "Reason",
     "expired": "expired",
     "expiring": "expiring",
+    "unverified": "signature not verified",
     "status_tripped": "Halted (breaker)",
     "tripped_banner": "This chain was halted by the circuit breaker. New actions and delegations are refused until an admin resumes it.",
     "open_breaker": "Open Circuit Breaker"
