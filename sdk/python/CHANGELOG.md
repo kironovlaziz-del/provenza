@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.1 (2026-10-26)
+
+- `provenza-mcp` without `PROVENZA_URL` still speaks MCP (initialize, ping,
+  an empty tools list) and answers a tool call with how to connect it,
+  instead of exiting - for clients and directories that start it unconfigured.
+
 ## 0.2.0 (2026-10-26)
 
 - `provenza-mcp`: Provenza's MCP gateway over stdio, for MCP clients that

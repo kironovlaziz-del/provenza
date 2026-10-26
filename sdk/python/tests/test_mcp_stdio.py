@@ -68,3 +68,18 @@ def test_refusals_and_outages_become_json_rpc_errors():
     out = _run(bridge, {"jsonrpc": "2.0", "id": 8, "method": "tools/list"},
                {"jsonrpc": "2.0", "method": "notifications/initialized"})
     assert [m["id"] for m in out[:-1]] == [8] and out[0]["error"]["code"] == -32000
+
+
+def test_without_provenza_url_it_still_speaks_mcp_and_says_how_to_connect():
+    from provenza.mcp_stdio import Unconfigured
+    out = _run(Unconfigured(),
+               {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2025-06-18"}},
+               {"jsonrpc": "2.0", "method": "notifications/initialized"},
+               {"jsonrpc": "2.0", "id": 2, "method": "tools/list"},
+               {"jsonrpc": "2.0", "id": 3, "method": "tools/call", "params": {"name": "x", "arguments": {}}},
+               {"jsonrpc": "2.0", "id": 4, "method": "resources/list"})
+    assert out[0]["result"]["protocolVersion"] == "2025-06-18"
+    assert "PROVENZA_URL" in out[0]["result"]["instructions"]
+    assert out[1]["result"] == {"tools": []}
+    assert out[2]["result"]["isError"] and "PROVENZA_URL" in out[2]["result"]["content"][0]["text"]
+    assert out[3]["error"]["code"] == -32601 and out[4]["error"]["code"] == -32700
