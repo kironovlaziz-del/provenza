@@ -902,6 +902,7 @@
     "export_key.invalid": "The export key is not valid or has been revoked.",
     "export_key.not_found": "No such export key.",
     "rbac.read_only": "Read-only access: the auditor role changes nothing.",
+    "demo.read_only": "This is the public demo: its account cannot be changed.",
     "impact_assessment.invalid_answer": "The answer to \"{{question}}\" is not valid.",
     "impact_assessment.incomplete": "Some required questions have no answer yet.",
     "impact_assessment.no_draft": "There is no draft to approve.",

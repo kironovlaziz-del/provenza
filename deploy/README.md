@@ -31,6 +31,7 @@ Grafana and Alertmanager on the loopback interface.
 | `scripts/backup.sh`, `restore.sh` | Backups |
 | `scripts/migrate-from-docker.sh` | Moves an existing Docker compose installation to Podman |
 | `scripts/edge.sh`, `edge/` | The egress proxy and the endpoint agent on this host, keys included (`provenza edge setup`; see docs/self-hosting.md) |
+| `scripts/demo.sh` | A public read-only demo organization, made again every night (`provenza demo enable`; see docs/self-hosting.md) |
 
 Each container is a systemd service named after it: `provenza-postgres`,
 `provenza-backend`, `provenza-caddy`, and so on. They are all part of
@@ -141,6 +142,7 @@ for `sudo` by itself):
 | Rebuild the code on disk | `provenza rebuild` — after a manual `git pull` or a patch: build, back up, restart (no fetch, no rollback) |
 | After editing `.env` | `provenza units && provenza restart` |
 | The egress proxy and the endpoint agent on this host | `provenza edge status` · `provenza edge setup` · `provenza edge refresh` |
+| A public read-only demo organization, fresh every night | `provenza demo enable` · `provenza demo reset` · `provenza demo status` · `provenza demo disable` |
 | Shell in the API | `sudo podman exec -it backend sh` |
 
 Services: `postgres redis migrate backend worker beat frontend caddy

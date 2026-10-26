@@ -22,6 +22,9 @@
 #   provenza edge setup|refresh|status
 #                                  the egress proxy and the endpoint agent on this
 #                                  host, keys included (deploy/scripts/edge.sh)
+#   provenza demo enable|reset|status|disable
+#                                  a public read-only demo organization, made again
+#                                  every night (deploy/scripts/demo.sh)
 #
 # Services: postgres redis migrate backend worker beat frontend caddy
 #           prometheus grafana alertmanager
@@ -193,6 +196,7 @@ case "$cmd" in
   run)     exec "$DEPLOY_DIR/scripts/run.sh" "$@" ;;
   units)   exec "$DEPLOY_DIR/scripts/units.sh" install ;;
   edge)    exec bash "$DEPLOY_DIR/scripts/edge.sh" "$@" ;;
+  demo)    exec bash "$DEPLOY_DIR/scripts/demo.sh" "$@" ;;
   -h|--help|help|"") usage ;;
   *) usage; die "unknown command: $cmd" ;;
 esac

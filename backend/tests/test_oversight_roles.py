@@ -62,3 +62,29 @@ def test_reviewers_mfa_policy_covers_the_oversight_roles():
     assert policy_applies("reviewers", "auditor")
     assert policy_applies("reviewers", "compliance")
     assert not policy_applies("reviewers", "user")
+
+
+async def test_a_public_demo_login_cannot_change_its_own_account(client, db_session, org_and_users, monkeypatch):
+    """DEMO_ACCOUNTS: a shared demo login reads like any auditor, but its
+    password, second factor and passkeys stay as they are for every visitor."""
+    from app.core.config import settings
+
+    token = await _token_for(client, db_session, org_and_users, UserRole.auditor)
+    h = auth_headers(token)
+    monkeypatch.setattr(settings, "DEMO_ACCOUNTS", "someone@else.example, AUDITOR@test.example.com")
+
+    for path, body in (("/api/v1/users/me/password", {"current_password": org_and_users["password"],
+                                                       "new_password": "another-Passw0rd-1"}),
+                       ("/api/v1/users/me/mfa/setup", None),
+                       ("/api/v1/users/me/passkeys/options", {})):
+        r = await client.post(path, headers=h, json=body)
+        assert r.status_code == 403 and r.json()["detail"] == "demo.read_only", (path, r.text)
+
+    # it still reads, signs out and runs an audit check
+    assert (await client.get("/api/v1/users/me", headers=h)).status_code == 200
+    assert (await client.post("/api/v1/audit-logs/verify", headers=h)).status_code == 200
+
+    # an auditor that is not a demo login keeps its own account
+    monkeypatch.setattr(settings, "DEMO_ACCOUNTS", "")
+    r = await client.post("/api/v1/users/me/mfa/setup", headers=h)
+    assert r.status_code != 403, r.text

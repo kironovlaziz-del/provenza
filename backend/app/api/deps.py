@@ -35,6 +35,14 @@ def _auditor_may(path: str) -> bool:
     return "/users/me" in path or path.endswith(AUDITOR_WRITES)
 
 
+def _demo_account(user: User) -> bool:
+    """A shared public demo login (DEMO_ACCOUNTS): whoever has it must not be
+    able to change its password, second factor or passkeys - that would lock
+    every other visitor out."""
+    demo = {e.strip().lower() for e in settings.DEMO_ACCOUNTS.split(",") if e.strip()}
+    return bool(demo) and (user.email or "").lower() in demo
+
+
 async def get_current_user(
     request: Request,
     token: Optional[str] = Depends(oauth2_scheme_optional),
@@ -73,6 +81,8 @@ async def get_current_user(
     if (user.role == UserRole.auditor.value and request.method not in SAFE_METHODS
             and not _auditor_may(request.url.path)):
         raise api_error(status.HTTP_403_FORBIDDEN, "rbac.read_only")
+    if request.method not in SAFE_METHODS and "/users/me" in request.url.path and _demo_account(user):
+        raise api_error(status.HTTP_403_FORBIDDEN, "demo.read_only")
     return user
 
 

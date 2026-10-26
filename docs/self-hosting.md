@@ -243,6 +243,7 @@ The installer puts the `provenza` command in `/usr/local/bin`; it asks for
 | Start / stop / restart | `provenza start` · `provenza stop` · `provenza restart` |
 | One service | `provenza restart caddy` |
 | The egress proxy and the endpoint agent of this host | `provenza edge status` · `provenza edge setup` · `journalctl -u provenza-proxy` |
+| A public demo organization, fresh every night | `provenza demo enable` · `provenza demo status` · `provenza demo disable` (see below) |
 | Upgrade | `provenza upgrade` (see Upgrade above; with no new code it refreshes the PostgreSQL, Redis, Caddy and monitoring images) |
 | Rebuild the code on disk | `provenza rebuild` - after a manual `git pull` or a patch, which `upgrade` would not see: build, back up, restart; no fetch and no rollback |
 | Backup now | `provenza backup` |
@@ -270,6 +271,27 @@ Every setting is documented in `deploy/.env.example`. The most common:
 After editing `deploy/.env`, run `provenza units && provenza restart`.
 The domain, ports, memory limits and passwords are written into the units, so
 `units.sh install` is needed for them; other settings only need the restart.
+
+### A public demo on this installation
+
+```bash
+sudo provenza demo enable                    # organization "demo", demo@<your domain>, password provenza-demo
+sudo provenza demo enable --password '...'   # or your own (12 characters or more)
+```
+
+makes an organization of its own, "Acme Bank (Provenza demo)", and fills it
+the way real agents would (`backend/scripts/demo_seed.py`): agents that enroll
+with their own keys, a signed delegation chain, allowed, denied and held
+actions, a refused capability escalation, AI tools found on employees'
+machines. Visitors sign in as its viewer, an auditor: it reads everything and
+changes nothing, not even its own password, second factor or passkeys
+(`DEMO_ACCOUNTS` in `deploy/.env`), so one visitor cannot lock the others out.
+The organization sees nothing of the others on this installation, and they see
+nothing of it.
+
+Every night at 04:20 (`provenza-demo.timer`) it is deleted and made again;
+`provenza demo reset` does it now. Only an organization the demo made is ever
+deleted. `provenza demo disable` stops the timer and deletes the organization.
 
 ## Keeping prompts on your own network
 
