@@ -34,6 +34,7 @@ from app.api import breaker
 from app.api import tool_registry
 from app.api import behavior
 from app.api import enrollment as enrollment_api
+from app.api import connect_script as connect_script_api
 from app.api import teams as teams_api
 from app.api import attestation as attestation_api
 from app.api import policy_layers as policy_layers_api
@@ -177,6 +178,7 @@ app.include_router(tool_registry.router, prefix=f"{settings.API_V1_STR}/tool-reg
 app.include_router(behavior.router, prefix=f"{settings.API_V1_STR}/agent-behavior", tags=["agent-governance"])
 app.include_router(agent_identity.router, prefix=f"{settings.API_V1_STR}/agent-identity", tags=["agent-governance"])
 app.include_router(enrollment_api.router, prefix=f"{settings.API_V1_STR}/agent-enrollment", tags=["agent-governance"])
+app.include_router(connect_script_api.router, prefix=f"{settings.API_V1_STR}/agent-enrollment", tags=["agent-governance"])
 app.include_router(teams_api.router, prefix=f"{settings.API_V1_STR}/teams", tags=["agent-governance"])
 app.include_router(attestation_api.router, prefix=f"{settings.API_V1_STR}/attestation", tags=["agent-governance"])
 app.include_router(policy_layers_api.router, prefix=f"{settings.API_V1_STR}/policy-layers", tags=["policies"])

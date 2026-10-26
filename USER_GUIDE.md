@@ -336,8 +336,19 @@ ignore findings.
 
 Agents → **New agent**: fill in what the agent may do
 (capabilities, tools, models, delegation depth, team) and **Issue
-enrollment token**. Give the token to whoever runs the agent; on that
-machine they run the command shown, e.g.
+enrollment token**.
+
+**Connect an AI client** (Gemini CLI, Claude Code, Cursor or any
+OpenAI-compatible client) is the simplest way: pick the client and copy the
+one command shown. Run it on the machine where the client runs, as the user
+it runs as (Linux, amd64 or arm64). It downloads `provenza-proxy` from your
+Provenza and checks it, makes the agent's keys there, enrolls the agent and
+connects the client through the proxy's agent mode: every call is signed as
+the agent, checked and recorded. The page shows *Connected* when it is done.
+The same panel appears for **Issue re-key token** on an agent's page.
+
+Other ways: give the token to whoever runs the agent; on that machine they
+run the command shown, e.g.
 
     python tools/provenza_sign.py enroll --server https://provenza.example.com --token pvz_enr_...
 

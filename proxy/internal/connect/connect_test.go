@@ -109,6 +109,7 @@ func TestGeminiCLI(t *testing.T) {
 func TestNoConfigYetAndNoUserBus(t *testing.T) {
 	r := &runs{}
 	o, out := opts(t, "cursor", r, "systemctl --user enable")
+	o.Start = func(Options) (int, error) { return 4242, nil }
 	if err := Do(o); err != nil {
 		t.Fatal(err)
 	}
@@ -116,8 +117,8 @@ func TestNoConfigYetAndNoUserBus(t *testing.T) {
 	if m["mcpServers"].(map[string]any)[EntryName].(map[string]any)["url"] != o.MCPURL() {
 		t.Fatalf("%v", m)
 	}
-	if !strings.Contains(out.String(), "-agent-identity") || !strings.Contains(out.String(), "systemd --user is not reachable") {
-		t.Fatalf("no fallback command: %s", out)
+	if !strings.Contains(out.String(), "started in the background (pid 4242") {
+		t.Fatalf("not started without systemd: %s", out)
 	}
 }
 

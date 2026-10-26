@@ -216,8 +216,32 @@ func loopback(addr string) bool {
 	return ip != nil && ip.IsLoopback()
 }
 
+// serverRoutes: with the Provenza server itself as upstream ("https://host/api/v1"
+// - a machine without an egress proxy), each protocol path goes to the server's
+// own gateway. Egress routes need an egress proxy: there the credentials are.
+var serverRoutes = map[string]string{
+	"_mcp":   "/api/v1/mcp",
+	"_llm":   "/api/v1/gateway",
+	"_a2a":   "/api/v1/a2a-gateway",
+	"_tools": "/api/v1/http-tools",
+}
+
+// serverPath: the server's path for an agent-mode path, or "" for none.
+func serverPath(p string) string {
+	slug, rest, _ := strings.Cut(strings.TrimPrefix(p, "/"), "/")
+	base, ok := serverRoutes[slug]
+	if !ok {
+		return ""
+	}
+	if rest == "" {
+		return base
+	}
+	return base + "/" + rest
+}
+
 // NewAgentMode: the local adapter that signs as the agent and passes each
-// request to the egress proxy at upstream.
+// request to the egress proxy at upstream - or, with upstream
+// "https://<provenza>/api/v1", to the server's own gateways (serverRoutes).
 func NewAgentMode(id *AgentIdentity, listen, upstream string, logger *slog.Logger) (http.Handler, error) {
 	return newAgentMode(id, listen, upstream, logger, time.Now)
 }
@@ -229,10 +253,15 @@ func newAgentMode(id *AgentIdentity, listen, upstream string, logger *slog.Logge
 			"as the agent): %s", listen)
 	}
 	target, err := url.Parse(upstream)
+	server := err == nil && strings.TrimSuffix(target.Path, "/") == "/api/v1"
 	if err != nil || (target.Scheme != "http" && target.Scheme != "https") || target.Host == "" ||
-		(target.Path != "" && target.Path != "/") || target.RawQuery != "" {
+		(target.Path != "" && target.Path != "/" && !server) || target.RawQuery != "" {
 		// what is signed is the path the proxy receives: the proxy's root, nothing before it
-		return nil, fmt.Errorf("the egress proxy's address is not an http(s) URL of its root: %q", upstream)
+		return nil, fmt.Errorf("the egress proxy's address is not an http(s) URL of its root "+
+			"(or Provenza's https://<host>/api/v1): %q", upstream)
+	}
+	if server && target.Scheme != "https" && !loopback(target.Host+":0") && !loopback(target.Host) {
+		return nil, fmt.Errorf("Provenza's address must be https (the agent's key travels over it): %q", upstream)
 	}
 	target.Path = ""
 	if logger == nil {
@@ -242,6 +271,9 @@ func newAgentMode(id *AgentIdentity, listen, upstream string, logger *slog.Logge
 		Rewrite: func(pr *httputil.ProxyRequest) {
 			pr.SetURL(target)
 			pr.Out.Host = target.Host
+			if server {
+				pr.Out.URL.Path, pr.Out.URL.RawPath = serverPath(pr.In.URL.Path), ""
+			}
 		},
 		FlushInterval: -1, // streams (SSE) pass as they come
 		ErrorHandler: func(w http.ResponseWriter, _ *http.Request, err error) {
@@ -250,6 +282,12 @@ func newAgentMode(id *AgentIdentity, listen, upstream string, logger *slog.Logge
 		},
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if server && serverPath(r.URL.Path) == "" {
+			refuse(w, http.StatusNotFound, "provenza_no_egress_proxy",
+				"egress routes go through an egress proxy; this agent mode talks to Provenza's gateways only "+
+					"(/_mcp, /_llm, /_a2a, /_tools)")
+			return
+		}
 		body, err := io.ReadAll(io.LimitReader(r.Body, agentBodyLimit+1))
 		if err != nil || len(body) > agentBodyLimit {
 			refuse(w, http.StatusRequestEntityTooLarge, "provenza_body_too_large", "the request is too large to sign")

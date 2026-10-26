@@ -174,7 +174,7 @@ export default function NewAgentPage() {
                 <code className="mono" style={{ wordBreak: "break-all" }}>{issued.token}</code>
                 <p className="hint-text">{t("enroll.token_once")}</p>
               </div>
-              <EnrollPanel token={issued.token} hybrid={issued.require_hybrid} />
+              <EnrollPanel token={issued.token} hybrid={issued.require_hybrid} enrollmentId={issued.id} />
               {issued.attestation?.required && (
                 <div className="field">
                   <label>{t("attest.enroll_title")}</label>

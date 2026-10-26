@@ -453,3 +453,62 @@ async def test_agent_mode_signs_with_a_hybrid_key_this_server_verifies(tmp_path,
     assert verify_agent_signature(req.signed_payload(), sr["signature"], sr["pq_signature"], pub, pq_pub)
     forged = sr["pq_signature"][:20] + ("A" if sr["pq_signature"][20] != "A" else "B") + sr["pq_signature"][21:]
     assert not verify_agent_signature(req.signed_payload(), sr["signature"], forged, pub, pq_pub)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("hybrid", [False, True])
+async def test_enroll_and_agent_mode_against_this_server(client, admin_token, db_session, tmp_path, proxy_binary,
+                                                         hybrid):
+    """Agents -> Connect without the shell script around it: provenza-proxy
+    enroll makes the keys on the machine and proves them to this server; agent
+    mode then talks to the server's own MCP gateway as that agent."""
+    from app.core.agent_signing import pq_available
+
+    if hybrid and not pq_available():
+        pytest.skip("ML-DSA needs cryptography >= 48")
+
+    async def bridge(method, target, headers, body):
+        keep = {k: v for k, v in headers.items() if k.lower() not in ("host", "content-length", "connection")}
+        r = await client.request(method, target, headers=keep, content=body)
+        return r.status_code, {"Content-Type": r.headers.get("content-type", "application/json")}, r.content
+
+    api_server, api_url = await _http_server(bridge)
+    r = await client.post("/api/v1/agent-enrollment/tokens", json={"capabilities": ["llm_call"],
+                          "require_hybrid": hybrid}, headers=auth_headers(admin_token))
+    assert r.status_code == 200, r.text
+    token = r.json()["token"]
+    identity = tmp_path / "home" / "provenza-agent.json"
+    try:
+        enroll = await asyncio.to_thread(
+            subprocess.run, [str(proxy_binary), "enroll", "--server", api_url, "--name", "gemini@test",
+                             "--identity", str(identity)],
+            env={**os.environ, "PROVENZA_ENROLL_TOKEN": token}, capture_output=True, text=True, timeout=60)
+        assert enroll.returncode == 0, enroll.stderr
+        saved = json.loads(identity.read_text())
+        assert oct(identity.stat().st_mode & 0o777) == "0o600"
+        agent = (await db_session.execute(select(Agent).where(Agent.id == saved["agent_id"]))).scalar_one()
+        assert agent.name == "gemini@test" and agent.public_key == saved["public_key"]
+        assert agent.key_origin == "agent" and bool(agent.pq_public_key) == hybrid
+        assert token not in enroll.stdout + enroll.stderr
+
+        port = _free_port()
+        proc = subprocess.Popen([str(proxy_binary), "-agent-identity", str(identity), "-listen", f"127.0.0.1:{port}",
+                                 "-upstream", api_url + "/api/v1"], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        try:
+            init = {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {
+                "protocolVersion": "2025-06-18", "capabilities": {}, "clientInfo": {"name": "gemini", "version": "1"}}}
+            async with httpx.AsyncClient() as c:
+                for _ in range(50):
+                    try:
+                        r = await c.post(f"http://127.0.0.1:{port}/_mcp", json=init,
+                                         headers={"Accept": "application/json, text/event-stream"})
+                        break
+                    except httpx.ConnectError:
+                        await asyncio.sleep(0.1)
+            assert r.status_code == 200, r.text
+            assert r.json()["result"]["serverInfo"]["name"] == "provenza-mcp-gateway"
+        finally:
+            proc.terminate()
+            proc.wait(timeout=10)
+    finally:
+        api_server.close()

@@ -2450,7 +2450,6 @@
     "browser_done": "Agent #{{id}} enrolled - provenza-agent.json downloaded",
     "browser_rekeyed": "Agent #{{id}} has a new key - provenza-agent.json downloaded (with its new API key)",
     "browser_file_warning": "The file holds the agent's private keys and API key: move it to the agent's machine, readable only by the agent's user (chmod 600), and delete it from this computer's downloads.",
-    "connect_hint": "On that machine, as the agent's user, with the file in ~/.config/provenza/: connect an AI client (gemini-cli, claude-code, cursor or openai) - it signs every request as this agent:",
     "browser_download_again": "Download again",
     "browser_failed": "Enrollment in the browser failed",
     "browser_unsupported": "This browser cannot generate Ed25519 keys (needs Chrome 113+, Firefox 129+ or Safari 17+). Use the command below.",
@@ -3570,5 +3569,20 @@
     "unsigned": "sealed by the server: proxies that follow the signed policy use it only once an administrator vouches for it",
     "countersign": "Vouch for it",
     "no_keys_legacy": "No egress proxy has registered its key yet: install and start one (proxy/README.md), then seal them here."
+  },
+  "connect": {
+    "title": "Connect an AI client",
+    "client": "Client",
+    "hint": "Run this one command on the machine where the client runs, as the user it runs as. It downloads provenza-proxy from this server, makes the agent's keys there (they never leave that machine) and connects the client: every call it makes is signed as this agent, checked and recorded. The token in it works once.",
+    "clients": {
+      "gemini-cli": "Gemini CLI",
+      "claude-code": "Claude Code",
+      "cursor": "Cursor",
+      "openai": "Any OpenAI-compatible client"
+    },
+    "waiting": "This page shows when the machine has connected.",
+    "where": "Linux, amd64 or arm64. With an egress proxy on that machine (the Provenza server has one) calls go through it; elsewhere straight to Provenza's gateways.",
+    "done": "Connected: agent #{{id}}. Its calls appear in Agent activity.",
+    "other": "Other ways to use the token:"
   }
 }

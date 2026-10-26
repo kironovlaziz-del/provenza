@@ -8,8 +8,10 @@ import { useTranslation } from "react-i18next";
 import { translateApiError } from "@/lib/errors";
 import { browserCanEnroll, downloadKeysFile, enrollInBrowser, type AgentKeysFile } from "@/lib/browser_enroll";
 import { enrollCommand } from "@/lib/enrollment_api";
+import { ConnectPanel } from "@/components/ConnectPanel";
 
-export function EnrollPanel({ token, hybrid, rekey = false }: { token: string; hybrid: boolean; rekey?: boolean }) {
+export function EnrollPanel({ token, hybrid, rekey = false, enrollmentId }:
+  { token: string; hybrid: boolean; rekey?: boolean; enrollmentId?: number }) {
   const { t } = useTranslation();
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState<AgentKeysFile | null>(null);
@@ -37,6 +39,12 @@ export function EnrollPanel({ token, hybrid, rekey = false }: { token: string; h
 
   return (
     <div style={{ display: "grid", gap: 14 }}>
+      {enrollmentId !== undefined && !done && (
+        <>
+          <ConnectPanel token={token} enrollmentId={enrollmentId} />
+          <p className="hint-text" style={{ margin: 0 }}>{t("connect.other")}</p>
+        </>
+      )}
       <div className="field" style={{ margin: 0 }}>
         <label>{t("enroll.browser_title")}</label>
         {done ? (
@@ -44,8 +52,6 @@ export function EnrollPanel({ token, hybrid, rekey = false }: { token: string; h
             <span className="pill pill-low">✓ {t(rekey ? "enroll.browser_rekeyed" : "enroll.browser_done", { id: done.agent_id })}</span>
             <code className="mono" style={{ fontSize: 12 }}>{done.key_fingerprint}</code>
             <p className="hint-text" style={{ color: "#f59e0b" }}>{t("enroll.browser_file_warning")}</p>
-            <p className="hint-text">{t("enroll.connect_hint")}</p>
-            <code className="mono" style={{ fontSize: 12 }}>provenza-proxy connect gemini-cli</code>
             <div>
               <button type="button" className="btn btn-sm" onClick={() => downloadKeysFile(done)}>{t("enroll.browser_download_again")}</button>
             </div>
