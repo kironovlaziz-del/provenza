@@ -65,32 +65,33 @@ const fmtTime = (iso: string, minutes: number) => {
 
 const CSS = `
 .obsk { --bg:#1d1e24; --panel:#25262e; --border:#343741; --grid:#343741; --text:#dfe5ef; --muted:#98a2b3; --dim:#69707d;
+  --title:#e6ebf2; --row:#2c2d35; --btn:#2f3038; --field:#1d1e24; --tip:#000000d9; --cross:#ffffff55; --link:#6aa9ff;
   background:var(--bg); color:var(--text); min-height:100vh; padding:16px; font-size:13px; }
-.obsk a { color:#6aa9ff; }
+.obsk a { color:var(--link); }
 .obsk .bar { display:flex; gap:12px; align-items:center; flex-wrap:wrap; background:var(--panel); border:1px solid var(--border);
   border-radius:6px; padding:10px 14px; margin-bottom:12px; }
 .obsk h1 { font-size:20px; font-weight:600; margin:0 12px 0 0; color:var(--text); }
 .obsk h2 { font-size:17px; font-weight:600; margin:18px 0 10px; color:var(--text); }
-.obsk .btn { background:#2f3038; color:var(--text); border:1px solid var(--border); border-radius:4px; padding:4px 10px; cursor:pointer; font-size:12px; }
+.obsk .btn { background:var(--btn); color:var(--text); border:1px solid var(--border); border-radius:4px; padding:4px 10px; cursor:pointer; font-size:12px; }
 .obsk .btn.on { background:#1e5bb8; border-color:#1e5bb8; color:#fff; }
-.obsk select, .obsk input[type=text] { background:#1d1e24; color:var(--text); border:1px solid var(--border); border-radius:4px; padding:4px 8px; font-size:12px; width:auto; }
+.obsk select, .obsk input[type=text] { background:var(--field); color:var(--text); border:1px solid var(--border); border-radius:4px; padding:4px 8px; font-size:12px; width:auto; }
 .obsk .grid { display:grid; grid-template-columns:repeat(12, minmax(0,1fr)); gap:12px; }
 .obsk .p { background:var(--panel); border:1px solid var(--border); border-radius:6px; padding:12px 14px; min-width:0; }
-.obsk .pt { font-weight:600; font-size:12px; margin-bottom:8px; font-family:ui-monospace,Menlo,Consolas,monospace; color:#e6ebf2; }
+.obsk .pt { font-weight:600; font-size:12px; margin-bottom:8px; font-family:ui-monospace,Menlo,Consolas,monospace; color:var(--title); }
 .obsk .kpi .v { font-size:24px; font-weight:700; }
 .obsk .kpi .l { color:var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:.04em; }
 .obsk .kpi .s { color:var(--muted); font-size:11px; }
 .obsk .lg { width:100%; border-collapse:collapse; font-size:12px; }
-.obsk .lg td { padding:3px 4px; border-bottom:1px solid #2c2d35; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:170px; color:var(--text); }
+.obsk .lg td { padding:3px 4px; border-bottom:1px solid var(--row); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:170px; color:var(--text); }
 .obsk .lg tr { cursor:pointer; }
 .obsk .lg tr.off td { opacity:.35; }
 .obsk .ax { position:absolute; font-size:11px; color:var(--muted); white-space:nowrap; pointer-events:none; line-height:14px; }
 .obsk .dot { display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:6px; vertical-align:middle; }
-.obsk .tip { position:absolute; pointer-events:none; background:#000000d9; border:1px solid var(--border); border-radius:4px; padding:6px 8px;
+.obsk .tip { position:absolute; pointer-events:none; background:var(--tip); border:1px solid var(--border); border-radius:4px; padding:6px 8px;
   font-size:11px; z-index:5; white-space:nowrap; color:var(--text); }
 .obsk table.t { width:100%; border-collapse:collapse; font-size:12px; }
 .obsk table.t th { text-align:left; color:var(--muted); font-weight:500; padding:4px 6px; border-bottom:1px solid var(--border); background:transparent; }
-.obsk table.t td { padding:5px 6px; border-bottom:1px solid #2c2d35; color:var(--text); }
+.obsk table.t td { padding:5px 6px; border-bottom:1px solid var(--row); color:var(--text); }
 .obsk .pill { border-radius:3px; padding:1px 6px; font-size:11px; font-family:ui-monospace,Menlo,Consolas,monospace; }
 .obsk .term { background:#0c0c0c; border:1px solid var(--border); border-radius:6px; font-family:ui-monospace,"Cascadia Mono",Menlo,Consolas,monospace;
   font-size:12px; line-height:1.5; color:#cccccc; height:560px; overflow:auto; padding:8px 10px; }
@@ -99,6 +100,10 @@ const CSS = `
 .obsk .term .raw { color:#ffcf70; padding-left:12px; white-space:pre-wrap; word-break:break-word; border-left:2px solid #c98500; margin:2px 0 4px 22px; }
 .obsk .term .lk { color:#58a6ff; cursor:pointer; margin-left:8px; }
 @media (max-width: 900px) { .obsk .grid > * { grid-column: span 12 !important; } }
+/* light theme: the same page on light surfaces (the live terminal stays dark, as terminals are) */
+:root[data-theme="light"] .obsk { --bg:#f5f6f8; --panel:#ffffff; --border:#dfe2e8; --grid:#e7e9ee; --text:#1b1d23; --muted:#5b6170;
+  --dim:#8a909c; --title:#1b1d23; --row:#eceef2; --btn:#f1f2f5; --field:#ffffff; --tip:#ffffffee; --cross:#00000040; --link:#2451d9; }
+:root[data-theme="light"] .obsk .tip { box-shadow:0 4px 14px rgba(0,0,0,.12); }
 `;
 
 /* ------------------------------------------------------------------ charts */
@@ -209,7 +214,7 @@ function TimeChart({ title, ts, label, height = 190, legendRight = true, unit }:
                   ))}
               {hover && (
                 <line x1={padL + hover.i * bw + bw / 2} x2={padL + hover.i * bw + bw / 2} y1={padT} y2={padT + plotH}
-                  stroke="#ffffff55" strokeWidth={1} vectorEffect="non-scaling-stroke" />
+                  stroke="var(--cross)" strokeWidth={1} vectorEffect="non-scaling-stroke" />
               )}
             </svg>
           )}
