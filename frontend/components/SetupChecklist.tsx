@@ -18,7 +18,8 @@ interface Item {
 
 const FOLDED_KEY = "pvz.setup.folded";
 
-export function SetupChecklist() {
+/** always: also when every required step is done (the Settings page keeps it, open). */
+export function SetupChecklist({ always = false }: { always?: boolean } = {}) {
   const { t } = useTranslation();
   const { user } = useAuth();
   const [items, setItems] = useState<Item[] | null>(null);
@@ -40,7 +41,7 @@ export function SetupChecklist() {
       .catch(() => setItems(null));
   }, [user?.role]);
 
-  if (!items || complete) return null;
+  if (!items || (complete && !always)) return null;
   const left = items.filter((i) => !i.done && !i.optional).length;
 
   function fold(next: boolean) {

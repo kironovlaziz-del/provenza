@@ -201,7 +201,7 @@ function Review({ id, onDone, readOnly }: { id: number; onDone: () => void; read
   );
 }
 
-export function AgentActionApprovals({ onCount, readOnly }: { onCount?: (n: number) => void; readOnly?: boolean }) {
+export function AgentActionApprovals({ onCount, readOnly, compact }: { onCount?: (n: number) => void; readOnly?: boolean; compact?: boolean }) {
   const { t } = useTranslation();
   const [pending, setPending] = useState<PendingApproval[]>([]);
   const [open, setOpen] = useState<number | null>(null);
@@ -224,7 +224,7 @@ export function AgentActionApprovals({ onCount, readOnly }: { onCount?: (n: numb
 
   return (
     <>
-        <p className="hint-text u-mb-16">{t("agent_approvals.hint")}</p>
+        {!compact && <p className="hint-text u-mb-16">{t("agent_approvals.hint")}</p>}
         {error && <div style={{ color: "#ef4444", marginBottom: 12 }}>{error}</div>}
         <div className="panel">
           <div className="panel-header"><h2>{t("agent_approvals.pending")} ({pending.length})</h2></div>

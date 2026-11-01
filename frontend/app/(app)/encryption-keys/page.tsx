@@ -127,8 +127,14 @@ export default function EncryptionKeysPage() {
               </thead>
               <tbody>
                 {data.data.map((d) => (
-                  <tr key={d.table}>
-                    <td>{t(`byok.table_${d.table}`, d.table)}</td>
+                  // a table can hold several encrypted columns: one row each
+                  <tr key={`${d.table}.${d.column}`}>
+                    <td>
+                      {t(`byok.table_${d.table}`, d.table)}
+                      {data.data.filter((x) => x.table === d.table).length > 1 && (
+                        <span className="hint-text"> · <code>{d.column}</code></span>
+                      )}
+                    </td>
                     <td>{d.total}</td>
                     <td>{d.active_key}</td>
                     <td style={d.older_keys ? { color: "#f59e0b" } : undefined}>{d.older_keys}</td>

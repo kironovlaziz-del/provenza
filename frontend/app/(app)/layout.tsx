@@ -1,18 +1,21 @@
 "use client";
 
 import React, { useEffect } from "react";
-import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
 import { useTranslation } from "react-i18next";
 import { loginUrl, useAuth } from "@/lib/auth";
+import { canOpen, homeFor } from "@/lib/navigation";
 import { DialogHost } from "@/components/Dialog";
 import { ReleaseBanner } from "@/components/ReleaseBanner";
 import { SessionBanner } from "@/components/SessionBanner";
-import { Sidebar } from "@/components/Sidebar";
+import { TopBar } from "@/components/TopBar";
 import { SystemHealthBanner } from "@/components/SystemHealthBanner";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
   const router = useRouter();
+  const pathname = usePathname();
   const { t } = useTranslation();
 
   useEffect(() => {
@@ -23,7 +26,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   if (loading) {
     return (
-      <div className="loading-line" style={{ padding: 40 }}>
+      // the server renders in English, the browser in the reader's language
+      <div className="loading-line" style={{ padding: 40 }} suppressHydrationWarning>
         {t("common.loading")}
       </div>
     );
@@ -35,7 +39,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="shell">
-      <Sidebar />
+      <TopBar />
       <div className="main">
         {user.role === "auditor" && (
           // one line, every page: why the buttons answer "read-only"
@@ -47,7 +51,19 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         <SessionBanner />
         <ReleaseBanner />
         <SystemHealthBanner />
-        {children}
+        {canOpen(pathname, user.role, !!user.is_operator) ? children : (
+          // a page this role does not see (an old link, a typed address): say so
+          // instead of rendering it and letting every request be refused
+          <div className="content">
+            <div className="panel" role="alert" style={{ maxWidth: 560 }}>
+              <div className="panel-body">
+                <h2 style={{ marginTop: 0, fontSize: 16 }}>{t("nav.no_access_title")}</h2>
+                <p className="hint-text">{t("nav.no_access")}</p>
+                <Link href={homeFor(user.role)} className="btn btn-primary">{t("nav.no_access_home")}</Link>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
       <DialogHost />
     </div>

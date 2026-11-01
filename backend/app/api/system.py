@@ -34,6 +34,9 @@ async def setup_checklist(db: AsyncSession = Depends(get_db),
 
     from app.models.agent import Agent
     from app.models.ai_provider import AIProvider
+    from app.models.egress_proxy import EgressProxy
+    from app.models.egress_sensor import EgressSensor
+    from app.models.scim import OidcSettings
     from app.models.enrollment import AgentEnrollment
     from app.models.ingestion_source import IngestionSource
     from app.models.notification_channel import NotificationChannel
@@ -56,5 +59,14 @@ async def setup_checklist(db: AsyncSession = Depends(get_db),
          "href": "/notifications"},
         {"key": "mfa", "done": (mfa or "none") != "none", "href": "/users"},
         {"key": "discovery", "done": await count(IngestionSource) > 0, "href": "/ingestion-sources", "optional": True},
+        # where agents' traffic is enforced and single sign-on: not every organization needs them
+        {"key": "proxy", "done": await count(EgressProxy, EgressProxy.enabled.is_(True),
+                                             EgressProxy.revoked_at.is_(None)) > 0,
+         "href": "/gateway?tab=egress", "optional": True},
+        {"key": "sensor", "done": await count(EgressSensor, EgressSensor.enabled.is_(True),
+                                              EgressSensor.revoked_at.is_(None)) > 0,
+         "href": "/runtime", "optional": True},
+        {"key": "sso", "done": await count(OidcSettings, OidcSettings.enabled.is_(True)) > 0,
+         "href": "/users", "optional": True},
     ]
     return {"items": items, "complete": all(i["done"] for i in items if not i.get("optional"))}

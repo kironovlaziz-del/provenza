@@ -28,7 +28,7 @@ joylashtirish va dasturlash uchun [README.md](README.md) ga qarang.
 |-----|--------------------|
 | **admin** | Hamma narsa: foydalanuvchilar, ulanishlar, telemetriya manbalari, domenlar katalogi, kashfiyot |
 | **approver** | Tasdiqlash so‘rovlarini ko‘rib chiqish va hal qilish; kundalik amallar |
-| **user** | Kundalik sahifalarni o‘qiydi (dashboard, inventar, agentlar, agent faolligi); tasdiqlash va sozlamalarsiz |
+| **user** | AI ro‘yxatidan boshlaydi; kundalik sahifalarni o‘qiydi (inventar, agentlar, agent faolligi) va hodisa haqida xabar bera oladi; tasdiqlash va sozlamalarsiz |
 | **auditor** | Admin yoki tasdiqlovchi ko‘radigan hamma narsani - inventar, siyosatlar, agentlar, audit jurnali, muvofiqlik - o‘qiydi va hech narsani o‘zgartirmaydi; audit jurnalini tekshirishi va muvofiqlik hisobotini yaratishi mumkin |
 | **compliance** | Muvofiqlik mas’uli (DPO, Chief AI Officer): auditor kabi o‘qiydi va muvofiqlik talablarini tasdiqlaydi |
 
@@ -58,33 +58,38 @@ qurilmalarda ikkita qo‘shing.
 
 ---
 
-## 2. Boshqaruv paneli (Dashboard)
+## 2. Yo‘l topish: yuqori panel
 
-Kirgandan so‘ng siz **Dashboard**ga tushasiz — bu LLM shlyuz
-chaqiruvlari, hodisalar va kutilayotgan tasdiqlarning qisqacha ko‘rinishi.
+Kirgandan so‘ng administratorlar, tasdiqlovchilar, auditorlar va
+muvofiqlik xodimlari **Inbox** (Kiruvchi) sahifasiga, qolganlar esa **AI**
+ro‘yxatiga tushadi. Hamma narsa yuqoridagi bitta paneldan ochiladi:
 
-Chapdagi yon menyuda beshta guruh bor; har bir band o‘ziga tegishli
-sahifalar yorliqlari bilan ochiladi:
+- **Inbox** — inson qarorini kutayotgan narsalar: tasdiqlashlar (qaror
+  to‘g‘ridan-to‘g‘ri ro‘yxatda), ochiq hodisalar va hali hech kim ko‘rib
+  chiqmagan, foydalanilayotgan AI; o‘ngda — so‘nggi yetti kun bir qarashda.
+  Yorliqlar: Inbox, Approvals, Incidents. Yorliqdagi raqam — kutayotgan
+  tasdiqlashlar soni.
+- **AI** — barcha AI tizimlari: AI inventory, agentlar, AI provayderlar,
+  shadow AI topilmalari, topilgan agentlar, agentlar kuzatuvi; **More**
+  ostida: ulanishlar, qurilmalar, jonli xarita, vakolat zanjirlari,
+  foydalanish holatlari, jamoalar va tarmoq kashfiyoti.
+- **Rules** — siyosatlar ierarxiyasi, agent siyosatlari, vositalar
+  reyestri, circuit breaker va xulq-atvor monitori.
+- **Evidence** — audit jurnali, muvofiqlik va har bir to‘xtatish tarixi
+  bilan Kill switch.
+- **Qidiruv** (yoki **Ctrl K**) istalgan sahifani nomi bo‘yicha ochadi.
+- **Stop all** (administratorlar) Kill switch sahifasini ochadi. Biror
+  to‘xtatish amal qilayotgan paytda panel ostidagi qizil qator buni har
+  bir sahifada ko‘rsatadi.
+- **Yordam (?)** — har bir rol uchun qo‘llanmalar, har bir funksiya
+  haqida maqola va ko‘p beriladigan savollar, ingliz va o‘zbek tillarida.
+- **Sozlamalar (⚙)** — barcha sozlamalar guruhlarga ajratilgan bitta
+  sahifa (siz, odamlar, shlyuzlar va agent identifikatori, kalitlar va
+  ma’lumotlar, tizim); administratorlar uchun tepasida sozlash ro‘yxati.
+- **Hisob menyusi** — profil, til, yorug‘ yoki qorong‘i mavzu, chiqish.
 
-- **Overview** — Dashboard, Incidents, Approvals va Kill switch.
-- **Visibility** — **AI inventory** (inventar, AI provayderlar,
-  ulanishlar, foydalanish holatlari), **Agents** (agentlar, jamoalar va
-  rollar, vositalar reyestri, agent identifikatori, attestatsiya,
-  xulq-atvor monitori, circuit breaker), **Discovery** (topilgan
-  agentlar, qurilmalar, tarmoq kashfiyoti), **Shadow AI** (topilmalar, AI
-  domenlar katalogi) va **Agent activity** (agentlar kuzatuvi, jonli
-  xarita, vakolat zanjirlari).
-- **Control** — **Policies** (siyosatlar ierarxiyasi, agent
-  siyosatlari), **Compliance** va **Gateways** (AI shlyuzi, egress
-  sensorlari bilan Runtime).
-- **Evidence** — **Audit & evidence**: audit jurnali.
-- **Settings** — foydalanuvchilar, profilingiz, bildirishnomalar, tizim
-  holati va server operatori uchun o‘rnatmaning holati; **More** ostida:
-  SIEM eksporti, shifrlash kalitlari, ma’lumotlarni saqlash va telemetriya
-  manbalari.
-
-Kamroq ochiladigan sahifalar bo‘lim yorliqlari qatoridagi **More**
-ortida turadi.
+Rol ko‘rmaydigan sahifa rad etilgan ma’lumotlarni ko‘rsatish o‘rniga
+"Bu sahifaga kirish huquqingiz yo‘q" deb javob beradi.
 
 Agentlar kuzatuvi agentlar nima qilayotganini faqat metama’lumot sifatida
 ko‘rsatadi. Admin bitta hodisaning mazmunini (agent nima yuborgani va nima
@@ -97,7 +102,7 @@ mazmun qancha saqlanishi Settings → Data retention'da belgilanadi.
 
 Agentlar AI provayderni shlyuz orqali chaqira olishidan oldin ulanish qo‘shing.
 
-1. Yon menyu → **AI inventory → Connections**.
+1. **AI → More → Connections**.
 2. **Connect** → turini tanlang (openai, anthropic, groq, azure_openai
    yoki custom), nom bering va API kalitni joylashtiring.
 3. Kalit **brauzeringizda** egress proksilarning o‘z kalitlariga
@@ -187,7 +192,7 @@ oldin barcha agentlarni proksi ortiga o'tkazing.
 
 Foydalanish holati maqsad, uning xavf darajasi va egasini qayd etadi.
 
-1. Yon menyu → **AI inventory → Use Cases** → **New use case**.
+1. **AI → More → Use Cases** → **New use case**.
 2. Nom, xavf darajasi va (ixtiyoriy) egasini belgilang.
 
 ### 5.1 Ta'sirni baholash
@@ -216,7 +221,7 @@ yuqori xavfli har bir tizim uchun sinovni talab qiladi.
 
 ## 6. Tasdiqlash
 
-Siyosat inson tasdig'ini talab qilgan agent amali **Overview →
+Siyosat inson tasdig'ini talab qilgan agent amali **Inbox →
 Approvals**da kutadi. Admin va tasdiqlovchilar uni argumentlari bo'yicha
 baholab, sabab bilan **Approve** yoki **Reject** qiladi. Tasdiq seans
 kalitingiz bilan imzolanadi, uni esa kirishda passkeyingiz tasdiqlagan:
@@ -233,7 +238,7 @@ ichida bir marta bajariladi - istalgan shlyuz yoki SDK orqali
 
 ## 7. Hodisalar kuzatuvchisi (Incident Tracker)
 
-1. Yon menyu → **Overview → Incidents**.
+1. **Inbox → Incidents**.
 2. Hodisalar qo‘lda yoki avtomatik yaratilishi mumkin (masalan,
    bloklangan AI domeni aniqlanganda — Shadow AI Monitorga qarang).
 3. Hodisani **Open → Investigating → Resolved** bosqichlaridan o‘tkazing
@@ -253,7 +258,7 @@ yagona **Sightings** ro‘yxatini to‘ldiradi.
 Kollektorlar foydalanuvchi hisobi bilan emas, mashina kaliti bilan
 autentifikatsiya qiladi.
 
-1. Yon menyu → **Settings → Ingestion Sources** (faqat admin).
+1. **Settings (⚙) → Ingestion Sources** (faqat admin).
 2. **New source** → turini tanlang (Gateway, Endpoint agent, Browser
    extension) va nom bering.
 3. **Telemetriya kaliti faqat bir marta ko‘rsatiladi** — uni hozir
@@ -264,7 +269,7 @@ autentifikatsiya qiladi.
 
 Katalog aniqlangan domen qanday qayta ishlanishini belgilaydi.
 
-1. Yon menyu → **Shadow AI → AI Domain Catalog** (faqat admin).
+1. **Settings (⚙) → AI Domain Catalog** (faqat admin).
 2. Domen qo‘shing va siyosatini belgilang: **Allowed** (faqat qayd
    etiladi), **Blocked** (avtomatik hodisa yaratadi) yoki **Unknown**
    (ko‘rib chiqish uchun signal yaratadi). Katalogda yo‘q har qanday
@@ -274,7 +279,7 @@ Katalog aniqlangan domen qanday qayta ishlanishini belgilaydi.
 
 ### 8.3 Sightings (aniqlangan holatlar)
 
-Yon menyu → **Shadow AI → Shadow AI Sightings**. Har bir yozuv vositani, manbani
+**AI → Shadow AI Sightings**. Har bir yozuv vositani, manbani
 (brauzer kengaytmasi, endpoint agenti, lokal jarayon/tarmoq/model fayli
 yoki qo‘lda), ma’lum bo‘lsa xodim haqidagi malumotni, holatni va
 takroriy aniqlashlar uchun "seen N times" hisoblagichini ko‘rsatadi. Har
@@ -477,7 +482,7 @@ yubormaydi.
 
 ## 9. Tarmoq kashfiyoti (aniq ulanish)
 
-Yon menyu → **Discovery → Network Discovery** (faqat admin).
+**AI → More → Network Discovery** (faqat admin).
 
 Endpoint agenti kashfiyot yoqilgan holda ishlaganda, u tarmoq
 xizmatlarini **passiv** ravishda topadi (DNS, shlyuz, Active Directory
@@ -496,7 +501,7 @@ xizmatlarni **Ignore** qilishingiz ham mumkin.
 
 ## 10. Bildirishnomalar
 
-Yon menyu → **Settings → Notifications**. **Email** yoki **webhook**
+**Settings (⚙) → Notifications**. **Email** yoki **webhook**
 kanallarini qo‘shing va har birini o‘zingizga kerakli hodisalarga obuna
 qiling (`incident_created`, `shadow_ai_reported`, `shadow_ai_blocked_domain`, `kill_switch`,
 `egress_sensor_offline`, `alert` - server monitoringi ogohlantirishlari -
@@ -508,7 +513,7 @@ o‘tkazib yuboriladi; webhooklar doim ishlaydi.
 
 ## 11. Audit va hisobot
 
-Yon menyu → **Audit & evidence → Audit Log**. Platforma orqali qilingan har bir
+**Evidence → Audit Log**. Platforma orqali qilingan har bir
 o‘zgarish — kim, nimani, qaysi obyektga, qachon qilgani — filtrlash va
 ko‘rib chiqish mumkin bo‘lgan faqat qo‘shiladigan jurnalga yoziladi.
 

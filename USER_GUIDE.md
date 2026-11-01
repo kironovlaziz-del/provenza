@@ -27,7 +27,7 @@ development, see [README.md](README.md).
 |------|--------|
 | **admin** | Everything, including user management, connections, ingestion sources, domain catalog, discovery |
 | **approver** | Review and decide approval requests; everyday operations |
-| **user** | Reads the everyday pages (dashboard, inventory, agents, agent activity); no reviews or settings |
+| **user** | Starts on the AI list; reads the everyday pages (inventory, agents, agent activity) and can report an incident; no reviews or settings |
 | **auditor** | Read everything an admin or approver sees - inventory, policies, agents, the audit log, compliance - and change nothing; may verify the audit log and generate compliance reports |
 | **compliance** | Compliance officer (DPO, Chief AI Officer): reads the same as an auditor and confirms compliance requirements |
 
@@ -56,30 +56,36 @@ devices, so a lost phone does not lock you out.
 
 ---
 
-## 2. The dashboard
+## 2. Finding your way: the top bar
 
-After sign-in you land on the **Dashboard** — a summary of LLM gateway
-calls, incidents and pending approvals over a recent window.
+After sign-in, administrators, approvers, auditors and compliance officers
+land on the **Inbox**; everybody else on the **AI** list. Everything is
+reached from one bar at the top:
 
-The left sidebar has five groups; each item opens a page with tabs for
-its related pages:
+- **Inbox** — what waits for a person: approvals (decided right in the
+  list), open incidents, and AI found in use that nobody reviewed yet; on
+  the right, the last seven days at a glance. Tabs: Inbox, Approvals,
+  Incidents. The number on the tab is the count of approvals waiting.
+- **AI** — every AI system: AI inventory, agents, AI providers, shadow AI
+  sightings, agents found, agent observability; under **More**:
+  connections, devices, the live map, delegation chains, use cases, teams
+  and network discovery.
+- **Rules** — policy hierarchy, agent policies, tool registry, circuit
+  breaker and behavior monitor.
+- **Evidence** — the audit log, compliance and the kill switch with the
+  history of every stop.
+- **Search** (or **Ctrl K**) opens any page by name.
+- **Stop all** (administrators) opens the kill switch. While any stop is in
+  force, a red line under the bar says so on every page.
+- **Help (?)** — guides for each role, an article for each feature, and the
+  FAQ, in English and Uzbek.
+- **Settings (⚙)** — one page listing every setting in groups (you, people,
+  gateways and agent identity, keys and data, system), with the setup
+  checklist on top for administrators.
+- The **account menu** — profile, language, light or dark theme, sign out.
 
-- **Overview** — Dashboard, Incidents, Approvals and the Kill switch.
-- **Visibility** — **AI inventory** (inventory, AI providers,
-  connections, use cases), **Agents** (agents, teams & roles, tool
-  registry, agent identity, attestation, behavior monitor, circuit
-  breaker), **Discovery** (agents found, devices, network discovery),
-  **Shadow AI** (sightings, AI domain catalog) and **Agent activity**
-  (agent observability, the live map, delegation chains).
-- **Control** — **Policies** (policy hierarchy, agent policies),
-  **Compliance** and **Gateways** (the AI gateway, Runtime with the egress
-  sensors).
-- **Evidence** — **Audit & evidence**: the audit log.
-- **Settings** — users, your profile, notifications, system status and,
-  for the server's operator, the installation's health; under **More**:
-  SIEM export, encryption keys, data retention and ingestion sources.
-
-Pages you open less often sit behind **More** on their section's tab bar.
+A page a role does not see answers "You don't have access to this page"
+instead of showing refused data.
 
 Agent observability shows what agents do as metadata only. An admin can open
 the content of one event (what the agent sent and got back) by giving a
@@ -93,7 +99,7 @@ set under Settings → Data retention.
 Before agents can call an AI provider through the gateway, add a
 connection.
 
-1. Sidebar → **AI inventory → Connections**.
+1. **AI → More → Connections**.
 2. **Connect** → choose the type (openai, anthropic, groq, azure_openai or
    custom), give it a name, and paste the API key.
 3. The key is **sealed in your browser** to the egress proxies' own keys
@@ -174,7 +180,7 @@ proxy.
 
 A use case records a purpose, its risk level and its owner.
 
-1. Sidebar → **AI inventory → Use Cases** → **New use case**.
+1. **AI → More → Use Cases** → **New use case**.
 2. Set the name, risk level and (optionally) the owner.
 
 ### 5.1 Impact assessment
@@ -219,7 +225,7 @@ decisions are audit-logged.
 
 ## 7. Incident Tracker
 
-1. Sidebar → **Overview → Incidents**.
+1. **Inbox → Incidents**.
 2. Incidents can be created manually or automatically (e.g. when a
    blocked AI domain is detected — see Shadow AI Monitor).
 3. Move an incident through **Open → Investigating → Resolved**, and
@@ -238,7 +244,7 @@ of them feed one **Sightings** list.
 
 Collectors authenticate with a machine key, not a user login.
 
-1. Sidebar → **Settings → Ingestion Sources** (admin only).
+1. **Settings (⚙) → Ingestion Sources** (admin only).
 2. **New source** → choose type (Gateway, Endpoint agent, Browser
    extension) and name it.
 3. The **ingestion key is shown once** — copy it now. It is stored
@@ -249,7 +255,7 @@ Collectors authenticate with a machine key, not a user login.
 
 The catalog decides how a detected domain is treated.
 
-1. Sidebar → **Shadow AI → AI Domain Catalog** (admin only).
+1. **Settings (⚙) → AI Domain Catalog** (admin only).
 2. Add a domain and set its policy: **Allowed** (only logged),
    **Blocked** (raises an automatic incident), or **Unknown** (raises a
    sighting for review). Anything not in the catalog is treated as
@@ -259,7 +265,7 @@ The catalog decides how a detected domain is treated.
 
 ### 8.3 Sightings
 
-Sidebar → **Shadow AI → Shadow AI Sightings**. Each sighting shows the tool, the
+**AI → Shadow AI Sightings**. Each sighting shows the tool, the
 source (browser extension, endpoint agent, local process/network/model
 file, or manual), the employee hint if known, the status, and a
 "seen N times" counter for repeat detections. For each one you can:
@@ -446,7 +452,7 @@ that an attempt happened — **without** ever sending the secret itself.
 
 ## 9. Network Discovery (explicit-connect)
 
-Sidebar → **Discovery → Network Discovery** (admin only).
+**AI → More → Network Discovery** (admin only).
 
 When the endpoint agent runs with discovery enabled, it **passively**
 finds network services (DNS, gateway, Active Directory, and — with the
@@ -464,7 +470,7 @@ about.
 
 ## 10. Notifications
 
-Sidebar → **Settings → Notifications**. Add **email** or **webhook**
+**Settings (⚙) → Notifications**. Add **email** or **webhook**
 channels and subscribe each to the events you care about
 (`incident_created`, `shadow_ai_reported`, `shadow_ai_blocked_domain`, `kill_switch`,
 `egress_sensor_offline`, `alert` - the server's monitoring alerts - and
@@ -476,7 +482,7 @@ silently; webhooks always work.
 
 ## 11. Audit & Reporting
 
-Sidebar → **Audit & evidence → Audit Log**. Every change made through the platform
+**Evidence → Audit Log**. Every change made through the platform
 — who did what, to which entity, when — is recorded in an append-only
 log you can filter and review.
 

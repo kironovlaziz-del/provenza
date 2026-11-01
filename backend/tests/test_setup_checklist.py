@@ -11,7 +11,10 @@ async def test_a_new_installation_shows_what_is_left(client, admin_token, approv
     r = (await client.get("/api/v1/system/setup", headers=auth_headers(admin_token))).json()
     assert r["complete"] is False
     assert {i["key"]: i["done"] for i in r["items"]} == {
-        "provider": False, "policy": False, "agent": False, "notifications": False, "mfa": False, "discovery": False}
+        "provider": False, "policy": False, "agent": False, "notifications": False, "mfa": False, "discovery": False,
+        "proxy": False, "sensor": False, "sso": False}
+    # the optional steps do not hold the checklist open
+    assert {i["key"] for i in r["items"] if i.get("optional")} == {"discovery", "proxy", "sensor", "sso"}
 
     # requiring a second factor the admin does not have yet would lock them out of everything but enrolling
     r = await client.put("/api/v1/users/mfa-policy", json={"mfa_required": "reviewers"}, headers=auth_headers(admin_token))
