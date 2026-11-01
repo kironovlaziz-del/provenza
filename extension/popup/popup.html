@@ -73,24 +73,28 @@
     </style>
   </head>
   <body>
-    <div class="header">AI Control Tower</div>
+    <div class="header">Provenza</div>
 
     <div class="section">
-      <div class="label">Current tab</div>
+      <div class="label">This page</div>
       <div id="current-tab-status">Checking…</div>
     </div>
 
     <div class="section">
       <div class="label">Connection</div>
       <div id="config-state" class="config-state"></div>
+      <div id="catalog-state" class="config-state"></div>
     </div>
 
-    <div class="section">
+    <div class="section" id="settings">
       <div class="label">Settings</div>
       <input id="api-url" type="text" placeholder="Server URL (…/api/v1/shadow-ai/ingest)" />
       <input id="ingestion-key" type="password" placeholder="Ingestion key" />
       <button id="save-btn">Save</button>
       <div id="save-status" class="saved"></div>
+    </div>
+    <div class="section" id="managed-note" hidden>
+      <div class="config-state">Managed by your organization. The settings cannot be changed here.</div>
     </div>
 
     <script src="../shared/domains.js"></script>

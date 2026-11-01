@@ -435,18 +435,22 @@ docs/kill-switch.md.
 
 ### 8.5 Deploying the browser extension
 
-1. On the **Ingestion Sources** page, click **Download extension**. The
-   server packages the extension preconfigured with your server URL and
-   a fresh key for your organization.
-2. Distribute the downloaded `.zip` to employees (or push it via
-   Chrome policy / MDM).
-3. Manual install: unzip it, open `chrome://extensions`, turn on
-   **Developer mode**, click **Load unpacked**, and select the unzipped
-   folder.
+The extension (Chrome and Edge) reports visits to AI services and **closes
+the ones your AI Domain Catalog marks as blocked**, offering the allowed
+ones instead. It reloads the catalog every hour, so a decision made in
+**Settings (⚙) → AI Domain Catalog** reaches every browser within the hour. It
+also warns people before they paste a secret into an AI tool; that warning
+stays in the browser.
 
-The extension warns the user in-page before they paste or type secrets
-(API keys, credit cards, private keys) into a known AI tool, and reports
-that an attempt happened — **without** ever sending the secret itself.
+1. For a pilot: on **Settings (⚙) → Ingestion Sources**, click **Download
+   extension** (it carries this server's address and a fresh key), unzip it,
+   open `chrome://extensions`, turn on **Developer mode**, click **Load
+   unpacked** and select the folder.
+2. For the whole organization: force-install it through Chrome or Edge
+   policy and give it the server address and key as managed configuration,
+   so that people can neither remove nor reconfigure it. The steps for
+   Windows, macOS, Linux and the Google Admin console are in
+   [docs/shadow-ai.md](docs/shadow-ai.md#installing-it-for-the-whole-organization).
 
 ---
 

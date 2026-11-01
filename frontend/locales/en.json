@@ -367,7 +367,7 @@
     "title": "AI Domain Catalog",
     "new": "New entry",
     "cancel": "Cancel",
-    "hint": "Domains classified here decide how Shadow AI telemetry from ingestion sources (Gateway, Endpoint, browser extension) is handled: an \"allowed\" domain is only logged, a \"blocked\" one raises an automatic incident, and anything not listed is treated as \"unknown\" and raises a sighting for review.",
+    "hint": "Domains classified here decide how Shadow AI telemetry from ingestion sources (Gateway, Endpoint, browser extension) is handled: an \"allowed\" domain is only logged, a \"blocked\" one raises an automatic incident and is closed in browsers that have the Provenza extension (it reloads this list every hour), and anything not listed is treated as \"unknown\" and raises a sighting for review.",
     "form_title": "New catalog entry",
     "domain": "Domain",
     "domain_placeholder": "chat.openai.com",
@@ -1240,7 +1240,7 @@
   },
   "extension_banner": {
     "title": "Browser protection available",
-    "desc": "Install the Provenza extension to monitor AI usage and prevent sensitive-data leaks.",
+    "desc": "Install the Provenza extension: it shows your organization which AI services are used, closes the ones it does not allow, and warns you before a secret is pasted into an AI tool.",
     "guide_btn": "How to install",
     "hide_btn": "Hide",
     "install_guide": "Installation steps:",

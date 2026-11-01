@@ -645,7 +645,7 @@ export async function downloadBrowserExtension() {
   const url = window.URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = "shadow-ai-extension.zip";
+  link.download = "provenza-browser-extension.zip";
   document.body.appendChild(link);
   link.click();
   link.remove();

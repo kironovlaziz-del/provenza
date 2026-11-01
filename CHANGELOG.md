@@ -8,6 +8,22 @@ this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **Browser extension 2.0: the organization's AI policy in the browser**
+  ([docs/shadow-ai.md](docs/shadow-ai.md#browser-extension)). The extension
+  reloads the organization's AI Domain Catalog every hour
+  (`GET /shadow-ai/extension/catalog`, with its ingestion key) instead of a
+  fixed list of 15 sites: it watches every catalogued and built-in AI
+  service, and **closes the blocked ones** with a "not allowed" page that
+  offers the allowed services instead. Its server and key can come from
+  Chrome / Edge policy (managed configuration), so that people can neither
+  change nor remove them; the guide covers Windows, macOS, Linux and the
+  Google Admin console. Unsent events survive the worker's restarts and are
+  retried when the server cannot be reached. The secret-paste warning stays,
+  in the browser only: nothing about it is reported any more.
+- The built-in AI domains know ChatGPT's current address (`chatgpt.com`),
+  `cursor.com`, and Grok, DeepSeek Chat, Le Chat, Qwen, Kimi, Meta AI,
+  NotebookLM, Google AI Studio, v0, Bolt, Lovable, Windsurf and others.
+
 - **A simpler console: one top bar instead of the sidebar.** Four tabs -
   **Inbox**, **AI**, **Rules**, **Evidence** - with **Search** (Ctrl K) for
   any page, **Stop all** for admins, **Help** and **Settings** behind icons
@@ -62,6 +78,9 @@ this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Browser extension: a secret-paste warning in the same batch as a visit made
+  the server refuse the whole batch, so the visit was lost. Such warnings from
+  older extensions are now dropped and the rest of the batch is kept.
 - Light theme: Agent observability and the audit log console stayed dark;
   both now follow the theme (the live activity terminal stays dark).
 - A page a role may not open (an old link, a typed address) says "You don't

@@ -273,7 +273,7 @@ export const ARTICLES_UZ: Article[] = [
       ["list", [
         "**Tarmoq** — egress proksi va sensor kompaniya trafigi qaysi AI xizmatlariga yetib borayotganini ko'radi.",
         "**Qurilmalar** — endpoint agent kompaniya kompyuterlarida ishlayotgan AI dasturlari va agentlarni ko'radi.",
-        "**Brauzer** — brauzer kengaytmasi AI xizmatlariga tashriflarni ko'radi.",
+        "**Brauzer** — brauzer kengaytmasi AI xizmatlariga tashriflarni ko'radi va tashkilotingiz bloklaganlarini yopadi.",
         "**Odamlar** — istalgan kishi topilmani qo'lda xabar qilishi mumkin, masalan xarajatlar hisobotidan.",
       ]],
       ["h", "Topilma bo'yicha qaror qilish"],
@@ -281,11 +281,11 @@ export const ARTICLES_UZ: Article[] = [
         "Topilmani oching — Kiruvchida **Yangi AI** ostida yoki **Shadow AI** sahifasida.",
         "Kim va nima uchun ishlatayotganini aniqlang. Ko'pincha ehtiyoj haqiqiy bo'ladi.",
         "Agar foydalanish maqbul bo'lsa, uni tasdiqlangan AI provayder sifatida **ro'yxatga oling** (administratorlar). Shundan so'ng u AI reyestrida egasi bilan paydo bo'ladi.",
-        "Agar maqbul bo'lmasa, uni shadow AI deb tasdiqlang, xizmatni siyosatlaringiz yoki domenlar katalogida bloklang va uni ishlatganlarga o'rniga nima ishlatishni ayting.",
+        "Agar maqbul bo'lmasa, xizmatni Sozlamalar → AI Domain Catalog bo'limida **bloklangan** deb belgilang. Bir soat ichida Provenza kengaytmasi o'rnatilgan har bir brauzer uning o'rniga \"ruxsat etilmagan\" sahifasini ko'rsatadi va tasdiqlangan AI xizmatlaringizni taklif qiladi.",
         "Agar bu noto'g'ri signal bo'lsa, uni **rad eting**. Rad etish topilmani yashiradi, shuning uchun buni tasdiqlovchilar va administratorlar qiladi va bu yozib qo'yiladi.",
       ]],
       ["p", "**Topilgan agentlar** qurilmalarda topilgan agentlar uchun xuddi shunday ishlaydi: ularga identifikatsiya va siyosatlar berish uchun ro'yxatga oling yoki e'tiborsiz qoldiring."],
-      ["tip", "Tasdiqlangan muqobilni taklif qilish faqat bloklashdan ko'ra yaxshiroq natija beradi."],
+      ["tip", "Tasdiqlangan muqobilni taklif qilish faqat bloklashdan ko'ra yaxshiroq natija beradi. Tasdiqlagan xizmatlaringizni domenlar katalogida **ruxsat etilgan** deb belgilang: kengaytmaning \"ruxsat etilmagan\" sahifasi ularni ko'rsatadi."],
     ],
   },
   {

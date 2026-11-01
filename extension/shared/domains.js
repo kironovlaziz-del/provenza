@@ -1,34 +1,51 @@
-// Known AI Domains Catalog
-const AI_DOMAINS = {
-  "chatgpt.com": { name: "ChatGPT", category: "llm", risk: 0.8 },
-  "chat.openai.com": { name: "ChatGPT (Legacy)", category: "llm", risk: 0.8 },
-  "claude.ai": { name: "Claude AI", category: "llm", risk: 0.8 },
-  "gemini.google.com": { name: "Google Gemini", category: "llm", risk: 0.7 },
-  "perplexity.ai": { name: "Perplexity AI", category: "search", risk: 0.6 },
-  "deepseek.com": { name: "DeepSeek", category: "llm", risk: 0.9 },
-  "chat.deepseek.com": { name: "DeepSeek Chat", category: "llm", risk: 0.9 },
-  "copilot.microsoft.com": { name: "Microsoft Copilot", category: "llm", risk: 0.6 },
-  "midjourney.com": { name: "Midjourney", category: "image", risk: 0.6 },
-  "huggingface.co": { name: "Hugging Face", category: "mlops", risk: 0.4 },
-  "v0.dev": { name: "v0 by Vercel", category: "code", risk: 0.6 },
-  "cursor.com": { name: "Cursor AI", category: "code", risk: 0.6 },
-  "poe.com": { name: "Poe by Quora", category: "llm", risk: 0.7 },
-  "mistral.ai": { name: "Mistral AI", category: "llm", risk: 0.6 },
-  "chat.mistral.ai": { name: "Le Chat Mistral", category: "llm", risk: 0.7 }
-};
+// The AI services the extension watches.
+//
+// The list comes from the organization's Provenza server
+// (GET /shadow-ai/extension/catalog, refreshed hourly): every domain of the
+// organization's AI domain catalog with its decision - allowed, blocked or
+// unknown - plus the built-in AI services nobody classified yet. BUILTIN
+// below is only the first-run fallback, until the server has answered once.
 
-// lookupDomain matches an exact host or any subdomain of a known AI
-// domain (e.g. "foo.claude.ai" matches "claude.ai").
-function lookupDomain(hostname) {
-  const host = (hostname || "").toLowerCase();
-  for (const [domain, meta] of Object.entries(AI_DOMAINS)) {
-    if (host === domain || host.endsWith("." + domain)) {
-      return { domain, ...meta };
-    }
+const BUILTIN_DOMAINS = [
+  ["chatgpt.com", "ChatGPT", "general_assistant"],
+  ["chat.openai.com", "ChatGPT", "general_assistant"],
+  ["claude.ai", "Claude", "general_assistant"],
+  ["gemini.google.com", "Gemini", "general_assistant"],
+  ["copilot.microsoft.com", "Microsoft Copilot", "general_assistant"],
+  ["perplexity.ai", "Perplexity", "search_assistant"],
+  ["chat.deepseek.com", "DeepSeek Chat", "general_assistant"],
+  ["grok.com", "Grok", "general_assistant"],
+  ["chat.mistral.ai", "Le Chat (Mistral)", "general_assistant"],
+  ["chat.qwen.ai", "Qwen Chat", "general_assistant"],
+  ["character.ai", "Character.AI", "general_assistant"],
+  ["poe.com", "Poe", "general_assistant"],
+  ["meta.ai", "Meta AI", "general_assistant"],
+  ["notebooklm.google.com", "NotebookLM", "productivity"],
+  ["huggingface.co", "Hugging Face", "model_hub"],
+  ["midjourney.com", "Midjourney", "image_generation"],
+  ["v0.dev", "v0 by Vercel", "coding_assistant"],
+  ["cursor.com", "Cursor", "coding_assistant"]
+].map(([domain, name, category]) => ({ domain, name, category, status: "unknown" }));
+
+// lookupDomain: the catalog entry for a host - an exact entry first, then the
+// most specific parent domain ("foo.claude.ai" matches "claude.ai").
+function lookupDomain(hostname, domains) {
+  const host = (hostname || "").toLowerCase().replace(/\.$/, "");
+  if (!host) return null;
+  const list = domains && domains.length ? domains : BUILTIN_DOMAINS;
+  let best = null;
+  for (const entry of list) {
+    if (host === entry.domain) return entry;
+    if (host.endsWith("." + entry.domain) && (!best || entry.domain.length > best.domain.length)) best = entry;
   }
-  return null;
+  return best;
+}
+
+// A domain that is safe to put into a match pattern or a network rule.
+function isPlainDomain(domain) {
+  return /^[a-z0-9](?:[a-z0-9-]{0,62}\.)+[a-z]{2,63}$/.test(domain || "");
 }
 
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { AI_DOMAINS, lookupDomain };
+  module.exports = { BUILTIN_DOMAINS, lookupDomain, isPlainDomain };
 }
