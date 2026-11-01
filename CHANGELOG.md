@@ -86,6 +86,8 @@ this project adheres to [Semantic Versioning](https://semver.org/).
 - The dashboard counts the policies in force (non-empty policy layers and
   enabled agent policies), not only the layers.
 - The sidebar shows the organization's name instead of `org-<id>`.
+- Profile, passkeys: a long fingerprint wraps, so the Remove button stays
+  inside the panel.
 - The demo records denied and held actions in the audit trail as the SDK
   does.
 
