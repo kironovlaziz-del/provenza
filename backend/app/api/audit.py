@@ -65,7 +65,9 @@ async def list_audit_logs(
     actor_user_id: Optional[int] = None,
     pagination: PaginationParams = Depends(),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    # the trail of every change in the organization: reviewers and the
+    # oversight roles read it, not every user (the proofs below stay open)
+    current_user: User = Depends(require_role(UserRole.admin, UserRole.approver)),
 ):
     service = AuditService(db)
     items = await service.list_logs(

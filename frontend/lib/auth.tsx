@@ -29,6 +29,23 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
+/** Where a sign-in continues: the page that sent the visitor to /login
+ * (?next=/inventory), when it is a path of this site; the dashboard otherwise. */
+export function nextAfterLogin(): string {
+  if (typeof window === "undefined") return "/dashboard";
+  const next = new URLSearchParams(window.location.search).get("next") || "";
+  // a path here only: not //host, not /\host, not back to the sign-in itself
+  if (!/^\/(?![\/\\])/.test(next) || next.startsWith("/login")) return "/dashboard";
+  return next;
+}
+
+/** /login, remembering the page to come back to. */
+export function loginUrl(): string {
+  if (typeof window === "undefined") return "/login";
+  const here = window.location.pathname + window.location.search;
+  return here === "/" || here.startsWith("/login") ? "/login" : `/login?next=${encodeURIComponent(here)}`;
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -94,8 +111,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           // not now: the banner in the app asks again
         }
       }
-      // Login always lands in the main app.
-      router.push("/dashboard");
+      // back to the page that asked for a sign-in (?next=), else the dashboard
+      router.push(nextAfterLogin());
     },
     [router]
   );

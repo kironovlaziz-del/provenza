@@ -27,7 +27,7 @@ MFA_SETUP_PATHS = ("/users/me", "/users/me/mfa", "/users/me/mfa/setup", "/users/
 # own account (/users/me/..., signing out), and what an audit produces - a
 # check of the whole log, a compliance report (both are in the audit log).
 SAFE_METHODS = ("GET", "HEAD", "OPTIONS")
-AUDITOR_WRITES = ("/auth/logout", "/audit-logs/verify", "/compliance/reports")
+AUDITOR_WRITES = ("/auth/logout", "/audit-logs/verify", "/compliance/reports", "/policy-layers/preview")
 
 
 def _auditor_may(path: str) -> bool:

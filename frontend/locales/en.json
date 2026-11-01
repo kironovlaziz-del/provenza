@@ -1,5 +1,7 @@
 {
   "common": {
+    "load_failed": "Could not load the data.",
+    "retry_load": "Try again",
     "save": "Save",
     "cancel": "Cancel",
     "delete": "Delete",

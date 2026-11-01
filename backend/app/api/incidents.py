@@ -37,7 +37,9 @@ async def create_incident(
 async def list_incidents(
     pagination: PaginationParams = Depends(),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    # incidents carry who signed in from where (session conflicts) and what
+    # went wrong: reviewers and the oversight roles read them; anyone may report one
+    current_user: User = Depends(require_role(UserRole.admin, UserRole.approver)),
 ):
     service = IncidentService(db)
     items, total = await service.list_incidents(
@@ -49,7 +51,7 @@ async def list_incidents(
 async def get_incident(
     incident_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_role(UserRole.admin, UserRole.approver)),
 ):
     service = IncidentService(db)
     return await service.get_incident(incident_id, current_user.org_id)

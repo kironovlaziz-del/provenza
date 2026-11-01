@@ -13,13 +13,15 @@ export default function ApprovalsPage() {
   const { t } = useTranslation();
   const { user } = useAuth();
   const reviewer = user?.role === "admin" || user?.role === "approver";
+  // auditors and compliance officers see what waits, and decide nothing
+  const oversight = user?.role === "auditor" || user?.role === "compliance";
 
   return (
     <>
       <PageHeader title={t("approvals.title_all")} />
       <div className="content">
-        {reviewer ? (
-          <AgentActionApprovals />
+        {reviewer || oversight ? (
+          <AgentActionApprovals readOnly={!reviewer} />
         ) : (
           <p className="hint-text">{t("approvals.reviewers_only", "Agent actions are approved by admins and approvers.")}</p>
         )}

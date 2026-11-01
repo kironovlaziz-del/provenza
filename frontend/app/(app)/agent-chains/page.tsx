@@ -4,6 +4,8 @@ import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { useTranslation } from "react-i18next";
 import { PageHeader } from "@/components/PageHeader";
+import { LoadError } from "@/components/LoadError";
+import { apiErrorMessage } from "@/lib/inventory_api";
 import { listChains } from "@/lib/agent_api";
 import type { DelegationChainT } from "@/lib/agent_types";
 
@@ -26,10 +28,12 @@ export default function AgentChainsPage() {
   const { t, i18n } = useTranslation();
   const [chains, setChains] = useState<DelegationChainT[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
     listChains()
-      .then(setChains)
+      .then((v) => { setChains(v); setLoadError(null); })
+      .catch((e) => setLoadError(apiErrorMessage(e, t("common.load_failed"))))
       .finally(() => setLoading(false));
   }, []);
 
@@ -37,6 +41,7 @@ export default function AgentChainsPage() {
     <>
       <PageHeader title={t("chains.title")} />
       <div className="content">
+          <LoadError message={loadError} />
         <p className="hint-text u-mb-16">{t("chains.hint")}</p>
         <div className="panel">
           <div className="panel-header"><h2>{t("chains.table_title")}</h2></div>

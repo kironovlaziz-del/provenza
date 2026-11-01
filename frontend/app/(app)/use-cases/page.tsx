@@ -5,6 +5,8 @@ import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslation } from "react-i18next";
 import { PageHeader } from "@/components/PageHeader";
+import { LoadError } from "@/components/LoadError";
+import { apiErrorMessage } from "@/lib/inventory_api";
 import { RiskPill, StatusPill } from "@/components/Pill";
 import { createUseCase, listUseCases } from "@/lib/api";
 import type { RiskLevel, UseCase } from "@/lib/types";
@@ -17,6 +19,7 @@ export default function UseCasesPage() {
   const isAdmin = user?.role === "admin";
   const [useCases, setUseCases] = useState<UseCase[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [name, setName] = useState("");
   const [riskLevel, setRiskLevel] = useState<RiskLevel>("low");
@@ -26,7 +29,8 @@ export default function UseCasesPage() {
   function refresh() {
     setLoading(true);
     listUseCases()
-      .then(setUseCases)
+      .then((v) => { setUseCases(v); setLoadError(null); })
+      .catch((e) => setLoadError(apiErrorMessage(e, t("common.load_failed"))))
       .finally(() => setLoading(false));
   }
 
@@ -62,6 +66,7 @@ export default function UseCasesPage() {
         }
       />
       <div className="content">
+          <LoadError message={loadError} onRetry={refresh} />
         {isAdmin && showForm && (
           <div className="panel" style={{ marginBottom: 20 }}>
             <div className="panel-header">

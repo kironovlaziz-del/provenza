@@ -4,6 +4,8 @@ import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { useTranslation } from "react-i18next";
 import { PageHeader } from "@/components/PageHeader";
+import { LoadError } from "@/components/LoadError";
+import { apiErrorMessage } from "@/lib/inventory_api";
 import { listAgents, killAgent, updateAgent } from "@/lib/agent_api";
 import { useAuth } from "@/lib/auth";
 import { translateApiError } from "@/lib/errors";
@@ -27,6 +29,7 @@ export default function AgentsPage() {
   const { t, i18n } = useTranslation();
   const [agents, setAgents] = useState<Agent[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const { user } = useAuth();
@@ -35,7 +38,8 @@ export default function AgentsPage() {
   function refresh() {
     setLoading(true);
     listAgents()
-      .then(setAgents)
+      .then((v) => { setAgents(v); setLoadError(null); })
+      .catch((e) => setLoadError(apiErrorMessage(e, t("common.load_failed"))))
       .finally(() => setLoading(false));
   }
 
@@ -83,6 +87,7 @@ export default function AgentsPage() {
         }
       />
       <div className="content">
+          <LoadError message={loadError} onRetry={refresh} />
         <p className="hint-text u-mb-16">{t("agents.hint")}</p>
 
         <div style={{ display: "flex", gap: 10, marginBottom: 18, flexWrap: "wrap" }}>

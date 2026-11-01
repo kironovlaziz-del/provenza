@@ -73,6 +73,8 @@ class MeOut(UserOut):
     # an administrator of the organization that runs the installation
     # (deps.require_operator): sees installation-wide monitoring
     is_operator: bool = False
+    # the organization's name, for the sidebar (its id alone tells a person nothing)
+    org_name: Optional[str] = None
 
 
 class UserLogin(BaseModel):

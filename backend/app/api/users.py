@@ -98,8 +98,11 @@ async def register(
 
 @router.get("/me", response_model=MeOut)
 async def get_me(current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    from app.models.organization import Organization
+
     me = MeOut.model_validate(current_user)
     me.is_operator = await is_operator(db, current_user)
+    me.org_name = await db.scalar(select(Organization.name).where(Organization.id == current_user.org_id))
     return me
 
 

@@ -3,6 +3,8 @@
 import React, { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { PageHeader } from "@/components/PageHeader";
+import { LoadError } from "@/components/LoadError";
+import { apiErrorMessage } from "@/lib/inventory_api";
 import { Form } from "@/components/Form";
 import {
   createIngestionSource,
@@ -17,6 +19,7 @@ export default function IngestionSourcesPage() {
   const { t, i18n } = useTranslation();
   const [sources, setSources] = useState<IngestionSource[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [downloadingExt, setDownloadingExt] = useState(false);
   async function handleDownloadExtension() {
@@ -45,7 +48,8 @@ export default function IngestionSourcesPage() {
   function refresh() {
     setLoading(true);
     listIngestionSources()
-      .then(setSources)
+      .then((v) => { setSources(v); setLoadError(null); })
+      .catch((e) => setLoadError(apiErrorMessage(e, t("common.load_failed"))))
       .finally(() => setLoading(false));
   }
 
@@ -117,6 +121,7 @@ export default function IngestionSourcesPage() {
         }
       />
       <div className="content">
+          <LoadError message={loadError} onRetry={refresh} />
         <p className="hint-text u-mb-16">{t("ingestion_sources.hint")}</p>
 
         {revealedKey && (

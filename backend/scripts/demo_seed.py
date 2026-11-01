@@ -195,8 +195,12 @@ def fill(api: str, admin_password: str) -> dict:
     def act(agent, tool, args, output=None, chain=None):
         chk = agent.check(tool, args, chain_id=chain)
         counts[chk.decision] = counts.get(chk.decision, 0) + 1
+        # every attempt is recorded, as the SDK does: a held one is what Approvals
+        # lists and the dashboard counts, a refused one shows in the timelines
         if chk.decision == "allowed":
             agent.record(chk, output, duration_ms=secrets.randbelow(400) + 40)
+        else:
+            agent.record(chk, None)
         return chk.decision
 
     # a chain: the orchestrator hands out a retention task

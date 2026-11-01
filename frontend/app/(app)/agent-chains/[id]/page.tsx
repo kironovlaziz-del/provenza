@@ -61,6 +61,7 @@ export default function ChainDetailPage() {
         (agents as Agent[]).forEach((a) => (names[a.id] = a.name));
         setAgentNames(names);
       })
+      .catch(() => setChain(null))   // shown as "not found"
       .finally(() => setLoading(false));
   }, [chainId]);
 

@@ -107,7 +107,7 @@ async def test_the_organization_policy_holds_users_until_they_enroll(client, db_
     await _enroll(client, approver_token)
     assert (await client.get("/api/v1/incidents/", headers=auth_headers(approver_token))).status_code == 200
     # a plain user is not covered by "reviewers"
-    assert (await client.get("/api/v1/incidents/", headers=auth_headers(plain))).status_code == 200
+    assert (await client.get("/api/v1/agents/", headers=auth_headers(plain))).status_code == 200
     # while required, the second factor cannot be switched off
     r = await client.post("/api/v1/users/me/mfa/disable", json={"password": PW, "code": now_code(secret, 1)},
                           headers=auth_headers(admin_token))

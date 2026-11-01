@@ -48,7 +48,7 @@ export const NAV: NavGroup[] = [
     labelKey: "sidebar.sections.overview",
     sections: [
       { key: "dashboard", labelKey: "sidebar.nav.dashboard", icon: "overview", pages: [P("/dashboard", "dashboard")] },
-      { key: "incidents", labelKey: "sidebar.sec.incidents", icon: "alert", pages: [P("/incidents", "incidents")] },
+      { key: "incidents", labelKey: "sidebar.sec.incidents", icon: "alert", pages: [P("/incidents", "incidents", { reviewOnly: true })] },
       { key: "approvals", labelKey: "sidebar.sec.approvals", icon: "check",
         pages: [P("/approvals", "approvals", { reviewOnly: true })] },
       { key: "kill_switch", labelKey: "sidebar.nav.kill_switch", icon: "stop",
@@ -109,7 +109,7 @@ export const NAV: NavGroup[] = [
     key: "evidence",
     labelKey: "sidebar.sections.evidence",
     sections: [
-      { key: "audit", labelKey: "sidebar.sec.audit", icon: "audit", pages: [P("/audit", "audit")] },
+      { key: "audit", labelKey: "sidebar.sec.audit", icon: "audit", pages: [P("/audit", "audit", { reviewOnly: true })] },
     ],
   },
   {

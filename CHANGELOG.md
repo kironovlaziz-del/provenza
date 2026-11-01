@@ -27,6 +27,34 @@ this project adheres to [Semantic Versioning](https://semver.org/).
   passkeys (`demo.read_only`). The organization is made again every night
   (`provenza-demo.timer`); only one the demo made is ever deleted.
 
+### Security
+
+- **A plain user no longer reads the audit trail or the incidents.**
+  `GET /audit-logs` and `GET /incidents` (list and one) were open to every
+  signed-in user and showed who did what, from which IP address and browser.
+  They now need an administrator or approver (auditor and compliance still
+  read them). Anyone may still report an incident; the audit proofs, keys and
+  integrity check stay open. The Incidents and Audit pages are hidden from
+  plain users accordingly.
+- `follow-redirects` 1.16.2 in the console (GHSA-mrwp-f3q8-3g9p).
+
+### Fixed
+
+- A page whose data failed to load (a 502 while the server restarts, say)
+  hung on "Loading…" or showed an error until it was reloaded. Reads are now
+  retried on 502/503/504, and a page that still cannot load says so with a
+  "Try again" button.
+- After a sign-in that an expired session asked for, the console returns to
+  the page it was on (`/login?next=…`), not to the dashboard.
+- Auditor and compliance can preview a policy (`POST /policy-layers/preview`,
+  which saves nothing); the approvals page shows them the requests read-only
+  instead of decision buttons the server refuses.
+- The dashboard counts the policies in force (non-empty policy layers and
+  enabled agent policies), not only the layers.
+- The sidebar shows the organization's name instead of `org-<id>`.
+- The demo records denied and held actions in the audit trail as the SDK
+  does.
+
 ## [0.3.0] - 2026-10-26
 
 ### Added
