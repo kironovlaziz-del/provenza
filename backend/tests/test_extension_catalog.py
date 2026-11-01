@@ -27,9 +27,10 @@ async def test_the_extension_gets_its_organizations_catalog(client, db_session, 
     # the built-in AI services, as unknown, ChatGPT under its current address
     assert by_domain["chatgpt.com"] == {"domain": "chatgpt.com", "name": "ChatGPT",
                                         "category": "general_assistant", "status": "unknown"}
-    assert "cursor.com" in by_domain and "grok.com" in by_domain
+    assert {"cursor.com", "grok.com"} <= set(by_domain)
     # an API host is not something people visit, and a path is not a host
-    assert "openrouter.ai" not in by_domain and not any("/" in d for d in by_domain)
+    assert not {"openrouter.ai", "github.com/copilot"} & set(by_domain)
+    assert all(d.count("/") == 0 for d in by_domain)
 
     # the organization's decision wins over the built-in hint, and changes the version
     for domain, status in (("chatgpt.com", "allowed"), ("chat.deepseek.com", "blocked"), ("intra-ai.example", "blocked")):
