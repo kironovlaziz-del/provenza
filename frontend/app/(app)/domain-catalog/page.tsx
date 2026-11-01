@@ -3,6 +3,8 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { PageHeader } from "@/components/PageHeader";
+import { LoadError } from "@/components/LoadError";
+import { apiErrorMessage } from "@/lib/inventory_api";
 import { Form } from "@/components/Form";
 import { StatusPill } from "@/components/Pill";
 import {
@@ -28,6 +30,7 @@ export default function DomainCatalogPage() {
   const [entries, setEntries] = useState<DomainCatalogEntry[]>([]);
   const [seeds, setSeeds] = useState<SeedDomainHint[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [busyId, setBusyId] = useState<number | null>(null);
   const [page, setPage] = useState(0);
@@ -54,7 +57,8 @@ export default function DomainCatalogPage() {
   function refresh() {
     setLoading(true);
     listDomainCatalog()
-      .then(setEntries)
+      .then((v) => { setEntries(v); setLoadError(null); })
+      .catch((e) => setLoadError(apiErrorMessage(e, t("common.load_failed"))))
       .finally(() => setLoading(false));
   }
 
@@ -132,6 +136,7 @@ export default function DomainCatalogPage() {
         }
       />
       <div className="content">
+          <LoadError message={loadError} onRetry={refresh} />
         <p className="hint-text u-mb-16">{t("domain_catalog.hint")}</p>
 
         {showForm && (

@@ -20,6 +20,8 @@ export interface User {
   /** an administrator of the organization that runs the installation
    *  (only /users/me says): sees installation-wide monitoring */
   is_operator?: boolean;
+  /** the organization's name (only /users/me says) */
+  org_name?: string | null;
 }
 
 export interface Provider {

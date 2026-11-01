@@ -68,16 +68,39 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+// A read that meets the server restarting (an upgrade, a container coming
+// back: 502/503/504, or no answer at all) is tried again a few times before
+// the page shows an error - a page must not need a manual reload for that.
+const TRANSIENT = [502, 503, 504];
+const RETRIES = 3;
+
+function transientRead(error: any): boolean {
+  const cfg = error?.config;
+  if (!cfg || (cfg.method || "get").toLowerCase() !== "get" || error?.code === "ERR_CANCELED") return false;
+  const status = error?.response?.status;
+  return status === undefined || TRANSIENT.includes(status);
+}
+
 api.interceptors.response.use(
   (response) => response,
-  (error) => {
+  async (error) => {
+    if (transientRead(error)) {
+      const cfg = error.config as typeof error.config & { _retries?: number };
+      cfg._retries = (cfg._retries ?? 0) + 1;
+      if (cfg._retries <= RETRIES) {
+        await new Promise((r) => setTimeout(r, 600 * cfg._retries));
+        return api.request(cfg);
+      }
+    }
     if (
       typeof window !== "undefined" &&
       error?.response?.status === 401 &&
       window.location.pathname !== "/login"
     ) {
       clearToken();
-      window.location.href = "/login";
+      // back to this page after signing in again
+      const here = window.location.pathname + window.location.search;
+      window.location.href = here === "/" ? "/login" : `/login?next=${encodeURIComponent(here)}`;
     }
     // a second sign-in of an administrator or approver waits on the sign-in page
     if (

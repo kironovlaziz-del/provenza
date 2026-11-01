@@ -88,3 +88,24 @@ async def test_a_public_demo_login_cannot_change_its_own_account(client, db_sess
     monkeypatch.setattr(settings, "DEMO_ACCOUNTS", "")
     r = await client.post("/api/v1/users/me/mfa/setup", headers=h)
     assert r.status_code != 403, r.text
+
+
+async def test_a_plain_user_reads_neither_the_audit_trail_nor_the_incidents(client, db_session, org_and_users):
+    """Incidents name who signed in from where; the audit trail is every change
+    in the organization. Reviewers and the oversight roles read them; a plain
+    user still reports an incident and reads the everyday pages."""
+    plain = auth_headers(await _token_for(client, db_session, org_and_users, UserRole.user))
+    for path in ("/api/v1/audit-logs/", "/api/v1/incidents/", "/api/v1/incidents/1"):
+        r = await client.get(path, headers=plain)
+        assert r.status_code == 403, (path, r.text)
+    assert (await client.get("/api/v1/agents/", headers=plain)).status_code == 200
+    r = await client.post("/api/v1/incidents/", headers=plain,
+                          json={"category": "other", "summary": "odd model output", "severity": "low"})
+    assert r.status_code in (200, 201), r.text
+
+    auditor = auth_headers(await _token_for(client, db_session, org_and_users, UserRole.auditor))
+    for path in ("/api/v1/audit-logs/", "/api/v1/incidents/"):
+        assert (await client.get(path, headers=auditor)).status_code == 200, path
+    # the effective policy is computed, never saved: an auditor may preview it
+    r = await client.post("/api/v1/policy-layers/preview", headers=auditor, json={"scope": "org", "document": {}})
+    assert r.status_code == 200, r.text

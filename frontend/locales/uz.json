@@ -1,5 +1,7 @@
 {
   "common": {
+    "load_failed": "Ma'lumotlarni yuklab bo'lmadi.",
+    "retry_load": "Qayta urinish",
     "save": "Saqlash",
     "cancel": "Bekor qilish",
     "delete": "O'chirish",

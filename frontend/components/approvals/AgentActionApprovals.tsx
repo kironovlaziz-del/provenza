@@ -38,7 +38,7 @@ function Fact({ label, children, bad }: { label: string; children: React.ReactNo
   );
 }
 
-function Review({ id, onDone }: { id: number; onDone: () => void }) {
+function Review({ id, onDone, readOnly }: { id: number; onDone: () => void; readOnly?: boolean }) {
   const { t } = useTranslation();
   const { session } = useAuth();
   const [p, setP] = useState<ReviewPacket | null>(null);
@@ -153,7 +153,13 @@ function Review({ id, onDone }: { id: number; onDone: () => void }) {
         </div>
       )}
 
-      {/* ---- decision ---- */}
+      {/* ---- decision (reviewers; the oversight roles read only) ---- */}
+      {readOnly ? (
+        <div className="hint-text" style={{ fontSize: 12 }}>
+          {t("approvals.reviewers_only")} · <ExpiresIn iso={rv.expires_at} />
+        </div>
+      ) : (
+        <>
       {error && <div style={{ color: "#ef4444", fontSize: 13, marginBottom: 8 }}>{error}</div>}
       {rv.blocked_reason && <div style={{ color: "#d97706", fontSize: 13, marginBottom: 8 }}>{rv.blocked_reason}</div>}
       {rv.self_approval && (
@@ -189,11 +195,13 @@ function Review({ id, onDone }: { id: number; onDone: () => void }) {
         </button>
         <span className="hint-text" style={{ fontSize: 12 }}><ExpiresIn iso={rv.expires_at} /></span>
       </div>
+        </>
+      )}
     </div>
   );
 }
 
-export function AgentActionApprovals({ onCount }: { onCount?: (n: number) => void }) {
+export function AgentActionApprovals({ onCount, readOnly }: { onCount?: (n: number) => void; readOnly?: boolean }) {
   const { t } = useTranslation();
   const [pending, setPending] = useState<PendingApproval[]>([]);
   const [open, setOpen] = useState<number | null>(null);
@@ -245,6 +253,7 @@ export function AgentActionApprovals({ onCount }: { onCount?: (n: number) => voi
                 {open === a.id && (
                   <Review
                     id={a.id}
+                    readOnly={readOnly}
                     onDone={() => {
                       setOpen(null);
                       refresh();

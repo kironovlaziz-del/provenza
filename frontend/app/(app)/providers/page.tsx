@@ -4,6 +4,8 @@ import { Form } from "@/components/Form";
 import React, { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { PageHeader } from "@/components/PageHeader";
+import { LoadError } from "@/components/LoadError";
+import { apiErrorMessage } from "@/lib/inventory_api";
 import { StatusPill } from "@/components/Pill";
 import { createProvider, listProviders, updateProvider } from "@/lib/api";
 import type { Provider } from "@/lib/types";
@@ -12,6 +14,7 @@ export default function ProvidersPage() {
   const { t } = useTranslation();
   const [providers, setProviders] = useState<Provider[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [name, setName] = useState("");
   const [type, setType] = useState("openai");
@@ -22,7 +25,8 @@ export default function ProvidersPage() {
   function refresh() {
     setLoading(true);
     listProviders()
-      .then(setProviders)
+      .then((v) => { setProviders(v); setLoadError(null); })
+      .catch((e) => setLoadError(apiErrorMessage(e, t("common.load_failed"))))
       .finally(() => setLoading(false));
   }
 
@@ -62,6 +66,7 @@ export default function ProvidersPage() {
         }
       />
       <div className="content">
+          <LoadError message={loadError} onRetry={refresh} />
         {showForm && (
           <div className="panel" style={{ marginBottom: 20 }}>
             <div className="panel-header">

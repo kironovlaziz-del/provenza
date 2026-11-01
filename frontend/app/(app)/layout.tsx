@@ -3,7 +3,7 @@
 import React, { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslation } from "react-i18next";
-import { useAuth } from "@/lib/auth";
+import { loginUrl, useAuth } from "@/lib/auth";
 import { DialogHost } from "@/components/Dialog";
 import { ReleaseBanner } from "@/components/ReleaseBanner";
 import { SessionBanner } from "@/components/SessionBanner";
@@ -17,7 +17,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!loading && !user) {
-      router.replace("/login");
+      router.replace(loginUrl());
     }
   }, [loading, user, router]);
 

@@ -110,7 +110,12 @@ export function Sidebar() {
     <aside className={`sidebar${narrow ? " narrow" : ""}`}>
       <div className="sidebar-brand">
         {narrow ? <div className="sidebar-brand-mini" title="Provenza">P</div> : <Logo />}
-        {!narrow && <div className="sidebar-brand-sub" style={{ marginTop: 6 }}>org-{user?.org_id ?? "—"}</div>}
+        {!narrow && (
+          <div className="sidebar-brand-sub" style={{ marginTop: 6, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+               title={user?.org_name || undefined}>
+            {user?.org_name || `org-${user?.org_id ?? "—"}`}
+          </div>
+        )}
       </div>
 
       {!narrow && (

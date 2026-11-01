@@ -13,6 +13,7 @@ from typing import Any, Dict
 from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.agent import AgentPolicy
 from app.models.agent_action import AgentAction
 from app.models.ai_incident import AIIncident
 from app.models.gateway import GatewayCall
@@ -93,11 +94,15 @@ async def build_stats(
         select(func.count()).select_from(AgentAction).where(
             AgentAction.org_id == org_id, AgentAction.policy_check_result == "pending_approval")
     )
-    # levels of the policy hierarchy that carry rules
-    total_policies = await db.scalar(
+    # what decides: levels of the policy hierarchy that carry rules, and the
+    # enabled agent policies (Policies -> Agent Policies) - both tabs of one page
+    total_policies = (await db.scalar(
         select(func.count()).select_from(PolicyLayer).where(
             PolicyLayer.org_id == org_id, PolicyLayer.document != text("'{}'::jsonb"))
-    )
+    ) or 0) + (await db.scalar(
+        select(func.count()).select_from(AgentPolicy).where(
+            AgentPolicy.org_id == org_id, AgentPolicy.enabled.is_(True))
+    ) or 0)
 
     return {
         "window_days": window_days,

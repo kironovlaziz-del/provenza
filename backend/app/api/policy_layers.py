@@ -33,6 +33,9 @@ router = APIRouter()
 _admin = require_role(UserRole.admin)
 # reading shows the rules: not for every user
 _reviewer = require_role(UserRole.admin, UserRole.approver)
+# the preview computes the effective policy and saves nothing: who reads the
+# policies may see it (an auditor's POST here is allowed in api/deps.py)
+_previewer = require_role(UserRole.admin, UserRole.approver, UserRole.auditor, UserRole.compliance)
 
 
 class LayerIn(BaseModel):
@@ -76,7 +79,7 @@ async def put_layer(data: LayerIn, db: AsyncSession = Depends(get_db), current_u
 
 
 @router.post("/preview")
-async def preview(data: LayerIn, db: AsyncSession = Depends(get_db), current_user: User = Depends(_reviewer)):
+async def preview(data: LayerIn, db: AsyncSession = Depends(get_db), current_user: User = Depends(_previewer)):
     return await hier_policy.preview(db, current_user.org_id, data.scope, data.target_id, data.yaml, data.document)
 
 

@@ -3,6 +3,8 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { PageHeader } from "@/components/PageHeader";
+import { LoadError } from "@/components/LoadError";
+import { apiErrorMessage } from "@/lib/inventory_api";
 import { Form } from "@/components/Form";
 import {
   listDiscoveredServices,
@@ -43,6 +45,7 @@ export default function DiscoveryPage() {
   const { t, i18n } = useTranslation();
   const [services, setServices] = useState<DiscoveredService[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<number | null>(null);
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [connDetails, setConnDetails] = useState<Record<number, ServiceConnection | null>>({});
@@ -87,7 +90,8 @@ export default function DiscoveryPage() {
   function refresh() {
     setLoading(true);
     listDiscoveredServices()
-      .then(setServices)
+      .then((v) => { setServices(v); setLoadError(null); })
+      .catch((e) => setLoadError(apiErrorMessage(e, t("common.load_failed"))))
       .finally(() => setLoading(false));
   }
 
@@ -164,6 +168,7 @@ export default function DiscoveryPage() {
     <>
       <PageHeader title={t("discovery.title")} />
       <div className="content">
+          <LoadError message={loadError} onRetry={refresh} />
         <p className="hint-text u-mb-16">{t("discovery.hint")}</p>
 
         <div className="stat-grid" style={{ marginBottom: 20 }}>

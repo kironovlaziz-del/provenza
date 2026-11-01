@@ -18,6 +18,8 @@ import {
   CartesianGrid,
 } from "recharts";
 import { PageHeader } from "@/components/PageHeader";
+import { LoadError } from "@/components/LoadError";
+import { apiErrorMessage } from "@/lib/inventory_api";
 import { SetupChecklist } from "@/components/SetupChecklist";
 import { fetchDashboardStats, type DashboardStats } from "@/lib/api";
 
@@ -39,20 +41,26 @@ export default function DashboardPage() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [windowDays, setWindowDays] = useState(7);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     setLoading(true);
     fetchDashboardStats(windowDays)
-      .then(setStats)
+      .then((s) => { setStats(s); setLoadError(null); })
+      .catch((e) => setLoadError(apiErrorMessage(e, t("common.load_failed"))))
       .finally(() => setLoading(false));
-  }, [windowDays]);
+  }, [windowDays, attempt, t]);
 
   if (loading || !stats) {
     return (
       <>
         <PageHeader title={t("dashboard.title")} />
         <div className="content">
-          <p className="loading-line">{t("dashboard.loading")}</p>
+          {/* a failed load says so and offers a retry, instead of "Loading…" for ever */}
+          {!loading && loadError
+            ? <LoadError message={loadError} onRetry={() => setAttempt((n) => n + 1)} />
+            : <p className="loading-line">{t("dashboard.loading")}</p>}
         </div>
       </>
     );

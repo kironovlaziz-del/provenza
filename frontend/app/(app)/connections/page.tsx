@@ -3,6 +3,8 @@
 import React, { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { PageHeader } from "@/components/PageHeader";
+import { LoadError } from "@/components/LoadError";
+import { apiErrorMessage } from "@/lib/inventory_api";
 import { ProviderPolicyPanel } from "@/components/ProviderPolicyPanel";
 import { Form } from "@/components/Form";
 import { SealedCredential, sealNew } from "@/components/gateways/SealedCredential";
@@ -166,6 +168,7 @@ export default function ConnectionsPage() {
   const { t } = useTranslation();
   const [providers, setProviders] = useState<Provider[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<number | null>(null);
 
   const [showForm, setShowForm] = useState(false);
@@ -181,7 +184,8 @@ export default function ConnectionsPage() {
   function refresh() {
     setLoading(true);
     listProviders()
-      .then(setProviders)
+      .then((v) => { setProviders(v); setLoadError(null); })
+      .catch((e) => setLoadError(apiErrorMessage(e, t("common.load_failed"))))
       .finally(() => setLoading(false));
   }
 
@@ -263,6 +267,7 @@ export default function ConnectionsPage() {
         }
       />
       <div className="content">
+          <LoadError message={loadError} onRetry={refresh} />
         <p className="hint-text" style={{ marginBottom: 16 }}>
           {t("connections.hint")}
         </p>
