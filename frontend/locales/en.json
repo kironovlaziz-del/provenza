@@ -115,7 +115,10 @@
       "profile": "My profile",
       "runtime": "Runtime",
       "observability": "Observability",
-      "retention": "Data retention"
+      "retention": "Data retention",
+      "inbox": "Inbox",
+      "settings": "All settings",
+      "help": "Help"
     },
     "logout": "Sign out",
     "role_admin": "admin",
@@ -397,179 +400,179 @@
     "auditor_banner": "Auditor: read-only access. You see everything administrators see and change nothing.",
     "hint": "Auditor: sees everything, changes nothing. Compliance officer: sees everything and confirms compliance requirements."
   },
-    "ia": {
-      "title": "Impact assessment",
-      "back": "Back to the system",
-      "status": "Status",
-      "approved_v": "Approved",
-      "draft_v": "Draft",
-      "not_approved": "Not approved yet",
-      "approved_on": "Approved on",
-      "review_due": "Review due",
-      "progress": "Required answers",
-      "intro": "One questionnaire serves as the ISO/IEC 42005 impact assessment, the GDPR data protection impact assessment and the EU AI Act fundamental rights impact assessment. The Compliance page reads the approved version.",
-      "save": "Save draft",
-      "approve": "Approve",
-      "revise": "Start a new version",
-      "history": "Approved versions",
-      "version": "Version",
-      "open": "Open",
-      "start": "Start the assessment",
-      "none": "Not assessed yet. One questionnaire covers ISO/IEC 42005, the DPIA and the FRIA.",
-      "saved": "Draft saved.",
-      "approved_notice": "Approved. This version is now the system's impact assessment.",
-      "incomplete": "Answer the highlighted questions first.",
-      "load_failed": "Could not load the assessment.",
-      "save_failed": "Could not save the draft.",
-      "approve_failed": "Could not approve.",
-      "s": {
-        "purpose": "Purpose and context",
-        "rights": "Impact on people",
-        "data": "Personal data (DPIA)",
-        "measures": "Measures",
-        "conclusion": "Conclusion"
-      },
-      "q": {
-        "purpose": "What is the system for, and in which process is it used?",
-        "affected": "Who is affected by its outputs?",
-        "scale": "How many people does it affect in a year?",
-        "period": "When and how often is it used?",
-        "rights": "Which rights or interests could be harmed?",
-        "harm": "What could go wrong for these people, and how?",
-        "severity": "How severe would the harm be?",
-        "likelihood": "How likely is it?",
-        "reversibility": "Can the harm be undone?",
-        "personal_data": "Does the system process personal data?",
-        "categories": "Which kinds?",
-        "lawful_basis": "Lawful basis (GDPR Art. 6)",
-        "necessity": "Why is this data necessary, and what is left out?",
-        "retention": "How long is it kept?",
-        "transfers": "Does it leave the EU/EEA?",
-        "measures": "What reduces these risks? (testing, limits, policies in Provenza, training)",
-        "oversight": "Who oversees the system and can stop or overrule it?",
-        "redress": "How can an affected person complain or contest a decision?",
-        "residual": "Residual risk after the measures",
-        "decision": "Decision",
-        "conditions": "Conditions",
-        "review_date": "Review again by"
-      },
-      "h": {
-        "review_date": "One year from approval when left empty."
-      },
-      "o": {
-        "affected": {
-          "employees": "Employees",
-          "job_applicants": "Job applicants",
-          "customers": "Customers",
-          "patients": "Patients",
-          "students": "Students",
-          "children": "Children",
-          "public": "The public",
-          "other": "Others"
-        },
-        "scale": {
-          "under_100": "Under 100",
-          "100_10k": "100 - 10,000",
-          "10k_1m": "10,000 - 1 million",
-          "over_1m": "Over 1 million"
-        },
-        "rights": {
-          "non_discrimination": "Non-discrimination",
-          "privacy": "Privacy",
-          "expression": "Freedom of expression",
-          "access_services": "Access to services",
-          "employment": "Work and employment",
-          "education": "Education",
-          "health_safety": "Health and safety",
-          "due_process": "Fair procedure",
-          "none": "None"
-        },
-        "severity": {
-          "low": "Low",
-          "medium": "Medium",
-          "high": "High",
-          "critical": "Critical"
-        },
-        "likelihood": {
-          "rare": "Rare",
-          "possible": "Possible",
-          "likely": "Likely"
-        },
-        "reversibility": {
-          "reversible": "Reversible",
-          "hard_to_reverse": "Hard to reverse",
-          "irreversible": "Irreversible"
-        },
-        "personal_data": {
-          "yes": "Yes",
-          "no": "No"
-        },
-        "categories": {
-          "identity": "Identity",
-          "contact": "Contact details",
-          "financial": "Financial",
-          "location": "Location",
-          "behaviour": "Behaviour",
-          "special": "Special categories (health, biometric, beliefs...)",
-          "children": "Children's data",
-          "criminal": "Criminal records"
-        },
-        "lawful_basis": {
-          "consent": "Consent",
-          "contract": "Contract",
-          "legal_obligation": "Legal obligation",
-          "vital_interest": "Vital interest",
-          "public_task": "Public task",
-          "legitimate_interest": "Legitimate interest"
-        },
-        "transfers": {
-          "no": "No",
-          "adequacy": "Yes, to a country with an adequacy decision",
-          "safeguards": "Yes, with safeguards (SCCs, BCRs)"
-        },
-        "residual": {
-          "low": "Low",
-          "medium": "Medium",
-          "high": "High"
-        },
-        "decision": {
-          "proceed": "Proceed",
-          "proceed_with_conditions": "Proceed with conditions",
-          "do_not_proceed": "Do not proceed"
-        }
-      }
+  "ia": {
+    "title": "Impact assessment",
+    "back": "Back to the system",
+    "status": "Status",
+    "approved_v": "Approved",
+    "draft_v": "Draft",
+    "not_approved": "Not approved yet",
+    "approved_on": "Approved on",
+    "review_due": "Review due",
+    "progress": "Required answers",
+    "intro": "One questionnaire serves as the ISO/IEC 42005 impact assessment, the GDPR data protection impact assessment and the EU AI Act fundamental rights impact assessment. The Compliance page reads the approved version.",
+    "save": "Save draft",
+    "approve": "Approve",
+    "revise": "Start a new version",
+    "history": "Approved versions",
+    "version": "Version",
+    "open": "Open",
+    "start": "Start the assessment",
+    "none": "Not assessed yet. One questionnaire covers ISO/IEC 42005, the DPIA and the FRIA.",
+    "saved": "Draft saved.",
+    "approved_notice": "Approved. This version is now the system's impact assessment.",
+    "incomplete": "Answer the highlighted questions first.",
+    "load_failed": "Could not load the assessment.",
+    "save_failed": "Could not save the draft.",
+    "approve_failed": "Could not approve.",
+    "s": {
+      "purpose": "Purpose and context",
+      "rights": "Impact on people",
+      "data": "Personal data (DPIA)",
+      "measures": "Measures",
+      "conclusion": "Conclusion"
     },
-    "assurance": {
-      "title": "Testing and assurance",
-      "add": "Record a test",
-      "hint": "Evaluations, bias tests, red teaming and robustness tests of this system, with who ran them and the evidence. A test counts for a year. EU AI Act Art. 15 needs an evaluation and a red teaming or robustness test; Art. 10 a bias test.",
-      "kind": "Kind",
-      "test_title": "What was tested",
-      "title_placeholder": "Accuracy on the 2026 Q3 holdout set",
-      "performed_on": "Date",
-      "performed_by": "By",
-      "by_placeholder": "ML team, an outside firm",
-      "result": "Result",
-      "summary": "Summary",
-      "findings": "Findings and what is done about them",
-      "evidence": "Report link",
-      "next_due": "Test again by",
-      "save": "Save",
-      "save_failed": "Could not save the record.",
-      "append_only": "A record cannot be changed later; a correction is a new record.",
-      "empty": "No test recorded yet.",
-      "kinds": {
-        "evaluation": "Evaluation",
-        "bias": "Bias test",
-        "red_team": "Red teaming",
-        "robustness": "Robustness test"
-      },
-      "results": {
-        "passed": "Passed",
-        "passed_with_findings": "Passed with findings",
-        "failed": "Failed"
-      }
+    "q": {
+      "purpose": "What is the system for, and in which process is it used?",
+      "affected": "Who is affected by its outputs?",
+      "scale": "How many people does it affect in a year?",
+      "period": "When and how often is it used?",
+      "rights": "Which rights or interests could be harmed?",
+      "harm": "What could go wrong for these people, and how?",
+      "severity": "How severe would the harm be?",
+      "likelihood": "How likely is it?",
+      "reversibility": "Can the harm be undone?",
+      "personal_data": "Does the system process personal data?",
+      "categories": "Which kinds?",
+      "lawful_basis": "Lawful basis (GDPR Art. 6)",
+      "necessity": "Why is this data necessary, and what is left out?",
+      "retention": "How long is it kept?",
+      "transfers": "Does it leave the EU/EEA?",
+      "measures": "What reduces these risks? (testing, limits, policies in Provenza, training)",
+      "oversight": "Who oversees the system and can stop or overrule it?",
+      "redress": "How can an affected person complain or contest a decision?",
+      "residual": "Residual risk after the measures",
+      "decision": "Decision",
+      "conditions": "Conditions",
+      "review_date": "Review again by"
     },
+    "h": {
+      "review_date": "One year from approval when left empty."
+    },
+    "o": {
+      "affected": {
+        "employees": "Employees",
+        "job_applicants": "Job applicants",
+        "customers": "Customers",
+        "patients": "Patients",
+        "students": "Students",
+        "children": "Children",
+        "public": "The public",
+        "other": "Others"
+      },
+      "scale": {
+        "under_100": "Under 100",
+        "100_10k": "100 - 10,000",
+        "10k_1m": "10,000 - 1 million",
+        "over_1m": "Over 1 million"
+      },
+      "rights": {
+        "non_discrimination": "Non-discrimination",
+        "privacy": "Privacy",
+        "expression": "Freedom of expression",
+        "access_services": "Access to services",
+        "employment": "Work and employment",
+        "education": "Education",
+        "health_safety": "Health and safety",
+        "due_process": "Fair procedure",
+        "none": "None"
+      },
+      "severity": {
+        "low": "Low",
+        "medium": "Medium",
+        "high": "High",
+        "critical": "Critical"
+      },
+      "likelihood": {
+        "rare": "Rare",
+        "possible": "Possible",
+        "likely": "Likely"
+      },
+      "reversibility": {
+        "reversible": "Reversible",
+        "hard_to_reverse": "Hard to reverse",
+        "irreversible": "Irreversible"
+      },
+      "personal_data": {
+        "yes": "Yes",
+        "no": "No"
+      },
+      "categories": {
+        "identity": "Identity",
+        "contact": "Contact details",
+        "financial": "Financial",
+        "location": "Location",
+        "behaviour": "Behaviour",
+        "special": "Special categories (health, biometric, beliefs...)",
+        "children": "Children's data",
+        "criminal": "Criminal records"
+      },
+      "lawful_basis": {
+        "consent": "Consent",
+        "contract": "Contract",
+        "legal_obligation": "Legal obligation",
+        "vital_interest": "Vital interest",
+        "public_task": "Public task",
+        "legitimate_interest": "Legitimate interest"
+      },
+      "transfers": {
+        "no": "No",
+        "adequacy": "Yes, to a country with an adequacy decision",
+        "safeguards": "Yes, with safeguards (SCCs, BCRs)"
+      },
+      "residual": {
+        "low": "Low",
+        "medium": "Medium",
+        "high": "High"
+      },
+      "decision": {
+        "proceed": "Proceed",
+        "proceed_with_conditions": "Proceed with conditions",
+        "do_not_proceed": "Do not proceed"
+      }
+    }
+  },
+  "assurance": {
+    "title": "Testing and assurance",
+    "add": "Record a test",
+    "hint": "Evaluations, bias tests, red teaming and robustness tests of this system, with who ran them and the evidence. A test counts for a year. EU AI Act Art. 15 needs an evaluation and a red teaming or robustness test; Art. 10 a bias test.",
+    "kind": "Kind",
+    "test_title": "What was tested",
+    "title_placeholder": "Accuracy on the 2026 Q3 holdout set",
+    "performed_on": "Date",
+    "performed_by": "By",
+    "by_placeholder": "ML team, an outside firm",
+    "result": "Result",
+    "summary": "Summary",
+    "findings": "Findings and what is done about them",
+    "evidence": "Report link",
+    "next_due": "Test again by",
+    "save": "Save",
+    "save_failed": "Could not save the record.",
+    "append_only": "A record cannot be changed later; a correction is a new record.",
+    "empty": "No test recorded yet.",
+    "kinds": {
+      "evaluation": "Evaluation",
+      "bias": "Bias test",
+      "red_team": "Red teaming",
+      "robustness": "Robustness test"
+    },
+    "results": {
+      "passed": "Passed",
+      "passed_with_findings": "Passed with findings",
+      "failed": "Failed"
+    }
+  },
   "export_keys": {
     "title": "SIEM export",
     "new": "New key",
@@ -3016,7 +3019,13 @@
     "mfa": "Require two-factor sign-in",
     "mfa_hint": "At least for admins and approvers. Set it up for yourself first in My profile.",
     "discovery": "Find shadow AI",
-    "discovery_hint": "An ingestion key for the endpoint agent or the browser extension."
+    "discovery_hint": "An ingestion key for the endpoint agent or the browser extension.",
+    "proxy": "Route agents through the egress proxy",
+    "proxy_hint": "The proxy holds the agents' real API keys, so an agent cannot reach a service without Provenza.",
+    "sensor": "Watch the network with the sensor",
+    "sensor_hint": "The sensor sees AI traffic that bypasses the proxy and can block it.",
+    "sso": "Sign in with your identity provider",
+    "sso_hint": "Single sign-on (OpenID Connect): people use their company account; leavers lose access with it."
   },
   "provider_policy": {
     "title": "AI provider policy",
@@ -3589,5 +3598,109 @@
     "where": "Linux, amd64 or arm64. With an egress proxy on that machine (the Provenza server has one) calls go through it; elsewhere straight to Provenza's gateways.",
     "done": "Connected: agent #{{id}}. Its calls appear in Agent activity.",
     "other": "Other ways to use the token:"
+  },
+  "nav": {
+    "main": "Main",
+    "inbox": "Inbox",
+    "ai": "AI",
+    "rules": "Rules",
+    "evidence": "Evidence",
+    "settings": "Settings",
+    "help": "Help",
+    "search": "Search",
+    "search_placeholder": "Search pages…",
+    "stop_all": "Stop all",
+    "stop_all_hint": "Kill switch: stop one agent, every agent or all AI traffic",
+    "account": "Account",
+    "stopped_org": "Agents are stopped for the whole organization.",
+    "stopped_some_one": "{{count}} stop is active: some agents are stopped.",
+    "stopped_some_other": "{{count}} stops are active: some agents are stopped.",
+    "stopped_open": "Open the kill switch",
+    "no_access_title": "You don't have access to this page",
+    "no_access": "Your role does not include this page. If you need it for your work, ask an administrator.",
+    "no_access_home": "Go to my start page"
+  },
+  "inbox": {
+    "title": "Inbox",
+    "hint": "Everything that is waiting for a person. Whatever is not listed here runs on its own under your policies.",
+    "filter": "Show",
+    "all": "All",
+    "approvals": "Approvals",
+    "incidents": "Incidents",
+    "new_ai": "New AI",
+    "open_incidents": "Open incidents",
+    "open_all": "Open all",
+    "no_incidents": "No open incidents.",
+    "agent_incident": "Agent incident",
+    "agent": "Agent",
+    "new_ai_title": "AI found in use, not reviewed yet",
+    "no_new_ai": "Nothing new found.",
+    "shadow": "Shadow AI",
+    "found_agent": "Agent on a device",
+    "seen_one": "seen {{count}} time",
+    "seen_other": "seen {{count}} times",
+    "review": "Review",
+    "dismiss": "Dismiss",
+    "summary": "Last 7 days",
+    "elsewhere": "Elsewhere",
+    "link_ai": "All AI in the organization",
+    "link_audit": "Audit trail",
+    "link_compliance": "Compliance",
+    "link_help": "How Provenza works",
+    "denied": "Denied by policy"
+  },
+  "settings_hub": {
+    "group": {
+      "you": "You",
+      "people": "People and notifications",
+      "gateways": "Gateways, sensors and agent identity",
+      "data": "Keys and data",
+      "system": "System"
+    },
+    "desc": {
+      "profile": "Your name, password, two-factor sign-in and passkeys.",
+      "users": "Invite people, set their roles, require two-factor sign-in, single sign-on.",
+      "notifications": "Where Provenza sends incidents and approval requests: e-mail, Slack, Teams, webhooks.",
+      "gateway": "The gateways agents go through: AI models, MCP tools, HTTP APIs, other agents, the egress proxy.",
+      "runtime": "Network sensors that see and stop AI traffic outside the gateways.",
+      "agent_identity": "How agents prove who they are: keys, enrollment tokens, role templates.",
+      "attestation": "Accept agents only from workloads you trust (Kubernetes service accounts).",
+      "ingestion_sources": "Keys for the endpoint agent and the browser extension that report AI use.",
+      "domain_catalog": "Which web addresses count as AI services, and how risky each one is.",
+      "encryption_keys": "The keys that protect stored secrets; bring your own key store.",
+      "retention": "How long records are kept before they are removed.",
+      "export_keys": "Send the audit trail to your SIEM.",
+      "system_status": "Whether the background jobs, database and gateways are healthy.",
+      "observability": "Metrics of this installation, all organizations (operators only)."
+    }
+  },
+  "help": {
+    "intro": "Guides for the people who use Provenza: where to start, a guide for each role, one article for each feature, and answers to common questions.",
+    "search": "Search the help…",
+    "results_one": "{{count}} article",
+    "results_other": "{{count}} articles",
+    "no_results": "No article matches. Try another word.",
+    "for_you": "For your role",
+    "group": {
+      "start": "Start here",
+      "roles": "Guides by role",
+      "features": "Features, one by one",
+      "faq": "Questions and answers"
+    },
+    "not_found": "This article does not exist.",
+    "back": "Back to Help",
+    "for": "Mostly for:",
+    "tip": "Good practice:",
+    "warn": "Watch out:",
+    "open_page": "Open this page",
+    "contents": "In this article",
+    "related": "Related",
+    "role": {
+      "admin": "administrators",
+      "approver": "approvers",
+      "auditor": "auditors",
+      "compliance": "compliance officers",
+      "user": "employees"
+    }
   }
 }

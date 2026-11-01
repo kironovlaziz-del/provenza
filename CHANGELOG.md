@@ -8,6 +8,28 @@ this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **A simpler console: one top bar instead of the sidebar.** Four tabs -
+  **Inbox**, **AI**, **Rules**, **Evidence** - with **Search** (Ctrl K) for
+  any page, **Stop all** for admins, **Help** and **Settings** behind icons
+  and an account menu (profile, language, theme, sign out). The 16 sidebar
+  sections are gone; every page keeps its address and sits as a tab of one
+  of the four. While a stop is in force, a red line says so on every page
+  ([USER_GUIDE.md](USER_GUIDE.md#2-finding-your-way-the-top-bar)).
+- **Inbox**, the start page of admins, approvers, auditors and compliance
+  officers: approvals (decided in the list, signed as before), open incidents
+  of the organization and of agents, and shadow AI and agents found that
+  nobody reviewed yet, with the last seven days beside them. Plain users
+  start on the AI list. `/dashboard` now sends each role to its start page.
+- **Settings** page: every setting the role may open, in groups, with what
+  each is for; the setup checklist on top for admins. The checklist also
+  shows the egress proxy, the network sensor and single sign-on (optional).
+- **Help**: guides for administrators, approvers, auditors and compliance
+  officers, and employees; an article for each feature (Inbox, approvals,
+  AI inventory, agents, shadow AI, policies, kill switch, incidents, audit
+  trail, compliance, account security, users and roles, notifications) and
+  the FAQ - in English and Uzbek, searchable, linked to the pages they
+  explain.
+
 - **`provenza-mcp`: the MCP gateway for desktop clients** (Python SDK 0.2.0,
   [sdk/python/README.md](sdk/python/README.md#integrations)). MCP clients that
   start servers as a local command (Claude Desktop, Claude Code, Cursor,
@@ -40,6 +62,16 @@ this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- A page a role may not open (an old link, a typed address) says "You don't
+  have access to this page" instead of loading forever or failing on refused
+  requests. The Compliance page is no longer offered to plain users, whom
+  the server already refused.
+- Phones: wide tables scroll inside their panel instead of widening the page
+  and pushing action buttons off screen; long key fingerprints on Runtime
+  wrap.
+- Encryption keys: a table with several encrypted columns showed one row per
+  column under the same name (and a duplicate React key); each row now names
+  its column.
 - A page whose data failed to load (a 502 while the server restarts, say)
   hung on "Loading…" or showed an error until it was reloaded. Reads are now
   retried on 502/503/504, and a page that still cannot load says so with a

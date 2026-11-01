@@ -23,12 +23,20 @@ export function PageHeader({
   const section = sectionOf(pathname, user?.role, !!user?.is_operator);
   const [showMore, setShowMore] = useState(false);
   const pages = section?.pages ?? [];
-  const main = pages.filter((p) => !p.more || pageMatches(p.href, pathname));
-  const more = pages.filter((p) => p.more && !pageMatches(p.href, pathname));
+  // a hub (Settings, Help) lists its pages on its first page: the others link back to it
+  const hub = section?.hub ? section.pages[0] : undefined;
+  const inHub = !!hub && pathname !== hub.href;
+  const main = hub ? [] : pages.filter((p) => !p.more || pageMatches(p.href, pathname));
+  const more = hub ? [] : pages.filter((p) => p.more && !pageMatches(p.href, pathname));
   return (
     <>
       <div className="topbar">
-        <h1>{title}</h1>
+        <h1>
+          {inHub && hub && (
+            <><Link href={hub.href} className="topbar-crumb">{t(hub.labelKey)}</Link><span className="topbar-sep">/</span></>
+          )}
+          {title}
+        </h1>
         {actions && <div style={{ display: "flex", gap: 8 }}>{actions}</div>}
       </div>
       {section && (main.length > 1 || more.length > 0) && (

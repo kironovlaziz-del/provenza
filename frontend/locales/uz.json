@@ -115,7 +115,10 @@
       "profile": "Mening profilim",
       "runtime": "Runtime",
       "observability": "Kuzatuvchanlik",
-      "retention": "Ma'lumotlarni saqlash"
+      "retention": "Ma'lumotlarni saqlash",
+      "inbox": "Kiruvchi",
+      "settings": "Barcha sozlamalar",
+      "help": "Yordam"
     },
     "logout": "Chiqish",
     "role_admin": "administrator",
@@ -397,179 +400,179 @@
     "auditor_banner": "Auditor: faqat o'qish. Siz administratorlar ko'rgan hamma narsani ko'rasiz va hech narsani o'zgartirmaysiz.",
     "hint": "Auditor: hammasini ko'radi, hech narsani o'zgartirmaydi. Muvofiqlik mas'uli: hammasini ko'radi va muvofiqlik talablarini tasdiqlaydi."
   },
-    "ia": {
-      "title": "Ta'sirni baholash",
-      "back": "Tizimga qaytish",
-      "status": "Holati",
-      "approved_v": "Tasdiqlangan",
-      "draft_v": "Qoralama",
-      "not_approved": "Hali tasdiqlanmagan",
-      "approved_on": "Tasdiqlangan sana",
-      "review_due": "Qayta ko'rib chiqish",
-      "progress": "Majburiy javoblar",
-      "intro": "Bitta so'rovnoma ISO/IEC 42005 ta'sirni baholashi, GDPR ma'lumotlarni himoya qilishga ta'sirni baholash (DPIA) va EU AI Act asosiy huquqlarga ta'sirni baholash (FRIA) vazifasini bajaradi. Muvofiqlik sahifasi tasdiqlangan versiyani o'qiydi.",
-      "save": "Qoralamani saqlash",
-      "approve": "Tasdiqlash",
-      "revise": "Yangi versiyani boshlash",
-      "history": "Tasdiqlangan versiyalar",
-      "version": "Versiya",
-      "open": "Ochish",
-      "start": "Baholashni boshlash",
-      "none": "Hali baholanmagan. Bitta so'rovnoma ISO/IEC 42005, DPIA va FRIA ni qamraydi.",
-      "saved": "Qoralama saqlandi.",
-      "approved_notice": "Tasdiqlandi. Endi bu versiya tizimning ta'sirni baholashi.",
-      "incomplete": "Avval belgilangan savollarga javob bering.",
-      "load_failed": "Baholashni yuklab bo'lmadi.",
-      "save_failed": "Qoralamani saqlab bo'lmadi.",
-      "approve_failed": "Tasdiqlab bo'lmadi.",
-      "s": {
-        "purpose": "Maqsad va kontekst",
-        "rights": "Odamlarga ta'siri",
-        "data": "Shaxsiy ma'lumotlar (DPIA)",
-        "measures": "Choralar",
-        "conclusion": "Xulosa"
-      },
-      "q": {
-        "purpose": "Tizim nima uchun va qaysi jarayonda ishlatiladi?",
-        "affected": "Uning natijalari kimga ta'sir qiladi?",
-        "scale": "Yiliga qancha odamga ta'sir qiladi?",
-        "period": "Qachon va qanchalik tez-tez ishlatiladi?",
-        "rights": "Qaysi huquq yoki manfaatlarga zarar yetishi mumkin?",
-        "harm": "Bu odamlar uchun nima noto'g'ri ketishi mumkin va qanday?",
-        "severity": "Zarar qanchalik jiddiy bo'ladi?",
-        "likelihood": "Bu qanchalik ehtimol?",
-        "reversibility": "Zararni bartaraf etish mumkinmi?",
-        "personal_data": "Tizim shaxsiy ma'lumotlarni qayta ishlaydimi?",
-        "categories": "Qaysi turlari?",
-        "lawful_basis": "Huquqiy asos (GDPR 6-modda)",
-        "necessity": "Bu ma'lumotlar nega kerak va nimalar chiqarib tashlangan?",
-        "retention": "Qancha vaqt saqlanadi?",
-        "transfers": "EI/EIH dan tashqariga chiqadimi?",
-        "measures": "Bu xavflarni nima kamaytiradi? (testlar, cheklovlar, Provenza siyosatlari, o'qitish)",
-        "oversight": "Tizimni kim nazorat qiladi va uni to'xtatishi yoki qarorini bekor qilishi mumkin?",
-        "redress": "Ta'sirlangan odam qanday shikoyat qilishi yoki qarorga e'tiroz bildirishi mumkin?",
-        "residual": "Choralardan keyingi qoldiq xavf",
-        "decision": "Qaror",
-        "conditions": "Shartlar",
-        "review_date": "Qayta ko'rib chiqish muddati"
-      },
-      "h": {
-        "review_date": "Bo'sh qolsa, tasdiqlangandan bir yil o'tib."
-      },
-      "o": {
-        "affected": {
-          "employees": "Xodimlar",
-          "job_applicants": "Ishga nomzodlar",
-          "customers": "Mijozlar",
-          "patients": "Bemorlar",
-          "students": "Talabalar",
-          "children": "Bolalar",
-          "public": "Jamoatchilik",
-          "other": "Boshqalar"
-        },
-        "scale": {
-          "under_100": "100 dan kam",
-          "100_10k": "100 - 10 000",
-          "10k_1m": "10 000 - 1 million",
-          "over_1m": "1 milliondan ortiq"
-        },
-        "rights": {
-          "non_discrimination": "Kamsitilmaslik",
-          "privacy": "Shaxsiy hayot daxlsizligi",
-          "expression": "So'z erkinligi",
-          "access_services": "Xizmatlardan foydalanish",
-          "employment": "Mehnat va bandlik",
-          "education": "Ta'lim",
-          "health_safety": "Sog'liq va xavfsizlik",
-          "due_process": "Adolatli tartib",
-          "none": "Hech biri"
-        },
-        "severity": {
-          "low": "Past",
-          "medium": "O'rta",
-          "high": "Yuqori",
-          "critical": "Kritik"
-        },
-        "likelihood": {
-          "rare": "Kamdan-kam",
-          "possible": "Ehtimoliy",
-          "likely": "Ehtimoli yuqori"
-        },
-        "reversibility": {
-          "reversible": "Qaytariladigan",
-          "hard_to_reverse": "Qaytarish qiyin",
-          "irreversible": "Qaytarib bo'lmaydigan"
-        },
-        "personal_data": {
-          "yes": "Ha",
-          "no": "Yo'q"
-        },
-        "categories": {
-          "identity": "Shaxsni aniqlovchi",
-          "contact": "Aloqa ma'lumotlari",
-          "financial": "Moliyaviy",
-          "location": "Joylashuv",
-          "behaviour": "Xulq-atvor",
-          "special": "Maxsus toifalar (sog'liq, biometrik, e'tiqod...)",
-          "children": "Bolalar ma'lumotlari",
-          "criminal": "Sudlanganlik"
-        },
-        "lawful_basis": {
-          "consent": "Rozilik",
-          "contract": "Shartnoma",
-          "legal_obligation": "Qonuniy majburiyat",
-          "vital_interest": "Hayotiy manfaat",
-          "public_task": "Ommaviy vazifa",
-          "legitimate_interest": "Qonuniy manfaat"
-        },
-        "transfers": {
-          "no": "Yo'q",
-          "adequacy": "Ha, adekvatlik qarori bor davlatga",
-          "safeguards": "Ha, kafolatlar bilan (SCC, BCR)"
-        },
-        "residual": {
-          "low": "Past",
-          "medium": "O'rta",
-          "high": "Yuqori"
-        },
-        "decision": {
-          "proceed": "Davom etish",
-          "proceed_with_conditions": "Shartlar bilan davom etish",
-          "do_not_proceed": "Davom etmaslik"
-        }
-      }
+  "ia": {
+    "title": "Ta'sirni baholash",
+    "back": "Tizimga qaytish",
+    "status": "Holati",
+    "approved_v": "Tasdiqlangan",
+    "draft_v": "Qoralama",
+    "not_approved": "Hali tasdiqlanmagan",
+    "approved_on": "Tasdiqlangan sana",
+    "review_due": "Qayta ko'rib chiqish",
+    "progress": "Majburiy javoblar",
+    "intro": "Bitta so'rovnoma ISO/IEC 42005 ta'sirni baholashi, GDPR ma'lumotlarni himoya qilishga ta'sirni baholash (DPIA) va EU AI Act asosiy huquqlarga ta'sirni baholash (FRIA) vazifasini bajaradi. Muvofiqlik sahifasi tasdiqlangan versiyani o'qiydi.",
+    "save": "Qoralamani saqlash",
+    "approve": "Tasdiqlash",
+    "revise": "Yangi versiyani boshlash",
+    "history": "Tasdiqlangan versiyalar",
+    "version": "Versiya",
+    "open": "Ochish",
+    "start": "Baholashni boshlash",
+    "none": "Hali baholanmagan. Bitta so'rovnoma ISO/IEC 42005, DPIA va FRIA ni qamraydi.",
+    "saved": "Qoralama saqlandi.",
+    "approved_notice": "Tasdiqlandi. Endi bu versiya tizimning ta'sirni baholashi.",
+    "incomplete": "Avval belgilangan savollarga javob bering.",
+    "load_failed": "Baholashni yuklab bo'lmadi.",
+    "save_failed": "Qoralamani saqlab bo'lmadi.",
+    "approve_failed": "Tasdiqlab bo'lmadi.",
+    "s": {
+      "purpose": "Maqsad va kontekst",
+      "rights": "Odamlarga ta'siri",
+      "data": "Shaxsiy ma'lumotlar (DPIA)",
+      "measures": "Choralar",
+      "conclusion": "Xulosa"
     },
-    "assurance": {
-      "title": "Sinov va kafolat",
-      "add": "Sinovni qayd etish",
-      "hint": "Bu tizimning baholashlari, bias testlari, red teaming va barqarorlik sinovlari - kim o'tkazgani va dalillari bilan. Sinov bir yil amal qiladi. EU AI Act 15-modda baholash hamda red teaming yoki barqarorlik sinovini, 10-modda esa bias testini talab qiladi.",
-      "kind": "Turi",
-      "test_title": "Nima sinaldi",
-      "title_placeholder": "2026 III chorak nazorat to'plamidagi aniqlik",
-      "performed_on": "Sana",
-      "performed_by": "Kim tomonidan",
-      "by_placeholder": "ML jamoasi, tashqi kompaniya",
-      "result": "Natija",
-      "summary": "Qisqacha",
-      "findings": "Topilgan kamchiliklar va ular bo'yicha choralar",
-      "evidence": "Hisobot havolasi",
-      "next_due": "Qayta sinash muddati",
-      "save": "Saqlash",
-      "save_failed": "Yozuvni saqlab bo'lmadi.",
-      "append_only": "Yozuvni keyin o'zgartirib bo'lmaydi; tuzatish - bu yangi yozuv.",
-      "empty": "Hali sinov qayd etilmagan.",
-      "kinds": {
-        "evaluation": "Baholash",
-        "bias": "Bias testi",
-        "red_team": "Red teaming",
-        "robustness": "Barqarorlik sinovi"
-      },
-      "results": {
-        "passed": "O'tdi",
-        "passed_with_findings": "Kamchiliklar bilan o'tdi",
-        "failed": "O'tmadi"
-      }
+    "q": {
+      "purpose": "Tizim nima uchun va qaysi jarayonda ishlatiladi?",
+      "affected": "Uning natijalari kimga ta'sir qiladi?",
+      "scale": "Yiliga qancha odamga ta'sir qiladi?",
+      "period": "Qachon va qanchalik tez-tez ishlatiladi?",
+      "rights": "Qaysi huquq yoki manfaatlarga zarar yetishi mumkin?",
+      "harm": "Bu odamlar uchun nima noto'g'ri ketishi mumkin va qanday?",
+      "severity": "Zarar qanchalik jiddiy bo'ladi?",
+      "likelihood": "Bu qanchalik ehtimol?",
+      "reversibility": "Zararni bartaraf etish mumkinmi?",
+      "personal_data": "Tizim shaxsiy ma'lumotlarni qayta ishlaydimi?",
+      "categories": "Qaysi turlari?",
+      "lawful_basis": "Huquqiy asos (GDPR 6-modda)",
+      "necessity": "Bu ma'lumotlar nega kerak va nimalar chiqarib tashlangan?",
+      "retention": "Qancha vaqt saqlanadi?",
+      "transfers": "EI/EIH dan tashqariga chiqadimi?",
+      "measures": "Bu xavflarni nima kamaytiradi? (testlar, cheklovlar, Provenza siyosatlari, o'qitish)",
+      "oversight": "Tizimni kim nazorat qiladi va uni to'xtatishi yoki qarorini bekor qilishi mumkin?",
+      "redress": "Ta'sirlangan odam qanday shikoyat qilishi yoki qarorga e'tiroz bildirishi mumkin?",
+      "residual": "Choralardan keyingi qoldiq xavf",
+      "decision": "Qaror",
+      "conditions": "Shartlar",
+      "review_date": "Qayta ko'rib chiqish muddati"
     },
+    "h": {
+      "review_date": "Bo'sh qolsa, tasdiqlangandan bir yil o'tib."
+    },
+    "o": {
+      "affected": {
+        "employees": "Xodimlar",
+        "job_applicants": "Ishga nomzodlar",
+        "customers": "Mijozlar",
+        "patients": "Bemorlar",
+        "students": "Talabalar",
+        "children": "Bolalar",
+        "public": "Jamoatchilik",
+        "other": "Boshqalar"
+      },
+      "scale": {
+        "under_100": "100 dan kam",
+        "100_10k": "100 - 10 000",
+        "10k_1m": "10 000 - 1 million",
+        "over_1m": "1 milliondan ortiq"
+      },
+      "rights": {
+        "non_discrimination": "Kamsitilmaslik",
+        "privacy": "Shaxsiy hayot daxlsizligi",
+        "expression": "So'z erkinligi",
+        "access_services": "Xizmatlardan foydalanish",
+        "employment": "Mehnat va bandlik",
+        "education": "Ta'lim",
+        "health_safety": "Sog'liq va xavfsizlik",
+        "due_process": "Adolatli tartib",
+        "none": "Hech biri"
+      },
+      "severity": {
+        "low": "Past",
+        "medium": "O'rta",
+        "high": "Yuqori",
+        "critical": "Kritik"
+      },
+      "likelihood": {
+        "rare": "Kamdan-kam",
+        "possible": "Ehtimoliy",
+        "likely": "Ehtimoli yuqori"
+      },
+      "reversibility": {
+        "reversible": "Qaytariladigan",
+        "hard_to_reverse": "Qaytarish qiyin",
+        "irreversible": "Qaytarib bo'lmaydigan"
+      },
+      "personal_data": {
+        "yes": "Ha",
+        "no": "Yo'q"
+      },
+      "categories": {
+        "identity": "Shaxsni aniqlovchi",
+        "contact": "Aloqa ma'lumotlari",
+        "financial": "Moliyaviy",
+        "location": "Joylashuv",
+        "behaviour": "Xulq-atvor",
+        "special": "Maxsus toifalar (sog'liq, biometrik, e'tiqod...)",
+        "children": "Bolalar ma'lumotlari",
+        "criminal": "Sudlanganlik"
+      },
+      "lawful_basis": {
+        "consent": "Rozilik",
+        "contract": "Shartnoma",
+        "legal_obligation": "Qonuniy majburiyat",
+        "vital_interest": "Hayotiy manfaat",
+        "public_task": "Ommaviy vazifa",
+        "legitimate_interest": "Qonuniy manfaat"
+      },
+      "transfers": {
+        "no": "Yo'q",
+        "adequacy": "Ha, adekvatlik qarori bor davlatga",
+        "safeguards": "Ha, kafolatlar bilan (SCC, BCR)"
+      },
+      "residual": {
+        "low": "Past",
+        "medium": "O'rta",
+        "high": "Yuqori"
+      },
+      "decision": {
+        "proceed": "Davom etish",
+        "proceed_with_conditions": "Shartlar bilan davom etish",
+        "do_not_proceed": "Davom etmaslik"
+      }
+    }
+  },
+  "assurance": {
+    "title": "Sinov va kafolat",
+    "add": "Sinovni qayd etish",
+    "hint": "Bu tizimning baholashlari, bias testlari, red teaming va barqarorlik sinovlari - kim o'tkazgani va dalillari bilan. Sinov bir yil amal qiladi. EU AI Act 15-modda baholash hamda red teaming yoki barqarorlik sinovini, 10-modda esa bias testini talab qiladi.",
+    "kind": "Turi",
+    "test_title": "Nima sinaldi",
+    "title_placeholder": "2026 III chorak nazorat to'plamidagi aniqlik",
+    "performed_on": "Sana",
+    "performed_by": "Kim tomonidan",
+    "by_placeholder": "ML jamoasi, tashqi kompaniya",
+    "result": "Natija",
+    "summary": "Qisqacha",
+    "findings": "Topilgan kamchiliklar va ular bo'yicha choralar",
+    "evidence": "Hisobot havolasi",
+    "next_due": "Qayta sinash muddati",
+    "save": "Saqlash",
+    "save_failed": "Yozuvni saqlab bo'lmadi.",
+    "append_only": "Yozuvni keyin o'zgartirib bo'lmaydi; tuzatish - bu yangi yozuv.",
+    "empty": "Hali sinov qayd etilmagan.",
+    "kinds": {
+      "evaluation": "Baholash",
+      "bias": "Bias testi",
+      "red_team": "Red teaming",
+      "robustness": "Barqarorlik sinovi"
+    },
+    "results": {
+      "passed": "O'tdi",
+      "passed_with_findings": "Kamchiliklar bilan o'tdi",
+      "failed": "O'tmadi"
+    }
+  },
   "export_keys": {
     "title": "SIEM eksporti",
     "new": "Yangi kalit",
@@ -3016,7 +3019,13 @@
     "mfa": "Ikki bosqichli kirishni talab qiling",
     "mfa_hint": "Hech bo'lmaganda adminlar va tasdiqlovchilar uchun. Avval o'zingiz uchun Mening profilimda sozlang.",
     "discovery": "Shadow AI'ni toping",
-    "discovery_hint": "Endpoint agent yoki brauzer kengaytmasi uchun ingestion kaliti."
+    "discovery_hint": "Endpoint agent yoki brauzer kengaytmasi uchun ingestion kaliti.",
+    "proxy": "Agentlarni egress proksi orqali o'tkazing",
+    "proxy_hint": "Proksi agentlarning haqiqiy API kalitlarini saqlaydi: agent Provenza'siz xizmatga ulana olmaydi.",
+    "sensor": "Tarmoqni sensor bilan kuzating",
+    "sensor_hint": "Sensor proksini chetlab o'tgan AI trafigini ko'radi va uni to'xtata oladi.",
+    "sso": "Identifikatsiya provayderi orqali kirish",
+    "sso_hint": "Yagona kirish (OpenID Connect): xodimlar kompaniya hisobidan foydalanadi; ishdan ketganlar kirish huquqini u bilan birga yo'qotadi."
   },
   "provider_policy": {
     "title": "AI provayderlar siyosati",
@@ -3589,5 +3598,109 @@
     "where": "Linux, amd64 yoki arm64. O'sha mashinada egress proksi bo'lsa (Provenza serverida bor) chaqiruvlar u orqali o'tadi; boshqa joyda to'g'ridan-to'g'ri Provenza shlyuzlariga.",
     "done": "Ulandi: agent #{{id}}. Uning chaqiruvlari Agent faoliyatida ko'rinadi.",
     "other": "Tokendan foydalanishning boshqa usullari:"
+  },
+  "nav": {
+    "main": "Asosiy",
+    "inbox": "Kiruvchi",
+    "ai": "AI",
+    "rules": "Qoidalar",
+    "evidence": "Dalillar",
+    "settings": "Sozlamalar",
+    "help": "Yordam",
+    "search": "Qidiruv",
+    "search_placeholder": "Sahifalarni qidirish…",
+    "stop_all": "Hammasini to'xtatish",
+    "stop_all_hint": "Favqulodda to'xtatish: bitta agentni, barcha agentlarni yoki butun AI trafigini to'xtatish",
+    "account": "Hisob",
+    "stopped_org": "Agentlar butun tashkilot bo'yicha to'xtatilgan.",
+    "stopped_some_one": "{{count}} ta to'xtatish faol: ba'zi agentlar to'xtatilgan.",
+    "stopped_some_other": "{{count}} ta to'xtatish faol: ba'zi agentlar to'xtatilgan.",
+    "stopped_open": "Favqulodda to'xtatishni ochish",
+    "no_access_title": "Bu sahifaga kirish huquqingiz yo'q",
+    "no_access": "Rolingiz bu sahifani o'z ichiga olmaydi. Agar u ishingiz uchun kerak bo'lsa, administratordan so'rang.",
+    "no_access_home": "Bosh sahifamga o'tish"
+  },
+  "inbox": {
+    "title": "Kiruvchi",
+    "hint": "Inson qarorini kutayotgan hamma narsa. Bu yerda yo'q narsalar siyosatlaringiz asosida o'zi ishlaydi.",
+    "filter": "Ko'rsatish",
+    "all": "Hammasi",
+    "approvals": "Tasdiqlashlar",
+    "incidents": "Hodisalar",
+    "new_ai": "Yangi AI",
+    "open_incidents": "Ochiq hodisalar",
+    "open_all": "Hammasini ochish",
+    "no_incidents": "Ochiq hodisalar yo'q.",
+    "agent_incident": "Agent hodisasi",
+    "agent": "Agent",
+    "new_ai_title": "Foydalanilayotgan, hali ko'rib chiqilmagan AI",
+    "no_new_ai": "Yangi hech narsa topilmadi.",
+    "shadow": "Shadow AI",
+    "found_agent": "Qurilmadagi agent",
+    "seen_one": "{{count}} marta ko'rilgan",
+    "seen_other": "{{count}} marta ko'rilgan",
+    "review": "Ko'rib chiqish",
+    "dismiss": "Rad etish",
+    "summary": "So'nggi 7 kun",
+    "elsewhere": "Boshqa bo'limlar",
+    "link_ai": "Tashkilotdagi barcha AI",
+    "link_audit": "Audit jurnali",
+    "link_compliance": "Muvofiqlik",
+    "link_help": "Provenza qanday ishlaydi",
+    "denied": "Siyosat rad etgan"
+  },
+  "settings_hub": {
+    "group": {
+      "you": "Siz",
+      "people": "Odamlar va bildirishnomalar",
+      "gateways": "Shlyuzlar, sensorlar va agent identifikatsiyasi",
+      "data": "Kalitlar va ma'lumotlar",
+      "system": "Tizim"
+    },
+    "desc": {
+      "profile": "Ismingiz, parol, ikki bosqichli kirish va passkey'lar.",
+      "users": "Odamlarni taklif qilish, rollarini belgilash, ikki bosqichli kirish, yagona kirish.",
+      "notifications": "Provenza hodisalar va tasdiqlash so'rovlarini qayerga yuboradi: email, Slack, Teams, webhook.",
+      "gateway": "Agentlar o'tadigan shlyuzlar: AI modellar, MCP vositalari, HTTP API, boshqa agentlar, egress proksi.",
+      "runtime": "Shlyuzlardan tashqaridagi AI trafigini ko'radigan va to'xtatadigan tarmoq sensorlari.",
+      "agent_identity": "Agentlar o'zini qanday tasdiqlaydi: kalitlar, ro'yxatga olish tokenlari, rol shablonlari.",
+      "attestation": "Agentlarni faqat ishonchli muhitlardan qabul qilish (Kubernetes service account).",
+      "ingestion_sources": "AI foydalanishini xabar qiluvchi endpoint agent va brauzer kengaytmasi kalitlari.",
+      "domain_catalog": "Qaysi veb-manzillar AI xizmati hisoblanadi va har biri qanchalik xavfli.",
+      "encryption_keys": "Saqlangan sirlarni himoya qiluvchi kalitlar; o'z kalit omboringizni ulash.",
+      "retention": "Yozuvlar o'chirilgunga qadar qancha vaqt saqlanadi.",
+      "export_keys": "Audit jurnalini SIEM tizimingizga yuborish.",
+      "system_status": "Fon vazifalari, ma'lumotlar bazasi va shlyuzlar sog'lommi.",
+      "observability": "Ushbu o'rnatishning barcha tashkilotlar bo'yicha ko'rsatkichlari (faqat operatorlar)."
+    }
+  },
+  "help": {
+    "intro": "Provenza'dan foydalanadigan odamlar uchun qo'llanmalar: qayerdan boshlash, har bir rol uchun qo'llanma, har bir funksiya haqida maqola va ko'p beriladigan savollarga javoblar.",
+    "search": "Yordamdan qidirish…",
+    "results_one": "{{count}} ta maqola",
+    "results_other": "{{count}} ta maqola",
+    "no_results": "Mos maqola topilmadi. Boshqa so'z bilan urinib ko'ring.",
+    "for_you": "Sizning rolingiz uchun",
+    "group": {
+      "start": "Shu yerdan boshlang",
+      "roles": "Rollar bo'yicha qo'llanmalar",
+      "features": "Funksiyalar, birma-bir",
+      "faq": "Savol va javoblar"
+    },
+    "not_found": "Bunday maqola mavjud emas.",
+    "back": "Yordamga qaytish",
+    "for": "Asosan kimlar uchun:",
+    "tip": "Yaxshi amaliyot:",
+    "warn": "Diqqat:",
+    "open_page": "Bu sahifani ochish",
+    "contents": "Ushbu maqolada",
+    "related": "O'xshash maqolalar",
+    "role": {
+      "admin": "administratorlar",
+      "approver": "tasdiqlovchilar",
+      "auditor": "auditorlar",
+      "compliance": "muvofiqlik xodimlari",
+      "user": "xodimlar"
+    }
   }
 }

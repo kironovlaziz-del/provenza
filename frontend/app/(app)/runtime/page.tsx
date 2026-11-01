@@ -731,7 +731,7 @@ export default function RuntimePage() {
                 <div style={{ display: "flex", gap: 24, flexWrap: "wrap", alignItems: "center" }}>
                   <span>
                     <em style={{ opacity: 0.6, fontStyle: "normal" }}>{t("rt.sensors.signing_key_current")}:</em>{" "}
-                    <span className="mono ag-small">{signingKey.fingerprint}</span>
+                    <span className="mono ag-small u-break">{signingKey.fingerprint}</span>
                   </span>
                   <button className="btn btn-sm btn-danger" disabled={busy} onClick={rotateKey}>
                     {t("rt.sensors.rotate_key")}
@@ -743,7 +743,7 @@ export default function RuntimePage() {
                     <div style={{ display: "flex", gap: 24, flexWrap: "wrap", alignItems: "center" }}>
                       <span>
                         <em style={{ opacity: 0.6, fontStyle: "normal" }}>{t("rt.sensors.signing_key_previous")}:</em>{" "}
-                        <span className="mono ag-small">{signingKey.previous_fingerprint}</span>
+                        <span className="mono ag-small u-break">{signingKey.previous_fingerprint}</span>
                       </span>
                       {signingKey.previous_valid_until && (
                         <span className="hint-text">
