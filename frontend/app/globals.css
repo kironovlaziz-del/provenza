@@ -1089,7 +1089,8 @@ tbody tr.clickable:hover {
 }
 
 /* ---------- Audit Log console ----------
-   A terminal-style pane: always dark, one line per record, scrolls inside. */
+   A terminal-style pane, one line per record, scrolls inside; light colours
+   under the light theme (below). */
 .audit-console {
   --ac-bg: #0d1117;
   --ac-bg-row: #161b22;
@@ -1955,4 +1956,12 @@ a.btn, a.btn:hover { text-decoration: none; }
 @media (max-width: 760px) {
   .content table:not(.no-scroll) { display: block; max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
   .content pre { max-width: 100%; overflow-x: auto; }
+}
+
+/* the audit console under the light theme */
+:root[data-theme="light"] .audit-console {
+  --ac-bg: #ffffff; --ac-bg-row: #f6f8fa; --ac-bg-open: #eef3fb; --ac-line: #e4e7ec; --ac-text: #1f2328;
+  --ac-muted: #656d76; --ac-good: #1a7f37; --ac-bad: #cf222e; --ac-new: #0969da; --ac-change: #9a6700;
+  --ac-key: #0550ae; --ac-str: #0a3069; --ac-num: #953800;
+  border: 1px solid var(--border);
 }

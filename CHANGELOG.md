@@ -62,6 +62,8 @@ this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Light theme: Agent observability and the audit log console stayed dark;
+  both now follow the theme (the live activity terminal stays dark).
 - A page a role may not open (an old link, a typed address) says "You don't
   have access to this page" instead of loading forever or failing on refused
   requests. The Compliance page is no longer offered to plain users, whom
