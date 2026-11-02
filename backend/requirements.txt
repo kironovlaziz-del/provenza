@@ -30,6 +30,10 @@ psycopg2-binary==2.9.13
 # Crypto
 cryptography==50.0.2
 
+# Agent Manifest (AgenTrust v0.2): signed manifests of agents, app/services/agent_manifest.py
+agent-manifest==0.15.0
+cbor2==6.2.0.post1
+
 # HTTP client
 httpx==0.28.1
 

@@ -63,6 +63,8 @@ from app.models.egress_proxy import EgressProxy, EgressRedemption, EgressRoute, 
 from app.models.egress_sensor import (EgressPolicyRevision, EgressPolicySettings, EgressSensor,
                                     EgressSensorWorkload, EgressViolation, EgressWorkload)
 
+from app.models.agent_manifest import AgentManifestRecord
+
 __all__ = [
     "Organization",
     "User",
@@ -116,6 +118,7 @@ __all__ = [
     "PolicyReleaseSignature",
     "PolicySigningSettings",
     "SealedCredential",
+    "AgentManifestRecord",
 ]
 
 # live agent events (after-commit session hook)

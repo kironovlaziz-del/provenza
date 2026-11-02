@@ -1203,7 +1203,8 @@
     "webauthn.bad_encoding": "The passkey's answer could not be read.",
     "log_import.too_large": "The log is too large for one upload: split it into parts.",
     "log_import.unreadable": "The file could not be read. A gzip file may be cut off.",
-    "ingestion.logs_need_gateway_key": "Log lines need a Gateway ingestion key."
+    "ingestion.logs_need_gateway_key": "Log lines need a Gateway ingestion key.",
+    "agent_manifest.unavailable": "This server cannot sign Agent Manifests."
   },
   "discovery": {
     "title": "Network Discovery",
@@ -1362,7 +1363,10 @@
     "confirm_retire": "Retire \"{{name}}\"? Its API key stops working for good, and it no longer counts toward its team or role (they can then be deleted). Its history and audit records stay.",
     "confirm_reactivate": "Switch \"{{name}}\" back on? It will be able to act again with its key.",
     "status_change_failed": "Could not change the agent's status.",
-    "retired_note": "This agent is retired: it cannot act and no longer counts toward a team or role. Its history is kept."
+    "retired_note": "This agent is retired: it cannot act and no longer counts toward a team or role. Its history is kept.",
+    "manifest": "Agent Manifest",
+    "manifest_hint": "A signed record of this agent's identity, approved tools and audit log (AgenTrust Agent Manifest v0.2), checkable without Provenza.",
+    "manifest_failed": "The Agent Manifest could not be issued."
   },
   "chains": {
     "title": "Delegation Chains",

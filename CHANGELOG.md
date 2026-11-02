@@ -8,6 +8,18 @@ this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **Agent Manifest** ([docs/agent-manifest.md](docs/agent-manifest.md)). Every
+  agent's page has an **Agent Manifest** button
+  (`GET /agents/{id}/manifest`, `/manifest.cose`): a signed record of the agent
+  in the open AgenTrust Agent Manifest v0.2 format, checkable offline with the
+  `agent-manifest` SDK. It binds the agent's SPIFFE identity, its approved MCP
+  tool catalog (schema and description hashes, Merkle root), the root of the
+  organization's signed audit log and whether its actions need a person's
+  approval; what Provenza does not see is declared unbound (`composition-only`
+  profile). Signed by the organization's audit key as a hybrid Ed25519 +
+  ML-DSA-65 COSE_Sign, reissued when what it binds changes, chained to the one
+  before, each issue recorded in the audit log.
+
 - **DNS and proxy logs as a Shadow AI collector**
   ([docs/shadow-ai.md](docs/shadow-ai.md#dns-and-proxy-logs)). An
   administrator uploads a log on **Shadow AI → Import logs**, or a log
