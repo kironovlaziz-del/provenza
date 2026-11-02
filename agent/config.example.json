@@ -1,16 +1,11 @@
 {
-  "api_url": "http://localhost:8000/api/v1/shadow-ai/ingest",
+  "api_url": "https://provenza.example.com/api/v1/shadow-ai/ingest",
   "ingestion_key": "REPLACE_WITH_YOUR_INGESTION_KEY",
   "agent_id": "",
   "scan_interval_sec": 30,
   "batch_interval_sec": 10,
   "batch_size": 50,
-  "model_search_paths": [
-    "~/.ollama/models",
-    "~/.cache/huggingface/hub",
-    "~/.cache/lm-studio/models",
-    "~/models"
-  ],
+  "heartbeat_sec": 900,
   "discovery_enabled": false,
   "discovery_interval_sec": 900
 }

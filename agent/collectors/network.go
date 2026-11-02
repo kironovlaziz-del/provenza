@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"log"
 	"net"
-	"os"
 	"sync"
 	"time"
 
@@ -44,7 +43,7 @@ func NewNetworkCollector(cfg *config.AgentConfig, rep *reporters.Reporter) *Netw
 
 // ScanOnce tests local TCP port listeners.
 func (c *NetworkCollector) ScanOnce() {
-	currentUser := os.Getenv("USER")
+	who := currentUser()
 
 	for port, meta := range KnownAIPorts {
 		target := fmt.Sprintf("127.0.0.1:%d", port)
@@ -66,7 +65,7 @@ func (c *NetworkCollector) ScanOnce() {
 				EventType:   "network_conn",
 				AgentID:     c.cfg.AgentID,
 				Domain:      fmt.Sprintf("localhost:%d", port),
-				UserID:      currentUser,
+				UserID:      who,
 				RiskScore:   meta.Risk,
 				ActionTaken: "monitored",
 				Payload: map[string]interface{}{

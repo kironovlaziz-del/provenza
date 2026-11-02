@@ -40,8 +40,6 @@ func NewFileCollector(cfg *config.AgentConfig, rep *reporters.Reporter) *FileCol
 
 // ScanOnce traverses directories looking for downloaded models.
 func (c *FileCollector) ScanOnce() {
-	currentUser := os.Getenv("USER")
-
 	for _, rootPath := range c.cfg.SearchRoots() {
 		if _, err := os.Stat(rootPath); os.IsNotExist(err) {
 			continue
@@ -78,7 +76,7 @@ func (c *FileCollector) ScanOnce() {
 						EventType:   "local_model_found",
 						AgentID:     c.cfg.AgentID,
 						Domain:      "local_filesystem",
-						UserID:      currentUser,
+						UserID:      fileUser(path),
 						RiskScore:   0.5,
 						ActionTaken: "monitored",
 						Payload: map[string]interface{}{
@@ -109,4 +107,12 @@ func (c *FileCollector) RunPeriodic(stopChan <-chan struct{}) {
 			c.ScanOnce()
 		}
 	}
+}
+
+// fileUser: the person by the file's location, else the agent's account.
+func fileUser(path string) string {
+	if u := ownerFromPath(path); u != "" {
+		return u
+	}
+	return currentUser()
 }

@@ -12,7 +12,8 @@ export function HelpInline({ text }: { text: string }) {
   let i = 0;
   while ((m = re.exec(text))) {
     if (m.index > last) parts.push(text.slice(last, m.index));
-    if (m[1]) parts.push(<strong key={i++}>{m[1]}</strong>);
+    // bold may hold a link: **[Policies](/policy-hierarchy)**
+    if (m[1]) parts.push(<strong key={i++}><HelpInline text={m[1]} /></strong>);
     else if (m[3].startsWith("/") && !m[3].startsWith("//")) parts.push(<Link key={i++} href={m[3]}>{m[2]}</Link>);
     else if (m[3].startsWith("https://")) parts.push(<a key={i++} href={m[3]} target="_blank" rel="noreferrer">{m[2]}</a>);
     else parts.push(m[2]);

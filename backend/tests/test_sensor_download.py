@@ -36,3 +36,32 @@ async def test_missing_build_says_why(client, tmp_path, monkeypatch):
     r = await client.get(f"{BASE}/install.sh")
     assert r.status_code == 404
     assert "not built" in r.text
+
+
+async def test_serves_the_agent_for_every_system(client, tmp_path, monkeypatch):
+    """The endpoint agent for Windows and macOS, and the scripts the
+    Ingestion Sources page gives as the install command."""
+    names = [
+        "provenza-agent-linux-amd64", "provenza-agent-darwin-arm64",
+        "provenza-agent-darwin-amd64", "provenza-agent-windows-amd64.exe",
+        "provenza-agent-windows-arm64.exe",
+    ]
+    for n in names:
+        (tmp_path / n).write_bytes(b"bin " + n.encode())
+    (tmp_path / "install-agent.sh").write_text("#!/bin/sh\n")
+    (tmp_path / "install-agent.ps1").write_text("param()\n")
+    monkeypatch.setattr(settings, "SENSOR_DIST_DIR", str(tmp_path))
+
+    for n in names:
+        r = await client.get(f"{BASE}/{n}")
+        assert r.status_code == 200, n
+        assert r.content == b"bin " + n.encode()
+        assert "attachment" in r.headers.get("content-disposition", "")
+    r = await client.get(f"{BASE}/install-agent.sh")
+    assert r.status_code == 200 and r.headers["content-type"].startswith("text/x-shellscript")
+    # irm in PowerShell returns text only for a text type
+    r = await client.get(f"{BASE}/install-agent.ps1")
+    assert r.status_code == 200 and r.headers["content-type"].startswith("text/plain")
+    # no Windows binary without .exe, no other systems
+    for n in ("provenza-agent-windows-amd64", "provenza-agent-freebsd-amd64"):
+        assert (await client.get(f"{BASE}/{n}")).status_code == 404, n

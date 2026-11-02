@@ -1,12 +1,8 @@
 package collectors
 
 import (
-	"fmt"
 	"log"
 	"os"
-	"os/user"
-	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -27,6 +23,8 @@ type ProcessCollector struct {
 	userNames  map[string]string    // uid -> user name
 	resolver   *apiResolver
 	mu         sync.Mutex
+	// listErrLogged: a failed process listing is logged once
+	listErrLogged bool
 }
 
 // NewProcessCollector creates an instance of the process monitor.
@@ -41,74 +39,59 @@ func NewProcessCollector(cfg *config.AgentConfig, rep *reporters.Reporter) *Proc
 	}
 }
 
-// ScanOnce reads /proc on Linux systems to detect active local AI runtimes.
+// ScanOnce lists the running processes (per operating system: /proc on
+// Linux, the Toolhelp snapshot on Windows, sysctl on macOS - see
+// proc_<os>.go) and reports the AI runtimes and agents among them.
 func (c *ProcessCollector) ScanOnce() {
-	procDir, err := os.Open("/proc")
+	procs, err := listProcesses()
 	if err != nil {
-		return // Not running on Linux or /proc is inaccessible
-	}
-	defer procDir.Close()
-
-	entries, err := procDir.Readdirnames(-1)
-	if err != nil {
+		c.logListError(err)
 		return
 	}
 
 	activePIDs := make(map[int]bool)
 	agentsNow := make(map[string]agentHit)
 	apiIPs := c.resolver.addresses()
-	sockets := llmSockets(httpsSockets(), apiIPs)
+	probe := newBehaviorProbe(apiIPs)
 	self := os.Getpid()
 
-	for _, entry := range entries {
-		pid, err := strconv.Atoi(entry)
-		if err != nil {
-			continue
-		}
-		activePIDs[pid] = true
+	for _, p := range procs {
+		activePIDs[p.PID] = true
+		commName := p.Comm
 
-		commBytes, err := os.ReadFile(fmt.Sprintf("/proc/%d/comm", pid))
-		if err != nil {
-			continue
-		}
-		commName := strings.TrimSpace(string(commBytes))
-
-		cmdlineBytes, _ := os.ReadFile(fmt.Sprintf("/proc/%d/cmdline", pid))
-		argv := strings.Split(strings.TrimRight(string(cmdlineBytes), "\x00"), "\x00")
-
-		matches := MatchProcess(commName, argv)
-		if len(matches) == 0 && pid != self && len(cmdlineBytes) > 0 && !behaviorIgnore[normalizeName(commName)] {
-			c.inspectUnknown(pid, commName, argv, sockets, apiIPs, agentsNow)
+		matches := MatchProcess(commName, p.Argv)
+		if len(matches) == 0 && p.PID != self && len(p.Argv) > 0 && !behaviorIgnore[normalizeName(commName)] {
+			c.inspectUnknown(p, probe, agentsNow)
 		}
 		for _, m := range matches {
 			if m.Signature.Kind == "agent" {
 				if _, seen := agentsNow[m.Signature.Product]; !seen {
-					agentsNow[m.Signature.Product] = agentHit{comm: commName, pid: pid, by: m.By, risk: m.Signature.Risk,
-						user: c.processUser(pid)}
+					agentsNow[m.Signature.Product] = agentHit{comm: commName, pid: p.PID, by: m.By, risk: m.Signature.Risk,
+						user: c.processUser(p)}
 				}
 				continue
 			}
 			c.mu.Lock()
-			alreadyReported := c.seenPIDs[pid] == commName
+			alreadyReported := c.seenPIDs[p.PID] == commName
 			if !alreadyReported {
-				c.seenPIDs[pid] = commName
+				c.seenPIDs[p.PID] = commName
 			}
 			c.mu.Unlock()
 			if alreadyReported {
 				continue
 			}
-			log.Printf("[ProcessCollector] Detected AI runtime process '%s' (PID %d)", commName, pid)
+			log.Printf("[ProcessCollector] Detected AI runtime process '%s' (PID %d)", commName, p.PID)
 			// The command line is never sent: it can carry API keys and tokens.
 			c.reporter.Submit(reporters.TelemetryEvent{
 				EventType:   "process_detected",
 				AgentID:     c.cfg.AgentID,
 				Domain:      "localhost",
-				UserID:      c.processUser(pid),
+				UserID:      c.processUser(p),
 				RiskScore:   m.Signature.Risk,
 				ActionTaken: "monitored",
 				Payload: map[string]interface{}{
 					"process_name": commName,
-					"pid":          pid,
+					"pid":          p.PID,
 					"ai_tool":      m.Signature.Product,
 					"matched_by":   m.By,
 				},
@@ -128,6 +111,16 @@ func (c *ProcessCollector) ScanOnce() {
 	c.mu.Unlock()
 }
 
+// logListError logs a failed process listing once, not on every scan.
+func (c *ProcessCollector) logListError(err error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if !c.listErrLogged {
+		c.listErrLogged = true
+		log.Printf("[ProcessCollector] cannot list processes: %v", err)
+	}
+}
+
 type agentHit struct {
 	comm  string
 	pid   int
@@ -138,36 +131,28 @@ type agentHit struct {
 }
 
 // processUser is the account that owns the process (the person running the
-// agent), not the account the collector itself runs as - usually root.
-func (c *ProcessCollector) processUser(pid int) string {
-	data, err := os.ReadFile(fmt.Sprintf("/proc/%d/status", pid))
-	if err != nil {
-		return ""
+// agent), not the account the collector itself runs as - usually root or
+// SYSTEM. Names are cached per account id.
+func (c *ProcessCollector) processUser(p procInfo) string {
+	if p.User != "" {
+		return p.User
 	}
-	for _, line := range strings.Split(string(data), "\n") {
-		if !strings.HasPrefix(line, "Uid:") {
-			continue
-		}
-		fields := strings.Fields(line)
-		if len(fields) < 2 {
+	if p.UID == "" {
+		p.UID = processUID(p.PID)
+		if p.UID == "" {
 			return ""
 		}
-		uid := fields[1] // real uid
-		c.mu.Lock()
-		name, ok := c.userNames[uid]
-		c.mu.Unlock()
-		if !ok {
-			name = uid
-			if u, err := user.LookupId(uid); err == nil {
-				name = u.Username
-			}
-			c.mu.Lock()
-			c.userNames[uid] = name
-			c.mu.Unlock()
-		}
-		return name
 	}
-	return ""
+	c.mu.Lock()
+	name, ok := c.userNames[p.UID]
+	c.mu.Unlock()
+	if !ok {
+		name = accountName(p.UID)
+		c.mu.Lock()
+		c.userNames[p.UID] = name
+		c.mu.Unlock()
+	}
+	return name
 }
 
 func (h agentHit) payload(product string) map[string]interface{} {
@@ -185,14 +170,13 @@ func (h agentHit) payload(product string) map[string]interface{} {
 
 // inspectUnknown looks for behavioral signals in a process no signature
 // matched (see behavior.go) and records it as an unrecognized agent.
-func (c *ProcessCollector) inspectUnknown(pid int, comm string, argv []string,
-	sockets, apiIPs map[string]string, agentsNow map[string]agentHit) {
-	interpreted := len(argv) > 0 && interpreters[interpreterName(argv[0])]
-	sig := inspectProcess(pid, interpreted, sockets, apiIPs, os.ReadFile, os.Readlink, listDir)
+func (c *ProcessCollector) inspectUnknown(p procInfo, probe behaviorProbe, agentsNow map[string]agentHit) {
+	interpreted := interpreters[interpreterName(p.Argv[0])]
+	sig := probe.inspect(p, interpreted)
 	if !sig.found() {
 		return
 	}
-	product := customProductID(comm, argv)
+	product := customProductID(p.Comm, p.Argv)
 	if _, seen := agentsNow[product]; seen {
 		return
 	}
@@ -201,7 +185,7 @@ func (c *ProcessCollector) inspectUnknown(pid int, comm string, argv []string,
 	if conf == "high" {
 		risk = 0.6
 	}
-	agentsNow[product] = agentHit{comm: comm, pid: pid, by: "behavior", risk: risk, user: c.processUser(pid),
+	agentsNow[product] = agentHit{comm: p.Comm, pid: p.PID, by: "behavior", risk: risk, user: c.processUser(p),
 		extra: map[string]interface{}{
 			"confidence": conf,
 			"api_hosts":  sig.APIHosts,

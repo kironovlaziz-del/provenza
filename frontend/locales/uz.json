@@ -645,7 +645,15 @@
     "enable": "Yoqish",
     "disable": "O'chirish",
     "revoke": "Bekor qilish",
-    "download_extension": "Kengaytmani yuklab olish"
+    "download_extension": "Kengaytmani yuklab olish",
+    "agent_install_title": "Endpoint agentni o‘rnatish",
+    "agent_os_windows": "Windows",
+    "agent_os_macos": "macOS",
+    "agent_os_linux": "Linux",
+    "agent_where_windows": "Administrator sifatida ochilgan PowerShell’da (Windows 10/11, Server 2016+). ProvenzaAgent xizmatini o‘rnatadi, u avtomatik ishga tushadi.",
+    "agent_where_macos": "Terminalda, administrator sifatida (macOS 12+, Intel yoki Apple silicon). Tizim yuklanganda ishga tushadigan LaunchDaemon o‘rnatadi.",
+    "agent_where_linux": "sudo bilan shell’da (systemd). provenza-agent xizmatini o‘rnatadi.",
+    "agent_after": "Buyruq ushbu manbaning kalitini so‘raydi (kiritilgani ko‘rinmaydi), yuklab olinganini SHA256SUMS bilan tekshiradi va agentni ishga tushiradi. Kompyuter bir daqiqa ichida AI → Qurilmalar bo‘limida paydo bo‘ladi. Yangilash uchun xuddi shu buyruqni qayta ishga tushiring. Intune, GPO yoki Jamf uchun Yordam → Endpoint agent bo‘limiga qarang."
   },
   "audit": {
     "title": "Audit jurnali",

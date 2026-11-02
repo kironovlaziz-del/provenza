@@ -8,6 +8,29 @@ this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **Endpoint agent for Windows and macOS** (agent 1.5,
+  [docs/shadow-ai.md](docs/shadow-ai.md#endpoint-agent)). The agent now runs
+  on Windows 10/11 and Server 2016+ (amd64, arm64), macOS 12+ (Intel, Apple
+  silicon) and Linux, and installs itself as a service:
+  `provenza-agent install --server … --key -` registers a Windows service
+  (`ProvenzaAgent`, LocalSystem, restarted on failure), a LaunchDaemon or a
+  systemd unit, with the key readable by administrators only; `status` and
+  `uninstall [--purge]` go with it. Provenza builds and serves the six
+  binaries and two installers (`install-agent.ps1`, `install-agent.sh`) next
+  to the sensor; **Ingestion Sources** shows the one-line install command for
+  each system when an *Endpoint agent* key is created, and the guide covers
+  Intune, Group Policy, Jamf and Ansible. Processes are listed natively on
+  each system (Toolhelp and the process command line on Windows, sysctl on
+  macOS); unknown agents are found by their connections to LLM APIs there,
+  and by API key names on macOS. **Devices** names the system (macOS,
+  Windows, Linux). Not code-signed yet.
+- **The endpoint agent no longer loses findings offline.** Batches the server
+  does not accept (no network, 5xx, 429, 401/403) wait in a queue on disk,
+  bounded at 50 MB, and are sent oldest first with a growing pause, also
+  after a restart. Model files are attributed to the user whose home folder
+  holds them; without `model_search_paths` the agent scans every user's
+  Ollama, Hugging Face, LM Studio, GPT4All and Jan folders.
+
 - **Who uses an AI service.** Browser extension 2.1 sends the person's
   e-mail with each visit when the organization sets it by user-level policy
   (`userEmail`; Windows logon script or Intune, a macOS profile - see
@@ -87,6 +110,11 @@ this project adheres to [Semantic Versioning](https://semver.org/).
 - `follow-redirects` 1.16.2 in the console (GHSA-mrwp-f3q8-3g9p).
 
 ### Fixed
+
+- In-app help: a link in bold text (**[Policies](/policy-hierarchy)**) is
+  shown as a link, not as raw markdown.
+- The endpoint agent's default ingest URL had `shadow_ai` instead of
+  `shadow-ai`.
 
 - Browser extension: a secret-paste warning in the same batch as a visit made
   the server refuse the whole batch, so the visit was lost. Such warnings from
