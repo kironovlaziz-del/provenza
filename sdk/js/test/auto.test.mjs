@@ -15,6 +15,9 @@ import { instrument, match, uninstrument } from "../dist/auto.js";
 import { FakeProvenza, SERVER } from "./fake-server.mjs";
 
 const PROMPT = "patient John Smith, diagnosis ...";
+// a query secret that cannot occur by chance in the random ids, hashes and
+// signatures of the recorded actions (a short hex-like "abc" could: flaky)
+const QUERY_SECRET = "sk-query-secret-do-not-record";
 const realFetch = globalThis.fetch;
 let provider, server, agent;
 
@@ -48,7 +51,7 @@ describe("provenza/auto", () => {
   });
 
   test("an AI call is checked, sent and recorded - without the prompt or the query", async () => {
-    const r = await fetch("https://api.openai.com/v1/chat/completions?key=abc",
+    const r = await fetch(`https://api.openai.com/v1/chat/completions?key=${QUERY_SECRET}`,
                           { method: "POST", body: JSON.stringify({ prompt: PROMPT }) });
     assert.equal(r.status, 200);
     assert.equal(provider.length, 1);
@@ -57,7 +60,7 @@ describe("provenza/auto", () => {
     assert.deepEqual([chk.input.method, chk.input.path], ["POST", "/v1/chat/completions"]);
     assert.equal(chk.input.body_sha256.length, 64);
     const all = JSON.stringify([...server.checks.values(), ...server.records]);
-    assert.ok(!all.includes(PROMPT) && !all.includes("abc"));
+    assert.ok(!all.includes(PROMPT) && !all.includes(QUERY_SECRET));
     assert.equal(server.records.at(-1).output.status, 200);
   });
 
