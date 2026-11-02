@@ -122,7 +122,7 @@ export default function DevicesPage() {
                         {quiet(d) && <span className="pill pill-neutral" style={{ marginLeft: 6 }}>{t("devices.quiet")}</span>}
                       </td>
                       <td style={{ fontSize: 12 }}>
-                        {[d.os, d.agent_version && `v${d.agent_version}`].filter(Boolean).join(" · ") || "—"}
+                        {[osLabel(d.os), d.agent_version && `v${d.agent_version}`].filter(Boolean).join(" · ") || "—"}
                       </td>
                     </tr>
                     {open === d.id && (
@@ -172,4 +172,10 @@ export default function DevicesPage() {
       </div>
     </>
   );
+}
+
+// The agent reports Go's system names (runtime.GOOS).
+const OS_LABELS: Record<string, string> = { darwin: "macOS", windows: "Windows", linux: "Linux" };
+function osLabel(os: string | null | undefined): string {
+  return os ? OS_LABELS[os] ?? os : "";
 }

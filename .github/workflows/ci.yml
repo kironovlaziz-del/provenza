@@ -140,6 +140,13 @@ jobs:
       - name: Shellcheck (errors)
         run: shellcheck --severity=error install.sh upgrade.sh deploy/scripts/*.sh deploy/scripts/provenza deploy/backend-entrypoint.sh
 
+      # The endpoint agent's installers (served to workstations)
+      - name: Agent installers
+        run: |
+          sh -n agent/install/install-agent.sh
+          shellcheck agent/install/install-agent.sh
+          pwsh -NoProfile -Command '$e = $null; [System.Management.Automation.Language.Parser]::ParseFile("agent/install/install-agent.ps1", [ref]$null, [ref]$e) | Out-Null; if ($e) { $e | ForEach-Object { $_.ToString() }; exit 1 }'
+
   dependency-audit:
     name: Dependency audit (known vulnerabilities)
     runs-on: ubuntu-latest
@@ -314,8 +321,48 @@ jobs:
       - name: Test
         run: go test -count=1 ./...
 
-      - name: Static build
-        run: CGO_ENABLED=0 go build -trimpath -o provenza-agent .
+      # every binary the server serves (deploy/backend.Dockerfile, edge stage)
+      - name: Static builds (Linux, macOS, Windows)
+        run: |
+          for os in linux darwin windows; do
+            for arch in amd64 arm64; do
+              ext=""; [ "$os" = windows ] && ext=".exe"
+              GOOS=$os GOARCH=$arch go vet ./...
+              CGO_ENABLED=0 GOOS=$os GOARCH=$arch go build -trimpath -o "/tmp/provenza-agent-$os-$arch$ext" .
+              echo "ok  $os/$arch"
+            done
+          done
+
+  endpoint-agent-native:
+    name: Endpoint agent on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        # the process listing, the connection probe and the service code of
+        # each system, tested on that system
+        os: [windows-latest, macos-latest]
+
+    defaults:
+      run:
+        working-directory: agent
+        shell: bash
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: agent/go.mod
+          cache-dependency-path: agent/go.sum
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test
+        run: go test -count=1 ./...
 
   sdk-python-integrations:
     name: Python SDK integrations (${{ matrix.extras }})

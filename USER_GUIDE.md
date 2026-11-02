@@ -279,10 +279,12 @@ You can also **Report a sighting** manually.
 
 ### 8.4 Deploying the endpoint agent
 
-The agent is a small native program installed on a machine you want to
-monitor (a server, or an employee workstation via your MDM). It detects
-local AI tools (running processes, listening ports, model files) and, if
-enabled, discovers network services.
+The agent is a small native program that runs as a service on a machine
+you want to monitor: an employee's Windows PC or Mac, or a Linux server. It
+detects local AI tools (running processes, listening ports, model files)
+and AI agents and, if enabled, discovers network services. When the
+network or Provenza is down it keeps its findings on disk and sends them
+later.
 
 On the Provenza server itself there is nothing to do: the installer runs
 the agent there with its key (`provenza edge setup`, see
@@ -290,12 +292,14 @@ the agent there with its key (`provenza edge setup`, see
 On any other machine:
 
 1. Create an **Ingestion Source** of type *Endpoint agent* and copy the
-   key.
-2. Download the agent from your Provenza
-   (`https://<provenza>/api/v1/egress-sensor/download/provenza-agent-linux-amd64`,
-   or `-arm64`; checked against `SHA256SUMS` next to it), put your server URL
-   and the key into its `config.json` (see `agent/config.example.json`) and
-   run it - full steps are in [Shadow AI collectors](docs/shadow-ai.md).
+   key. One source serves the whole fleet.
+2. The same page shows the install command for Windows, macOS and Linux.
+   Run it as an administrator (PowerShell *Run as administrator* on
+   Windows, `sudo` on macOS and Linux) and paste the key when it asks.
+   The command downloads the agent from your Provenza, checks it against
+   `SHA256SUMS` and installs it as a service. For Intune, Group Policy,
+   Jamf and Ansible, and what the agent sees on each system, see
+   [Shadow AI collectors](docs/shadow-ai.md#endpoint-agent).
 3. New findings appear within a minute: local AI tools under
    **Shadow AI → Shadow AI Sightings**, AI agents under **Discovery →
    Agents Found**, and the machine itself under **Discovery → Devices**.

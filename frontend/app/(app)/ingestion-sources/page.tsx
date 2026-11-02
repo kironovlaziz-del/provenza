@@ -6,6 +6,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { LoadError } from "@/components/LoadError";
 import { apiErrorMessage } from "@/lib/inventory_api";
 import { Form } from "@/components/Form";
+import { AgentInstall } from "@/components/AgentInstall";
 import {
   createIngestionSource,
   listIngestionSources,
@@ -43,6 +44,7 @@ export default function IngestionSourcesPage() {
   // never returned by the API again, so there is nothing to fetch or
   // restore here on refresh.
   const [revealedKey, setRevealedKey] = useState<string | null>(null);
+  const [revealedType, setRevealedType] = useState<IngestionSourceType | null>(null);
   const [copied, setCopied] = useState(false);
 
   function refresh() {
@@ -62,6 +64,7 @@ export default function IngestionSourcesPage() {
     try {
       const created = await createIngestionSource({ name, source_type: sourceType });
       setRevealedKey(created.api_key);
+      setRevealedType(sourceType);
       setCopied(false);
       setName("");
       setSourceType("gateway");
@@ -141,11 +144,17 @@ export default function IngestionSourcesPage() {
                   {copied ? t("ingestion_sources.copied") : t("ingestion_sources.copy")}
                 </button>
               </div>
+              {revealedType === "endpoint" && (
+                <div style={{ marginTop: 16 }}>
+                  <h3 className="u-mb-8">{t("ingestion_sources.agent_install_title")}</h3>
+                  <AgentInstall />
+                </div>
+              )}
               <button
                 type="button"
                 className="btn btn-sm"
                 style={{ marginTop: 12 }}
-                onClick={() => setRevealedKey(null)}
+                onClick={() => { setRevealedKey(null); setRevealedType(null); }}
               >
                 {t("ingestion_sources.dismiss")}
               </button>
@@ -193,6 +202,17 @@ export default function IngestionSourcesPage() {
               </Form>
             </div>
           </div>
+        )}
+
+        {!revealedKey && sources.some((s) => s.source_type === "endpoint") && (
+          <details className="panel" style={{ marginBottom: 20 }}>
+            <summary className="panel-header" style={{ cursor: "pointer" }}>
+              <h2 style={{ display: "inline" }}>{t("ingestion_sources.agent_install_title")}</h2>
+            </summary>
+            <div className="panel-body">
+              <AgentInstall />
+            </div>
+          </details>
         )}
 
         <div className="panel">

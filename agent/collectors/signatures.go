@@ -66,7 +66,7 @@ var Signatures = []Signature{
 
 	// ---- Local model runtimes (reported as process_detected, as before).
 	{Product: "ollama", Kind: "runtime", Risk: 0.6, Executables: []string{"ollama"}},
-	{Product: "lmstudio", Kind: "runtime", Risk: 0.7, Executables: []string{"lmstudio", "lm-studio", "lms"}},
+	{Product: "lmstudio", Kind: "runtime", Risk: 0.7, Executables: []string{"lmstudio", "lm-studio", "lm studio", "lms"}},
 	{Product: "vllm", Kind: "runtime", Risk: 0.8, Executables: []string{"vllm"}, Modules: []string{"vllm"}},
 	{Product: "localai", Kind: "runtime", Risk: 0.7, Executables: []string{"localai", "local-ai"}},
 	{Product: "llama.cpp", Kind: "runtime", Risk: 0.6, Executables: []string{"llama-server", "llama-cli", "llama-cpp-server"}, Modules: []string{"llama_cpp"}},

@@ -294,10 +294,12 @@ Shuningdek, **Report a sighting** orqali qo‘lda ham qo‘shishingiz mumkin.
 
 ### 8.4 Endpoint agentini joylashtirish
 
-Agent — bu kuzatmoqchi bo‘lgan mashinaga (server yoki MDM orqali xodim
-kompyuteriga) o‘rnatiladigan kichik native dastur. U lokal AI
-vositalarini (ishlayotgan jarayonlar, tinglayotgan portlar, model
-fayllari) aniqlaydi va yoqilgan bo‘lsa, tarmoq xizmatlarini kashf qiladi.
+Agent — bu kuzatmoqchi bo‘lgan mashinada xizmat sifatida ishlaydigan
+kichik native dastur: xodimning Windows kompyuteri yoki Mac’i, yoki Linux
+server. U lokal AI vositalarini (ishlayotgan jarayonlar, tinglayotgan
+portlar, model fayllari) va AI agentlarni aniqlaydi va yoqilgan bo‘lsa,
+tarmoq xizmatlarini kashf qiladi. Tarmoq yoki Provenza ishlamay qolsa,
+topilmalarni diskda saqlaydi va keyinroq yuboradi.
 
 Provenza serverining o‘zida hech narsa qilish shart emas: o‘rnatuvchi
 agentni u yerda kaliti bilan ishga tushiradi (`provenza edge setup`,
@@ -305,13 +307,15 @@ agentni u yerda kaliti bilan ishga tushiradi (`provenza edge setup`,
 ro‘yxatda paydo bo‘ladi. Boshqa har qanday mashinada:
 
 1. *Endpoint agent* turidagi **Ingestion Source** yarating va kalitni
-   nusxalang.
-2. Agentni Provenzangizdan yuklab oling
-   (`https://<provenza>/api/v1/egress-sensor/download/provenza-agent-linux-amd64`
-   yoki `-arm64`; yonidagi `SHA256SUMS` bilan tekshiriladi), server manzili
-   va kalitni uning `config.json` fayliga kiriting (`agent/config.example.json`
-   ga qarang) va ishga tushiring — to‘liq bosqichlar
-   [Shadow AI kollektorlari](docs/shadow-ai.md) da.
+   nusxalang. Bitta manba butun park uchun yetarli.
+2. O‘sha sahifa Windows, macOS va Linux uchun o‘rnatish buyrug‘ini
+   ko‘rsatadi. Uni administrator sifatida ishga tushiring (Windows’da
+   PowerShell *Run as administrator*, macOS va Linux’da `sudo`) va
+   so‘raganda kalitni joylang. Buyruq agentni Provenzangizdan yuklab
+   oladi, `SHA256SUMS` bilan tekshiradi va xizmat sifatida o‘rnatadi.
+   Intune, Group Policy, Jamf va Ansible uchun, shuningdek agent har bir
+   tizimda nimani ko‘rishi haqida
+   [Shadow AI kollektorlari](docs/shadow-ai.md#endpoint-agent) ga qarang.
 3. Yangi topilmalar bir daqiqa ichida paydo bo‘ladi: lokal AI vositalari
    **Shadow AI → Shadow AI Sightings**da, AI agentlar **Discovery →
    Agents Found**da, mashinaning o‘zi esa **Discovery → Devices**da.

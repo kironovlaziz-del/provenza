@@ -29,56 +29,185 @@ its user, OS and last activity.
 
 ## Endpoint agent
 
-A native Go binary that detects:
+A native Go binary for **Windows, macOS and Linux** (amd64 and arm64). It
+runs as a service and detects:
 
-- **local AI tools:** processes such as `ollama` and `vllm`, listening
-  ports, model weight files on disk;
+- **local AI tools:** processes such as `ollama`, LM Studio and `vllm`,
+  listening ports, model weight files on disk;
 - **AI agents:** Claude Code, Cursor, Copilot, Codex CLI, Aider, CrewAI,
   LangGraph, n8n, and others. Agents that no catalog knows are found by
-  behavior: a process that talks to an LLM API or has an LLM SDK loaded.
+  behavior (below).
 
-It sends only what it recognized, never a process command line or a key
-value. Every 15 minutes it also says it is alive, so its machine is listed
-on **Devices** even when nothing AI-related runs there.
+It sends only what it recognized, never a process command line, a file's
+content or a key value. Every 15 minutes it also says it is alive, so its
+machine is listed on **Devices** even when nothing AI-related runs there.
 
 **On the Provenza server** the installer runs it already, with its key
 (`provenza-agent.service`, `provenza edge setup`; see
 [self-hosting](self-hosting.md)).
 
-**On another machine:** create an Ingestion Source of type *Endpoint agent*
-(Settings → Ingestion Sources) and download the agent from your Provenza -
-no Go needed:
+### Installing it on a computer
+
+1. Create an Ingestion Source of type *Endpoint agent* (Settings → Ingestion
+   Sources). One source for the whole fleet is enough; its key is shown once.
+2. The same page then shows the install command for each system. Run it as
+   an administrator; it asks for the key with the input hidden.
+
+**Windows** (PowerShell, *Run as administrator*; Windows 10/11, Server 2016+):
+
+```powershell
+$s='https://provenza.example.com'; & ([scriptblock]::Create((irm "$s/api/v1/egress-sensor/download/install-agent.ps1"))) -Server $s
+```
+
+**macOS** (Terminal; macOS 12+, Intel or Apple silicon) and **Linux**
+(systemd):
+
+```bash
+f=$(mktemp) && curl -fsSL https://provenza.example.com/api/v1/egress-sensor/download/install-agent.sh -o "$f" \
+  && sudo sh "$f" --server https://provenza.example.com
+```
+
+The script downloads the agent for this machine from your Provenza, checks
+it against `SHA256SUMS` next to it, and runs `provenza-agent install`:
+
+| | Windows | macOS | Linux |
+|---|---|---|---|
+| Service | `ProvenzaAgent`, automatic start, LocalSystem, restarted on failure | LaunchDaemon `com.provenza.agent`, root, starts at boot, kept alive | `provenza-agent.service`, root with two capabilities (below) |
+| Binary | `C:\Program Files\Provenza\provenza-agent.exe` | `/usr/local/bin/provenza-agent` | `/usr/local/bin/provenza-agent` |
+| Configuration and key | `C:\ProgramData\Provenza\Agent\` (SYSTEM and Administrators only) | `/Library/Application Support/Provenza Agent/` (root only) | `/etc/provenza-agent/` (root only) |
+| Queue of undelivered events | `…\Agent\state\queue` | `…/Provenza Agent/state/queue` | `/var/lib/provenza-agent/queue` |
+| Log | `…\Agent\state\agent.log` | `/Library/Logs/provenza-agent.log` | `journalctl -u provenza-agent` |
+
+The machine appears on **Devices** within a minute. On the machine:
+
+```text
+provenza-agent status              the service, the server, the queue
+provenza-agent install             upgrade in place with the binary you run (keeps the configuration)
+provenza-agent uninstall [--purge] remove the service and the binary (--purge: also the configuration and the key)
+```
+
+Running the install command again upgrades the agent; the key is not asked
+for then. Options of the scripts: `--agent-id` / `-AgentId` (the name the
+machine is listed under, default the host name), `--discovery` /
+`-Discovery` (network discovery, below), `--uninstall` / `-Uninstall`.
+
+### Installing it on the whole fleet
+
+For an unattended install the key comes from a parameter or the
+`PROVENZA_KEY` environment variable instead of the prompt. Keep the
+deployment script where only administrators can read it: the key lets
+anyone who has it send events as your organization's endpoints (nothing
+more).
+
+**Microsoft Intune** (Devices → Scripts and remediations → Platform
+scripts → Windows; *Run this script using the logged on credentials*: No;
+*Run script in 64-bit PowerShell*: Yes):
+
+```powershell
+$s = 'https://provenza.example.com'
+$k = 'ing_...'   # the Endpoint agent key
+& ([scriptblock]::Create((Invoke-RestMethod "$s/api/v1/egress-sensor/download/install-agent.ps1"))) -Server $s -Key $k
+```
+
+The same script works as a Win32 app install command, from SCCM / ConfigMgr,
+or as a **Group Policy** computer startup script (Computer Configuration →
+Policies → Windows Settings → Scripts → Startup → PowerShell Scripts). It
+is idempotent: on a computer that has the agent it upgrades it.
+
+**Jamf Pro** (Settings → Computer management → Scripts; parameter 4: the
+server, parameter 5: the key; add it to a policy with the trigger you use):
+
+```bash
+#!/bin/sh
+f=$(mktemp) && curl -fsSL "$4/api/v1/egress-sensor/download/install-agent.sh" -o "$f" \
+  && PROVENZA_KEY="$5" sh "$f" --server "$4"
+```
+
+Kandji, Mosyle and other MDMs take the same script. For model files in
+folders macOS protects (Desktop, Documents, Downloads), grant
+`/usr/local/bin/provenza-agent` *Full Disk Access* with a PPPC
+configuration profile; the default model folders (`~/.ollama`, `~/.cache`,
+`~/.lmstudio`) do not need it.
+
+**Linux** (Ansible, Puppet, a cloud-init script): the same command with
+`--key-file PATH` or `PROVENZA_KEY`.
+
+### Not signed yet
+
+The binaries are not code-signed yet. Downloaded by the scripts (not by a
+browser) they carry no "downloaded from the internet" mark, so Windows
+SmartScreen and macOS Gatekeeper do not stop them. Endpoint protection
+(Defender for Endpoint, CrowdStrike, SentinelOne) may still flag an
+unsigned service: allow it by path (above) or by its SHA-256 from
+`/api/v1/egress-sensor/download/SHA256SUMS`. A binary downloaded through a
+browser on macOS needs `xattr -d com.apple.quarantine provenza-agent`.
+
+### What it sees on each system
+
+| Signal | Linux | macOS | Windows |
+|---|---|---|---|
+| Known agents and runtimes by process name and command line | yes | yes | yes |
+| Unknown agents: connection to an LLM API | yes | yes (`lsof`) | yes (`netstat`) |
+| Unknown agents: LLM API key names in the environment | yes | yes | no |
+| Unknown agents: LLM SDK libraries loaded | yes | no | no |
+| Local model ports, model files | yes | yes | yes |
+| Network discovery: DNS SRV, mDNS, LLMNR | yes | yes | yes |
+| Network discovery: DNS servers, gateway | yes | DNS servers | no |
+| Network discovery: ARP scan, DHCP listening | yes (`CAP_NET_RAW`) | no | no |
+
+On Windows and macOS an unknown agent is therefore found mostly by its
+connection to an LLM API, which is "medium" confidence on its own (an API
+address behind a shared CDN can also serve other sites). Processes the
+system protects (Windows protected processes, macOS system processes) are
+listed by name only. Model files are attributed to the user whose home
+folder holds them.
+
+### Offline and restarts
+
+A batch the server does not accept (no network, server down, HTTP 5xx,
+429, 401/403) is written to the queue on disk and sent again later, oldest
+first, with a growing pause between attempts (10 s up to 5 minutes). It
+survives a restart of the agent or the computer. The queue is bounded
+(`queue_max_mb`, 50 MB by default); when full, the oldest batches go first.
+A batch the server rejects as malformed (another 4xx) is dropped.
+
+### By hand
 
 ```bash
 base=https://provenza.example.com/api/v1/egress-sensor/download
-curl -fsSL -O $base/provenza-agent-linux-amd64 -O $base/SHA256SUMS   # or -arm64
+curl -fsSL -O $base/provenza-agent-linux-amd64 -O $base/SHA256SUMS   # or -arm64, -darwin-*, -windows-*.exe
 grep " provenza-agent-linux-amd64$" SHA256SUMS | sha256sum -c -
-sudo install -m 0755 provenza-agent-linux-amd64 /usr/local/bin/provenza-agent
-# config.json from agent/config.example.json: api_url and the key (or ingestion_key_file)
-provenza-agent -config config.json
+chmod +x provenza-agent-linux-amd64
+sudo ./provenza-agent-linux-amd64 install --server https://provenza.example.com --key -   # reads the key from stdin
+# or in the foreground, without a service:
+./provenza-agent-linux-amd64 run -config config.json
 ```
 
-From the repository: `cd agent && go build -o provenza-agent .` (Go 1.26+).
+From the repository: `cd agent && go build -o provenza-agent .` (Go 1.26+;
+`GOOS=windows` / `GOOS=darwin` cross-compile without cgo).
 
-`config.json`:
+`config.json` (`provenza-agent install` writes it):
 
 | Field | Description |
 |-------|-------------|
 | `api_url` | the ingest endpoint, `…/api/v1/shadow-ai/ingest` |
 | `ingestion_key` | the machine key from an Ingestion Source (never a user token) |
-| `ingestion_key_file` | the key from a file (mode 600) instead, as the installer writes it |
+| `ingestion_key_file` | the key from a file readable by the service only, as the installers write it |
 | `agent_id` | the name the machine is listed under (default: the host name) |
 | `scan_interval_sec` / `batch_interval_sec` / `batch_size` | how often it scans and reports |
 | `heartbeat_sec` | how often it says it is alive (default 900 s) |
-| `model_search_paths` | directories scanned for local model weight files; `*` is expanded on every scan (`/home/*/.ollama/models`) |
+| `model_search_paths` | directories scanned for model weight files; `*` is expanded on every scan (`/home/*/.ollama/models`). Left out: every user's Ollama, Hugging Face, LM Studio, GPT4All and Jan folders for the system; `[]` turns the scan off |
+| `state_dir` | where the queue lives (default per system, above) |
+| `queue_max_mb` | the queue's size limit (default 50) |
 | `discovery_enabled` | network discovery on or off |
 | `discovery_interval_sec` | discovery sweep interval (default 900 s) |
 
 ## Network discovery
 
 The endpoint agent passively discovers services on its network: DNS, the
-gateway, Active Directory (via DNS SRV), mDNS and LLMNR. With the
-`CAP_NET_RAW` capability it also runs an ARP scan and listens for DHCP.
+gateway, Active Directory (via DNS SRV), mDNS and LLMNR. On Linux, with the
+`CAP_NET_RAW` capability, it also runs an ARP scan and listens for DHCP
+(see the table above for Windows and macOS).
 Discovery is read-only: nothing is connected until an admin supplies
 credentials for a specific service.
 

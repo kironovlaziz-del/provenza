@@ -35,14 +35,20 @@ COPY agent/go.mod agent/go.sum ./agent/
 RUN cd agent && go mod download
 COPY proxy/ ./proxy/
 COPY agent/ ./agent/
+# The agent is built for Linux, Windows and macOS (not signed yet: see
+# docs/shadow-ai.md); install-agent.sh / .ps1 fetch it from here.
 RUN set -eu; mkdir -p /dist; \
     for arch in amd64 arm64; do \
       (cd proxy && CGO_ENABLED=0 GOOS=linux GOARCH=$arch go build -trimpath -ldflags "-s -w" \
         -o /dist/provenza-proxy-linux-$arch .); \
-      (cd agent && CGO_ENABLED=0 GOOS=linux GOARCH=$arch go build -trimpath -ldflags "-s -w" \
-        -o /dist/provenza-agent-linux-$arch .); \
+      for os in linux darwin windows; do \
+        ext=""; [ "$os" = windows ] && ext=".exe"; \
+        (cd agent && CGO_ENABLED=0 GOOS=$os GOARCH=$arch go build -trimpath -ldflags "-s -w" \
+          -o /dist/provenza-agent-$os-$arch$ext .); \
+      done; \
     done; \
-    cd /dist && sha256sum provenza-proxy-linux-* provenza-agent-linux-* > SHA256SUMS.edge
+    cp agent/install/install-agent.sh agent/install/install-agent.ps1 /dist/; \
+    cd /dist && sha256sum provenza-proxy-linux-* provenza-agent-* install-agent.* > SHA256SUMS.edge
 
 # ---------------------------------------------------------------- build stage
 FROM python:${PYTHON_VERSION}-slim AS build
@@ -78,7 +84,7 @@ COPY extension/ /opt/provenza/extension/
 COPY deploy/backend-entrypoint.sh /usr/local/bin/provenza-entrypoint
 COPY --from=sensor /dist/ /app/sensor-dist/
 COPY --from=edge /dist/ /tmp/edge-dist/
-RUN cd /tmp/edge-dist && cp provenza-proxy-linux-* provenza-agent-linux-* /app/sensor-dist/ \
+RUN cd /tmp/edge-dist && cp provenza-proxy-linux-* provenza-agent-* install-agent.* /app/sensor-dist/ \
  && cat SHA256SUMS.edge >> /app/sensor-dist/SHA256SUMS && rm -rf /tmp/edge-dist
 RUN chmod 0755 /usr/local/bin/provenza-entrypoint \
  && rm -f /app/apply_*.py /app/celerybeat-schedule \
