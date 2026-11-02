@@ -78,12 +78,75 @@ async def ingest_telemetry(
         # an address, or nothing - no other text from a public key is kept
         for e in raw_events:
             e["user_id"] = _browser_user(e.get("user_id"))
+            # a public key cannot say it stands for many visits, or a log
+            if isinstance(e.get("payload"), dict):
+                for k in ("hits", "blocked_hits", "source"):
+                    e["payload"].pop(k, None)
     task = process_telemetry_batch.delay(source.org_id, source.id, raw_events)
     return TelemetryIngestAcceptedResponse(
         status="accepted",
         received=len(events),
         task_id=task.id,
     )
+
+
+@router.post("/ingest/logs")
+async def ingest_logs(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    source: IngestionSource = Depends(get_ingestion_source),
+):
+    """DNS or proxy log lines from a log forwarder (a Gateway ingestion key):
+    the raw text in the body, gzip allowed. The lines that reach an AI service
+    become visits, exactly as an upload in the console (app/services/log_import.py)."""
+    if source.source_type != "gateway":
+        raise api_error(status.HTTP_403_FORBIDDEN, "ingestion.logs_need_gateway_key")
+    rate_limit.enforce(request, scope="ingest-logs", extra_key=f"source-{source.id}", window_seconds=60,
+                       limit=settings.LOG_INGEST_REQUESTS_PER_MINUTE)
+    return await _import_logs(request, db, source.org_id, source.id, settings.LOG_INGEST_MAX_MB,
+                              source.name or "gateway")
+
+
+@router.post("/logs/import")
+async def import_logs(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role(UserRole.admin)),
+):
+    """An administrator uploads a DNS or proxy log file (the raw file as the
+    body, ?name= its file name; any of the formats in log_import.py, gzip
+    allowed). Returns what
+    was found; the visits are processed in the background."""
+    rate_limit.enforce(request, scope="log-import", extra_key=f"user-{current_user.id}", window_seconds=60, limit=10)
+    source = await IngestionSourceService(db).upload_source(current_user.org_id, current_user.id)
+    name = (request.query_params.get("name") or "")[:200]  # the file's name, for the audit trail
+    out = await _import_logs(request, db, current_user.org_id, source.id, settings.LOG_IMPORT_MAX_MB, "log upload")
+    await AuditService(db).log(
+        current_user.org_id, current_user.id, "shadow_ai_log_import", source.id, "imported",
+        {"file": "".join(c for c in name if c.isprintable()), "lines": out["lines"],
+         "ai_lines": out["ai_lines"], "services": out["services"]},
+    )
+    return out
+
+
+async def _import_logs(request: Request, db: AsyncSession, org_id: int, source_id: int,
+                       max_mb: int, label: str) -> dict:
+    from app.services.log_import import run_import
+
+    limit = max_mb << 20
+    length = request.headers.get("content-length")
+    if length and length.isdigit() and int(length) > limit:
+        raise api_error(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "log_import.too_large")
+    try:
+        out = await run_import(db, org_id, source_id, request.stream(), limit, label)
+    except ValueError as e:
+        if str(e) == "too_large":
+            raise api_error(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "log_import.too_large")
+        raise api_error(status.HTTP_400_BAD_REQUEST, "log_import.unreadable")
+    except (OSError, EOFError):  # a broken gzip stream
+        raise api_error(status.HTTP_400_BAD_REQUEST, "log_import.unreadable")
+    out["max_mb"] = max_mb
+    return out
 
 
 _EMAIL = re.compile(r"[a-z0-9._%+'-]{1,64}@[a-z0-9-]{1,63}(?:\.[a-z0-9-]{1,63})+")

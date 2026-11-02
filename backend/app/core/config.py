@@ -72,6 +72,12 @@ class Settings(BaseSettings):
     # extension, so anyone who has the extension has it: its limit is lower.
     INGEST_BATCHES_PER_MINUTE: int = 120
     INGEST_EXTENSION_BATCHES_PER_MINUTE: int = 30
+    # DNS and proxy logs (app/services/log_import.py): the most one upload in
+    # the console may hold, and one POST /shadow-ai/ingest/logs from a log
+    # forwarder - in MB of log text (a gzip file is counted unpacked).
+    LOG_IMPORT_MAX_MB: int = 200
+    LOG_INGEST_MAX_MB: int = 20
+    LOG_INGEST_REQUESTS_PER_MINUTE: int = 30
 
     # The address agents reach this server at, e.g. "https://provenza.example.com".
     # Agent cards served by the A2A gateway point there. Empty = taken from the

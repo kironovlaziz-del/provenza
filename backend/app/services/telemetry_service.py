@@ -89,10 +89,21 @@ def _behavior_evidence(payload: dict) -> dict:
     }
 
 
+# How many log lines one event stands for (log_import.py): counted when
+# people per AI service are summed, so only a plain, bounded number is kept.
+_COUNT_KEYS = ("hits", "blocked_hits")
+_LOG_SOURCES = ("dns_log", "proxy_log")
+
+
 def _safe_payload(payload: Optional[dict]) -> Optional[dict]:
     if not payload:
         return payload
-    return {k: v for k, v in payload.items() if k not in _DROPPED_PAYLOAD_KEYS}
+    out = {k: v for k, v in payload.items() if k not in _DROPPED_PAYLOAD_KEYS}
+    for k in _COUNT_KEYS:
+        v = out.get(k)
+        if k in out and not (type(v) is int and 0 <= v <= 10_000_000):
+            del out[k]
+    return out
 
 
 class TelemetryService:
@@ -138,7 +149,7 @@ class TelemetryService:
         self._pending: List[Tuple[str, str, str, dict]] = []
 
     async def ingest_events(
-        self, org_id: int, ingestion_source_id: int, events: List[TelemetryEventIn]
+        self, org_id: int, ingestion_source_id: int, events: List[TelemetryEventIn], record_devices: bool = True
     ) -> TelemetryIngestResponse:
         counts = {"allowed": 0, "unknown": 0, "blocked": 0}
         local_signals = 0
@@ -147,12 +158,13 @@ class TelemetryService:
         agents_found = 0
         new_agents: List[dict] = []
 
-        devices = await self._upsert_devices(org_id, ingestion_source_id, events)
+        # lines of a DNS or proxy log (log_import.py) come from no device
+        devices = await self._upsert_devices(org_id, ingestion_source_id, events) if record_devices else {}
 
         for event in events:
             if event.event_type == HEARTBEAT_EVENT_TYPE:
                 continue  # the device was refreshed above; nothing else to record
-            if event.event_type == AGENT_EVENT_TYPE:
+            if event.event_type == AGENT_EVENT_TYPE and devices:
                 self._log_raw_event(org_id, ingestion_source_id, event, matched_policy_status=None)
                 found = await self._handle_agent_detected(org_id, devices[_host_id(event)], event)
                 if found:
@@ -364,13 +376,17 @@ class TelemetryService:
             "url": payload.get("url"),
             "agent_id": event.agent_id,
         }
+        # a DNS or proxy log import says so, not "domain visit"
+        detected_via = payload.get("source") if payload.get("source") in _LOG_SOURCES else event.event_type
+        if detected_via != event.event_type:
+            display_meta["source"] = detected_via
         sighting = await self.shadow_ai.create_sighting(
             org_id,
             reported_by=None,
             data=ShadowSightingCreate(
                 tool_name=payload_tool_name or match.tool_name or domain,
                 domain=domain,
-                detected_via=event.event_type,
+                detected_via=detected_via,
                 user_hint=event.user_id,
                 display_meta=display_meta,
                 notes=(
@@ -408,7 +424,7 @@ class TelemetryService:
         self._queue(
             "shadow_ai_reported",
             f"Unsanctioned AI usage detected: {_clean(sighting.tool_name)}",
-            f"Detected automatically via {event.event_type}. "
+            f"Detected automatically via {sighting.detected_via}. "
             f"Needs review in Shadow AI Monitor.",
             {"sighting_id": sighting.id},
         )

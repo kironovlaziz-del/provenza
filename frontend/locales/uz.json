@@ -364,14 +364,16 @@
     "seen_times": "{{count}} marta ko'rilgan",
     "people_one": "{{count}} kishi",
     "people_other": "{{count}} kishi",
-    "unnamed_browsers_one": "+ {{count}} ta nomsiz brauzer",
-    "unnamed_browsers_other": "+ {{count}} ta nomsiz brauzer",
-    "people_hint": "Brauzerlar xabar qilganidek: tashkilot kengaytmaga har bir xodimning emailini siyosat orqali beradi (userEmail). Bu tizimga kirish emas.",
+    "unnamed_browsers_one": "+ {{count}} ta nomsiz",
+    "unnamed_browsers_other": "+ {{count}} ta nomsiz",
+    "people_hint": "Brauzerlari xabar berganidek (tashkilot kengaytmaga har bir kishining e-pochtasini siyosat orqali beradi, userEmail) yoki DNS yoki proksi jurnalida ko'rsatilganidek. Bu tizimga kirish emas.",
     "people_visits": "Tashriflar",
     "people_blocked": "Bloklangan",
     "people_last": "Oxirgi tashrif",
-    "people_unnamed_one": "Yana {{count}} ta brauzer kim foydalanishini aytmadi (tashriflar: {{visits}}): uning siyosatida userEmail yo'q.",
-    "people_unnamed_other": "Yana {{count}} ta brauzer kim foydalanishini aytmadi (tashriflar: {{visits}}): ularning siyosatida userEmail yo'q."
+    "people_unnamed_one": "Yana {{count}} ta brauzer yoki kompyuter kim foydalanishini aytmadi (tashriflar: {{visits}}): siyosatida userEmail bo'lmagan brauzer yoki faqat manzili bor jurnal qatori.",
+    "people_unnamed_other": "Yana {{count}} ta brauzer yoki kompyuter kim foydalanishini aytmadi (tashriflar: {{visits}}): siyosatida userEmail bo'lmagan brauzerlar yoki faqat manzili bor jurnal qatorlari.",
+    "source_dns_log": "DNS jurnali",
+    "source_proxy_log": "Proksi jurnali"
   },
   "domain_catalog": {
     "title": "AI domenlar katalogi",
@@ -653,7 +655,8 @@
     "agent_where_windows": "Administrator sifatida ochilgan PowerShell’da (Windows 10/11, Server 2016+). ProvenzaAgent xizmatini o‘rnatadi, u avtomatik ishga tushadi.",
     "agent_where_macos": "Terminalda, administrator sifatida (macOS 12+, Intel yoki Apple silicon). Tizim yuklanganda ishga tushadigan LaunchDaemon o‘rnatadi.",
     "agent_where_linux": "sudo bilan shell’da (systemd). provenza-agent xizmatini o‘rnatadi.",
-    "agent_after": "Buyruq ushbu manbaning kalitini so‘raydi (kiritilgani ko‘rinmaydi), yuklab olinganini SHA256SUMS bilan tekshiradi va agentni ishga tushiradi. Kompyuter bir daqiqa ichida AI → Qurilmalar bo‘limida paydo bo‘ladi. Yangilash uchun xuddi shu buyruqni qayta ishga tushiring. Intune, GPO yoki Jamf uchun Yordam → Endpoint agent bo‘limiga qarang."
+    "agent_after": "Buyruq ushbu manbaning kalitini so‘raydi (kiritilgani ko‘rinmaydi), yuklab olinganini SHA256SUMS bilan tekshiradi va agentni ishga tushiradi. Kompyuter bir daqiqa ichida AI → Qurilmalar bo‘limida paydo bo‘ladi. Yangilash uchun xuddi shu buyruqni qayta ishga tushiring. Intune, GPO yoki Jamf uchun Yordam → Endpoint agent bo‘limiga qarang.",
+    "type_log_upload": "Jurnal yuklamalari"
   },
   "audit": {
     "title": "Audit jurnali",
@@ -1197,7 +1200,10 @@
     "webauthn.bad_client_data": "Brauzer javobini o'qib bo'lmadi.",
     "webauthn.bad_authenticator_data": "Qurilma javobini o'qib bo'lmadi.",
     "webauthn.bad_public_key": "Passkey ochiq kalitini o'qib bo'lmadi.",
-    "webauthn.bad_encoding": "Passkey javobini o'qib bo'lmadi."
+    "webauthn.bad_encoding": "Passkey javobini o'qib bo'lmadi.",
+    "log_import.too_large": "Jurnal bitta yuklash uchun juda katta: uni qismlarga bo'ling.",
+    "log_import.unreadable": "Faylni o'qib bo'lmadi. gzip fayl kesilgan bo'lishi mumkin.",
+    "ingestion.logs_need_gateway_key": "Jurnal qatorlari uchun Gateway kaliti kerak."
   },
   "discovery": {
     "title": "Tarmoq kashfiyoti",
@@ -3720,5 +3726,23 @@
       "compliance": "muvofiqlik xodimlari",
       "user": "xodimlar"
     }
+  },
+  "log_import": {
+    "open": "Jurnallarni import qilish",
+    "title": "DNS yoki proksi jurnallarini import qilish",
+    "hint": "DNS serverlaringiz va veb-proksingiz kim qaysi saytga kirganini allaqachon yozib boradi. Provenza'ga shunday jurnalni bering: u faqat AI xizmatiga yetgan qatorlarni — AI Domain Catalog va o'rnatilgan ro'yxatdan — saqlaydi va ularni har bir xizmatdan kim va qanchalik tez-tez foydalanishi bilan topilmalarga aylantiradi. Jurnalning boshqa hech narsasi saqlanmaydi.",
+    "file": "Jurnal fayli",
+    "import": "Import qilish",
+    "reading": "O'qilmoqda…",
+    "formats": "Squid, BIND, dnsmasq / Pi-hole, Unbound, Windows DNS debug log, Zeek, JSON qatorlari, key=value (Fortinet, CEF) va sarlavhali CSV eksportlari (Cisco Umbrella, Zscaler, Netskope, Palo Alto). gzip ham bo'ladi; 200 MB gacha jurnal matni. Doimiy oqim uchun jurnal yo'naltiruvchisi yangi qatorlarni Gateway kaliti bilan yuborishi mumkin.",
+    "found": "{{lines}} ta qator o'qildi; {{ai}} tasi AI xizmatlariga yetadi: {{services}} ta xizmat, {{people}} ta kishi, {{computers}} ta kompyuter.",
+    "nothing": "{{lines}} ta qator o'qildi, {{recognized}} tasida sayt bor — hech biri ma'lum AI xizmatiga yetmaydi.",
+    "col_service": "AI xizmati",
+    "col_lines": "Qatorlar",
+    "unrecognized_one": "{{count}} ta qatorda sayt yo'q edi va o'tkazib yuborildi.",
+    "unrecognized_other": "{{count}} ta qatorda sayt yo'q edi va o'tkazib yuborildi.",
+    "truncated": "Faylda 20 000 dan ortiq kishi-va-xizmat juftligi bor: qolgani hisoblanmadi. Uni qismlarga bo'lib import qiling.",
+    "after": "Topilmalar bir daqiqa ichida ro'yxatda paydo bo'ladi; kim foydalanishini ko'rish uchun birini oching.",
+    "failed": "Jurnalni import qilib bo'lmadi."
   }
 }

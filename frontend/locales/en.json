@@ -364,14 +364,16 @@
     "seen_times": "Seen {{count}} times",
     "people_one": "{{count}} person",
     "people_other": "{{count}} people",
-    "unnamed_browsers_one": "+ {{count}} browser without a name",
-    "unnamed_browsers_other": "+ {{count}} browsers without a name",
-    "people_hint": "As their browsers reported it: the organization gives the extension each person's e-mail by policy (userEmail). It is not a sign-in.",
+    "unnamed_browsers_one": "+ {{count}} without a name",
+    "unnamed_browsers_other": "+ {{count}} without a name",
+    "people_hint": "As their browsers reported it (the organization gives the extension each person's e-mail by policy, userEmail), or as a DNS or proxy log names them. It is not a sign-in.",
     "people_visits": "Visits",
     "people_blocked": "Blocked",
     "people_last": "Last visit",
-    "people_unnamed_one": "And {{count}} browser that did not say who uses it (visits: {{visits}}): its policy has no userEmail.",
-    "people_unnamed_other": "And {{count}} browsers that did not say who uses them (visits: {{visits}}): their policy has no userEmail."
+    "people_unnamed_one": "And {{count}} browser or computer that did not say who uses it (visits: {{visits}}): a browser whose policy has no userEmail, or a log line with only an address.",
+    "people_unnamed_other": "And {{count}} browsers or computers that did not say who uses them (visits: {{visits}}): browsers whose policy has no userEmail, or log lines with only an address.",
+    "source_dns_log": "DNS log",
+    "source_proxy_log": "Proxy log"
   },
   "domain_catalog": {
     "title": "AI Domain Catalog",
@@ -653,7 +655,8 @@
     "agent_where_windows": "In PowerShell run as administrator (Windows 10/11, Server 2016+). Installs the ProvenzaAgent service, started automatically.",
     "agent_where_macos": "In Terminal, as an administrator (macOS 12+, Intel or Apple silicon). Installs a LaunchDaemon that starts at boot.",
     "agent_where_linux": "In a shell with sudo (systemd). Installs the provenza-agent service.",
-    "agent_after": "The command asks for this source's key (input hidden), checks the download against SHA256SUMS and starts the agent. The computer appears under AI → Devices within a minute. Run the same command again to upgrade. For Intune, GPO or Jamf, see Help → Endpoint agent."
+    "agent_after": "The command asks for this source's key (input hidden), checks the download against SHA256SUMS and starts the agent. The computer appears under AI → Devices within a minute. Run the same command again to upgrade. For Intune, GPO or Jamf, see Help → Endpoint agent.",
+    "type_log_upload": "Log uploads"
   },
   "audit": {
     "title": "Audit Log",
@@ -1197,7 +1200,10 @@
     "webauthn.bad_client_data": "The browser's answer could not be read.",
     "webauthn.bad_authenticator_data": "The device's answer could not be read.",
     "webauthn.bad_public_key": "The passkey's public key could not be read.",
-    "webauthn.bad_encoding": "The passkey's answer could not be read."
+    "webauthn.bad_encoding": "The passkey's answer could not be read.",
+    "log_import.too_large": "The log is too large for one upload: split it into parts.",
+    "log_import.unreadable": "The file could not be read. A gzip file may be cut off.",
+    "ingestion.logs_need_gateway_key": "Log lines need a Gateway ingestion key."
   },
   "discovery": {
     "title": "Network Discovery",
@@ -3720,5 +3726,23 @@
       "compliance": "compliance officers",
       "user": "employees"
     }
+  },
+  "log_import": {
+    "open": "Import logs",
+    "title": "Import DNS or proxy logs",
+    "hint": "Your DNS servers and web proxy already record who reaches which site. Give Provenza such a log: it keeps only the lines that reach an AI service — from your AI Domain Catalog and the built-in list — and turns them into sightings, with who uses each service and how often. Nothing else of the log is kept.",
+    "file": "Log file",
+    "import": "Import",
+    "reading": "Reading…",
+    "formats": "Squid, BIND, dnsmasq / Pi-hole, Unbound, Windows DNS debug log, Zeek, JSON lines, key=value (Fortinet, CEF) and CSV exports with a header (Cisco Umbrella, Zscaler, Netskope, Palo Alto). gzip is fine; up to 200 MB of log text. For a continuous feed, a log forwarder can send new lines with a Gateway ingestion key.",
+    "found": "{{lines}} lines read; {{ai}} reach AI services: {{services}} services, {{people}} people, {{computers}} computers.",
+    "nothing": "{{lines}} lines read, {{recognized}} with a site in them — none reaches a known AI service.",
+    "col_service": "AI service",
+    "col_lines": "Lines",
+    "unrecognized_one": "{{count}} line had no site in it and was skipped.",
+    "unrecognized_other": "{{count}} lines had no site in them and were skipped.",
+    "truncated": "The file names more than 20,000 person-and-service pairs: the rest was not counted. Import it in parts.",
+    "after": "The sightings appear in the list within a minute; open one to see who uses it.",
+    "failed": "The log could not be imported."
   }
 }

@@ -21,7 +21,7 @@ from app.services.telemetry_service import TelemetryService
 
 
 async def _process_telemetry_batch_async(
-    org_id: int, ingestion_source_id: int, raw_events: List[Dict[str, Any]]
+    org_id: int, ingestion_source_id: int, raw_events: List[Dict[str, Any]], record_devices: bool = True
 ) -> Dict[str, Any]:
     # raw_events were produced by TelemetryEventIn.model_dump(mode="json")
     # at the API layer (so they survive Celery's JSON transport) -
@@ -30,13 +30,13 @@ async def _process_telemetry_batch_async(
     events = [TelemetryEventIn.model_validate(e) for e in raw_events]
     async with CelerySessionLocal() as db:
         service = TelemetryService(db)
-        result = await service.ingest_events(org_id, ingestion_source_id, events)
+        result = await service.ingest_events(org_id, ingestion_source_id, events, record_devices=record_devices)
         return result.model_dump()
 
 
 @celery_app.task(name="telemetry.process_batch")
 def process_telemetry_batch(
-    org_id: int, ingestion_source_id: int, raw_events: List[Dict[str, Any]]
+    org_id: int, ingestion_source_id: int, raw_events: List[Dict[str, Any]], record_devices: bool = True
 ) -> Dict[str, Any]:
     """
     Celery wrapper around the async TelemetryService.ingest_events.
@@ -47,7 +47,11 @@ def process_telemetry_batch(
     plain dict (Celery's result backend is configured for JSON) - not
     delivered to the original caller (which already got its 202), but
     available via the task_id for anyone who wants to check afterwards.
+
+    record_devices=False: the events are lines of a DNS or proxy log
+    (log_import.py) - their computers are addresses in a log, not devices
+    with a collector, so Devices is left as it is.
     """
     return asyncio.run(
-        _process_telemetry_batch_async(org_id, ingestion_source_id, raw_events)
+        _process_telemetry_batch_async(org_id, ingestion_source_id, raw_events, record_devices)
     )

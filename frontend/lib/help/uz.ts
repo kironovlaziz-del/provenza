@@ -275,7 +275,16 @@ export const ARTICLES_UZ: Article[] = [
         "**Qurilmalar** — endpoint agent kompaniya kompyuterlarida ishlayotgan AI dasturlari va agentlarni ko'radi.",
         "**Brauzer** — brauzer kengaytmasi AI xizmatlariga tashriflarni ko'radi va tashkilotingiz bloklaganlarini yopadi. Tashkilot har bir brauzerga foydalanuvchisining emailini bersa, topilma xizmatdan necha kishi foydalanayotganini ko'rsatadi; ko'rib chiquvchilar raqamni bosib kimligini ko'radi.",
         "**Odamlar** — istalgan kishi topilmani qo'lda xabar qilishi mumkin, masalan xarajatlar hisobotidan.",
+        "**Jurnallar** — sizda allaqachon mavjud DNS server va veb-proksi jurnallari tarmoqdagi har bir kompyuter va telefonda kim qaysi AI xizmatiga kirganini ko'rsatadi.",
       ]],
+      ["h", "DNS va proksi jurnallarini import qilish"],
+      ["steps", [
+        "DNS serveringiz yoki veb-proksingizdan jurnalni eksport qiling — Squid, BIND, dnsmasq yoki Pi-hole, Windows DNS, Zeek yoki Cisco Umbrella, Zscaler, Netskope'dan CSV eksport. .gz fayl ham bo'ladi.",
+        "**Shadow AI** sahifasida **Jurnallarni import qilish** ni tanlang, faylni tanlang va **Import qilish** ni bosing (administratorlar).",
+        "Provenza faqat AI xizmatiga yetgan qatorlarni saqlaydi va nima topganini ko'rsatadi: xizmatlar, nechta kishi va kompyuter. Jurnalning boshqa hech narsasi saqlanmaydi.",
+        "Bir daqiqa ichida xizmatlar **DNS jurnali** yoki **Proksi jurnali** manbasi bilan topilmalar sifatida paydo bo'ladi. Kim kirganini biladigan proksi ismlarni ham beradi: ularni ko'rish uchun kishilar sonini bosing.",
+      ]],
+      ["tip", "Har bir jurnalni bir marta import qiling — ikki marta import qilingan qatorlar ikki marta hisoblanadi. Yuklash o'rniga doimiy oqim uchun IT jamoangiz proksi yoki DNS serverga yangi qatorlarni Gateway kaliti bilan yuborishni sozlashi mumkin; administrator qo'llanmasida (docs/shadow-ai.md) tayyor skriptlar bor."],
       ["h", "Topilma bo'yicha qaror qilish"],
       ["steps", [
         "Topilmani oching — Kiruvchida **Yangi AI** ostida yoki **Shadow AI** sahifasida.",
