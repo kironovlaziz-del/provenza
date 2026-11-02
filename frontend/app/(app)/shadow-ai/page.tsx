@@ -4,6 +4,7 @@ import { Form } from "@/components/Form";
 import React, { useEffect, useState, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { PageHeader } from "@/components/PageHeader";
+import { LogImport } from "@/components/LogImport";
 import { StatusPill } from "@/components/Pill";
 import { useAuth } from "@/lib/auth";
 import {
@@ -49,6 +50,7 @@ export default function ShadowAIPage() {
   const [summary, setSummary] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
+  const [showImport, setShowImport] = useState(false);
   const [busyId, setBusyId] = useState<number | null>(null);
   // who visited a domain sighting (reviewers and the oversight roles)
   const [peopleOf, setPeopleOf] = useState<number | null>(null);
@@ -205,6 +207,11 @@ export default function ShadowAIPage() {
       // a visit to an AI site, reported by the browser extension or the endpoint agent
       case "domain_visit":
         return <span className="mono" style={style}>🌐 {t("shadow_ai.source_domain_visit")}</span>;
+      // DNS or proxy log lines (Import logs, or a log forwarder with a Gateway key)
+      case "dns_log":
+        return <span className="mono" style={style}>🧾 {t("shadow_ai.source_dns_log")}</span>;
+      case "proxy_log":
+        return <span className="mono" style={style}>🧾 {t("shadow_ai.source_proxy_log")}</span>;
       default:
         return <span className="mono" style={style}>📝 {t("shadow_ai.source_manual")}</span>;
     }
@@ -215,9 +222,16 @@ export default function ShadowAIPage() {
       <PageHeader
         title={t("shadow_ai.title")}
         actions={
-          <button className="btn btn-primary btn-sm" onClick={() => setShowForm((s) => !s)}>
-            {showForm ? t("shadow_ai.cancel") : t("shadow_ai.report")}
-          </button>
+          <>
+            {canRegister && (
+              <button className="btn btn-sm" style={{ marginRight: 8 }} onClick={() => setShowImport((s) => !s)}>
+                {showImport ? t("shadow_ai.cancel") : t("log_import.open")}
+              </button>
+            )}
+            <button className="btn btn-primary btn-sm" onClick={() => setShowForm((s) => !s)}>
+              {showForm ? t("shadow_ai.cancel") : t("shadow_ai.report")}
+            </button>
+          </>
         }
       />
 
@@ -255,6 +269,8 @@ export default function ShadowAIPage() {
             </div>
           </div>
         </div>
+
+        {showImport && canRegister && <LogImport onDone={() => setTimeout(refresh, 3000)} />}
 
         {/* Manual Report Form */}
         {showForm && (
@@ -425,6 +441,8 @@ export default function ShadowAIPage() {
                 <option value="network_conn">{t("shadow_ai.source_network")}</option>
                 <option value="local_model_found">{t("shadow_ai.source_model_file")}</option>
                 <option value="domain_visit">{t("shadow_ai.source_domain_visit")}</option>
+                <option value="dns_log">{t("shadow_ai.source_dns_log")}</option>
+                <option value="proxy_log">{t("shadow_ai.source_proxy_log")}</option>
                 <option value="manual">{t("shadow_ai.source_manual")}</option>
               </select>
             </div>

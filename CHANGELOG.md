@@ -8,6 +8,20 @@ this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **DNS and proxy logs as a Shadow AI collector**
+  ([docs/shadow-ai.md](docs/shadow-ai.md#dns-and-proxy-logs)). An
+  administrator uploads a log on **Shadow AI → Import logs**, or a log
+  forwarder posts new lines with a Gateway ingestion key
+  (`POST /shadow-ai/ingest/logs`). Squid, BIND, dnsmasq / Pi-hole, Unbound,
+  the Windows DNS debug log, Zeek, JSON lines, key=value (Fortinet, CEF) and
+  CSV exports with a header (Cisco Umbrella, Zscaler, Netskope, Palo Alto) are
+  recognized line by line, gzip included. Only lines that reach an AI service
+  (the AI Domain Catalog plus the built-in list) are kept, folded into one
+  visit per service, person and computer with its line count; they become
+  sightings (source *DNS log* / *Proxy log*), people per service and incidents
+  for blocked services like the browser extension's visits. Nothing else of a
+  log is stored; addresses in a log do not become Devices.
+
 - **Endpoint agent for Windows and macOS** (agent 1.5,
   [docs/shadow-ai.md](docs/shadow-ai.md#endpoint-agent)). The agent now runs
   on Windows 10/11 and Server 2016+ (amd64, arm64), macOS 12+ (Intel, Apple

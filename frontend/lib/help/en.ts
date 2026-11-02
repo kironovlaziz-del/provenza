@@ -274,7 +274,16 @@ export const ARTICLES_EN: Article[] = [
         "**Devices** — the endpoint agent sees AI programs and agents running on company computers.",
         "**Browser** — the browser extension sees visits to AI services, and closes the ones your organization blocked. When the organization gives each browser its user's e-mail, a finding shows how many people use the service; reviewers click the number to see who.",
         "**People** — anyone can report a sighting by hand, for example from an expense report.",
+        "**Logs** — the DNS server and web proxy logs you already keep show who reaches which AI service, on every computer and phone on the network.",
       ]],
+      ["h", "Importing DNS and proxy logs"],
+      ["steps", [
+        "Export a log from your DNS server or web proxy — Squid, BIND, dnsmasq or Pi-hole, Windows DNS, Zeek, or a CSV export from Cisco Umbrella, Zscaler or Netskope. A .gz file is fine.",
+        "On the **Shadow AI** page, choose **Import logs**, pick the file and press **Import** (administrators).",
+        "Provenza keeps only the lines that reach an AI service and shows what it found: the services, how many people and computers. Nothing else of the log is kept.",
+        "Within a minute the services appear as findings, with the source **DNS log** or **Proxy log**. A proxy that knows who is signed in also gives the names: click the number of people to see them.",
+      ]],
+      ["tip", "Import each log once — the same lines imported twice count twice. For a continuous feed instead of uploads, your IT team can have the proxy or DNS server send new lines with a Gateway key; the administrator's guide (docs/shadow-ai.md) has ready scripts."],
       ["h", "Deciding on a finding"],
       ["steps", [
         "Open the finding — in the Inbox under **New AI**, or on the **Shadow AI** page.",

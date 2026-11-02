@@ -1,6 +1,6 @@
 # Shadow AI Monitor: collectors
 
-Shadow AI Monitor finds AI that nobody sanctioned. The data comes from three
+Shadow AI Monitor finds AI that nobody sanctioned. The data comes from four
 collectors, and all of them feed one **Sightings** list. Working with that
 list in the UI is covered in the [user guide](../USER_GUIDE.md#8-shadow-ai-monitor).
 This page covers the collectors themselves.
@@ -10,6 +10,7 @@ This page covers the collectors themselves.
 | Endpoint agent | local models and AI agents on a machine | `agent/` (Go) |
 | Network discovery | services on the local network (part of the endpoint agent) | `agent/collectors/discovery/` |
 | Browser extension | visits to AI services; closes the ones the organization blocks | `extension/` (Chrome and Edge, Manifest V3) |
+| DNS and proxy logs | who reached which AI service, from logs you already keep | `backend/app/services/log_import.py` |
 
 ## How data arrives
 
@@ -231,6 +232,101 @@ sudo systemctl restart provenza-agent
 
 The agent checks for the capability at startup. Without it, it logs that
 it runs the unprivileged methods only.
+
+## DNS and proxy logs
+
+Your DNS servers and web proxy already record who reaches which site. Those
+logs show AI use on every computer and phone on the network - without
+installing anything - and, when the proxy authenticates people, who it was.
+
+Provenza reads a log, keeps only the lines that reach an AI service (the
+organization's **AI Domain Catalog** plus the built-in list, API hosts
+included), and folds them into one visit per service, person and computer,
+with how many lines it stands for, how many were blocked, and when first and
+last. The visits go through the same pipeline as the browser extension's:
+an unknown service becomes a sighting (source *DNS log* or *Proxy log*), a
+blocked one also an incident, an allowed one is only counted; reviewers see
+who uses each service and how often. Nothing else of the log is kept: no
+URL path, no query, no other site.
+
+### Formats
+
+Recognized line by line, so one file may mix them:
+
+| Format | Example | Person |
+|---|---|---|
+| Squid `access.log` (native) | `1730512345.123 150 10.0.0.5 TCP_TUNNEL/200 3456 CONNECT chatgpt.com:443 alice ...` | yes, when the proxy authenticates |
+| BIND query log | `client @0x7f.. 10.0.0.5#53211 (chatgpt.com): query: chatgpt.com IN A + ...` | no |
+| dnsmasq / Pi-hole | `dnsmasq[123]: query[A] chatgpt.com from 10.0.0.5` | no |
+| Unbound (`log-queries: yes`) | `info: 10.0.0.5 chatgpt.com. A IN` | no |
+| Windows DNS debug log | `... UDP Rcv 10.0.0.5 1234 Q [...] A (7)chatgpt(3)com(0)` | no |
+| Zeek `dns.log` / `http.log` | TSV with its `#fields` header, or JSON | no |
+| JSON lines | keys such as `query`, `domain`, `host`, `url`, `user`, `client_ip`, `ts`, `action` | when present |
+| key=value (Fortinet, CEF, ...) | `srcip=10.0.0.5 user="alice" hostname="chatgpt.com" action="blocked"` | when present |
+| CSV with a header | Cisco Umbrella, Zscaler, Netskope, Palo Alto exports; columns found by name | when present |
+
+From any other line the host names in it are still taken, and its first IPv4
+address as the computer. A DNS log names computers by address; a proxy that
+authenticates names people (`alice`, `CORP\alice`, an e-mail). gzip files
+are unpacked on the fly. A line counts as blocked when its action says so
+(`TCP_DENIED`, `blocked`, `deny`, ...).
+
+### Importing a file
+
+**Shadow AI → Import logs** (administrators): choose the file, **Import**.
+The page tells what it found - lines read, how many reach AI services, the
+services, people and computers - and the sightings appear within a minute.
+Up to 200 MB of log text per file (`LOG_IMPORT_MAX_MB`); split a larger one.
+Each upload is recorded in the audit trail, under the source *Log uploads*.
+
+Import each log once: the same lines imported twice count twice.
+
+### A continuous feed
+
+A log forwarder sends new lines itself with a **Gateway** ingestion key
+(Settings → Ingestion Sources → type *Gateway*):
+
+```text
+POST /api/v1/shadow-ai/ingest/logs
+X-Ingestion-Key: <the Gateway key>
+<the log lines, as text or gzip>
+```
+
+Up to 20 MB of log text per request (`LOG_INGEST_MAX_MB`), 30 requests per
+minute per key. The answer is the same summary the upload page shows.
+
+**Squid**, after each rotation (`/etc/logrotate.d/squid`, with
+`delaycompress` so yesterday's file is still plain text):
+
+```bash
+postrotate
+    /usr/sbin/squid -k rotate
+    split -C 18M -d /var/log/squid/access.log.1 /tmp/provenza-log-
+    for f in /tmp/provenza-log-*; do
+        curl -fsS -H "X-Ingestion-Key: $(cat /etc/provenza/gateway.key)" \
+          --data-binary @"$f" https://provenza.example.com/api/v1/shadow-ai/ingest/logs >/dev/null
+        rm -f "$f"
+    done
+endscript
+```
+
+The same works for BIND, dnsmasq, Pi-hole and Unbound logs.
+
+**Windows DNS** (enable *Debug logging* → *Log packets for debugging*,
+incoming, queries, to `C:\dns\dns.log`), a scheduled task every hour:
+
+```powershell
+$s = 'https://provenza.example.com'
+$k = Get-Content 'C:\ProgramData\Provenza\gateway.key'
+Copy-Item C:\dns\dns.log C:\dns\dns-send.log -Force
+Clear-Content C:\dns\dns.log
+Invoke-RestMethod -Method Post -Uri "$s/api/v1/shadow-ai/ingest/logs" -Headers @{ 'X-Ingestion-Key' = $k } `
+  -InFile C:\dns\dns-send.log -ContentType 'application/octet-stream'
+```
+
+**Cloud DNS and secure web gateways** (Cisco Umbrella, Zscaler, Netskope,
+Cloudflare Gateway): export their logs as CSV or JSON and upload them, or
+have the export job post each file to `/ingest/logs`.
 
 ## Browser extension
 

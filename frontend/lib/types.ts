@@ -200,3 +200,18 @@ export interface SeedDomainHint {
 
 
 
+
+/** POST /shadow-ai/logs/import: what a DNS or proxy log held. */
+export interface LogImportResult {
+  lines: number;
+  recognized: number;
+  ai_lines: number;
+  services: number;
+  people: number;
+  computers: number;
+  formats: Record<string, number>;
+  top: { domain: string; hits: number }[];
+  truncated: boolean;
+  events: number;
+  max_mb: number;
+}

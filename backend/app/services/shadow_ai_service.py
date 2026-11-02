@@ -195,7 +195,7 @@ class ShadowAIService:
         return {d: (int(p or 0), int(b or 0)) for d, p, b in rows.all()}
 
     async def people(self, org_id: int, sighting_id: int) -> dict:
-        from sqlalchemy import case, distinct, func
+        from sqlalchemy import Integer, case, distinct, func
 
         from app.models.ai_telemetry_event import AITelemetryEvent
         from app.schemas.telemetry import DOMAIN_EVENT_TYPE
@@ -207,11 +207,18 @@ class ShadowAIService:
             return out
         E = AITelemetryEvent
         visits = (E.org_id == org_id, E.event_type == DOMAIN_EVENT_TYPE, E.domain == domain)
+        # a browser reports each visit; a DNS or proxy log import one event
+        # per person and computer with how many lines it stands for (hits)
+        hits = func.coalesce(E.metadata_json["hits"].astext.cast(Integer), 1)
+        blocked = func.coalesce(
+            E.metadata_json["blocked_hits"].astext.cast(Integer),
+            case((E.action_taken == "blocked", 1), else_=0),
+        )
         rows = await self.db.execute(
             select(
                 E.user_hint,
-                func.count(),
-                func.count(case((E.action_taken == "blocked", 1))),
+                func.sum(hits),
+                func.sum(blocked),
                 func.max(E.occurred_at),
             )
             .where(*visits, E.user_hint.is_not(None))
@@ -223,7 +230,7 @@ class ShadowAIService:
             {"user": u, "visits": int(n), "blocked": int(b), "last_seen_at": last} for u, n, b, last in rows.all()
         ]
         browsers, anon = (await self.db.execute(
-            select(func.count(distinct(E.agent_id)), func.count()).where(*visits, E.user_hint.is_(None))
+            select(func.count(distinct(E.agent_id)), func.sum(hits)).where(*visits, E.user_hint.is_(None))
         )).one()
         out["unidentified_browsers"], out["unidentified_visits"] = int(browsers or 0), int(anon or 0)
         return out

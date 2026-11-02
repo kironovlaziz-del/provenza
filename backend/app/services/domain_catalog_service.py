@@ -170,3 +170,26 @@ class DomainCatalogService:
         version = hashlib.sha256(json.dumps(domains, sort_keys=True).encode()).hexdigest()[:16]
         return {"version": version, "domains": domains}
 
+
+    async def ai_domains(self, org_id: int) -> "AIDomainSet":
+        """Every domain this organization's catalog or the built-in list knows
+        as an AI service: what a DNS or proxy log is filtered by
+        (app/services/log_import.py). API hosts count too - a program that
+        calls an AI API is an AI use."""
+        from app.services.domain_catalog_seed import SEED_DOMAINS
+
+        own = {e.domain for e in await self.list_entries(org_id) if "/" not in e.domain}
+        seed = {h["domain"] for h in SEED_DOMAINS if "/" not in h["domain"]}
+        return AIDomainSet(own | seed)
+
+
+class AIDomainSet:
+    """A set of domains matched by host name or any parent domain:
+    "chat.openai.com" is in a set that holds "openai.com"."""
+
+    def __init__(self, domains):
+        self.domains = {d.strip().lower().rstrip(".") for d in domains if d}
+
+    def __call__(self, host: str) -> bool:
+        labels = host.lower().rstrip(".").split(".")
+        return any(".".join(labels[i:]) in self.domains for i in range(len(labels) - 1))

@@ -267,7 +267,7 @@ The catalog decides how a detected domain is treated.
 
 **AI → Shadow AI Sightings**. Each sighting shows the tool, the
 source (browser extension, endpoint agent, local process/network/model
-file, or manual), the employee hint if known, the status, and a
+file, DNS or proxy log, or manual), the employee hint if known, the status, and a
 "seen N times" counter for repeat detections. For each one you can:
 
 - **Take on** it for review,
@@ -276,6 +276,19 @@ file, or manual), the employee hint if known, the status, and a
 - **Dismiss** it.
 
 You can also **Report a sighting** manually.
+
+### 8.3.1 Importing DNS and proxy logs
+
+Administrators can give Provenza the logs their DNS servers and web proxy
+already keep: **Shadow AI → Import logs**, choose the file (Squid, BIND,
+dnsmasq / Pi-hole, Unbound, Windows DNS debug log, Zeek, JSON lines,
+key=value, or a CSV export from Cisco Umbrella, Zscaler, Netskope, Palo
+Alto; gzip is fine), **Import**. Only the lines that reach an AI service
+are kept, folded into one visit per service, person and computer; the
+services appear as sightings with the source *DNS log* or *Proxy log*, and
+a proxy that authenticates people also tells who. Import each log once.
+For a continuous feed, a log forwarder can send new lines with a
+*Gateway* ingestion key - see [Shadow AI collectors](docs/shadow-ai.md#dns-and-proxy-logs).
 
 ### 8.4 Deploying the endpoint agent
 

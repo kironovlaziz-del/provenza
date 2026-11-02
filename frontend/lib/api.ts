@@ -19,6 +19,7 @@ import type {
   ServiceConnection,
   UserRole,
   SightingPeople,
+  LogImportResult,
 } from "./types";
 
 const API_BASE_URL =
@@ -436,6 +437,15 @@ export async function createShadowSighting(payload: {
 
 export async function getSightingPeople(id: number) {
   const { data } = await api.get<SightingPeople>(`/shadow-ai/${id}/people`);
+  return data;
+}
+
+/** A DNS or proxy log file, sent as it is (gzip too): what was found in it. */
+export async function importAILogs(file: File) {
+  const { data } = await api.post<LogImportResult>(
+    `/shadow-ai/logs/import?name=${encodeURIComponent(file.name)}`, file,
+    { headers: { "Content-Type": "application/octet-stream" } },
+  );
   return data;
 }
 

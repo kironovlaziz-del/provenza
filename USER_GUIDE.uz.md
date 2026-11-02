@@ -280,8 +280,8 @@ Katalog aniqlangan domen qanday qayta ishlanishini belgilaydi.
 ### 8.3 Sightings (aniqlangan holatlar)
 
 **AI → Shadow AI Sightings**. Har bir yozuv vositani, manbani
-(brauzer kengaytmasi, endpoint agenti, lokal jarayon/tarmoq/model fayli
-yoki qo‘lda), ma’lum bo‘lsa xodim haqidagi malumotni, holatni va
+(brauzer kengaytmasi, endpoint agenti, lokal jarayon/tarmoq/model fayli,
+DNS yoki proksi jurnali yoki qo‘lda), ma’lum bo‘lsa xodim haqidagi malumotni, holatni va
 takroriy aniqlashlar uchun "seen N times" hisoblagichini ko‘rsatadi. Har
 biri uchun siz:
 
@@ -291,6 +291,21 @@ biri uchun siz:
 - **Dismiss** qilishingiz mumkin.
 
 Shuningdek, **Report a sighting** orqali qo‘lda ham qo‘shishingiz mumkin.
+
+### 8.3.1 DNS va proksi jurnallarini import qilish
+
+Administratorlar Provenza'ga DNS serverlari va veb-proksi allaqachon
+yuritadigan jurnallarni berishi mumkin: **Shadow AI → Jurnallarni import
+qilish**, faylni tanlang (Squid, BIND, dnsmasq / Pi-hole, Unbound, Windows
+DNS debug log, Zeek, JSON qatorlari, key=value yoki Cisco Umbrella,
+Zscaler, Netskope, Palo Alto'dan CSV eksport; gzip ham bo‘ladi), **Import
+qilish**. Faqat AI xizmatiga yetgan qatorlar saqlanadi va har bir xizmat,
+kishi va kompyuter uchun bitta tashrifga yig‘iladi; xizmatlar *DNS jurnali*
+yoki *Proksi jurnali* manbasi bilan topilmalar sifatida paydo bo‘ladi, kim
+kirganini biladigan proksi esa kimligini ham aytadi. Har bir jurnalni bir
+marta import qiling. Doimiy oqim uchun jurnal yo‘naltiruvchisi yangi
+qatorlarni *Gateway* kaliti bilan yuborishi mumkin —
+[Shadow AI kollektorlari](docs/shadow-ai.md#dns-and-proxy-logs) ga qarang.
 
 ### 8.4 Endpoint agentini joylashtirish
 
