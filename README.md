@@ -20,6 +20,7 @@
   <a href="CONTRIBUTING.md"><img src="https://img.shields.io/badge/PRs-welcome-brightgreen.svg" alt="PRs Welcome"></a>
   <a href="https://pypi.org/project/provenza/"><img src="https://img.shields.io/pypi/v/provenza?label=PyPI&color=blue" alt="PyPI"></a>
   <a href="https://pypi.org/project/provenza/"><img src="https://img.shields.io/pypi/pyversions/provenza?label=Python" alt="Python versions"></a>
+  <a href="https://glama.ai/mcp/servers/kironovlaziz-del/provenza"><img src="https://glama.ai/mcp/servers/kironovlaziz-del/provenza/badges/score.svg" alt="Glama MCP score"></a>
 </p>
 
 <p align="center">
