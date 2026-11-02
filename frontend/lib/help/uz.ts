@@ -273,7 +273,7 @@ export const ARTICLES_UZ: Article[] = [
       ["list", [
         "**Tarmoq** — egress proksi va sensor kompaniya trafigi qaysi AI xizmatlariga yetib borayotganini ko'radi.",
         "**Qurilmalar** — endpoint agent kompaniya kompyuterlarida ishlayotgan AI dasturlari va agentlarni ko'radi.",
-        "**Brauzer** — brauzer kengaytmasi AI xizmatlariga tashriflarni ko'radi va tashkilotingiz bloklaganlarini yopadi.",
+        "**Brauzer** — brauzer kengaytmasi AI xizmatlariga tashriflarni ko'radi va tashkilotingiz bloklaganlarini yopadi. Tashkilot har bir brauzerga foydalanuvchisining emailini bersa, topilma xizmatdan necha kishi foydalanayotganini ko'rsatadi; ko'rib chiquvchilar raqamni bosib kimligini ko'radi.",
         "**Odamlar** — istalgan kishi topilmani qo'lda xabar qilishi mumkin, masalan xarajatlar hisobotidan.",
       ]],
       ["h", "Topilma bo'yicha qaror qilish"],

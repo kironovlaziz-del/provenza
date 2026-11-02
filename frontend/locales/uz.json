@@ -361,7 +361,17 @@
     "confirm_register_msg": "Bu quyidagi uchun tasdiqlangan AI provayder ulanishini yaratadi:",
     "provider_type": "Provayder turi",
     "register_btn": "Ro'yxatga olish",
-    "seen_times": "{{count}} marta ko'rilgan"
+    "seen_times": "{{count}} marta ko'rilgan",
+    "people_one": "{{count}} kishi",
+    "people_other": "{{count}} kishi",
+    "unnamed_browsers_one": "+ {{count}} ta nomsiz brauzer",
+    "unnamed_browsers_other": "+ {{count}} ta nomsiz brauzer",
+    "people_hint": "Brauzerlar xabar qilganidek: tashkilot kengaytmaga har bir xodimning emailini siyosat orqali beradi (userEmail). Bu tizimga kirish emas.",
+    "people_visits": "Tashriflar",
+    "people_blocked": "Bloklangan",
+    "people_last": "Oxirgi tashrif",
+    "people_unnamed_one": "Yana {{count}} ta brauzer kim foydalanishini aytmadi (tashriflar: {{visits}}): uning siyosatida userEmail yo'q.",
+    "people_unnamed_other": "Yana {{count}} ta brauzer kim foydalanishini aytmadi (tashriflar: {{visits}}): ularning siyosatida userEmail yo'q."
   },
   "domain_catalog": {
     "title": "AI domenlar katalogi",

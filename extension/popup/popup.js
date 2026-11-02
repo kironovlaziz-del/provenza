@@ -37,6 +37,13 @@ chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
       ? "✓ Reporting to " + new URL(s.apiUrl).host + (s.queued ? " (" + s.queued + " waiting)" : "")
       : "✗ Not configured — enter the server and ingestion key below";
     conf.className = "config-state " + (s.configured ? "config-ok" : "config-missing");
+    if (s.configured) {
+      const who = document.createElement("div");
+      who.className = "config-state";
+      who.style.color = "#64748b";
+      who.textContent = s.userEmail ? "Visits are reported as " + s.userEmail : "Visits are reported without a name";
+      conf.after(who);
+    }
 
     const cat = document.getElementById("catalog-state");
     cat.textContent = s.catalogError

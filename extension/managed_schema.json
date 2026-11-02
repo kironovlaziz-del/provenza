@@ -10,6 +10,11 @@
       "title": "Ingestion key",
       "description": "A browser-extension ingestion key (Settings > Ingestion Sources in Provenza).",
       "type": "string"
+    },
+    "userEmail": {
+      "title": "User's e-mail",
+      "description": "Who uses this browser, as your organization knows them. Set per user (e.g. a user-level policy written at sign-in); Provenza shows it on the AI services they visit.",
+      "type": "string"
     }
   }
 }

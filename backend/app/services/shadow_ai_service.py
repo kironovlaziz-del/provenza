@@ -1,7 +1,7 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from fastapi import HTTPException, status
-from typing import List, Optional
+from typing import Dict, List, Optional, Tuple
 from datetime import datetime, timezone
 from app.models.shadow_ai_sighting import ShadowAISighting
 from app.models.ai_provider import AIProvider
@@ -157,3 +157,73 @@ class ShadowAIService:
         return result.scalars().first()
 
 
+
+    # ------------------------------------------------------------ people
+    # Who visited a domain sighting's AI service, read from the raw visits
+    # (ai_telemetry_events, kept as long as Settings -> Data retention says).
+    # user_hint is what the browser reported - the organization sets it by
+    # policy for its extensions (userEmail); a browser without it counts as
+    # one unidentified browser (its install id).
+
+    @staticmethod
+    def _visit_domain(sighting: ShadowAISighting) -> Optional[str]:
+        meta = sighting.display_meta or {}
+        if meta.get("kind") == "domain" and sighting.domain:
+            return sighting.domain
+        return None
+
+    async def people_counts(self, org_id: int, sightings: List[ShadowAISighting]) -> Dict[str, Tuple[int, int]]:
+        """domain -> (identified people, unidentified browsers) for these sightings."""
+        from sqlalchemy import case, distinct, func
+
+        from app.models.ai_telemetry_event import AITelemetryEvent
+        from app.schemas.telemetry import DOMAIN_EVENT_TYPE
+
+        domains = sorted({d for d in (self._visit_domain(s) for s in sightings) if d})
+        if not domains:
+            return {}
+        E = AITelemetryEvent
+        rows = await self.db.execute(
+            select(
+                E.domain,
+                func.count(distinct(E.user_hint)),
+                func.count(distinct(case((E.user_hint.is_(None), E.agent_id)))),
+            )
+            .where(E.org_id == org_id, E.event_type == DOMAIN_EVENT_TYPE, E.domain.in_(domains))
+            .group_by(E.domain)
+        )
+        return {d: (int(p or 0), int(b or 0)) for d, p, b in rows.all()}
+
+    async def people(self, org_id: int, sighting_id: int) -> dict:
+        from sqlalchemy import case, distinct, func
+
+        from app.models.ai_telemetry_event import AITelemetryEvent
+        from app.schemas.telemetry import DOMAIN_EVENT_TYPE
+
+        sighting = await self._get(sighting_id, org_id)
+        domain = self._visit_domain(sighting)
+        out = {"people": [], "unidentified_browsers": 0, "unidentified_visits": 0}
+        if not domain:
+            return out
+        E = AITelemetryEvent
+        visits = (E.org_id == org_id, E.event_type == DOMAIN_EVENT_TYPE, E.domain == domain)
+        rows = await self.db.execute(
+            select(
+                E.user_hint,
+                func.count(),
+                func.count(case((E.action_taken == "blocked", 1))),
+                func.max(E.occurred_at),
+            )
+            .where(*visits, E.user_hint.is_not(None))
+            .group_by(E.user_hint)
+            .order_by(func.max(E.occurred_at).desc())
+            .limit(500)
+        )
+        out["people"] = [
+            {"user": u, "visits": int(n), "blocked": int(b), "last_seen_at": last} for u, n, b, last in rows.all()
+        ]
+        browsers, anon = (await self.db.execute(
+            select(func.count(distinct(E.agent_id)), func.count()).where(*visits, E.user_hint.is_(None))
+        )).one()
+        out["unidentified_browsers"], out["unidentified_visits"] = int(browsers or 0), int(anon or 0)
+        return out

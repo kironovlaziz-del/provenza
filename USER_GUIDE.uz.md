@@ -479,6 +479,13 @@ ma’lumot joylashdan oldin ogohlantiradi; bu ogohlantirish brauzerda qoladi.
    bering — shunda xodimlar uni o‘chira ham, qayta sozlay ham olmaydi.
    Windows, macOS, Linux va Google Admin konsoli uchun qadamlar
    [docs/shadow-ai.md](docs/shadow-ai.md#installing-it-for-the-whole-organization) da.
+3. Har bir AI xizmatidan **kim** foydalanayotganini ko‘rish uchun har bir
+   brauzerga foydalanuvchisining emailini foydalanuvchi darajasidagi siyosat
+   orqali bering (`userEmail`, qarang:
+   [docs/shadow-ai.md](docs/shadow-ai.md#who-uses-the-browser-useremail)).
+   Shunda topilma unga necha kishi kirganini ko‘rsatadi; tasdiqlovchilar,
+   auditorlar va muvofiqlik xodimlari raqamni bosib kim, necha marta va
+   oxirgi marta qachon kirganini ko‘radi.
 
 ---
 

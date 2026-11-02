@@ -10,7 +10,8 @@
 //
 // Configuration, first found wins:
 //   1. managed by the organization (Chrome / Edge policy, managed_schema.json):
-//      serverUrl + ingestionKey - the user cannot change or remove it;
+//      serverUrl + ingestionKey - the user cannot change or remove it - and,
+//      set per user, userEmail: who uses this browser (sent with each visit);
 //   2. baked in by the server's download (/shadow-ai/extension/download);
 //   3. set by hand in the popup.
 // The defaults below are inert placeholders, so a raw checkout never carries a
@@ -34,26 +35,36 @@ const CONTENT_SCRIPT_ID = "provenza-secret-warning";
 
 async function managedConfig() {
   try {
-    return (await chrome.storage.managed.get(["serverUrl", "ingestionKey"])) || {};
+    return (await chrome.storage.managed.get(["serverUrl", "ingestionKey", "userEmail"])) || {};
   } catch (e) {
     return {}; // no policy on this browser
   }
 }
 
+// Who uses this browser: only the organization's policy says so - a value a
+// person types is not an identity. Anything that is not an address is ignored.
+function policyUser(managed) {
+  const value = typeof managed.userEmail === "string" ? managed.userEmail.trim().toLowerCase() : "";
+  return /^[^@\s]{1,64}@[^@\s]{1,190}\.[^@\s]+$/.test(value) ? value : null;
+}
+
 async function getConfig() {
   const managed = await managedConfig();
+  const userEmail = policyUser(managed);
   if (managed.serverUrl && managed.ingestionKey) {
     return {
       apiUrl: managed.serverUrl.replace(/\/+$/, "") + INGEST_PATH,
       ingestionKey: managed.ingestionKey,
-      managed: true
+      managed: true,
+      userEmail
     };
   }
   const stored = await chrome.storage.local.get(["apiUrl", "ingestionKey"]);
   return {
     apiUrl: stored.apiUrl || PLACEHOLDER_CONFIG.apiUrl,
     ingestionKey: stored.ingestionKey || PLACEHOLDER_CONFIG.ingestionKey,
-    managed: false
+    managed: false,
+    userEmail
   };
 }
 
@@ -206,6 +217,7 @@ async function reportVisit(host, entry, blocked) {
     event_id: crypto.randomUUID(),
     event_type: "domain_visit",
     agent_id: await getAgentId(),
+    user_id: (await getConfig()).userEmail || undefined,
     domain: host,
     risk_score: RISK[blocked ? "blocked" : entry.status] ?? 0.6,
     action_taken: blocked ? "blocked" : "monitored",
@@ -266,6 +278,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     Promise.all([getConfig(), getCatalog(), chrome.storage.local.get(["catalogError", "lastReport"]), readQueue()])
       .then(([config, catalog, extra, queue]) => sendResponse({
         managed: config.managed,
+        userEmail: config.userEmail,
         configured: !!config.ingestionKey,
         apiUrl: config.apiUrl,
         catalog: { version: catalog.version, fetchedAt: catalog.fetchedAt, count: catalog.domains.length,

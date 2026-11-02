@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey, func
+from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey, Index, func
 from sqlalchemy.dialects.postgresql import JSONB
 from app.core.database import Base
 
@@ -28,6 +28,8 @@ class AITelemetryEvent(Base):
     """
 
     __tablename__ = "ai_telemetry_events"
+    # who used an AI service: the raw visits of its domain (Shadow AI, people per sighting)
+    __table_args__ = (Index("ix_ai_telemetry_events_org_domain", "org_id", "domain", "event_type"),)
 
     id = Column(Integer, primary_key=True, index=True)
     org_id = Column(Integer, ForeignKey("organizations.id"), nullable=False)

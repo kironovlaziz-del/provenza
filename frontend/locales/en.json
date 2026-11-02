@@ -361,7 +361,17 @@
     "confirm_register_msg": "This will create an approved AI provider connection for",
     "provider_type": "Provider type",
     "register_btn": "Register",
-    "seen_times": "Seen {{count}} times"
+    "seen_times": "Seen {{count}} times",
+    "people_one": "{{count}} person",
+    "people_other": "{{count}} people",
+    "unnamed_browsers_one": "+ {{count}} browser without a name",
+    "unnamed_browsers_other": "+ {{count}} browsers without a name",
+    "people_hint": "As their browsers reported it: the organization gives the extension each person's e-mail by policy (userEmail). It is not a sign-in.",
+    "people_visits": "Visits",
+    "people_blocked": "Blocked",
+    "people_last": "Last visit",
+    "people_unnamed_one": "And {{count}} browser that did not say who uses it (visits: {{visits}}): its policy has no userEmail.",
+    "people_unnamed_other": "And {{count}} browsers that did not say who uses them (visits: {{visits}}): their policy has no userEmail."
   },
   "domain_catalog": {
     "title": "AI Domain Catalog",

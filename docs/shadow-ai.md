@@ -156,6 +156,7 @@ then says *Managed by your organization*).
    |---|---|
    | `serverUrl` | your Provenza address, e.g. `https://provenza.example.com` |
    | `ingestionKey` | the browser-extension key |
+   | `userEmail` | optional, per user: who uses this browser (below) |
 
    Replace `<ID>` with the extension's id (shown on `chrome://extensions`, or
    on its store page):
@@ -185,6 +186,46 @@ then says *Managed by your organization*).
      ```
 
    A configuration that arrives later takes effect without a browser restart.
+
+### Who uses the browser (userEmail)
+
+With `userEmail`, every visit carries the person's address: a Shadow AI
+sighting then shows how many people use the service and, for reviewers and
+the oversight roles, who, how often and when last (other users see only the
+count). Without it, a browser is counted as "a browser without a name".
+
+The address comes **only** from policy, never from what a person types, and
+the server keeps nothing from an extension but a well-formed address. It is
+attribution, not authentication: the key is public, and a person with
+administrator rights on their own computer can change their own user-level
+policy. Use it to see who needs which AI service, not as evidence against
+someone.
+
+`userEmail` differs per person, so it is set as a **user-level** policy,
+written when the person signs in:
+
+- **Windows** (a logon script through Group Policy, or an Intune PowerShell
+  script that runs as the signed-in user), on domain- or Entra-joined
+  computers:
+
+  ```powershell
+  $id  = "<ID>"
+  $upn = (whoami /upn).Trim()
+  $key = "HKCU:\Software\Policies\Google\Chrome\3rdparty\extensions\$id\policy"
+  # Edge: HKCU:\Software\Policies\Microsoft\Edge\3rdparty\extensions\$id\policy
+  New-Item -Path $key -Force | Out-Null
+  Set-ItemProperty -Path $key -Name userEmail -Value $upn
+  ```
+
+  `serverUrl` and `ingestionKey` stay machine-wide (HKLM); Chrome merges the
+  two levels.
+- **macOS**: a user-level configuration profile for the same preference
+  domain, with your MDM's variable for the user's e-mail (for example
+  `$EMAIL` in Jamf Pro).
+- **Linux**: policies are per machine; set `userEmail` there only on
+  computers that one person uses.
+- **Google Admin console**: one value applies to a whole organizational unit,
+  so it cannot name each person; leave `userEmail` out there.
 
 ## Related
 

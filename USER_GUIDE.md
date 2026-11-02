@@ -451,6 +451,11 @@ stays in the browser.
    so that people can neither remove nor reconfigure it. The steps for
    Windows, macOS, Linux and the Google Admin console are in
    [docs/shadow-ai.md](docs/shadow-ai.md#installing-it-for-the-whole-organization).
+3. To see **who** uses each AI service, give every browser its user's
+   e-mail by a user-level policy (`userEmail`, see
+   [docs/shadow-ai.md](docs/shadow-ai.md#who-uses-the-browser-useremail)). A
+   sighting then shows how many people visited it; reviewers, auditors and
+   compliance officers click the number to see who, how often and when last.
 
 ---
 
