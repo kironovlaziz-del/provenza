@@ -29,6 +29,19 @@ export async function getAgent(id: number) {
   return data;
 }
 
+/** The agent's signed Agent Manifest (AgenTrust v0.2), as its COSE file. */
+export async function downloadAgentManifest(id: number) {
+  const { data } = await api.get(`/agents/${id}/manifest.cose`, { responseType: "blob" });
+  const url = window.URL.createObjectURL(new Blob([data], { type: "application/cose" }));
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `agent-${id}-manifest.cose`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
+}
+
 export async function registerAgent(payload: {
   name: string;
   description?: string;

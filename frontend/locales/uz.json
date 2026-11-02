@@ -1203,7 +1203,8 @@
     "webauthn.bad_encoding": "Passkey javobini o'qib bo'lmadi.",
     "log_import.too_large": "Jurnal bitta yuklash uchun juda katta: uni qismlarga bo'ling.",
     "log_import.unreadable": "Faylni o'qib bo'lmadi. gzip fayl kesilgan bo'lishi mumkin.",
-    "ingestion.logs_need_gateway_key": "Jurnal qatorlari uchun Gateway kaliti kerak."
+    "ingestion.logs_need_gateway_key": "Jurnal qatorlari uchun Gateway kaliti kerak.",
+    "agent_manifest.unavailable": "Bu server Agent Manifest'larni imzolay olmaydi."
   },
   "discovery": {
     "title": "Tarmoq kashfiyoti",
@@ -1362,7 +1363,10 @@
     "confirm_retire": "\"{{name}}\" iste'foga chiqarilsinmi? Uning API kaliti butunlay ishlamay qoladi va u endi jamoa yoki rolda hisoblanmaydi (keyin ularni o'chirish mumkin). Tarixi va audit yozuvlari saqlanadi.",
     "confirm_reactivate": "\"{{name}}\" qayta yoqilsinmi? U o'z kaliti bilan yana harakat qila oladi.",
     "status_change_failed": "Agent holatini o'zgartirib bo'lmadi.",
-    "retired_note": "Bu agent iste'foda: u harakat qila olmaydi va endi jamoa yoki rolda hisoblanmaydi. Tarixi saqlanadi."
+    "retired_note": "Bu agent iste'foda: u harakat qila olmaydi va endi jamoa yoki rolda hisoblanmaydi. Tarixi saqlanadi.",
+    "manifest": "Agent Manifest",
+    "manifest_hint": "Ushbu agentning identifikatori, tasdiqlangan vositalari va audit jurnalining imzolangan yozuvi (AgenTrust Agent Manifest v0.2), uni Provenza'siz tekshirish mumkin.",
+    "manifest_failed": "Agent Manifest'ni chiqarib bo'lmadi."
   },
   "chains": {
     "title": "Delegatsiya zanjirlari",

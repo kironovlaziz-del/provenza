@@ -374,6 +374,52 @@ async def list_agents(
     return Page(items=items, total=total, skip=pagination.skip, limit=pagination.limit)
 
 
+_MANIFEST_READERS = (UserRole.admin, UserRole.approver, UserRole.auditor, UserRole.compliance)
+
+
+async def _manifest(request: Request, agent_id: int, db: AsyncSession, user: User):
+    from app.services import agent_manifest
+
+    agent = await AgentRegistry(db).get_agent(agent_id, user.org_id)
+    try:
+        rec = await agent_manifest.current(db, agent, str(request.base_url), user.id)
+    except agent_manifest.ManifestUnavailable:
+        raise HTTPException(status_code=503, detail="agent_manifest.unavailable")
+    await db.commit()
+    return rec
+
+
+@router.get("/{agent_id}/manifest")
+async def get_agent_manifest(
+    request: Request,
+    agent_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role(*_MANIFEST_READERS)),
+):
+    """The agent's Agent Manifest (AgenTrust v0.2, composition-only): signed
+    by the organization's audit key, checkable offline with the agent-manifest
+    SDK. Issued again when what it binds changes (app/services/agent_manifest.py)."""
+    from app.services import agent_manifest
+
+    rec = await _manifest(request, agent_id, db, current_user)
+    return agent_manifest.out(rec, await agent_manifest.signing_key_of(db, rec))
+
+
+@router.get("/{agent_id}/manifest.cose")
+async def get_agent_manifest_cose(
+    request: Request,
+    agent_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role(*_MANIFEST_READERS)),
+):
+    """The same manifest as its COSE envelope, as `manifest verify` reads it."""
+    from fastapi.responses import Response
+
+    rec = await _manifest(request, agent_id, db, current_user)
+    return Response(rec.envelope, media_type="application/cose",
+                    headers={"Content-Disposition": f'attachment; filename="agent-{agent_id}-manifest.cose"'})
+
+
 @router.get("/{agent_id}", response_model=AgentOut)
 async def get_agent(
     agent_id: int,

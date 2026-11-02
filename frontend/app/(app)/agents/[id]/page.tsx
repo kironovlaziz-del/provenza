@@ -5,7 +5,7 @@ import { useParams } from "next/navigation";
 import Link from "next/link";
 import { useTranslation } from "react-i18next";
 import { PageHeader } from "@/components/PageHeader";
-import { getAgent, updateAgent, killAgent, listAgentActions, listKeyRevocations, listSigningKeys, revokeSigningKey, setSigningKey } from "@/lib/agent_api";
+import { downloadAgentManifest, getAgent, updateAgent, killAgent, listAgentActions, listKeyRevocations, listSigningKeys, revokeSigningKey, setSigningKey } from "@/lib/agent_api";
 import type { Agent, AgentActionT, KeyRevocationT, SigningKeyT } from "@/lib/agent_types";
 import { useAuth } from "@/lib/auth";
 import { getIdentityOverview } from "@/lib/agent_identity_api";
@@ -159,6 +159,14 @@ export default function AgentDetailPage() {
             )}
             {isAdmin && agent.status !== "retired" && (
               <button type="button" className="btn btn-sm" onClick={() => changeStatus("retired")}>{t("agents.retire")}</button>
+            )}
+            {user?.role !== "user" && (
+              <button type="button" className="btn btn-sm" title={t("agents.manifest_hint")} onClick={() => {
+                setStatusError(null);
+                downloadAgentManifest(agentId).catch(() => setStatusError(t("agents.manifest_failed")));
+              }}>
+                {t("agents.manifest")}
+              </button>
             )}
             <Link href="/agents" className="btn btn-sm">← {t("agents.back")}</Link>
           </>
