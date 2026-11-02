@@ -143,12 +143,20 @@ guarantee is spelled out in the [security model](docs/security-model.md).
 
 ### 👁️ Shadow AI — unsanctioned AI
 
-- **Endpoint agent** finds local models and AI agents (Claude Code, Cursor,
-  Copilot, Aider, CrewAI, n8n, …), including unknown ones by their behavior.
-- **Browser extension** warns before a secret is pasted into an AI tool.
+- **Endpoint agent** for Linux, Windows and macOS finds local models and AI
+  agents (Claude Code, Cursor, Copilot, Aider, CrewAI, n8n, …), including unknown
+  ones by their behavior. One command from the console installs it as a service;
+  Intune, Group Policy and Jamf are covered.
+- **Browser extension** (Chrome, Edge) reports visits to AI services, closes the
+  ones your organization blocks and offers the approved ones instead. Deployed by
+  policy, it also tells who uses what.
+- **DNS and proxy logs** — upload a log (Squid, BIND, dnsmasq, Windows DNS, Zeek,
+  Cisco Umbrella, Zscaler, …) or stream it with a log forwarder: AI use on every
+  device on the network, without installing anything. Only the lines that reach
+  an AI service are kept.
 - **Passive network discovery** — read-only; nothing is connected automatically.
-- Everything lands in one Sightings list, with an AI domain catalog and device
-  inventory ([collectors](docs/shadow-ai.md)).
+- Everything lands in one Sightings list, with an AI domain catalog, who uses each
+  service, and device inventory ([collectors](docs/shadow-ai.md)).
 
 ### 🤖 Agents — autonomous AI
 
