@@ -18,6 +18,7 @@ import type {
   DiscoveredService,
   ServiceConnection,
   UserRole,
+  SightingPeople,
 } from "./types";
 
 const API_BASE_URL =
@@ -430,6 +431,11 @@ export async function createShadowSighting(payload: {
   notes?: string;
 }) {
   const { data } = await api.post<ShadowSighting>("/shadow-ai/", payload);
+  return data;
+}
+
+export async function getSightingPeople(id: number) {
+  const { data } = await api.get<SightingPeople>(`/shadow-ai/${id}/people`);
   return data;
 }
 

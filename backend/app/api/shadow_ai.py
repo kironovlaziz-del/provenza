@@ -14,6 +14,7 @@ from app.core.errors import api_error
 from app.core.database import get_db
 from app.core.pagination import PaginationParams
 from app.schemas.shadow_ai import (
+    SightingPeopleOut,
     ShadowSightingCreate,
     ShadowSightingUpdate,
     ShadowSightingRegister,
@@ -72,12 +73,28 @@ async def ingest_telemetry(
     if not events:  # nothing left to process: no task for an empty batch
         return TelemetryIngestAcceptedResponse(status="accepted", received=0, task_id="")
     raw_events = [e.model_dump(mode="json") for e in events]
+    if extension:
+        # the user is what the organization's policy gave the browser (userEmail):
+        # an address, or nothing - no other text from a public key is kept
+        for e in raw_events:
+            e["user_id"] = _browser_user(e.get("user_id"))
     task = process_telemetry_batch.delay(source.org_id, source.id, raw_events)
     return TelemetryIngestAcceptedResponse(
         status="accepted",
         received=len(events),
         task_id=task.id,
     )
+
+
+_EMAIL = re.compile(r"[a-z0-9._%+'-]{1,64}@[a-z0-9-]{1,63}(?:\.[a-z0-9-]{1,63})+")
+
+
+def _browser_user(value) -> Optional[str]:
+    """A browser's user: an e-mail address (lower case), else nobody."""
+    if not isinstance(value, str):
+        return None
+    value = value.strip().lower()
+    return value if len(value) <= 254 and _EMAIL.fullmatch(value) else None
 
 
 @router.get("/extension/catalog")
@@ -129,7 +146,35 @@ async def list_sightings(
         skip=pagination.skip,
         limit=pagination.limit,
     )
-    return Page(items=items, total=total, skip=pagination.skip, limit=pagination.limit)
+    counts = await service.people_counts(current_user.org_id, items)
+    # who used an AI service is personal data: only reviewers and the
+    # oversight roles see names; everybody sees how many
+    names = _sees_people(current_user)
+    out = []
+    for item in items:
+        row = ShadowSightingOut.model_validate(item)
+        if row.domain in counts and (row.display_meta or {}).get("kind") == "domain":
+            row.people, row.unidentified_browsers = counts[row.domain]
+        if not names:
+            row.user_hint = None
+        out.append(row)
+    return Page(items=out, total=total, skip=pagination.skip, limit=pagination.limit)
+
+
+def _sees_people(user: User) -> bool:
+    return user.role in (UserRole.admin.value, UserRole.approver.value, UserRole.auditor.value,
+                         UserRole.compliance.value)
+
+
+@router.get("/{sighting_id}/people", response_model=SightingPeopleOut)
+async def sighting_people(
+    sighting_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role(UserRole.admin, UserRole.approver)),
+):
+    """Who visited this AI service (a domain sighting), how often, and when
+    last - as their browsers reported it (browser extension with userEmail)."""
+    return await ShadowAIService(db).people(current_user.org_id, sighting_id)
 
 
 @router.get("/summary")

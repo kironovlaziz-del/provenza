@@ -1965,3 +1965,10 @@ a.btn, a.btn:hover { text-decoration: none; }
   --ac-key: #0550ae; --ac-str: #0a3069; --ac-num: #953800;
   border: 1px solid var(--border);
 }
+
+/* Shadow AI: who visited a sighting */
+.link-button { background: none; border: 0; padding: 0; font: inherit; color: var(--accent); cursor: pointer; text-align: left; }
+.link-button:hover { text-decoration: underline; }
+tr.sub-row > td { background: var(--bg-app); }
+.sighting-people { padding: 4px 0; max-width: 760px; }
+.sighting-people table { width: 100%; }

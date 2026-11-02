@@ -272,7 +272,7 @@ export const ARTICLES_EN: Article[] = [
       ["list", [
         "**Network** — the egress proxy and the sensor see which AI services company traffic reaches.",
         "**Devices** — the endpoint agent sees AI programs and agents running on company computers.",
-        "**Browser** — the browser extension sees visits to AI services, and closes the ones your organization blocked.",
+        "**Browser** — the browser extension sees visits to AI services, and closes the ones your organization blocked. When the organization gives each browser its user's e-mail, a finding shows how many people use the service; reviewers click the number to see who.",
         "**People** — anyone can report a sighting by hand, for example from an expense report.",
       ]],
       ["h", "Deciding on a finding"],

@@ -8,6 +8,16 @@ this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **Who uses an AI service.** Browser extension 2.1 sends the person's
+  e-mail with each visit when the organization sets it by user-level policy
+  (`userEmail`; Windows logon script or Intune, a macOS profile - see
+  [docs/shadow-ai.md](docs/shadow-ai.md#who-uses-the-browser-useremail)). A
+  domain sighting shows how many people visited it and how many browsers did
+  not say who; reviewers, auditors and compliance officers open the list:
+  who, how often, how often blocked, when last
+  (`GET /shadow-ai/{id}/people`). The server keeps nothing from an extension
+  but a well-formed address. Plain users see the count, no longer the names.
+
 - **Browser extension 2.0: the organization's AI policy in the browser**
   ([docs/shadow-ai.md](docs/shadow-ai.md#browser-extension)). The extension
   reloads the organization's AI Domain Catalog every hour

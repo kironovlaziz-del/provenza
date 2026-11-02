@@ -8,12 +8,13 @@ import { StatusPill } from "@/components/Pill";
 import { useAuth } from "@/lib/auth";
 import {
   createShadowSighting,
+  getSightingPeople,
   listShadowSightings,
   registerShadowSighting,
   updateShadowSighting,
   getShadowAISummary,
 } from "@/lib/api";
-import type { ShadowSighting } from "@/lib/types";
+import type { ShadowSighting, SightingPeople } from "@/lib/types";
 
 // Renders the human-readable specifics the backend put in display_meta
 // (port/service, file name+size, process name+pid, device) so the raw
@@ -49,6 +50,10 @@ export default function ShadowAIPage() {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [busyId, setBusyId] = useState<number | null>(null);
+  // who visited a domain sighting (reviewers and the oversight roles)
+  const [peopleOf, setPeopleOf] = useState<number | null>(null);
+  const [people, setPeople] = useState<SightingPeople | null>(null);
+  const [peopleError, setPeopleError] = useState<string | null>(null);
 
   // Tabs & filters
   const [activeTab, setActiveTab] = useState<"active" | "resolved">("active");
@@ -114,6 +119,20 @@ export default function ShadowAIPage() {
   // what the API allows: review (take, dismiss) admin or approver, register admin
   const { user } = useAuth();
   const canReview = user?.role === "admin" || user?.role === "approver";
+  const seesPeople = canReview || user?.role === "auditor" || user?.role === "compliance";
+
+  function togglePeople(id: number) {
+    if (peopleOf === id) {
+      setPeopleOf(null);
+      return;
+    }
+    setPeopleOf(id);
+    setPeople(null);
+    setPeopleError(null);
+    getSightingPeople(id)
+      .then(setPeople)
+      .catch(() => setPeopleError(t("common.load_failed")));
+  }
   const canRegister = user?.role === "admin";
 
   async function handleSetStatus(id: number, status: string) {
@@ -438,7 +457,8 @@ export default function ShadowAIPage() {
                   </tr>
                 )}
                 {filteredSightings.map((s) => (
-                  <tr key={s.id}>
+                  <React.Fragment key={s.id}>
+                  <tr>
                     <td>
                       <div style={{ fontWeight: 600, color: "var(--text-primary)" }}>{s.tool_name}</div>
                       {(() => {
@@ -483,7 +503,25 @@ export default function ShadowAIPage() {
                       )}
                     </td>
                     <td>{renderSourceBadge(s.detected_via)}</td>
-                    <td style={{ fontSize: "12px" }}>{s.user_hint || "—"}</td>
+                    <td style={{ fontSize: "12px" }}>
+                      {s.people != null && (s.people > 0 || (s.unidentified_browsers ?? 0) > 0) ? (
+                        <>
+                          {seesPeople ? (
+                            <button type="button" className="link-button" aria-expanded={peopleOf === s.id}
+                              onClick={() => togglePeople(s.id)}>
+                              {t("shadow_ai.people", { count: s.people })} {peopleOf === s.id ? "▴" : "▾"}
+                            </button>
+                          ) : (
+                            <span>{t("shadow_ai.people", { count: s.people })}</span>
+                          )}
+                          {(s.unidentified_browsers ?? 0) > 0 && (
+                            <div className="hint-text" style={{ fontSize: "11px" }}>
+                              {t("shadow_ai.unnamed_browsers", { count: s.unidentified_browsers ?? 0 })}
+                            </div>
+                          )}
+                        </>
+                      ) : (s.user_hint || "—")}
+                    </td>
                     <td>
                       <StatusPill status={s.status} />
                     </td>
@@ -538,6 +576,50 @@ export default function ShadowAIPage() {
                       </div>
                     </td>
                   </tr>
+                  {peopleOf === s.id && (
+                    <tr className="sub-row">
+                      <td colSpan={6}>
+                        {peopleError && <div className="error-text">{peopleError}</div>}
+                        {!people && !peopleError && <div className="hint-text">{t("common.loading")}</div>}
+                        {people && (
+                          <div className="sighting-people">
+                            <p className="hint-text" style={{ margin: "0 0 8px" }}>{t("shadow_ai.people_hint")}</p>
+                            {people.people.length > 0 && (
+                              <table>
+                                <thead>
+                                  <tr>
+                                    <th>{t("shadow_ai.col_employee")}</th>
+                                    <th>{t("shadow_ai.people_visits")}</th>
+                                    <th>{t("shadow_ai.people_blocked")}</th>
+                                    <th>{t("shadow_ai.people_last")}</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {people.people.map((p) => (
+                                    <tr key={p.user}>
+                                      <td className="u-break">{p.user}</td>
+                                      <td>{p.visits}</td>
+                                      <td>{p.blocked || "—"}</td>
+                                      <td className="mono" style={{ fontSize: "11px" }}>
+                                        {p.last_seen_at ? new Date(p.last_seen_at).toLocaleString(i18n.language) : "—"}
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            )}
+                            {people.unidentified_browsers > 0 && (
+                              <p className="hint-text" style={{ margin: "8px 0 0" }}>
+                                {t("shadow_ai.people_unnamed", {
+                                  count: people.unidentified_browsers, visits: people.unidentified_visits })}
+                              </p>
+                            )}
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  )}
+                  </React.Fragment>
                 ))}
               </tbody>
             </table>

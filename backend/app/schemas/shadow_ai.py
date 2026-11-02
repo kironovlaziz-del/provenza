@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field
 from datetime import datetime
-from typing import Any, Dict, Literal, Optional
+from typing import List, Any, Dict, Literal, Optional
 
 
 class ShadowSightingCreate(BaseModel):
@@ -37,6 +37,10 @@ class ShadowSightingOut(BaseModel):
     display_meta: Optional[Dict[str, Any]] = None
     seen_count: int = 1
     last_seen_at: Optional[datetime] = None
+    # a domain sighting: how many identified people visited it (browser
+    # extension 2.1+ with userEmail), and browsers that did not say who
+    people: Optional[int] = None
+    unidentified_browsers: Optional[int] = None
     created_at: datetime
     resolved_at: Optional[datetime]
 
@@ -44,3 +48,19 @@ class ShadowSightingOut(BaseModel):
         from_attributes = True
 
 
+
+
+class SightingPersonOut(BaseModel):
+    user: str
+    visits: int
+    blocked: int
+    last_seen_at: Optional[datetime]
+
+
+class SightingPeopleOut(BaseModel):
+    """Who visited a domain sighting's AI service, from the raw visits Provenza
+    keeps (Settings -> Data retention). The user is what the browser reported:
+    the organization sets it by policy, it is not a sign-in."""
+    people: List[SightingPersonOut]
+    unidentified_browsers: int
+    unidentified_visits: int

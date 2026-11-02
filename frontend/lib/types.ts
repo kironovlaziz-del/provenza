@@ -136,6 +136,15 @@ export interface ShadowSighting {
   last_seen_at?: string | null;
   created_at: string;
   resolved_at?: string | null;
+  /** A domain sighting: people who visited it, and browsers that did not say who. */
+  people?: number | null;
+  unidentified_browsers?: number | null;
+}
+
+export interface SightingPeople {
+  people: { user: string; visits: number; blocked: number; last_seen_at: string | null }[];
+  unidentified_browsers: number;
+  unidentified_visits: number;
 }
 
 export type NotificationChannelType = "email" | "webhook";

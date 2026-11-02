@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Provenza — AI usage monitor",
   "short_name": "Provenza",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "Shows your organization which AI services are used, closes the ones it does not allow, and warns before secrets are pasted into an AI tool.",
   "permissions": [
     "storage",
@@ -22,8 +22,12 @@
   },
   "web_accessible_resources": [
     {
-      "resources": ["blocked/blocked.html"],
-      "matches": ["<all_urls>"]
+      "resources": [
+        "blocked/blocked.html"
+      ],
+      "matches": [
+        "<all_urls>"
+      ]
     }
   ],
   "action": {
