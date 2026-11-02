@@ -21,12 +21,14 @@ from app.schemas.shadow_ai import (
 )
 from app.schemas.telemetry import (
     DOMAIN_EVENT_TYPE,
+    LEGACY_EXTENSION_EVENT_TYPES,
     TelemetryIngestAcceptedResponse,
     TelemetryIngestRequest,
 )
 from app.schemas.ingestion_source import IngestionSourceCreate
 from app.schemas.pagination import Page
 from app.services.shadow_ai_service import ShadowAIService
+from app.services.domain_catalog_service import DomainCatalogService
 from app.services.ingestion_source_service import IngestionSourceService
 from app.services.audit_service import AuditService
 from app.services import notification_service
@@ -60,16 +62,36 @@ async def ingest_telemetry(
         request, scope="ingest", extra_key=f"source-{source.id}", window_seconds=60,
         limit=settings.INGEST_EXTENSION_BATCHES_PER_MINUTE if extension else settings.INGEST_BATCHES_PER_MINUTE,
     )
-    # an extension's key is public: it may report domain visits, nothing else
-    if extension and any(e.event_type != DOMAIN_EVENT_TYPE for e in data.events):
-        raise api_error(status.HTTP_403_FORBIDDEN, "ingestion.event_type_not_allowed")
-    raw_events = [e.model_dump(mode="json") for e in data.events]
+    events = data.events
+    if extension:
+        # an old extension's secret-paste warnings: no longer received
+        events = [e for e in events if e.event_type not in LEGACY_EXTENSION_EVENT_TYPES]
+        # an extension's key is public: it may report domain visits, nothing else
+        if any(e.event_type != DOMAIN_EVENT_TYPE for e in events):
+            raise api_error(status.HTTP_403_FORBIDDEN, "ingestion.event_type_not_allowed")
+    if not events:  # nothing left to process: no task for an empty batch
+        return TelemetryIngestAcceptedResponse(status="accepted", received=0, task_id="")
+    raw_events = [e.model_dump(mode="json") for e in events]
     task = process_telemetry_batch.delay(source.org_id, source.id, raw_events)
     return TelemetryIngestAcceptedResponse(
         status="accepted",
-        received=len(data.events),
+        received=len(events),
         task_id=task.id,
     )
+
+
+@router.get("/extension/catalog")
+async def extension_catalog(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    source: IngestionSource = Depends(get_ingestion_source),
+):
+    """The AI domains a browser extension watches and which of them the
+    organization blocks (browser extension 2.0+, refreshed hourly).
+    Authenticated with the extension's ingestion key, like /ingest; the list
+    is the organization's own catalog plus built-in hints, nothing more."""
+    rate_limit.enforce(request, scope="ingest-catalog", extra_key=f"source-{source.id}", window_seconds=60, limit=30)
+    return await DomainCatalogService(db).browser_catalog(source.org_id)
 
 
 @router.post("/", response_model=ShadowSightingOut)
@@ -221,6 +243,6 @@ async def download_extension(
         zip_buffer,
         media_type="application/zip",
         headers={
-            "Content-Disposition": 'attachment; filename="shadow-ai-extension.zip"'
+            "Content-Disposition": 'attachment; filename="provenza-browser-extension.zip"'
         },
     )

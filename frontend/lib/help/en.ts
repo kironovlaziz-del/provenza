@@ -272,7 +272,7 @@ export const ARTICLES_EN: Article[] = [
       ["list", [
         "**Network** — the egress proxy and the sensor see which AI services company traffic reaches.",
         "**Devices** — the endpoint agent sees AI programs and agents running on company computers.",
-        "**Browser** — the browser extension sees visits to AI services.",
+        "**Browser** — the browser extension sees visits to AI services, and closes the ones your organization blocked.",
         "**People** — anyone can report a sighting by hand, for example from an expense report.",
       ]],
       ["h", "Deciding on a finding"],
@@ -280,11 +280,11 @@ export const ARTICLES_EN: Article[] = [
         "Open the finding — in the Inbox under **New AI**, or on the **Shadow AI** page.",
         "Find out who uses it and why. Often the need is real.",
         "If the use is acceptable, **register** it as an approved AI provider (administrators). It then appears in the AI inventory with an owner.",
-        "If it is not acceptable, confirm it as shadow AI and block the service in your policies or the domain catalog, and tell the people who used it what to use instead.",
+        "If it is not acceptable, mark the service **blocked** in Settings → AI Domain Catalog. Within the hour, every browser with the Provenza extension shows a \"not allowed\" page instead of it, with your approved AI services offered in its place.",
         "If it is a false alarm, **dismiss** it. Dismissing hides the finding, so approvers and administrators do it, and it is recorded.",
       ]],
       ["p", "**Agents found** works the same way for agents discovered on devices: register them to give them an identity and policies, or ignore them."],
-      ["tip", "Offering an approved alternative works better than blocking alone."],
+      ["tip", "Offering an approved alternative works better than blocking alone. Mark the services you approve as **allowed** in the domain catalog: the extension's \"not allowed\" page lists them."],
     ],
   },
   {

@@ -1,70 +1,74 @@
-// Popup: shows current-tab status and lets the user view/set the
-// server URL and ingestion key (needed when the extension is installed
-// manually rather than via the server's preconfigured download).
+// Popup: what Provenza knows about this page, whether the extension reports,
+// and - unless the organization manages it - the server and key to report to.
 
-// ---- current tab status ---------------------------------------------
-chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-  const statusEl = document.getElementById("current-tab-status");
-  if (!tabs || !tabs[0] || !tabs[0].url) {
-    statusEl.textContent = "No active page";
-    return;
-  }
-  try {
-    const host = new URL(tabs[0].url).hostname;
-    const aiTool = lookupDomain(host);
-    if (aiTool) {
-      statusEl.textContent = "\u26A0\uFE0F " + aiTool.name + " (risk " + aiTool.risk + ")";
-      statusEl.style.color = "#dc2626";
-    } else {
-      statusEl.textContent = "Standard website (" + host + ")";
-      statusEl.style.color = "#64748b";
-    }
-  } catch (e) {
-    statusEl.textContent = "Unknown";
-  }
-});
+const STATUS_TEXT = {
+  blocked: ["⛔ ", " - not allowed in your organization", "#dc2626"],
+  allowed: ["✓ ", " - approved by your organization", "#059669"],
+  unknown: ["● ", " - AI service, not reviewed yet", "#d97706"]
+};
 
-// ---- connection state + settings form -------------------------------
-const apiUrlInput = document.getElementById("api-url");
-const keyInput = document.getElementById("ingestion-key");
-const saveBtn = document.getElementById("save-btn");
-const saveStatus = document.getElementById("save-status");
-const configState = document.getElementById("config-state");
-
-function renderConfigState(hasKey) {
-  if (hasKey) {
-    configState.textContent = "\u2713 Configured and reporting";
-    configState.className = "config-state config-ok";
-  } else {
-    configState.textContent = "\u2717 Not configured \u2014 enter your ingestion key below";
-    configState.className = "config-state config-missing";
-  }
+function when(iso) {
+  return iso ? new Date(iso).toLocaleString() : "never";
 }
 
-chrome.storage.local.get(["apiUrl", "ingestionKey"], (stored) => {
-  if (stored.apiUrl) apiUrlInput.value = stored.apiUrl;
-  if (stored.ingestionKey) {
-    // Don't echo the real key back into a readable field; show a masked
-    // placeholder so the user knows one is set without exposing it.
-    keyInput.placeholder = "\u2022\u2022\u2022\u2022 key saved \u2014 type to replace";
+chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+  let host = "";
+  try {
+    host = tabs && tabs[0] && tabs[0].url ? new URL(tabs[0].url).hostname : "";
+  } catch (e) {
+    host = "";
   }
-  renderConfigState(Boolean(stored.ingestionKey));
+  chrome.runtime.sendMessage({ action: "status", host }, (s) => {
+    if (!s) return;
+    const tab = document.getElementById("current-tab-status");
+    if (!host) {
+      tab.textContent = "No web page";
+    } else if (s.lookup) {
+      const [mark, tail, color] = STATUS_TEXT[s.lookup.status] || STATUS_TEXT.unknown;
+      tab.textContent = mark + s.lookup.name + tail;
+      tab.style.color = color;
+    } else {
+      tab.textContent = "Not an AI service (" + host + ")";
+      tab.style.color = "#64748b";
+    }
+
+    const conf = document.getElementById("config-state");
+    conf.textContent = s.configured
+      ? "✓ Reporting to " + new URL(s.apiUrl).host + (s.queued ? " (" + s.queued + " waiting)" : "")
+      : "✗ Not configured — enter the server and ingestion key below";
+    conf.className = "config-state " + (s.configured ? "config-ok" : "config-missing");
+
+    const cat = document.getElementById("catalog-state");
+    cat.textContent = s.catalogError
+      ? "AI service list: could not refresh (" + s.catalogError + ")"
+      : s.catalog.count + " AI services watched, " + s.catalog.blocked + " blocked · updated " + when(s.catalog.fetchedAt);
+
+    document.getElementById("settings").hidden = s.managed;
+    document.getElementById("managed-note").hidden = !s.managed;
+  });
 });
 
-saveBtn.addEventListener("click", () => {
+const apiUrlInput = document.getElementById("api-url");
+const keyInput = document.getElementById("ingestion-key");
+const saveStatus = document.getElementById("save-status");
+
+chrome.storage.local.get(["apiUrl"], (stored) => {
+  if (stored.apiUrl) apiUrlInput.value = stored.apiUrl;
+});
+
+document.getElementById("save-btn").addEventListener("click", () => {
   const apiUrl = apiUrlInput.value.trim();
-  const key = keyInput.value.trim();
-
-  const toSave = {};
-  if (apiUrl) toSave.apiUrl = apiUrl;
-  // Only overwrite the stored key if the user actually typed a new one,
-  // so re-saving just the URL doesn't wipe an existing key.
-  if (key) toSave.ingestionKey = key;
-
-  chrome.storage.local.set(toSave, () => {
-    saveStatus.textContent = "Saved";
+  const ingestionKey = keyInput.value.trim();
+  if (!apiUrl || !ingestionKey) {
+    saveStatus.textContent = "Both fields are required.";
+    return;
+  }
+  chrome.storage.local.set({ apiUrl, ingestionKey }, () => {
     keyInput.value = "";
-    chrome.storage.local.get(["ingestionKey"], (s) => renderConfigState(Boolean(s.ingestionKey)));
-    setTimeout(() => (saveStatus.textContent = ""), 2000);
+    saveStatus.textContent = "Saved. Loading the AI service list…";
+    chrome.runtime.sendMessage({ action: "configured" }, () => {
+      saveStatus.textContent = "Saved.";
+      window.location.reload();
+    });
   });
 });

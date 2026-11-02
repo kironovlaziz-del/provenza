@@ -144,3 +144,29 @@ class DomainCatalogService:
             return DomainMatch("unknown", seed_hint["tool_name"], seed_hint["category"], None)
 
         return DomainMatch("unknown", None, None, None)
+
+    async def browser_catalog(self, org_id: int) -> dict:
+        """What the organization's browser extension watches: every domain of
+        the organization's catalog with its decision (allowed, blocked,
+        unknown), and the built-in AI services it has not classified yet, as
+        unknown. Blocked domains are closed in the browser; the allowed ones
+        are offered instead. `version` changes whenever the list does."""
+        import hashlib
+        import json
+
+        from app.services.domain_catalog_seed import browser_seed
+
+        entries = [e for e in await self.list_entries(org_id) if "/" not in e.domain]
+        own = {e.domain for e in entries}
+        domains = [
+            {"domain": e.domain, "name": e.tool_name or e.domain, "category": e.category or "",
+             "status": e.policy_status}
+            for e in entries
+        ] + [
+            {"domain": h["domain"], "name": h["tool_name"], "category": h["category"], "status": "unknown"}
+            for h in browser_seed() if h["domain"] not in own
+        ]
+        domains.sort(key=lambda d: d["domain"])
+        version = hashlib.sha256(json.dumps(domains, sort_keys=True).encode()).hexdigest()[:16]
+        return {"version": version, "domains": domains}
+

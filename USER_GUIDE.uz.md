@@ -463,20 +463,22 @@ darajasidagi to'xtatish bilan bir xil. Batafsil: docs/kill-switch.md.
 
 ### 8.5 Brauzer kengaytmasini joylashtirish
 
-1. **Ingestion Sources** sahifasida **Download extension** tugmasini
-   bosing. Server kengaytmani sizning server manzilingiz va
-   tashkilotingiz uchun yangi kalit bilan oldindan sozlab paketlaydi.
-2. Yuklab olingan `.zip` faylni xodimlarga tarqating (yoki Chrome
-   siyosati / MDM orqali joylashtiring).
-3. Qo‘lda o‘rnatish: arxivdan chiqaring, `chrome://extensions` oching,
-   **Developer mode**ni yoqing, **Load unpacked** bosing va arxivdan
-   chiqarilgan papkani tanlang.
+Kengaytma (Chrome va Edge) AI xizmatlariga tashriflar haqida xabar beradi va
+**AI domenlar katalogida bloklangan deb belgilanganlarini yopadi**, o‘rniga
+ruxsat etilganlarini taklif qiladi. U katalogni har soatda yangilaydi, shuning
+uchun **Sozlamalar (⚙) → AI Domain Catalog**da qabul qilingan qaror bir soat
+ichida barcha brauzerlarga yetib boradi. Shuningdek, AI vositasiga maxfiy
+ma’lumot joylashdan oldin ogohlantiradi; bu ogohlantirish brauzerda qoladi.
 
-Kengaytma foydalanuvchi maxfiy ma’lumotlarni (API kalitlar, karta
-raqamlari, maxfiy kalitlar) tanilgan AI vositasiga joylashtirish yoki
-yozishdan oldin sahifada ogohlantiradi va urinish sodir bo‘lganini
-xabar qiladi — lekin maxfiy ma’lumotning o‘zini **hech qachon**
-yubormaydi.
+1. Sinov uchun: **Sozlamalar (⚙) → Ingestion Sources** sahifasida
+   **Download extension** tugmasini bosing (unda ushbu server manzili va yangi
+   kalit bor), arxivdan chiqaring, `chrome://extensions` oching,
+   **Developer mode**ni yoqing, **Load unpacked** bosing va papkani tanlang.
+2. Butun tashkilot uchun: uni Chrome yoki Edge siyosati orqali majburiy
+   o‘rnating va server manzili hamda kalitni boshqariladigan sozlama sifatida
+   bering — shunda xodimlar uni o‘chira ham, qayta sozlay ham olmaydi.
+   Windows, macOS, Linux va Google Admin konsoli uchun qadamlar
+   [docs/shadow-ai.md](docs/shadow-ai.md#installing-it-for-the-whole-organization) da.
 
 ---
 

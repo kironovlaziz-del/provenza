@@ -9,7 +9,7 @@ This page covers the collectors themselves.
 |---|---|---|
 | Endpoint agent | local models and AI agents on a machine | `agent/` (Go) |
 | Network discovery | services on the local network (part of the endpoint agent) | `agent/collectors/discovery/` |
-| Browser extension | visits to AI services, secrets about to be pasted into them | `extension/` (Chrome, Manifest V3) |
+| Browser extension | visits to AI services; closes the ones the organization blocks | `extension/` (Chrome and Edge, Manifest V3) |
 
 ## How data arrives
 
@@ -105,12 +105,86 @@ it runs the unprivileged methods only.
 
 ## Browser extension
 
-A Manifest V3 Chrome extension that flags visits to known AI services and
-warns the user before they paste or type secrets (API keys, card numbers,
-private keys) into an AI tool. It reports only *that* something sensitive
-was detected (type and label), never any part of the value, and it does
-not send full page URLs. Admins download it from the **Ingestion Sources**
-page (**Download extension**) and push it to employees' browsers.
+A Manifest V3 extension for Chrome and Edge (2.0+). It acts on the
+organization's **AI Domain Catalog**:
+
+| Domain in the catalog | In the browser | Reported |
+|---|---|---|
+| **blocked** | the page is replaced by "*Name* is not allowed", with the organization's allowed AI services offered instead | the attempt (`action_taken: blocked`), and Provenza opens an incident |
+| **unknown** (or a built-in AI service nobody classified) | opens normally | the visit: a sighting for review |
+| **allowed** | opens normally | the visit, logged only |
+
+- **The list** comes from `GET /api/v1/shadow-ai/extension/catalog` (the
+  extension's ingestion key) when the extension starts and every hour: the
+  organization's catalog plus the built-in AI services. A change in the
+  catalog reaches every browser within the hour. Until the server has
+  answered once, a built-in list is used.
+- **What is sent:** the host name (never a full URL: a path or a query can
+  hold what was typed), the service's name and category, and a random id per
+  browser install. Events wait in the browser when the server cannot be
+  reached and are sent later.
+- **Secret warning:** on the AI services it watches, the extension warns
+  before an API key, a card number, a private key or a token is pasted or
+  typed. The warning stays in the browser: Provenza receives nothing about it.
+- An extension's ingestion key ships inside the extension, so it may report
+  domain visits and read the catalog, nothing else, and is rate-limited.
+
+### Installing it for a pilot
+
+On **Settings → Ingestion Sources**, click **Download extension**: the server
+packages it with this server's address and a fresh key. Unzip it into a folder
+that stays, open `chrome://extensions` (or `edge://extensions`), turn on
+**Developer mode**, click **Load unpacked** and pick the folder.
+
+### Installing it for the whole organization
+
+Two policies: one installs the extension so that people cannot remove it, the
+other gives it its server and key so that people cannot change them (its popup
+then says *Managed by your organization*).
+
+1. **Install.** Chrome and Edge force-install extensions from their stores, or
+   a packed `.crx` that you host with an update manifest. Publish the
+   downloaded extension once as an *unlisted* item in the Chrome Web Store
+   (and Edge Add-ons for Edge), or pack and host it yourself; then list its id
+   in the `ExtensionInstallForcelist` (or `ExtensionSettings`) policy through
+   Group Policy, Intune, Jamf or the Google Admin console.
+2. **Configure.** Create one ingestion source of type *Browser extension* on
+   **Settings → Ingestion Sources** and give its key to every browser through
+   the extension's managed configuration (`managed_schema.json`):
+
+   | Key | Value |
+   |---|---|
+   | `serverUrl` | your Provenza address, e.g. `https://provenza.example.com` |
+   | `ingestionKey` | the browser-extension key |
+
+   Replace `<ID>` with the extension's id (shown on `chrome://extensions`, or
+   on its store page):
+
+   - **Windows** (Group Policy preferences, Intune or a script), values of type
+     `REG_SZ` under
+     `HKLM\Software\Policies\Google\Chrome\3rdparty\extensions\<ID>\policy`
+     (Edge: `HKLM\Software\Policies\Microsoft\Edge\3rdparty\extensions\<ID>\policy`).
+   - **macOS** (a configuration profile through your MDM): the preference
+     domain `com.google.Chrome.extensions.<ID>` (Edge:
+     `com.microsoft.Edge.extensions.<ID>`) with the two keys as strings.
+   - **Linux**: `/etc/opt/chrome/policies/managed/provenza.json` (Edge:
+     `/etc/opt/edge/policies/managed/`, Chromium: `/etc/chromium/policies/managed/`):
+
+     ```json
+     {"3rdparty": {"extensions": {"<ID>": {
+       "serverUrl": "https://provenza.example.com",
+       "ingestionKey": "<key>"}}}}
+     ```
+
+   - **Google Admin console**: Devices → Chrome → Apps & extensions → the
+     extension → *Policy for extensions*:
+
+     ```json
+     {"serverUrl": {"Value": "https://provenza.example.com"},
+      "ingestionKey": {"Value": "<key>"}}
+     ```
+
+   A configuration that arrives later takes effect without a browser restart.
 
 ## Related
 

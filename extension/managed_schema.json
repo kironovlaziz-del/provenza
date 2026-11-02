@@ -1,0 +1,15 @@
+{
+  "type": "object",
+  "properties": {
+    "serverUrl": {
+      "title": "Provenza server",
+      "description": "The address of your Provenza installation, e.g. https://provenza.example.com",
+      "type": "string"
+    },
+    "ingestionKey": {
+      "title": "Ingestion key",
+      "description": "A browser-extension ingestion key (Settings > Ingestion Sources in Provenza).",
+      "type": "string"
+    }
+  }
+}

@@ -9,6 +9,10 @@ from typing import Optional, Dict, Any, List
 # isolation, so the schema follows them rather than the other way
 # around.
 DOMAIN_EVENT_TYPE = "domain_visit"
+# Sent by browser extensions before 2.0 (secret-paste warnings): Provenza no
+# longer receives them - the warning stays in the browser. Dropped, not refused,
+# so an old extension's domain visits in the same batch still arrive.
+LEGACY_EXTENSION_EVENT_TYPES = {"pii_paste_attempt", "pii_input_attempt"}
 LOCAL_SIGNAL_EVENT_TYPES = {"process_detected", "network_conn", "local_model_found"}
 # An AI agent product found running (endpoint agent >= 1.2.0); payload
 # {"product": "<catalog id>", "process_name", "matched_by"}.

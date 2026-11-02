@@ -367,7 +367,7 @@
     "title": "AI domenlar katalogi",
     "new": "Yangi yozuv",
     "cancel": "Bekor qilish",
-    "hint": "Bu yerda tasniflangan domenlar telemetriya manbalaridan (Gateway, Endpoint, brauzer kengaytmasi) kelgan Shadow AI ma'lumotlari qanday qayta ishlanishini belgilaydi: \"ruxsat etilgan\" domen faqat qayd etiladi, \"bloklangan\" domen avtomatik hodisa yaratadi, ro'yxatda yo'q domenlar esa \"noma'lum\" deb hisoblanib, ko'rib chiqish uchun signal yaratadi.",
+    "hint": "Bu yerda tasniflangan domenlar telemetriya manbalaridan (Gateway, Endpoint, brauzer kengaytmasi) kelgan Shadow AI ma'lumotlari qanday qayta ishlanishini belgilaydi: \"ruxsat etilgan\" domen faqat qayd etiladi, \"bloklangan\" domen avtomatik hodisa yaratadi va Provenza kengaytmasi o'rnatilgan brauzerlarda yopiladi (kengaytma bu ro'yxatni har soatda yangilaydi), ro'yxatda yo'q domenlar esa \"noma'lum\" deb hisoblanib, ko'rib chiqish uchun signal yaratadi.",
     "form_title": "Yangi katalog yozuvi",
     "domain": "Domen",
     "domain_placeholder": "chat.openai.com",
@@ -1240,7 +1240,7 @@
   },
   "extension_banner": {
     "title": "Brauzer himoyasi mavjud",
-    "desc": "AI foydalanishini kuzatish va maxfiy ma'lumotlar sizib chiqishining oldini olish uchun Provenza kengaytmasini o'rnating.",
+    "desc": "Provenza kengaytmasini o'rnating: u tashkilotingizga qaysi AI xizmatlaridan foydalanilayotganini ko'rsatadi, ruxsat etilmaganlarini yopadi va AI vositasiga maxfiy ma'lumot joylashdan oldin sizni ogohlantiradi.",
     "guide_btn": "Qanday o'rnatiladi",
     "hide_btn": "Yashirish",
     "install_guide": "O'rnatish bosqichlari:",

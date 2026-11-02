@@ -1,21 +1,18 @@
-// Content script: runs only on monitored AI tools (see manifest matches).
-// Warns the user in-page when they are about to submit sensitive data,
-// and reports the ATTEMPT (metadata only) to the background worker.
+// Content script: injected only into the AI services the organization's
+// catalog lists (the background worker registers it for those domains).
+// Warns the user in-page when they are about to send a secret into the AI
+// tool. The warning stays in the browser: nothing about it is reported.
 (function () {
   const currentHost = window.location.hostname;
-  const aiTool = lookupDomain(currentHost);
-  if (!aiTool) {
-    return; // not a monitored AI service (defensive - manifest already scopes us)
-  }
-  console.log("[AI Control Tower] Active monitoring enabled for " + aiTool.name);
+  const aiTool = lookupDomain(currentHost) || { name: currentHost };
 
   // ---- in-page warning banner ----------------------------------------
   function showWarningBanner(findings) {
-    const existing = document.getElementById("aict-warning-modal");
+    const existing = document.getElementById("provenza-warning-modal");
     if (existing) existing.remove();
 
     const banner = document.createElement("div");
-    banner.id = "aict-warning-modal";
+    banner.id = "provenza-warning-modal";
     banner.style.cssText = [
       "position:fixed",
       "top:20px",
@@ -78,28 +75,12 @@
     }, 8000);
   }
 
-  // Report the attempt to the background worker. Sends ONLY finding
-  // metadata (type/label/severity) and a length - never the text itself
-  // nor any slice of a matched secret.
-  function reportFindings(findings, eventType) {
-    chrome.runtime.sendMessage({
-      action: "report_event",
-      event_type: eventType,
-      domain: currentHost,
-      risk_score: 0.9,
-      action_taken: "warned",
-      payload: {
-        tool_name: aiTool.name,
-        findings: findings // metadata only (scanner.js strips values)
-      }
-    });
-  }
 
   // Avoid re-warning for the exact same set of finding types in quick
   // succession (e.g. paste then keystroke of the same content).
   let lastSignature = "";
   let lastWarnAt = 0;
-  function maybeWarn(text, eventType) {
+  function maybeWarn(text) {
     if (!text) return;
     const findings = scanTextForPII(text);
     if (findings.length === 0) return;
@@ -111,7 +92,6 @@
     lastWarnAt = now;
 
     showWarningBanner(findings);
-    reportFindings(findings, eventType);
   }
 
   // ---- paste detection ------------------------------------------------
@@ -119,7 +99,7 @@
     "paste",
     function (e) {
       const text = e.clipboardData ? e.clipboardData.getData("text") : "";
-      maybeWarn(text, "pii_paste_attempt");
+      maybeWarn(text);
     },
     true
   );
@@ -139,7 +119,7 @@
         if (typeof target.value === "string") text = target.value;
         else if (target.isContentEditable) text = target.innerText || "";
       }
-      maybeWarn(text, "pii_input_attempt");
+      maybeWarn(text);
     }, 1200);
   }
 
