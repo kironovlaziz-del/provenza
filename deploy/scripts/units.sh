@@ -100,6 +100,8 @@ install_units() {
   [ ${#stale[@]} -eq 0 ] || { rm -f "${stale[@]}"; ok "removed units no longer in the repository: ${stale[*]##*/}"; }
 
   write_runtime_env
+  # Caddy mounts it read-only: site blocks of other applications go here
+  mkdir -p /etc/provenza/caddy-sites
   install -m 644 "$tmp"/quadlet/* "$UNIT_DIR/"
   install -m 644 "$tmp"/systemd/* "$SYSTEMD_DIR/"
   rm -rf "$tmp"
