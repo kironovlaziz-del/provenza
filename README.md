@@ -105,31 +105,6 @@ guarantee is spelled out in the [security model](docs/security-model.md).
 
 > 🟦 active agent &nbsp; 🟥 policy violation &nbsp; — verified delegation &nbsp; ┈ blocked chain &nbsp; ✓ verified in your browser
 
-## 📸 Screenshots
-
-<table>
-  <tr>
-    <td width="50%">
-      <b>Live delegation map</b><br>
-      <sub>Agents, delegations, violations — signatures verified in-browser</sub><br>
-      <img src="docs/screenshots/live-map.png" alt="Live delegation map">
-    </td>
-    <td width="50%">
-      <b>Dashboard</b><br>
-      <sub>Gateway calls, incidents and approvals at a glance</sub><br>
-      <img src="docs/screenshots/dashboard.png" alt="Dashboard">
-    </td>
-  </tr>
-  <tr>
-    <td width="50%">
-      <b>Connections</b><br>
-      <sub>Manage AI providers — keys encrypted, never returned by the API</sub><br>
-      <img src="docs/screenshots/connections.png" alt="Connections — AI providers">
-    </td>
-    <td width="50%"></td>
-  </tr>
-</table>
-
 ## 🧩 Features
 
 ### 🎯 Governance — default
