@@ -181,6 +181,31 @@ Either stop the other server, or put Provenza behind it:
 1. Set `HTTP_PORT` and `HTTPS_PORT` in `deploy/.env` to free ports.
 2. Proxy your domain to Caddy's HTTPS port.
 
+### Other sites on the same server
+
+Provenza's Caddy holds ports 80 and 443. It can also serve other applications
+on the same server, each under its own domain and with its own certificate:
+
+1. Run the application's container on the `provenza_sites` network
+   (`Network=provenza_sites` in a Quadlet unit, or
+   `podman run --network provenza_sites`). Only Caddy shares that network with
+   it: the application cannot reach Provenza's backend, database or Redis.
+2. Put a site block in `/etc/provenza/caddy-sites/<name>.caddy`:
+
+   ```caddy
+   bots.example.com {
+   	reverse_proxy <container name>:<port>
+   }
+   ```
+
+3. Point the domain's DNS record at the server and run
+   `sudo provenza restart caddy`.
+
+The directory is outside the repository, so upgrades keep it. A broken site
+block stops Caddy from starting: check it with
+`podman exec caddy caddy validate --config /etc/caddy/Caddyfile` before the
+restart.
+
 ## Backups
 
 The installer schedules `deploy/scripts/backup.sh` daily with the systemd timer

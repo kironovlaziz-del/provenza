@@ -7,6 +7,7 @@ this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- Self-hosting: Provenza's Caddy can serve other applications on the same server. Site blocks go in `/etc/provenza/caddy-sites/*.caddy`, and the applications join the `provenza_sites` network, which they share only with Caddy.
 
 - **Agent Manifest** ([docs/agent-manifest.md](docs/agent-manifest.md)). Every
   agent's page has an **Agent Manifest** button

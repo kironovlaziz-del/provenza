@@ -1,0 +1,6 @@
+# Provenza: the "sites" network (rendered into /etc/containers/systemd by deploy/scripts/units.sh).
+# Other applications on this server join it so that Provenza's Caddy can serve
+# them (see docs/self-hosting.md, "Other sites on the same server"). Only Caddy
+# is on it from Provenza: those applications cannot reach Provenza's services.
+[Network]
+NetworkName=provenza_sites

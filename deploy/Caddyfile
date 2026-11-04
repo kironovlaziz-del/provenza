@@ -52,3 +52,7 @@
 		}
 	}
 }
+
+# Other applications on this server: one site block per file in
+# /etc/provenza/caddy-sites/*.caddy (see docs/self-hosting.md). None by default.
+import /etc/caddy/sites/*.caddy
