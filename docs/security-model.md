@@ -122,7 +122,7 @@ What this does **not** do:
 - **The fingerprint check is yours to do.** A valid signature proves the
   record matches the key. That the key belongs to the agent is
   established by comparing fingerprints with its owner, outside Provenza.
-- **Keyless agents** (created without a key) stay on the unsigned,
-  cooperative path.
+- **Keyless agents cannot act.** An agent without its own signing key is
+  refused (`agent.key_required`); the server never generates one.
 
 Report vulnerabilities privately, as described in [SECURITY.md](../SECURITY.md).
