@@ -33,6 +33,10 @@
 
 ---
 
+**Provenza is an open-source AI governance platform** for companies that use AI agents: it finds
+shadow AI, keeps a registry of every AI agent, checks each agent action against policy *before* it runs
+(an MCP gateway), and writes a signed, tamper-evident audit log that anyone can verify offline.
+
 > **AI entered your company through every door at once** — shadow AI on laptops,
 > autonomous agents delegating to each other, and no way to *prove* who authorized
 > what. Most governance tools watch one door. **Provenza covers them all,

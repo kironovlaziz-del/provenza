@@ -197,6 +197,7 @@ docs/        documentation
 | `WEBAUTHN_RP_ID` | passkey relying party (a host name such as `provenza.example.com`), when it is not the host of the first `CORS_ORIGINS` entry. Changing it makes existing passkeys unusable |
 | `APPROVAL_REDEEM_MINUTES` | how long an approved call may be repeated to run, default 60 |
 | `PUBLIC_BASE_URL` | the public address, when a reverse proxy does not pass the original host (single sign-on redirects) |
+| `ALLOW_SEARCH_INDEXING` | `true` lets search engines index the sign-in page (needs `PUBLIC_BASE_URL`); default off, `robots.txt` keeps crawlers out |
 | `ALLOW_PUBLIC_SIGNUP` | default `false`. When `true`, anyone who can reach the site can create an organization and become its admin |
 | `TRUSTED_PROXIES` | peers whose forwarding headers are trusted, default `127.0.0.1,::1` |
 | `OUTBOUND_PRIVATE_ALLOWLIST` | internal hosts that provider, Vault, webhook, identity-provider and TSA calls may reach (host names, IPs, CIDRs). Other private and loopback targets are refused; cloud metadata (link-local) always is |

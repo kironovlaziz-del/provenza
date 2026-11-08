@@ -16,17 +16,20 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://stickstock.lol"),
-  title: "Provenza",
-  description: "Provenance for every AI action — self-hosted governance with verifiable accountability, from shadow AI to autonomous agents.",
+  title: { default: "Provenza — open-source AI governance for AI agents", template: "%s · Provenza" },
+  description:
+    "Provenza is open-source, self-hosted AI governance: find shadow AI, keep a registry of AI agents, check every agent action against policy before it runs, and keep a signed, tamper-evident audit log.",
+  applicationName: "Provenza",
+  keywords: ["AI governance", "AI agent governance", "shadow AI detection", "MCP gateway", "AI audit log", "open source", "self-hosted"],
   openGraph: {
-    title: "Provenza",
+    title: "Provenza — open-source AI governance for AI agents",
     description: "Provenance for every AI action — self-hosted governance with verifiable accountability, from shadow AI to autonomous agents.",
     type: "website",
     images: [{ url: "/og-image.png", width: 1200, height: 630, alt: "Provenza" }],
   },
   twitter: {
     card: "summary_large_image",
-    title: "Provenza",
+    title: "Provenza — open-source AI governance for AI agents",
     description: "Provenance for every AI action — verifiable, self-hosted AI governance.",
     images: ["/og-image.png"],
   },

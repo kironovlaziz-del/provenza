@@ -18,10 +18,11 @@
 		-Server
 	}
 
-	# API, agent gateway, health check and the egress-check beacon -> FastAPI.
+	# API, agent gateway, health check, the egress-check beacon and robots.txt /
+	# sitemap.xml (closed unless ALLOW_SEARCH_INDEXING is set) -> FastAPI.
 	# flush_interval -1 lets the live streams (Server-Sent Events) through
 	# without buffering.
-	@api path /api/* /health /egress-beacon/*
+	@api path /api/* /health /egress-beacon/* /robots.txt /sitemap.xml
 	handle @api {
 		request_body {
 			max_size 200MB

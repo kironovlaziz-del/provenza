@@ -83,6 +83,9 @@ class Settings(BaseSettings):
     # Agent cards served by the A2A gateway point there. Empty = taken from the
     # request (fine when the reverse proxy passes the original host and scheme).
     PUBLIC_BASE_URL: str = ""
+    # Let search engines index the sign-in page (robots.txt, sitemap.xml - app/api/search_files.py).
+    # Off: robots.txt keeps every crawler out. Needs PUBLIC_BASE_URL. For a public demo or project site only.
+    ALLOW_SEARCH_INDEXING: bool = False
     # Passkeys (app/core/webauthn.py): the relying party id. Empty = the host
     # of the first CORS origin, which is the site administrators sign in at.
     WEBAUTHN_RP_ID: str = ""

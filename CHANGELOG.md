@@ -7,6 +7,7 @@ this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- `robots.txt` and `sitemap.xml`. Closed by default: robots.txt keeps every crawler out and there is no sitemap. A public demo or project site opens the sign-in page to search engines with `ALLOW_SEARCH_INDEXING=true` and `PUBLIC_BASE_URL` in `deploy/.env`.
 - Self-hosting: Provenza's Caddy can serve other applications on the same server. Site blocks go in `/etc/provenza/caddy-sites/*.caddy`, and the applications join the `provenza_sites` network, which they share only with Caddy.
 
 - **Agent Manifest** ([docs/agent-manifest.md](docs/agent-manifest.md)). Every
