@@ -103,6 +103,12 @@ delegation or action and check it offline with `tools/provenza_sign.py` or plain
 OpenSSL, against the key fingerprint the agent's owner gave you. On the live
 delegation map, click an edge to run the same check in your browser.
 
+**Agent Manifest.** Provenza also issues a signed [Agent Manifest](docs/agent-manifest.md)
+for every agent (AgenTrust specification v0.2, hybrid Ed25519 + ML-DSA-65, both
+signers required), binding the agent's approved MCP tools and the audit-log root.
+It is listed in [AgenTrust's integrations](https://github.com/agentrust-io/integrations/tree/main/integrations/provenza-agent-manifest),
+with a verifier you can run offline.
+
 This is the kind of *verifiable accountability* the EU AI Act asks for — made
 **clickable** ([how it works](docs/agent-signing.md)). What it does and does not
 guarantee is spelled out in the [security model](docs/security-model.md).
@@ -191,5 +197,6 @@ Copyright 2026 Laziz Kironov.
 
 ## Featured in
 
+- [AgenTrust integrations](https://github.com/agentrust-io/integrations/tree/main/integrations/provenza-agent-manifest): Provenza Agent Manifest issuer (community tier)
 - [![Awesome AI Governance](https://img.shields.io/badge/Awesome-AI%20Governance-blue?logo=github)](https://github.com/agentrust-io/awesome-ai-governance)
 - [![Awesome AI Agent Governance](https://img.shields.io/badge/Awesome-AI%20Agent%20Governance-blue?logo=github)](https://github.com/systempromptio/awesome-ai-agent-governance)
