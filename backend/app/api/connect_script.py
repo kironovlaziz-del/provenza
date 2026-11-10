@@ -141,10 +141,15 @@ try {
   $Dest = Join-Path $env:LOCALAPPDATA 'provenza'
   New-Item -ItemType Directory -Force -Path $Dest | Out-Null
   $Exe = Join-Path $Dest 'provenza-proxy.exe'
-  # an agent mode of this very file that is still running holds it: stop it, connect starts it again
-  Get-Process -Name 'provenza-proxy' -ErrorAction SilentlyContinue |
-    Where-Object { $_.Path -eq $Exe } | Stop-Process -Force -ErrorAction SilentlyContinue
-  Move-Item -Force -LiteralPath (Join-Path $Tmp $Bin) -Destination $Exe
+  # An agent mode of this very file that still runs holds it: Windows lets a running file be
+  # renamed, not replaced. So the old one is put aside (and taken away at the next run, when
+  # nothing runs from it any more); `connect` below stops that agent mode and starts the new one.
+  Get-ChildItem -LiteralPath $Dest -Filter 'provenza-proxy.exe.old-*' -ErrorAction SilentlyContinue |
+    Remove-Item -Force -ErrorAction SilentlyContinue
+  if (Test-Path -LiteralPath $Exe) {
+    Move-Item -LiteralPath $Exe -Destination ("$Exe.old-" + [Guid]::NewGuid().ToString('N'))
+  }
+  Move-Item -LiteralPath (Join-Path $Tmp $Bin) -Destination $Exe
   Say "  ok $Exe"
 
   Say '-> Enrolling the agent (its keys are made on this machine)'

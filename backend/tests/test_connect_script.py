@@ -147,6 +147,13 @@ def test_the_powershell_script_checks_what_it_downloaded(tmp_path):
         assert (tmp_path / "local" / "provenza" / "provenza-proxy.exe").read_bytes() == binary, r.stderr
         assert "Enrolling the agent" in r.stdout
         (tmp_path / "local" / "provenza" / "provenza-proxy.exe").unlink()
+    # run again over an installed one (on Windows it may be held by a running agent mode): the old
+    # file is put aside, the new one installed, and the next run takes the old one away
+    exe = tmp_path / "local" / "provenza" / "provenza-proxy.exe"
+    for expect_old in (0, 1):
+        r = _run_ps1(tmp_path, f"{good}  {name}\n", binary)
+        assert exe.read_bytes() == binary and "Enrolling the agent" in r.stdout, r.stderr
+        assert len(list(exe.parent.glob("provenza-proxy.exe.old-*"))) == expect_old, (expect_old, r.stdout, r.stderr)
 
 
 def test_the_powershell_script_is_plain_ascii():
