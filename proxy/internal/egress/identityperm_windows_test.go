@@ -10,7 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
+	"syscall"
 	"testing"
 )
 
@@ -32,7 +32,10 @@ func TestIdentityFileProblemOnWindows(t *testing.T) {
 	if err := identityFileProblem(p, st); err == nil {
 		t.Fatal("a file Everyone can read was accepted")
 	}
-	if err := exec.Command("cmd", "/c", strings.TrimSpace(fixCommand(p))).Run(); err != nil {
+	// the command of the message, as the user pastes it into cmd (raw: Go would escape the quotes)
+	fix := exec.Command("cmd.exe")
+	fix.SysProcAttr = &syscall.SysProcAttr{CmdLine: `cmd.exe /s /c "` + fixCommand(p) + `"`}
+	if err := fix.Run(); err != nil {
 		t.Fatalf("the reset command in the message does not work: %v", err)
 	}
 	if err := identityFileProblem(p, st); err != nil {

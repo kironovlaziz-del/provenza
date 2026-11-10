@@ -48,7 +48,7 @@ func identityFileProblem(path string, _ os.FileInfo) error {
 }
 
 func fixCommand(path string) string {
-	return `icacls "` + path + `" /inheritance:r /grant:r "%USERNAME%:F"`
+	return `icacls "` + path + `" /reset && icacls "` + path + `" /inheritance:r /grant:r "%USERNAME%:F"`
 }
 
 // system32: a tool of Windows itself, by its full path, not by name from the
