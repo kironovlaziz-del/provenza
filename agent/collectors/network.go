@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"strings"
 	"sync"
 	"time"
 
@@ -24,20 +25,28 @@ var KnownAIPorts = map[int]struct {
 	3000:  {Name: "Open-WebUI", Risk: 0.5},
 }
 
-// NetworkCollector checks for local listening AI endpoints.
+// NetworkCollector checks for local listening AI endpoints: an open port, and
+// then what answers there (probeModelAPI). A port where no model API answers
+// is still reported, with "confirmed": false and a low risk.
 type NetworkCollector struct {
 	cfg       *config.AgentConfig
 	reporter  *reporters.Reporter
-	openPorts map[int]bool
+	openPorts map[int]string // port -> what was reported for it ("" closed)
 	mu        sync.Mutex
+	probe     func(base string, port int) modelAPIResult
 }
+
+// unconfirmedRisk: an open model port where no model API answers - most likely
+// a developer's own web server.
+const unconfirmedRisk = 0.2
 
 // NewNetworkCollector creates an instance of the network port scanner.
 func NewNetworkCollector(cfg *config.AgentConfig, rep *reporters.Reporter) *NetworkCollector {
 	return &NetworkCollector{
 		cfg:       cfg,
 		reporter:  rep,
-		openPorts: make(map[int]bool),
+		openPorts: make(map[int]string),
+		probe:     probeModelAPI,
 	}
 }
 
@@ -54,27 +63,62 @@ func (c *NetworkCollector) ScanOnce() {
 			_ = conn.Close()
 		}
 
-		c.mu.Lock()
-		wasOpen := c.openPorts[port]
-		c.openPorts[port] = isOpen
-		c.mu.Unlock()
-
-		if isOpen && !wasOpen {
-			log.Printf("[NetworkCollector] Detected active AI service on local port %d (%s)", port, meta.Name)
-			c.reporter.Submit(reporters.TelemetryEvent{
-				EventType:   "network_conn",
-				AgentID:     c.cfg.AgentID,
-				Domain:      fmt.Sprintf("localhost:%d", port),
-				UserID:      who,
-				RiskScore:   meta.Risk,
-				ActionTaken: "monitored",
-				Payload: map[string]interface{}{
-					"port":        port,
-					"target_host": "127.0.0.1",
-					"service":     meta.Name,
-				},
-			})
+		if !isOpen {
+			c.mu.Lock()
+			c.openPorts[port] = ""
+			c.mu.Unlock()
+			continue
 		}
+
+		res := c.probe(fmt.Sprintf("http://127.0.0.1:%d", port), port)
+		if !c.changed(port, res) {
+			continue // reported already, nothing changed
+		}
+		if res.Confirmed {
+			log.Printf("[NetworkCollector] %s answers on local port %d (%d models)", res.API, port, len(res.Models))
+		} else {
+			log.Printf("[NetworkCollector] Port %d is open, no model API answers there", port)
+		}
+		ev := portEvent(port, meta.Name, meta.Risk, res)
+		ev.AgentID, ev.UserID = c.cfg.AgentID, who
+		c.reporter.Submit(ev)
+	}
+}
+
+// changed: what answers on the port is not what was reported last.
+func (c *NetworkCollector) changed(port int, res modelAPIResult) bool {
+	state := fmt.Sprintf("open|%v|%s|%s", res.Confirmed, res.API, strings.Join(res.Models, ","))
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.openPorts[port] == state {
+		return false
+	}
+	c.openPorts[port] = state
+	return true
+}
+
+// portEvent: the report of a model port: confirmed, with its API and models; or not.
+func portEvent(port int, name string, risk float64, res modelAPIResult) reporters.TelemetryEvent {
+	service := name
+	if !res.Confirmed {
+		service, risk = fmt.Sprintf("a service on port %d (no model API answered)", port), unconfirmedRisk
+	}
+	payload := map[string]interface{}{
+		"port":        port,
+		"target_host": "127.0.0.1",
+		"service":     service,
+		"confirmed":   res.Confirmed,
+	}
+	if res.Confirmed {
+		payload["api"] = res.API
+		payload["models"] = res.Models
+	}
+	return reporters.TelemetryEvent{
+		EventType:   "network_conn",
+		Domain:      fmt.Sprintf("localhost:%d", port),
+		RiskScore:   risk,
+		ActionTaken: "monitored",
+		Payload:     payload,
 	}
 }
 

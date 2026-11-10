@@ -8,7 +8,7 @@
 
 <p align="center">
   <b>Provenance for every AI action.</b><br>
-  <sub>See and govern every AI in your company — with provable accountability.</sub><br>
+  <sub>See and govern the AI in your company — with provable accountability.</sub><br>
   From an employee pasting into ChatGPT to autonomous agents acting on their own —<br>
   watch it, control it, and <b>prove</b> every decision was authorized. Self-hosted, no external SaaS.
 </p>

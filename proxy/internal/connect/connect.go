@@ -17,6 +17,7 @@ package connect
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -26,6 +27,7 @@ import (
 	"os/exec"
 	"os/user"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -101,6 +103,20 @@ func (o Options) logPath() string {
 }
 func (o Options) pidPath() string {
 	return filepath.Join(o.stateDir(), fmt.Sprintf("agent-%d.pid", o.AgentID))
+}
+
+// LogLine: one line in agent mode's log (what agent-start did at sign-in, when nobody sees its output).
+func LogLine(o Options, msg string) {
+	if err := os.MkdirAll(o.stateDir(), 0o700); err != nil {
+		return
+	}
+	f, err := os.OpenFile(o.logPath(), os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0o600)
+	if err != nil {
+		return
+	}
+	defer f.Close()
+	line, _ := json.Marshal(map[string]string{"time": time.Now().Format(time.RFC3339Nano), "level": "INFO", "msg": msg})
+	f.Write(append(line, '\n'))
 }
 
 // StartDetached: agent mode as a background process of this user (its own
@@ -204,7 +220,18 @@ func Do(o Options) error {
 	return configure(o)
 }
 
-func (o Options) printf(format string, a ...any) { fmt.Fprintf(o.Out, format, a...) }
+func (o Options) printf(format string, a ...any) {
+	fmt.Fprintf(o.Out, Plain(format), a...)
+}
+
+// Plain: the text with "ok" for the check mark on Windows, whose console
+// (code page 866, 1252, ...) shows a box for it.
+func Plain(s string) string {
+	if runtime.GOOS == "windows" {
+		return strings.ReplaceAll(s, "✓", "ok")
+	}
+	return s
+}
 
 // portFree: the port is free, or agent mode of this very agent holds it.
 func portFree(o Options) error {
@@ -376,11 +403,26 @@ func mustJSON(v any) string {
 }
 
 // RunCommand: the default Options.Run.
+// commandTimeout: a client's own command (claude mcp add) that has not
+// finished by then is waiting for something - a first-run prompt, a sign-in,
+// or another program of that name - and is stopped: connect then says what to
+// run by hand instead of hanging.
+var commandTimeout = 60 * time.Second
+
 func RunCommand(name string, args ...string) error {
-	cmd := exec.Command(name, args...)
+	ctx, cancel := context.WithTimeout(context.Background(), commandTimeout)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, name, args...)
+	cmd.Cancel = func() error { return killTree(cmd.Process) } // claude.cmd runs node under cmd.exe: all of it
+	cmd.WaitDelay = 2 * time.Second                            // its own children may hold the output open
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
-	if err := cmd.Run(); err != nil {
+	err := cmd.Run()
+	if ctx.Err() == context.DeadlineExceeded {
+		return fmt.Errorf("did not finish in %s (is it waiting for input, a sign-in, or is another program called %q?)",
+			commandTimeout, name)
+	}
+	if err != nil {
 		if msg := strings.TrimSpace(stderr.String()); msg != "" {
 			return fmt.Errorf("%w: %s", err, firstLine(msg))
 		}

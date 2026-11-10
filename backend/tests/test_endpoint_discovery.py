@@ -252,3 +252,41 @@ class TestApi:
         assert r.status_code == 404
         r = await client.post(f"{F}/{fid}/link", json={"agent_id": 1, "extra": 1}, headers=auth_headers(admin_token))
         assert r.status_code == 422
+
+
+class TestLocalModelPorts:
+    """What answers on a local model port (agent/collectors/modelapi.go), as the finding shows it."""
+
+    async def _meta(self, db, org_id, payload):
+        from app.models.shadow_ai_sighting import ShadowAISighting
+        src = await _source(db, org_id)
+        ev = TelemetryEventIn(event_type="network_conn", agent_id="dev-9", domain="localhost:11434", user_id="alice",
+                              risk_score=0.6, payload={"port": 11434, "target_host": "127.0.0.1",
+                                                       "service": "Ollama API", **payload})
+        await _ingest(db, src, [ev])
+        row = (await db.execute(select(ShadowAISighting).where(ShadowAISighting.org_id == org_id,
+                                                               ShadowAISighting.detected_via == "network_conn"))).scalar_one()
+        return row.display_meta
+
+    async def test_a_confirmed_model_api_keeps_its_clean_model_names(self, db_session, org_and_users, notes):
+        org = org_and_users["org"]
+        meta = await self._meta(db_session, org.id, {
+            "confirmed": True, "api": "Ollama",
+            "models": ["llama3:8b", "<img src=x onerror=alert(1)>", "llama3:8b", 7, "a" * 200, "qwen2.5-coder:7b"]})
+        assert meta["confirmed"] is True and meta["api"] == "Ollama"
+        assert meta["models"] == ["llama3:8b", "qwen2.5-coder:7b"]
+
+    async def test_an_unknown_api_name_is_not_kept(self, db_session, org_and_users, notes):
+        org = org_and_users["org"]
+        meta = await self._meta(db_session, org.id, {"confirmed": True, "api": "<b>Evil</b>", "models": "x"})
+        assert meta["api"] is None and meta["models"] == []
+
+    async def test_a_port_where_nothing_answered(self, db_session, org_and_users, notes):
+        org = org_and_users["org"]
+        meta = await self._meta(db_session, org.id, {"confirmed": False, "models": ["m"]})
+        assert meta["confirmed"] is False and "models" not in meta
+
+    async def test_an_older_agent_says_nothing_about_it(self, db_session, org_and_users, notes):
+        org = org_and_users["org"]
+        meta = await self._meta(db_session, org.id, {})
+        assert "confirmed" not in meta and "models" not in meta

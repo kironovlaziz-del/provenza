@@ -26,7 +26,9 @@ The agent side:
 What is checked: the signature against the organization's JWKS (public, no
 account needed; refetched when an unknown key id appears, after a rotation),
 the issuer, the tool (aud), the SHA-256 of the canonical input (the JSON body
-the tool received must be the input the agent checked), the expiry. Then the
+the tool received must be the input the agent checked; a form body - an HTTP
+tool set to send a form - is read back into its string arguments,
+form_input()), the expiry. Then the
 permit is redeemed with Provenza, so it is used once across every replica of
 the tool; with redeem=False only this process remembers what it has seen.
 Anything that cannot be verified is refused: the verifier fails closed.
@@ -38,6 +40,7 @@ import json
 import threading
 import time
 from dataclasses import dataclass
+from urllib.parse import parse_qsl
 from typing import Any, Awaitable, Callable, Dict, Optional, Tuple, Union
 
 import httpx
@@ -48,6 +51,25 @@ from provenza.crypto import content_hash
 from provenza.errors import ProvenzaError
 
 HEADER = "Provenza-Permit"
+FORM_TYPE = "application/x-www-form-urlencoded"
+
+
+def form_input(body: bytes) -> Dict[str, str]:
+    """The input of a form body: each field once, as a string - what an HTTP
+    tool that sends a form was called with (its arguments are strings). A
+    field given twice, or a body that is not a form, is refused: the input
+    would be ambiguous."""
+    try:
+        pairs = parse_qsl(body.decode("ascii"), keep_blank_values=True, strict_parsing=bool(body),
+                          errors="strict")
+    except (UnicodeDecodeError, ValueError) as exc:
+        raise PermitError("permit.body_not_form", "the body is not a form") from exc
+    out: Dict[str, str] = {}
+    for k, v in pairs:
+        if k in out:
+            raise PermitError("permit.body_not_form", f"the field {k!r} is given twice")
+        out[k] = v
+    return out
 TYP = "provenza-permit+jwt"
 MAX_TOKEN_BYTES = 4096
 
@@ -246,7 +268,8 @@ ToolOf = Union[str, Callable[[Dict[str, Any]], Optional[str]]]
 
 class PermitMiddleware:
     """ASGI middleware: an HTTP request runs only with a valid permit for
-    `tool` and the request's JSON body as the input. `tool` is a name, or a
+    `tool` and the request's JSON body as the input (a form body: its fields,
+    form_input()). `tool` is a name, or a
     function of the ASGI scope returning the name (None = not a governed
     route, passed through). The verified Permit is in scope["state"]["permit"]
     (request.state.permit in Starlette / FastAPI). A refusal is a 403 JSON
@@ -275,10 +298,16 @@ class PermitMiddleware:
             more = message.get("more_body", False)
         body = b"".join(chunks)
         headers = {k.decode("latin-1").lower(): v.decode("latin-1") for k, v in scope.get("headers", [])}
-        try:
-            data = json.loads(body) if body.strip() else {}
-        except ValueError:
-            return await _refuse(send, 400, "permit.body_not_json")
+        if headers.get("content-type", "").split(";")[0].strip().lower() == FORM_TYPE:
+            try:
+                data = form_input(body)
+            except PermitError as exc:
+                return await _refuse(send, 400, exc.code)
+        else:
+            try:
+                data = json.loads(body) if body.strip() else {}
+            except ValueError:
+                return await _refuse(send, 400, "permit.body_not_json")
         try:
             permit = await self.verifier.averify(headers.get(HEADER.lower()), tool=tool, input=data)
         except PermitError as exc:

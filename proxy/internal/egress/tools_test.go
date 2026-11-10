@@ -40,14 +40,15 @@ func TestToolRequestsAreBuiltAsTheServerBuildsThem(t *testing.T) {
 		if d, err := manifestDigest(def); err != nil || d != c["digest"] {
 			t.Fatalf("#%d digest %s, want %s (%v)", i, d, c["digest"], err)
 		}
-		problems := argumentProblems(def["input_schema"], args, def["url"].(string))
+		encoding, _ := def["body_encoding"].(string)
+		problems := argumentProblems(def["input_schema"], args, def["url"].(string), encoding)
 		if refused := c["refused"] == true; refused != (len(problems) > 0) {
 			t.Fatalf("#%d refused %v, problems %v", i, refused, problems)
 		}
 		if len(problems) > 0 {
 			continue
 		}
-		target, body, err := buildRequest(def["method"].(string), def["url"].(string), args)
+		target, body, err := buildRequest(def["method"].(string), def["url"].(string), args, encoding)
 		if err != nil {
 			t.Fatalf("#%d: %v", i, err)
 		}

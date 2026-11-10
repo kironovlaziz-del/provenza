@@ -301,6 +301,12 @@
     "load_failed": "Hodisalarni yuklab bo'lmadi."
   },
   "shadow_ai": {
+    "port_confirmed": "{{api}} javob berdi",
+    "port_unconfirmed": "model API javob bermadi",
+    "port_models": "modellar: {{list}}",
+    "port_more": "yana {{n}} ta",
+    "port_why_confirmed": "Endpoint agenti shu portga tegishli model API'sidan so'radi (faqat shu kompyuterda) va u o'sha API formatida javob berdi.",
+    "port_why_unconfirmed": "Port ochiq, lekin u yerda hech qanday model API javob bermadi: ehtimol boshqa veb-server (dasturchining o'z ilovasi). Past xavf.",
     "title": "Shadow AI topilmalari",
     "report": "Topilma haqida xabar berish",
     "cancel": "Bekor qilish",
@@ -1073,6 +1079,8 @@
     "provider.self_hosted_only": "Bu tashkilot faqat o'z serverlaridagi AI provayderlarga ruxsat beradi, bu ulanish esa sizning tarmog'ingizda emas. Hech narsa yuborilmadi.",
     "http_tool.not_found": "Bunday HTTP vosita yo'q yoki u o'chirilgan.",
     "http_tool.name_taken": "\"{{name}}\" nomli vosita allaqachon mavjud.",
+    "http_tool.schema_unsupported": "Kirish sxemasini tekshirib bo'lmaydi: {{problems}}.",
+    "http_tool.form_needs_body": "Forma tanasi uchun POST, PUT yoki PATCH kerak.",
     "http_tool.placeholder_undeclared": "URL kirish sxemasida e'lon qilinmagan joy egalaridan foydalanadi: {{names}}.",
     "http_tool.agent_key_required": "Agent kaliti talab qilinadi.",
     "permit.invalid": "Ruxsatnoma yaroqsiz.",
@@ -2382,6 +2390,8 @@
     "dismiss": "Yopish"
   },
   "found": {
+    "confidence_why_high": "Ikkita mustaqil belgi mos keladi yoki jarayonda LLM SDK kutubxonasi yuklangan (to'g'ridan-to'g'ri fakt).",
+    "confidence_why_medium": "Faqat bitta belgi: LLM API bilan aloqa. Uning manzili umumiy CDN orqasida boshqa saytlarga ham xizmat qilishi mumkin.",
     "title": "Topilgan agentlar",
     "hint": "Qurilmalaringizda ishlayotgan AI agentlar: tanilgan mahsulotlar (kod agentlari, agent freymvorklari, agent platformalari) va LLM API bilan aloqa qiladigan yoki LLM SDK yuklagan tanilmagan dasturlar. Ularni hech kim qo'lda ro'yxatdan o'tkazmagan: har birini ko'rib chiqing, so'ng siyosatlar ostiga olish uchun ro'yxatdan o'tkazing yoki e'tiborsiz qoldiring.",
     "stat_new": "Ko'rib chiqish kerak",
@@ -2911,7 +2921,10 @@
       "url_hint": "{id} kabi yo'l joy egalari bittadan argument oladi. GET va DELETE qolgan argumentlarni so'rov qatorida, boshqa usullar JSON tanasida yuboradi.",
       "description": "Tavsif (agent modeliga ko'rsatiladi)",
       "schema": "Kirish sxemasi (JSON Schema, ixtiyoriy)",
-      "schema_hint": "Hech narsa yuborilishidan oldin tekshiriladi: majburiy argumentlar, turlar, ruxsat etilgan qiymatlar va additionalProperties false bo'lsa ortiqcha argumentlar yo'qligi.",
+      "schema_hint": "Hech narsa yuborilishidan oldin to'liq tekshiriladi: majburiy argumentlar, turlar, ruxsat etilgan qiymatlar, uzunliklar, oraliqlar va naqshlar (RE2), additionalProperties false bo'lsa ortiqcha argumentlar yo'qligi. Tekshirilmaydigan kalit so'zlar ($ref, anyOf, ...) rad etiladi.",
+      "body": "Tana",
+      "body_form": "Forma",
+      "body_hint": "JSON yoki forma (application/x-www-form-urlencoded): forma vositasi faqat satr argumentlarini qabul qiladi, shunda API ruxsatnoma bog'langan argumentlarning aynan o'zini qayta o'qiydi.",
       "schema_invalid": "Kirish sxemasi yaroqli JSON emas.",
       "send_permit": "Imzolangan ruxsatnomani chaqiruv bilan yuborish (POST, PUT, PATCH): Provenza ruxsatnoma middleware'idan foydalanadigan API faqat Provenza orqali qilingan chaqiruvlarni qabul qiladi",
       "endpoint": "Manzil",

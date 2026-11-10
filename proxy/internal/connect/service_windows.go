@@ -9,6 +9,7 @@ package connect
 import (
 	"encoding/csv"
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 	"syscall"
@@ -84,5 +85,14 @@ func removeService(o Options) error {
 		return fmt.Errorf("could not remove %s\\%s: %w", runKey, o.runValueName(), err)
 	}
 	o.printf("  ✓ agent mode no longer starts at sign-in\n")
+	return nil
+}
+
+// killTree: the process and everything it started (claude.cmd is cmd.exe
+// running node: killing cmd.exe alone would leave node waiting).
+func killTree(p *os.Process) error {
+	if err := exec.Command(sys32("taskkill.exe"), "/T", "/F", "/PID", fmt.Sprint(p.Pid)).Run(); err != nil {
+		return p.Kill()
+	}
 	return nil
 }

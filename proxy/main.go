@@ -239,6 +239,7 @@ func runConnect(args []string) int {
 // `connect` runs on Windows: agent mode started in the background, as
 // `connect` itself starts it, and this process exits (no console window stays).
 func runAgentStart(args []string) int {
+	leaveOwnConsole()
 	fs := flag.NewFlagSet("agent-start", flag.ContinueOnError)
 	home, _ := os.UserHomeDir()
 	agentID := fs.Int64("agent-id", 0, "the agent's number")
@@ -261,10 +262,14 @@ func runAgentStart(args []string) int {
 		return 1
 	}
 	o := connect.Options{AgentID: *agentID, Identity: *identity, Proxy: *proxy, Port: *port, Binary: self, Home: home}
-	if _, err := connect.StartDetached(o); err != nil {
+	// at sign-in nobody sees this process's output: what it did goes to agent mode's log
+	pid, err := connect.StartDetached(o)
+	if err != nil {
+		connect.LogLine(o, "agent-start: agent mode did not start: "+err.Error())
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
+	connect.LogLine(o, fmt.Sprintf("agent-start: agent mode started (pid %d)", pid))
 	return 0
 }
 
@@ -313,7 +318,7 @@ func runEnroll(args []string) int {
 	if id.PQPublicKey != "" {
 		scheme = "Ed25519 + ML-DSA-65"
 	}
-	fmt.Printf("  ✓ agent #%d %s (%s, %s); its keys stay on this machine: %s\n", id.AgentID, what, scheme,
+	fmt.Printf(connect.Plain("  ✓ agent #%d %s (%s, %s); its keys stay on this machine: %s\n"), id.AgentID, what, scheme,
 		id.KeyFingerprint, *identity)
 	return 0
 }

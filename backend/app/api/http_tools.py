@@ -27,6 +27,7 @@ from app.core.database import get_db
 from app.core.errors import api_error
 from app.core.outbound import validate_url
 from app.models.http_tool import HttpTool
+from app.pvp.schema_check import schema_problems
 from app.models.mcp import MCPTool
 from app.models.user import User, UserRole
 from app.pvp import guard as pvp_guard
@@ -124,6 +125,7 @@ class HttpToolIn(BaseModel):
     timeout_seconds: int = Field(default=30, ge=1, le=120)
     max_response_bytes: int = Field(default=1024 * 1024, ge=1024, le=8 * 1024 * 1024)
     send_permit: bool = True
+    body_encoding: Literal["json", "form"] = "json"
     enabled: bool = True
 
     @field_validator("url")
@@ -154,6 +156,7 @@ class HttpToolUpdate(BaseModel):
     timeout_seconds: Optional[int] = Field(default=None, ge=1, le=120)
     max_response_bytes: Optional[int] = Field(default=None, ge=1024, le=8 * 1024 * 1024)
     send_permit: Optional[bool] = None
+    body_encoding: Optional[Literal["json", "form"]] = None
     enabled: Optional[bool] = None
 
     @field_validator("url")
@@ -185,6 +188,7 @@ class HttpToolOut(BaseModel):
     timeout_seconds: int
     max_response_bytes: int
     send_permit: bool
+    body_encoding: str
     enabled: bool
     digest: str
     registry_entry_id: Optional[int]
@@ -197,8 +201,21 @@ def _out(t: HttpTool) -> HttpToolOut:
                        input_schema=t.input_schema, auth_header=t.auth_header, has_secret=t.credential_source != "none",
                        credential_source=t.credential_source,
                        timeout_seconds=t.timeout_seconds, max_response_bytes=t.max_response_bytes,
-                       send_permit=t.send_permit, enabled=t.enabled, digest=t.digest,
+                       send_permit=t.send_permit, body_encoding=t.body_encoding or "json",
+                       enabled=t.enabled, digest=t.digest,
                        registry_entry_id=t.registry_entry_id, created_at=t.created_at, updated_at=t.updated_at)
+
+
+def _definition_ok(tool: HttpTool) -> None:
+    """The schema is one the deep check understands (app/pvp/schema_check.py),
+    and a form body goes with a method that has a body."""
+    if tool.input_schema is not None:
+        problems = schema_problems(tool.input_schema)
+        if problems:
+            raise api_error(status.HTTP_422_UNPROCESSABLE_ENTITY, "http_tool.schema_unsupported",
+                            problems="; ".join(problems[:5]))
+    if (tool.body_encoding or "json") == "form" and tool.method not in ("POST", "PUT", "PATCH"):
+        raise api_error(status.HTTP_422_UNPROCESSABLE_ENTITY, "http_tool.form_needs_body")
 
 
 def _placeholders_declared(url: str, schema: Optional[dict]) -> None:
@@ -238,7 +255,9 @@ async def create_tool(data: HttpToolIn, db: AsyncSession = Depends(get_db), user
     tool = HttpTool(org_id=org_id, name=data.name, description=data.description, method=data.method, url=data.url,
                     input_schema=data.input_schema, auth_header=data.auth_header,
                     timeout_seconds=data.timeout_seconds, max_response_bytes=data.max_response_bytes,
-                    send_permit=data.send_permit, enabled=data.enabled, digest="", created_by=user_id)
+                    send_permit=data.send_permit, body_encoding=data.body_encoding, enabled=data.enabled,
+                    digest="", created_by=user_id)
+    _definition_ok(tool)
     try:
         async with db.begin_nested():   # a taken name undoes only this insert
             db.add(tool)
@@ -249,7 +268,8 @@ async def create_tool(data: HttpToolIn, db: AsyncSession = Depends(get_db), user
     tool_id = tool.id
     await db.commit()
     await AuditService(db).log(org_id, user_id, "http_tool", tool_id, "created",
-                               {"name": data.name, "method": data.method, "url": data.url})
+                               {"name": data.name, "method": data.method, "url": data.url,
+                                "body_encoding": data.body_encoding})
     return _out(await _get(db, org_id, tool_id))
 
 
@@ -267,6 +287,7 @@ async def update_tool(tool_id: int, data: HttpToolUpdate, db: AsyncSession = Dep
         if value is not None or key == "input_schema":
             setattr(tool, key, value)
     _placeholders_declared(tool.url, tool.input_schema)
+    _definition_ok(tool)
     if data.clear_secret:
         await credentials.forget(db, "http_tool", tool_id)
         tool.credential_source, tool.auth_secret_encrypted = "none", None

@@ -14,9 +14,9 @@ This page covers the collectors themselves.
 
 ## How data arrives
 
-Collectors send batches to `POST /api/v1/shadow-ai/ingest`. They
+Collectors send batches to `POST /api/v1/shadow-ai/ingest` over HTTPS. They
 authenticate with a machine key (`X-Ingestion-Key`) from an **Ingestion
-Source**, never with a user's session. Every event is kept raw for later
+Source**, never with a user's session; there are no client certificates. Every event is kept raw for later
 analysis. Domain visits are classified against the organization's **AI
 Domain Catalog** (allow, block or unknown), which decides what becomes a
 sighting or an incident.
@@ -28,16 +28,55 @@ sanctioned provider or a dismissal. Agents found on endpoints appear on
 them. Every machine or browser that reports is listed on **Devices** with
 its user, OS and last activity.
 
+## What it does not see
+
+Discovery finds a great deal of the AI in use, never all of it. Each
+collector sees only its own part, and there is no "100%":
+
+- **Browser extension:** only the browsers it is installed in, and only the
+  AI services in the catalog. A service not in the catalog, a private window
+  where extensions are off, or another browser is not seen. It never reads
+  what is typed: its secret warning checks the input field locally and sends
+  nothing.
+- **Endpoint agent:** only machines it is installed on. An agent that no
+  catalog knows is found by behavior (an LLM API connection, a loaded SDK,
+  key variable names), which can miss a tool that talks to a model through
+  an address not in the catalog. What it sees differs by system (the table
+  under *What it sees on each system*).
+- **DNS and proxy logs:** only the traffic that passes the resolver or proxy
+  whose logs are imported; DNS over HTTPS in a browser or a VPN goes around
+  them.
+- **Network discovery** names infrastructure (DNS servers, gateway, directory
+  services, mDNS/LLMNR announcements); it does not look inside traffic.
+- **The eBPF egress sensor** is not a discovery tool: it enforces the egress
+  policy of governed workloads on Linux and reports what it blocked.
+
+Findings carry their evidence (a confirmed model API and its models, the
+signals of an agent found by behavior, with a confidence), so a reviewer can
+tell a fact from a guess.
+
 ## Endpoint agent
 
 A native Go binary for **Windows, macOS and Linux** (amd64 and arm64). It
 runs as a service and detects:
 
 - **local AI tools:** processes such as `ollama`, LM Studio and `vllm`,
-  listening ports, model weight files on disk;
+  model weight files on disk, and model servers on this machine's own ports
+  (below);
 - **AI agents:** Claude Code, Cursor, Copilot, Codex CLI, Aider, CrewAI,
   LangGraph, n8n, and others. Agents that no catalog knows are found by
   behavior (below).
+
+**Local model servers.** An open port 11434, 1234, 8080, 8000, 5000 or 3000
+says little on its own (they are every web developer's ports too), so the
+agent asks what answers there: `GET /api/tags` (Ollama), `GET /v1/models`
+(the OpenAI-compatible list of LM Studio, llama.cpp, vLLM, LocalAI) or
+`GET /api/config` (Open WebUI). Only on `127.0.0.1`, only those read-only
+paths, without a proxy, credentials or redirects, and at most 256 KB of an
+answer. A server that answers in its API's shape is reported as *confirmed*,
+with the names of its models (at most 20, and only names made of letters,
+digits and `._:/@+-`). A port where no model API answers is still reported,
+as *not confirmed* and with a low risk.
 
 It sends only what it recognized, never a process command line, a file's
 content or a key value. Every 15 minutes it also says it is alive, so its

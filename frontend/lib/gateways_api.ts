@@ -281,6 +281,7 @@ export interface HttpTool {
   timeout_seconds: number;
   max_response_bytes: number;
   send_permit: boolean;
+  body_encoding: "json" | "form";
   enabled: boolean;
   digest: string;
   registry_entry_id: number | null;
@@ -298,6 +299,7 @@ export interface HttpToolInput {
   clear_secret?: boolean;
   timeout_seconds?: number;
   send_permit?: boolean;
+  body_encoding?: "json" | "form";
   enabled?: boolean;
 }
 

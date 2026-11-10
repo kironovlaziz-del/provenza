@@ -9,8 +9,8 @@ import { generateKeyPairSync, randomBytes, sign } from "node:crypto";
 import { Readable } from "node:stream";
 import { describe, test } from "node:test";
 
-import { canonical, contentHash, PERMIT_HEADER, PermitError, PermitVerifier, permitHeaders, permitMiddleware,
-         withPermit } from "../dist/index.js";
+import { canonical, contentHash, formInput, PERMIT_HEADER, PermitError, PermitVerifier, permitHeaders,
+         permitMiddleware, withPermit } from "../dist/index.js";
 
 const SERVER = "https://provenza.test";
 const INPUT = { customer: 42, fields: { tier: "gold" } };
@@ -148,6 +148,37 @@ describe("middleware", () => {
     assert.deepEqual(await ok.json(), { agent: 7, input: INPUT });
     const refused = await handler(new Request("http://tool/update", { method: "POST", body: JSON.stringify(INPUT) }));
     assert.equal(refused.status, 403);
+  });
+
+  test("a form body: its fields are the input (an HTTP tool set to send a form)", async () => {
+    const fake = new FakeProvenza();
+    const form = { customer: "c 42", note: "caf\u00e9", tier: "gold & more" };
+    const body = "customer=c+42&note=caf%C3%A9&tier=gold+%26+more";   // as Provenza sends it (sorted, form-encoded)
+    const type = { "content-type": "application/x-www-form-urlencoded; charset=utf-8" };
+    const mw = permitMiddleware(verifierFor(fake), { tool: "crm.update" });
+    let out = await call(mw, { body, headers: { ...type, [PERMIT_HEADER.toLowerCase()]: fake.permit({ input: form }) } });
+    assert.ok(out.next && !out.err);
+    assert.deepEqual(out.req.body, form);
+    out = await call(mw, { body: body + "&tier=x", headers: { ...type, [PERMIT_HEADER.toLowerCase()]: fake.permit({ input: form }) } });
+    assert.equal(out.res.statusCode, 400);
+    assert.deepEqual(JSON.parse(out.res.body), { error: "permit.body_not_form" });
+
+    const handler = withPermit(verifierFor(fake), "crm.update", (_req, _permit, input) => Response.json(input));
+    const ok = await handler(new Request("http://tool/update", { method: "POST", body,
+                                                                 headers: { ...type, [PERMIT_HEADER]: fake.permit({ input: form }) } }));
+    assert.equal(ok.status, 200);
+    assert.deepEqual(await ok.json(), form);
+    const other = await handler(new Request("http://tool/update", { method: "POST", body: body.replace("gold", "bronze"),
+                                                                    headers: { ...type, [PERMIT_HEADER]: fake.permit({ input: form }) } }));
+    assert.equal(other.status, 403);
+  });
+
+  test("formInput", () => {
+    assert.deepEqual(formInput("a=1&b=x+y&c=caf%C3%A9&d="), { a: "1", b: "x y", c: "caf\u00e9", d: "" });
+    assert.deepEqual(formInput(""), {});
+    for (const bad of ["a=1&a=2", "a", "\u00e9=1", "a=%E0%A4%A"]) {
+      assert.throws(() => formInput(bad), (e) => e instanceof PermitError && e.code === "permit.body_not_form", bad);
+    }
   });
 
   test("the agent sends the permit with the call", () => {

@@ -23,7 +23,9 @@ const METHODS: HttpMethod[] = ["GET", "POST", "PUT", "PATCH", "DELETE"];
 const EMPTY = {
   name: "", description: "", method: "POST" as HttpMethod, url: "", input_schema: "",
   auth_header: "Authorization", auth_secret: "", timeout_seconds: 30, send_permit: true,
+  body_encoding: "json" as "json" | "form",
 };
+const BODY_METHODS: HttpMethod[] = ["POST", "PUT", "PATCH"];
 
 export function HttpTools() {
   const { t } = useTranslation();
@@ -83,7 +85,8 @@ export function HttpTools() {
               }
               act("new", async () => {
                 const { auth_secret, ...fields } = form;
-                const tool = await createHttpTool({ ...fields, input_schema: schema,
+                const body_encoding = BODY_METHODS.includes(fields.method) ? fields.body_encoding : "json";
+                const tool = await createHttpTool({ ...fields, body_encoding, input_schema: schema,
                                                     description: form.description || undefined });
                 await sealNew("http_tool", tool.id, auth_secret);   // sealed here, never sent in clear
                 setForm(EMPTY);
@@ -102,6 +105,16 @@ export function HttpTools() {
                     {METHODS.map((m) => <option key={m} value={m}>{m}</option>)}
                   </select>
                 </div>
+                {BODY_METHODS.includes(form.method) && (
+                  <div className="field" style={{ maxWidth: 160 }}>
+                    <label htmlFor="ht-body">{t("gw.http.body")}</label>
+                    <select id="ht-body" value={form.body_encoding} title={t("gw.http.body_hint")}
+                            onChange={(e) => setForm({ ...form, body_encoding: e.target.value as "json" | "form" })}>
+                      <option value="json">JSON</option>
+                      <option value="form">{t("gw.http.body_form")}</option>
+                    </select>
+                  </div>
+                )}
               </div>
               <div className="field">
                 <label htmlFor="ht-url">{t("gw.http.url")}</label>
@@ -172,7 +185,10 @@ export function HttpTools() {
                   {h.description && <div className="hint-text">{h.description.slice(0, 160)}</div>}
                 </td>
                 <td style={{ maxWidth: 360 }}>
-                  <div className="u-mono" style={{ wordBreak: "break-all" }}><strong>{h.method}</strong> {h.url}</div>
+                  <div className="u-mono" style={{ wordBreak: "break-all" }}>
+                    <strong>{h.method}</strong> {h.url}
+                    {h.body_encoding === "form" && <span className="pill pill-neutral" style={{ marginLeft: 6 }}>{t("gw.http.body_form")}</span>}
+                  </div>
                   {h.send_permit && ["POST", "PUT", "PATCH"].includes(h.method) && (
                     <div className="hint-text">{t("gw.http.permit_sent")}</div>
                   )}

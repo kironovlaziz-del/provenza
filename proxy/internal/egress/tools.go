@@ -38,6 +38,14 @@ var placeholderRe = regexp.MustCompile(`\{([A-Za-z_][A-Za-z0-9_]{0,63})\}`)
 
 var bodyMethods = map[string]bool{"POST": true, "PUT": true, "PATCH": true}
 
+// formEncoding: a tool whose definition says "body_encoding": "form" sends its
+// arguments (strings) as application/x-www-form-urlencoded, sorted by name -
+// as the server's build_request does.
+const (
+	formEncoding = "form"
+	formType     = "application/x-www-form-urlencoded"
+)
+
 // manifestDigest: the server's manifest_digest (sorted keys, no whitespace,
 // characters as they are).
 func manifestDigest(v any) (string, error) {
@@ -63,51 +71,6 @@ func isInteger(v any) bool {
 	return ok && !strings.ContainsAny(string(n), ".eE")
 }
 
-func typeOK(v any, expected any) bool {
-	var names []any
-	if l, ok := expected.([]any); ok {
-		names = l
-	} else {
-		names = []any{expected}
-	}
-	for _, n := range names {
-		name, _ := n.(string)
-		switch name {
-		case "string":
-			if _, ok := v.(string); ok {
-				return true
-			}
-		case "integer":
-			if isInteger(v) {
-				return true
-			}
-		case "number":
-			if _, ok := v.(json.Number); ok {
-				return true
-			}
-		case "boolean":
-			if _, ok := v.(bool); ok {
-				return true
-			}
-		case "object":
-			if _, ok := v.(map[string]any); ok {
-				return true
-			}
-		case "array":
-			if _, ok := v.([]any); ok {
-				return true
-			}
-		case "null":
-			if v == nil {
-				return true
-			}
-		default:
-			return true // a type this check does not know: not refused here
-		}
-	}
-	return false
-}
-
 func sameJSON(a, b any) bool {
 	x, err1 := canon.Text(a)
 	y, err2 := canon.Text(b)
@@ -127,54 +90,14 @@ func sameJSON(a, b any) bool {
 	return false
 }
 
-// argumentProblems: the server's argument_problems - the input schema's top
-// level and the path placeholders.
-func argumentProblems(schema any, args map[string]any, rawURL string) []string {
+// argumentProblems: the server's argument_problems - the input schema all the
+// way down (schema.go), the path placeholders, and for a form body strings only.
+func argumentProblems(schema any, args map[string]any, rawURL, bodyEncoding string) []string {
 	var problems []string
-	if s, ok := schema.(map[string]any); ok {
-		props, _ := s["properties"].(map[string]any)
-		if req, ok := s["required"].([]any); ok {
-			for _, n := range req {
-				name, _ := n.(string)
-				if _, ok := args[name]; !ok {
-					problems = append(problems, fmt.Sprintf("missing argument '%s'", name))
-				}
-			}
-		}
-		if s["additionalProperties"] == false {
-			keys := make([]string, 0, len(args))
-			for k := range args {
-				keys = append(keys, k)
-			}
-			sort.Strings(keys)
-			for _, k := range keys {
-				if _, ok := props[k]; !ok {
-					problems = append(problems, fmt.Sprintf("unexpected argument '%s'", k))
-				}
-			}
-		}
-		for name, sub := range props {
-			v, present := args[name]
-			sm, _ := sub.(map[string]any)
-			if !present || sm == nil {
-				continue
-			}
-			if t, ok := sm["type"]; ok && !typeOK(v, t) {
-				problems = append(problems, fmt.Sprintf("argument '%s' is not of type %v", name, t))
-			}
-			if enum, ok := sm["enum"].([]any); ok {
-				found := false
-				for _, e := range enum {
-					if sameJSON(e, v) {
-						found = true
-						break
-					}
-				}
-				if !found {
-					problems = append(problems, fmt.Sprintf("argument '%s' is not one of the allowed values", name))
-				}
-			}
-		}
+	if !valueDepthOK(any(args), 0) {
+		problems = append(problems, "the arguments are nested too deeply")
+	} else if _, ok := schema.(map[string]any); ok {
+		problems = append(problems, valueProblems(schema, any(args))...)
 	}
 	for _, name := range placeholders(rawURL) {
 		v := args[name]
@@ -182,6 +105,9 @@ func argumentProblems(schema any, args map[string]any, rawURL string) []string {
 		if isStr && (str == "" || str == "." || str == "..") || (!isStr && !isInteger(v)) {
 			problems = append(problems, fmt.Sprintf("path argument '%s' must be a non-empty string or an integer", name))
 		}
+	}
+	if bodyEncoding == formEncoding {
+		problems = append(problems, formProblems(args)...)
 	}
 	return problems
 }
@@ -220,7 +146,7 @@ func scalarText(v any) (string, bool) {
 // buildRequest: the server's build_request - the URL with each path
 // placeholder as one encoded segment, the arguments as the JSON body (body
 // methods) or the query (GET, DELETE).
-func buildRequest(method, rawURL string, args map[string]any) (string, []byte, error) {
+func buildRequest(method, rawURL string, args map[string]any, bodyEncoding string) (string, []byte, error) {
 	used := map[string]bool{}
 	for _, n := range placeholders(rawURL) {
 		used[n] = true
@@ -243,6 +169,17 @@ func buildRequest(method, rawURL string, args map[string]any) (string, []byte, e
 		target += "?" + tail
 	}
 	if bodyMethods[method] {
+		if bodyEncoding == formEncoding {
+			form := url.Values{}
+			for k, v := range args {
+				str, ok := v.(string)
+				if !ok {
+					return "", nil, fmt.Errorf("argument '%s' must be a string (the tool sends a form)", k)
+				}
+				form.Set(k, str)
+			}
+			return target, []byte(form.Encode()), nil
+		}
 		text, err := canon.UnicodeText(any(args))
 		return target, []byte(text), err
 	}
@@ -299,6 +236,7 @@ func (p *Proxy) serveTool(w http.ResponseWriter, r *http.Request) {
 	name, _ := def["name"].(string)
 	method, _ := def["method"].(string)
 	rawURL, _ := def["url"].(string)
+	encoding, _ := def["body_encoding"].(string)
 	if got, err := manifestDigest(def); err != nil || got != digest || name != a.check.Tool || args == nil {
 		p.refuseAction(w, ctx, a, policy.Denied, "the tool's definition is not the one pinned")
 		return
@@ -314,11 +252,11 @@ func (p *Proxy) serveTool(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if problems := argumentProblems(def["input_schema"], args, rawURL); len(problems) > 0 {
+	if problems := argumentProblems(def["input_schema"], args, rawURL, encoding); len(problems) > 0 {
 		p.refuseAction(w, ctx, a, policy.Denied, "arguments refused: "+strings.Join(problems, "; "))
 		return
 	}
-	target, payload, err := buildRequest(method, rawURL, args)
+	target, payload, err := buildRequest(method, rawURL, args, encoding)
 	if err != nil {
 		p.refuseAction(w, ctx, a, policy.Denied, "arguments refused: "+err.Error())
 		return
@@ -369,7 +307,11 @@ func (p *Proxy) sendTool(ctx context.Context, a *action, method, target string, 
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("User-Agent", "provenza-egress-proxy")
 	if payload != nil {
-		req.Header.Set("Content-Type", "application/json")
+		ctype := "application/json"
+		if def, _ := a.plan["definition"].(map[string]any); def != nil && def["body_encoding"] == formEncoding {
+			ctype = formType
+		}
+		req.Header.Set("Content-Type", ctype)
 		if permit, _ := a.plan["permit"].(string); permit != "" {
 			req.Header.Set("Provenza-Permit", permit)
 		}

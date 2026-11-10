@@ -30,7 +30,8 @@ export function connectCommand(token: string, client: string, system: ConnectSys
   return `f=$(mktemp) && curl -fsSL ${script} -o "$f" && sh "$f" ${client} ${token}`;
 }
 
-export function ConnectPanel({ token, enrollmentId }: { token: string; enrollmentId: number }) {
+export function ConnectPanel({ token, enrollmentId, onConnected }:
+  { token: string; enrollmentId: number; onConnected?: () => void }) {
   const { t } = useTranslation();
   const [client, setClient] = useState<string>("gemini-cli");
   const [system, setSystem] = useState<ConnectSystem>("linux");
@@ -48,6 +49,7 @@ export function ConnectPanel({ token, enrollmentId }: { token: string; enrollmen
         const e = (await listEnrollments()).find((x) => x.id === enrollmentId);
         if (e?.state === "used") {
           setUsed(e);
+          onConnected?.();   // the token is spent: the other ways to use it are gone
           clearInterval(timer);
         }
       } catch {
