@@ -3,38 +3,20 @@ package discovery
 import (
 	"log"
 	"net"
-	"os"
 	"strings"
 )
 
 // discoverDNSServers reports the DNS servers this machine is configured
-// to use (the "nameserver" lines in /etc/resolv.conf). These are real,
-// in-use infrastructure services - reading the local resolver config is
-// not a scan or a probe, it's reading a local file the OS already wrote.
+// to use (dnsServerAddresses: resolv.conf, or the adapters' settings on
+// Windows). These are real, in-use infrastructure services - reading the
+// local resolver config is not a scan or a probe.
 func discoverDNSServers(rep *Reporter) {
-	data, err := os.ReadFile("/etc/resolv.conf")
-	if err != nil {
-		log.Printf("[Discovery/DNS] Could not read /etc/resolv.conf: %v", err)
-		return
-	}
-
-	for _, line := range strings.Split(string(data), "\n") {
-		line = strings.TrimSpace(line)
-		if !strings.HasPrefix(line, "nameserver") {
-			continue
-		}
-		fields := strings.Fields(line)
-		if len(fields) < 2 {
-			continue
-		}
-		ip := fields[1]
-		if net.ParseIP(ip) == nil {
-			continue
-		}
+	addrs, via := dnsServerAddresses()
+	for _, ip := range addrs {
 		// 127.0.0.53 is systemd-resolved's local stub, not a real
 		// upstream DNS server - reporting it as network infrastructure
 		// would be misleading, so skip loopback resolvers.
-		if net.ParseIP(ip).IsLoopback() {
+		if p := net.ParseIP(ip); p == nil || p.IsLoopback() {
 			continue
 		}
 
@@ -50,7 +32,7 @@ func discoverDNSServers(rep *Reporter) {
 			ServiceType:   "dns",
 			Host:          ip,
 			Port:          53,
-			DiscoveredVia: "resolv_conf",
+			DiscoveredVia: via,
 			Details:       details,
 		})
 	}

@@ -72,7 +72,7 @@ func discoverViaDNSSRV(rep *Reporter) {
 }
 
 // localSearchDomains returns candidate DNS domains to probe: the
-// "search" entries from /etc/resolv.conf plus the domain part of the
+// resolver's search domains (resolverSearchDomains) plus the domain part of the
 // machine's own FQDN. Deduplicated, lower-cased.
 func localSearchDomains() []string {
 	seen := map[string]bool{}
@@ -85,17 +85,10 @@ func localSearchDomains() []string {
 		}
 	}
 
-	// From /etc/resolv.conf: "search corp.local ..." and "domain corp.local"
-	if data, err := os.ReadFile("/etc/resolv.conf"); err == nil {
-		for _, line := range strings.Split(string(data), "\n") {
-			line = strings.TrimSpace(line)
-			if strings.HasPrefix(line, "search") || strings.HasPrefix(line, "domain") {
-				fields := strings.Fields(line)
-				for _, f := range fields[1:] {
-					add(f)
-				}
-			}
-		}
+	// From the resolver settings: "search corp.local ..." / "domain corp.local"
+	// in /etc/resolv.conf, the adapters' DNS suffixes on Windows.
+	for _, d := range resolverSearchDomains() {
+		add(d)
 	}
 
 	// From the host's own FQDN, if it has a domain part.

@@ -150,15 +150,18 @@ browser on macOS needs `xattr -d com.apple.quarantine provenza-agent`.
 | Known agents and runtimes by process name and command line | yes | yes | yes |
 | Unknown agents: connection to an LLM API | yes | yes (`lsof`) | yes (`netstat`) |
 | Unknown agents: LLM API key names in the environment | yes | yes | no |
-| Unknown agents: LLM SDK libraries loaded | yes | no | no |
+| Unknown agents: LLM SDK libraries loaded | yes | no | yes (loaded modules) |
 | Local model ports, model files | yes | yes | yes |
 | Network discovery: DNS SRV, mDNS, LLMNR | yes | yes | yes |
-| Network discovery: DNS servers, gateway | yes | DNS servers | no |
+| Network discovery: DNS servers, gateway | yes | DNS servers | yes (adapter settings) |
 | Network discovery: ARP scan, DHCP listening | yes (`CAP_NET_RAW`) | no | no |
 
-On Windows and macOS an unknown agent is therefore found mostly by its
-connection to an LLM API, which is "medium" confidence on its own (an API
-address behind a shared CDN can also serve other sites). Processes the
+On macOS an unknown agent is therefore found mostly by its connection to an
+LLM API, which is "medium" confidence on its own (an API address behind a
+shared CDN can also serve other sites). On Windows a loaded SDK library (the
+modules of a Python process: `jiter`, `tiktoken`, `tokenizers`) is a direct
+fact, so such a process is "high" confidence; only the module paths are
+looked at, and only for those names. Processes the
 system protects (Windows protected processes, macOS system processes) are
 listed by name only. Model files are attributed to the user whose home
 folder holds them.

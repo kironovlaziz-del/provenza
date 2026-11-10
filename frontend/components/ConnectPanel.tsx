@@ -9,6 +9,8 @@ import { useTranslation } from "react-i18next";
 import { listEnrollments, type EnrollmentT } from "@/lib/enrollment_api";
 
 const CLIENTS = ["gemini-cli", "claude-code", "cursor", "openai"] as const;
+const SYSTEMS = ["linux", "windows"] as const;
+export type ConnectSystem = (typeof SYSTEMS)[number];
 const POLL_MS = 3000;
 const POLL_FOR_MS = 60 * 60 * 1000;
 
@@ -18,7 +20,12 @@ function origin(): string {
   return envURL.replace(/\/api\/v1\/?$/, "") || (typeof window !== "undefined" ? window.location.origin : "");
 }
 
-export function connectCommand(token: string, client: string): string {
+export function connectCommand(token: string, client: string, system: ConnectSystem = "linux"): string {
+  if (system === "windows") {
+    // PowerShell as the client's user; a script block, so no execution-policy change
+    const script = `${origin()}/api/v1/agent-enrollment/connect.ps1`;
+    return `& ([scriptblock]::Create((irm "${script}"))) -Client ${client} -Token ${token}`;
+  }
   const script = `${origin()}/api/v1/agent-enrollment/connect.sh`;
   return `f=$(mktemp) && curl -fsSL ${script} -o "$f" && sh "$f" ${client} ${token}`;
 }
@@ -26,9 +33,10 @@ export function connectCommand(token: string, client: string): string {
 export function ConnectPanel({ token, enrollmentId }: { token: string; enrollmentId: number }) {
   const { t } = useTranslation();
   const [client, setClient] = useState<string>("gemini-cli");
+  const [system, setSystem] = useState<ConnectSystem>("linux");
   const [copied, setCopied] = useState(false);
   const [used, setUsed] = useState<EnrollmentT | null>(null);
-  const cmd = connectCommand(token, client);
+  const cmd = connectCommand(token, client, system);
 
   // the token is spent when the machine enrolls: then the agent is connected
   useEffect(() => {
@@ -64,6 +72,12 @@ export function ConnectPanel({ token, enrollmentId }: { token: string; enrollmen
                 {CLIENTS.map((c) => <option key={c} value={c}>{t(`connect.clients.${c}`)}</option>)}
               </select>
             </div>
+            <div className="field" style={{ margin: 0 }}>
+              <label htmlFor="connect-system">{t("connect.system")}</label>
+              <select id="connect-system" value={system} onChange={(e) => { setSystem(e.target.value as ConnectSystem); setCopied(false); }}>
+                {SYSTEMS.map((x) => <option key={x} value={x}>{t(`connect.systems.${x}`)}</option>)}
+              </select>
+            </div>
           </div>
           <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
             <code className="mono u-break" style={{ flex: 1, fontSize: 12 }}>{cmd}</code>
@@ -73,7 +87,7 @@ export function ConnectPanel({ token, enrollmentId }: { token: string; enrollmen
             </button>
           </div>
           <p className="hint-text" style={{ margin: 0 }}>{t("connect.waiting")}</p>
-          <p className="hint-text" style={{ margin: 0 }}>{t("connect.where")}</p>
+          <p className="hint-text" style={{ margin: 0 }}>{t(system === "windows" ? "connect.where_windows" : "connect.where")}</p>
         </div>
       )}
     </div>

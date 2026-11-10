@@ -3615,6 +3615,12 @@
   "connect": {
     "title": "Connect an AI client",
     "client": "Client",
+    "system": "System",
+    "systems": {
+      "linux": "Linux",
+      "windows": "Windows (PowerShell)"
+    },
+    "where_windows": "Windows 10 or 11, amd64 or arm64: run it in PowerShell as the client's user, not as administrator. Agent mode starts at your sign-in; the keys stay in your user profile. With an egress proxy on that machine calls go through it; elsewhere straight to Provenza's gateways.",
     "hint": "Run this one command on the machine where the client runs, as the user it runs as. It downloads provenza-proxy from this server, makes the agent's keys there (they never leave that machine) and connects the client: every call it makes is signed as this agent, checked and recorded. The token in it works once.",
     "clients": {
       "gemini-cli": "Gemini CLI",

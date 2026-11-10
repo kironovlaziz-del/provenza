@@ -102,18 +102,63 @@ func accountName(sid string) string {
 	return account
 }
 
-// newBehaviorProbe: on Windows only the "api" signal - "netstat -ano"
-// lists connections with their process. The environment and the loaded
-// libraries of another process are not read.
+// newBehaviorProbe: on Windows the "api" signal - "netstat -ano" lists
+// connections with their process - and the "sdk" signal, from the loaded
+// modules of the process (Toolhelp). The environment of another process is
+// not read: that needs its memory.
 func newBehaviorProbe(apiIPs map[string]string) behaviorProbe {
-	if len(apiIPs) == 0 {
-		return connProbe{}
+	conn := connProbe{}
+	if len(apiIPs) > 0 {
+		var conns []pidConn
+		for _, proto := range []string{"TCP", "TCPv6"} {
+			if out, err := commandOutput("netstat", "-ano", "-p", proto); err == nil {
+				conns = append(conns, parseNetstat(out)...)
+			}
+		}
+		conn = newConnProbe(conns, apiIPs)
 	}
-	var conns []pidConn
-	for _, proto := range []string{"TCP", "TCPv6"} {
-		if out, err := commandOutput("netstat", "-ano", "-p", proto); err == nil {
-			conns = append(conns, parseNetstat(out)...)
+	return winProbe{conn: conn}
+}
+
+type winProbe struct{ conn connProbe }
+
+func (w winProbe) inspect(p procInfo, interpreted bool) behaviorSignals {
+	s := w.conn.inspect(p, interpreted)
+	// like on Linux: modules are listed only for likely agents (interpreters,
+	// or a process already talking to an LLM API)
+	if interpreted || len(s.APIHosts) > 0 {
+		s.SDKs = sdkMarkersFromPaths(loadedModules(p.PID))
+	}
+	return s
+}
+
+// loadedModules: the file paths of the modules (DLLs, .pyd, the executable)
+// loaded in a process. Nothing when the process cannot be read (protected, or
+// another bitness): only the paths are looked at, and only for the markers.
+func loadedModules(pid int) []string {
+	var snap windows.Handle
+	var err error
+	for try := 0; try < 5; try++ { // ERROR_BAD_LENGTH: the module list changed while it was taken
+		snap, err = windows.CreateToolhelp32Snapshot(windows.TH32CS_SNAPMODULE|windows.TH32CS_SNAPMODULE32, uint32(pid))
+		if !errors.Is(err, windows.ERROR_BAD_LENGTH) {
+			break
 		}
 	}
-	return newConnProbe(conns, apiIPs)
+	if err != nil {
+		return nil
+	}
+	defer windows.CloseHandle(snap)
+	var m windows.ModuleEntry32
+	m.Size = uint32(unsafe.Sizeof(m))
+	if err := windows.Module32First(snap, &m); err != nil {
+		return nil
+	}
+	var out []string
+	for len(out) < 50000 {
+		out = append(out, windows.UTF16ToString(m.ExePath[:]))
+		if err := windows.Module32Next(snap, &m); err != nil {
+			break
+		}
+	}
+	return out
 }
