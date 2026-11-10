@@ -100,3 +100,6 @@ func removeService(o Options) error {
 	}
 	return nil
 }
+
+// killTree: the process (a client command that did not finish).
+func killTree(p *os.Process) error { return p.Kill() }

@@ -712,8 +712,11 @@ that rights, policies and the Tool Registry use), method, URL with optional
 `{argument}` path placeholders and input schema. This server holds no
 credential: a tool that takes one has it sealed to the egress proxies
 (edge.md §4.1) and is refused here. Saving it pins the digest of the
-definition (`name`, `method`, `url`, `input_schema`, `description`) in the
-Tool Registry as approved.
+definition (`name`, `method`, `url`, `input_schema`, `description`, and
+`body_encoding` when it is `"form"`) in the Tool Registry as approved. A
+schema is saved only when the argument check understands all of it (below);
+`$ref`, `anyOf`, `oneOf`, `allOf`, `not`, `if`, `patternProperties` and any
+other keyword are refused.
 
 The agent sends `POST /http-tools/call` with its key and a signed
 `action.request` (§3.1, `action_type: "tool_call"`). Provenza then does
@@ -721,12 +724,26 @@ everything in one operation:
 
 1. verifies the agent's signature, freshness and nonce;
 2. checks the action, reporting the pinned digest itself;
-3. checks the arguments against the top level of the input schema
-   (`required`, `type`, `enum`, `additionalProperties: false`);
+3. checks the arguments against the input schema, all the way down
+   (`app/pvp/schema_check.py`; the egress proxy runs the same rules,
+   `proxy/internal/egress/schema.go`, against the same vectors,
+   `sdk/testdata/schema-vectors.json`): `type`, `enum`, `const`,
+   `properties`, `required`, `additionalProperties` (false or a schema),
+   `items`, `minItems`/`maxItems`, `minLength`/`maxLength` (code points),
+   `pattern` (RE2 on both sides: linear time, `\d` is 0-9, `$` is the end of
+   the text, unanchored search), `minimum`/`maximum` and their exclusive
+   forms (integers exactly). Annotations (`title`, `description`, `default`,
+   `examples`, `format`, ...) are read by nobody. A schema keyword the check
+   does not know refuses the call. Arguments nest at most 32 deep, schemas 16;
 4. calls the API with the SSRF-guarded client, injecting the credential.
-   For POST, PUT and PATCH it also sends the check's permit (§3.1), so an
-   API behind the permit middleware accepts only calls made through
-   Provenza;
+   The body of POST, PUT and PATCH is the arguments as JSON, or, for a tool
+   with `body_encoding: "form"`, as `application/x-www-form-urlencoded`
+   sorted by name. A form tool takes string arguments only, so the API
+   reads back exactly the arguments the permit is bound to (the SDKs'
+   permit middleware reads a form body that way: `form_input`,
+   `formInput`). For POST, PUT and PATCH it also sends the check's permit
+   (§3.1), so an API behind the permit middleware accepts only calls made
+   through Provenza;
 5. records the action with `executed_by: "http_gateway"`, and records
    denied and refused calls too.
 

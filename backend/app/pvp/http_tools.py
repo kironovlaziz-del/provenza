@@ -24,9 +24,13 @@ Provenza.
   definition    method, URL, input schema and description are pinned in the
                 Tool Registry when the admin saves them; the check reports
                 the digest computed here
-  arguments     checked against the tool's input schema (top level: required,
-                types, additionalProperties: false) before anything is sent;
-                path placeholders ({id}) take one URL-encoded segment
+  arguments     checked against the tool's input schema, all the way down
+                (app/pvp/schema_check.py; the proxy checks the same) before
+                anything is sent; path placeholders ({id}) take one
+                URL-encoded segment
+  the body      JSON, or form-encoded (body_encoding "form": string
+                arguments only, so the API reads back exactly the arguments
+                the permit is bound to)
   the call      SSRF-guarded client (core/outbound.py): no redirects, no
                 private addresses unless the operator allows them; the
                 response is read up to max_response_bytes
@@ -40,7 +44,7 @@ import json
 import re
 import time
 from typing import Any, Dict, List, Optional, Tuple
-from urllib.parse import quote
+from urllib.parse import quote, urlencode
 
 import httpx
 from fastapi import status
@@ -57,59 +61,49 @@ from app.pvp import permits
 from app.pvp.guard import structure_findings
 from app.pvp.model import ALLOWED, PENDING_APPROVAL, PVPActionRequest
 from app.pvp.orchestrator import PVPOrchestrator
+from app.pvp.schema_check import value_depth_ok, value_problems
 from app.services.supply_chain import manifest_digest
 
 EXECUTOR = "http_gateway"
 BODY_METHODS = ("POST", "PUT", "PATCH")
 METHODS = ("GET", "DELETE", *BODY_METHODS)
 PLACEHOLDER = re.compile(r"\{([A-Za-z_][A-Za-z0-9_]{0,63})\}")
-_JSON_TYPES = {"string": (str,), "integer": (int,), "number": (int, float), "boolean": (bool,),
-               "object": (dict,), "array": (list,), "null": (type(None),)}
+
+
+FORM = "form"
+FORM_TYPE = "application/x-www-form-urlencoded"
 
 
 def definition(tool: HttpTool) -> Dict[str, Any]:
-    """What is pinned: everything that decides what a call does."""
-    return {"name": tool.name, "method": tool.method, "url": tool.url, "input_schema": tool.input_schema,
-            "description": tool.description}
+    """What is pinned: everything that decides what a call does. The body's
+    encoding only when it is not JSON, so tools saved before it keep their digest."""
+    out = {"name": tool.name, "method": tool.method, "url": tool.url, "input_schema": tool.input_schema,
+           "description": tool.description}
+    if getattr(tool, "body_encoding", None) == FORM:
+        out["body_encoding"] = FORM
+    return out
 
 
 def placeholders(url: str) -> List[str]:
     return PLACEHOLDER.findall(url.split("?", 1)[0])
 
 
-def _type_ok(value: Any, expected: Any) -> bool:
-    names = expected if isinstance(expected, list) else [expected]
-    for name in names:
-        kinds = _JSON_TYPES.get(name)
-        if kinds is None:
-            return True   # a type this check does not know: not refused here
-        if isinstance(value, bool) and name in ("integer", "number"):
-            continue
-        if isinstance(value, kinds):
-            return True
-    return False
-
-
-def argument_problems(schema: Optional[dict], arguments: Dict[str, Any], url: str) -> List[str]:
-    """The top level of the input schema, and the path placeholders."""
+def argument_problems(schema: Optional[dict], arguments: Dict[str, Any], url: str,
+                      body_encoding: Optional[str] = None) -> List[str]:
+    """The input schema, all the way down (schema_check), the path placeholders,
+    and for a form body: string arguments only."""
     problems = []
-    if isinstance(schema, dict):
-        props = schema.get("properties") if isinstance(schema.get("properties"), dict) else {}
-        for name in schema.get("required") or []:
-            if name not in arguments:
-                problems.append(f"missing argument '{name}'")
-        if schema.get("additionalProperties") is False:
-            problems += [f"unexpected argument '{k}'" for k in arguments if k not in props]
-        for name, sub in props.items():
-            if name in arguments and isinstance(sub, dict) and "type" in sub and not _type_ok(arguments[name], sub["type"]):
-                problems.append(f"argument '{name}' is not of type {sub['type']}")
-            if name in arguments and isinstance(sub, dict) and isinstance(sub.get("enum"), list) \
-                    and arguments[name] not in sub["enum"]:
-                problems.append(f"argument '{name}' is not one of the allowed values")
+    if not value_depth_ok(arguments):
+        problems.append("the arguments are nested too deeply")
+    elif isinstance(schema, dict):
+        problems += value_problems(schema, arguments)
     for name in placeholders(url):
         value = arguments.get(name)
         if isinstance(value, bool) or not isinstance(value, (str, int)) or str(value) in ("", ".", ".."):
             problems.append(f"path argument '{name}' must be a non-empty string or an integer")
+    if body_encoding == FORM:
+        problems += [f"argument '{k}' must be a string (the tool sends a form)"
+                     for k in sorted(arguments) if not isinstance(arguments[k], str)]
     return problems
 
 
@@ -121,6 +115,9 @@ def build_request(tool: HttpTool, arguments: Dict[str, Any]) -> Tuple[str, Optio
     url = PLACEHOLDER.sub(lambda m: quote(str(arguments[m.group(1)]), safe="") if m.group(1) in used else m.group(0),
                           tool.url)
     if tool.method in BODY_METHODS:
+        if getattr(tool, "body_encoding", None) == FORM:
+            # every argument, sorted by name (as Go's url.Values.Encode): what the API parses back
+            return url, None, urlencode(sorted(arguments.items())).encode("ascii")
         return url, None, json.dumps(arguments, ensure_ascii=False, allow_nan=False).encode("utf-8")
     query = {}
     for k, v in arguments.items():
@@ -141,7 +138,7 @@ async def _send(tool: HttpTool, url: str, query: Optional[dict], body: Optional[
                 permit: Optional[str]) -> Dict[str, Any]:
     headers = {"Accept": "application/json", "User-Agent": "provenza-http-gateway/1"}
     if body is not None:
-        headers["Content-Type"] = "application/json"
+        headers["Content-Type"] = FORM_TYPE if getattr(tool, "body_encoding", None) == FORM else "application/json"
         if permit and tool.send_permit:
             headers[permits.HEADER] = permit
     limit = tool.max_response_bytes
@@ -244,7 +241,7 @@ class HttpToolGateway:
                        "call it through an egress proxy")
         elif manifest_digest(definition(tool)) != tool.digest:
             refusal = "HTTP tool gateway: the tool's definition differs from the one pinned (ASI04)"
-        problems = argument_problems(tool.input_schema, arguments, tool.url)
+        problems = argument_problems(tool.input_schema, arguments, tool.url, tool.body_encoding)
         if problems and not refusal:
             refusal = "HTTP tool gateway: arguments refused: " + "; ".join(problems[:5])
         built = None

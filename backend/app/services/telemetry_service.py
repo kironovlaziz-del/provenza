@@ -65,6 +65,23 @@ _MAX_SIGHTING_NOTIFICATIONS = 3
 _HOST = re.compile(r"[a-z0-9][a-z0-9.-]{0,99}")
 _ENV_NAME = re.compile(r"[A-Z][A-Z0-9_]{0,63}")
 _SDK = re.compile(r"[a-z0-9][a-z0-9-]{0,39}")
+# What the endpoint agent's model-port probe may report (agent/collectors/modelapi.go):
+# the API that answered, and its model names - kept only in a shape that cannot be markup.
+_MODEL_APIS = ("Ollama", "OpenAI-compatible", "Open WebUI")
+_MODEL_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:/@+-]{0,127}")
+_MAX_MODEL_NAMES = 20
+
+
+def _model_names(value) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    out: list[str] = []
+    for v in value:
+        if isinstance(v, str) and _MODEL_NAME.fullmatch(v) and v not in out:
+            out.append(v)
+        if len(out) == _MAX_MODEL_NAMES:
+            break
+    return out
 
 
 def _str_list(value, pattern: re.Pattern, limit: int) -> List[str]:
@@ -484,13 +501,20 @@ class TelemetryService:
                 "ai_tool": payload.get("ai_tool"),
             }
         if event.event_type == "network_conn":
-            return {
+            meta = {
                 **base,
                 "kind": "network",
                 "port": payload.get("port"),
                 "service": payload.get("service"),
                 "target_host": payload.get("target_host"),
             }
+            # whether a model API answered on the port (agents before it send nothing: unknown)
+            if isinstance(payload.get("confirmed"), bool):
+                meta["confirmed"] = payload["confirmed"]
+                if payload["confirmed"]:
+                    meta["api"] = payload.get("api") if payload.get("api") in _MODEL_APIS else None
+                    meta["models"] = _model_names(payload.get("models"))
+            return meta
         # local_model_found
         return {
             **base,

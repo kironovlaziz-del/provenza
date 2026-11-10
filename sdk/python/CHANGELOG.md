@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- `PermitMiddleware` reads a form body (`application/x-www-form-urlencoded`)
+  into its fields as the input - what an HTTP tool set to send a form was
+  called with; `provenza.permit.form_input(body)` for other frameworks. A
+  field given twice is refused (`permit.body_not_form`).
+
 ## 0.2.1 (2026-10-26)
 
 - `provenza-mcp` without `PROVENZA_URL` still speaks MCP (initialize, ping,

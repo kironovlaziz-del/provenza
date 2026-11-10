@@ -215,3 +215,61 @@ async def test_admin_rules(client, admin_token, approver_token, db_session, api)
     row = await db_session.get(HttpTool, tool["id"])
     await db_session.refresh(row)
     assert row.enabled is False
+
+
+@pytest.mark.asyncio
+async def test_a_form_tool_sends_its_string_arguments_as_a_form(client, admin_token, db_session, api):
+    from urllib.parse import parse_qsl
+
+    from app.core.agent_signing import content_hash
+
+    tool = await _tool(client, admin_token, api, name="crm.form", method="POST", url=api.base + "/forms/{id}",
+                       body_encoding="form")
+    assert tool["body_encoding"] == "form"
+    agent = await _agent(client, admin_token, tools=("crm.form",))
+    args = {"id": "c 42", "tier": "gold"}
+    r = await _call(client, agent, tool="crm.form", args=args)
+    out = r.json()
+    assert out["decision"] == "allowed", out
+    sent = api.calls[-1]
+    assert sent["headers"]["Content-Type"] == "application/x-www-form-urlencoded"
+    assert sent["body"] == b"id=c+42&tier=gold"
+    # the API reads back exactly the arguments the permit is bound to
+    claims = json.loads(permits._unb64url(sent["headers"][permits.HEADER].split(".")[1]))
+    assert claims["ish"] == content_hash(dict(parse_qsl(sent["body"].decode())))
+
+    # anything but strings: refused, nothing sent
+    n = len(api.calls)
+    schema_any = {"type": "object", "properties": {"id": {"type": "string"}, "n": {"type": "integer"}}}
+    await client.patch(f"{T}/{tool['id']}", json={"input_schema": schema_any}, headers=auth_headers(admin_token))
+    out = (await _call(client, agent, tool="crm.form", args={"id": "c", "n": 1})).json()
+    assert out["decision"] == "denied" and "must be a string" in out["reason"] and len(api.calls) == n
+
+
+@pytest.mark.asyncio
+async def test_a_schema_the_check_cannot_follow_is_refused(client, admin_token, api):
+    for schema in ({"type": "object", "properties": {"id": {"anyOf": [{"type": "string"}]}}},
+                   {"type": "object", "properties": {"id": {"$ref": "#/x"}}},
+                   {"type": "object", "properties": {"id": {"type": "string", "pattern": "(a)\\1"}}}):
+        r = await client.post(T, json={"name": "crm.bad", "method": "POST", "url": api.base + "/x",
+                                       "input_schema": schema}, headers=auth_headers(admin_token))
+        assert r.status_code == 422 and r.json()["detail"]["code"] == "http_tool.schema_unsupported", r.text
+    r = await client.post(T, json={"name": "crm.get_form", "method": "GET", "url": api.base + "/x",
+                                   "body_encoding": "form"}, headers=auth_headers(admin_token))
+    assert r.status_code == 422 and r.json()["detail"] == "http_tool.form_needs_body", r.text
+
+
+@pytest.mark.asyncio
+async def test_nested_arguments_are_checked_all_the_way_down(client, admin_token, api):
+    schema = {"type": "object", "required": ["customer"], "additionalProperties": False, "properties": {
+        "customer": {"type": "object", "required": ["id"], "additionalProperties": False,
+                     "properties": {"id": {"type": "string", "pattern": "^c-[0-9]+$"}}}}}
+    await _tool(client, admin_token, api, name="crm.nested", method="POST", url=api.base + "/n", input_schema=schema)
+    agent = await _agent(client, admin_token, tools=("crm.nested",))
+    n = len(api.calls)
+    for bad in ({"customer": {"id": "x"}}, {"customer": {"id": "c-1", "admin": True}}, {"customer": {}}):
+        out = (await _call(client, agent, tool="crm.nested", args=bad)).json()
+        assert out["decision"] == "denied" and "arguments refused" in out["reason"], (bad, out)
+    assert len(api.calls) == n
+    out = (await _call(client, agent, tool="crm.nested", args={"customer": {"id": "c-7"}})).json()
+    assert out["decision"] == "allowed", out

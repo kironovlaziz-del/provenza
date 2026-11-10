@@ -32,6 +32,8 @@ class HttpTool(Base):
     timeout_seconds = Column(Integer, nullable=False, default=30)
     max_response_bytes = Column(Integer, nullable=False, default=1024 * 1024)
     send_permit = Column(Boolean, nullable=False, default=True)   # forward the signed permit (body methods)
+    # the body of POST / PUT / PATCH: "json", or "form" (application/x-www-form-urlencoded, string arguments)
+    body_encoding = Column(String(8), nullable=False, default="json", server_default="json")
     enabled = Column(Boolean, nullable=False, default=True)
     digest = Column(String(64), nullable=False)               # of the definition; pinned in the Tool Registry
     registry_entry_id = Column(Integer, ForeignKey("tool_registry_entries.id", ondelete="SET NULL"))

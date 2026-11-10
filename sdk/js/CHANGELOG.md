@@ -10,6 +10,8 @@ SDK 0.1.
 - `agent.invoke` / `agent.httpTools()`: HTTP tools called through Provenza.
 - Permits for tools: `PermitVerifier`, `permitMiddleware` (Express),
   `withPermit` (fetch-style handlers); the agent sends `permitHeaders(check)`.
+  A form body (`application/x-www-form-urlencoded`) is read into its fields
+  as the input (`formInput`), for HTTP tools set to send a form.
 - Every `check` is signed by the agent: a nonce, the time and a signature
   over the request, which the server requires.
 - `Agent.create`: enrollment with keys generated on the agent's side. The

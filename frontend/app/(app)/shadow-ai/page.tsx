@@ -16,10 +16,35 @@ import {
   getShadowAISummary,
 } from "@/lib/api";
 import type { ShadowSighting, SightingPeople } from "@/lib/types";
+import { portSignal } from "@/lib/discovery_signals";
 
 // Renders the human-readable specifics the backend put in display_meta
 // (port/service, file name+size, process name+pid, device) so the raw
 // dedup key in `domain` never has to be shown to a person.
+// Whether a model API answered on a local model port, which one, and its models.
+function PortSignalLine({ s }: { s: ShadowSighting }) {
+  const { t } = useTranslation();
+  const sig = portSignal(s.display_meta as Record<string, unknown> | null);
+  if (!sig) return null;
+  return (
+    <div style={{ fontSize: 11, marginTop: 4 }}>
+      <span
+        className={`pill ${sig.confirmed ? "pill-medium" : "pill-neutral"}`}
+        style={{ marginRight: 6 }}
+        title={t(sig.confirmed ? "shadow_ai.port_why_confirmed" : "shadow_ai.port_why_unconfirmed")}
+      >
+        {sig.confirmed ? t("shadow_ai.port_confirmed", { api: sig.api ?? "API" }) : t("shadow_ai.port_unconfirmed")}
+      </span>
+      {sig.models.length > 0 && (
+        <span className="hint-text">
+          {t("shadow_ai.port_models", { list: sig.models.join(", ") })}
+          {sig.more > 0 && ` ${t("shadow_ai.port_more", { n: sig.more })}`}
+        </span>
+      )}
+    </div>
+  );
+}
+
 function renderDisplayMeta(s: ShadowSighting): string | null {
   const m = (s.display_meta || {}) as Record<string, unknown>;
   const kind = m.kind as string | undefined;
@@ -483,9 +508,12 @@ export default function ShadowAIPage() {
                         const meta = renderDisplayMeta(s);
                         if (meta) {
                           return (
-                            <div className="text-muted" style={{ fontSize: "11px", marginTop: 2 }}>
-                              {meta}
-                            </div>
+                            <>
+                              <div className="text-muted" style={{ fontSize: "11px", marginTop: 2 }}>
+                                {meta}
+                              </div>
+                              <PortSignalLine s={s} />
+                            </>
                           );
                         }
                         // Fall back to showing the domain only when it is a

@@ -17,7 +17,7 @@ from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
 
 from provenza.agent import Check
 from provenza.crypto import canonical, content_hash
-from provenza.permit import HEADER, PermitError, PermitMiddleware, PermitVerifier, require_permit
+from provenza.permit import HEADER, PermitError, PermitMiddleware, PermitVerifier, form_input, require_permit
 
 SERVER = "https://provenza.test"
 INPUT = {"customer": 42, "fields": {"tier": "gold"}}
@@ -199,6 +199,40 @@ def test_asgi_middleware(fake):
     fake.down = True
     sent, _ = _asgi_call(app, body, [(HEADER.lower().encode(), fake.permit().encode())])
     assert sent[0]["status"] == 503
+
+
+def test_asgi_middleware_reads_a_form_body(fake):
+    """An HTTP tool set to send a form: the fields are the arguments the permit is bound to."""
+    from urllib.parse import urlencode
+
+    seen = {}
+
+    async def tool_app(scope, receive, send):
+        seen["body"] = (await receive())["body"]
+        await send({"type": "http.response.start", "status": 200, "headers": []})
+        await send({"type": "http.response.body", "body": b"ok"})
+
+    form = {"customer": "c 42", "tier": "gold & more", "note": "caf\u00e9"}
+    app = PermitMiddleware(tool_app, verifier(fake), tool="crm.update")
+    body = urlencode(sorted(form.items())).encode("ascii")
+    ctype = (b"content-type", b"application/x-www-form-urlencoded; charset=utf-8")
+    sent, _ = _asgi_call(app, body, [ctype, (HEADER.lower().encode(), fake.permit(input=form).encode())])
+    assert sent[0]["status"] == 200 and seen["body"] == body
+    # the same fields, one changed: another input
+    sent, _ = _asgi_call(app, body.replace(b"gold", b"bronze"), [ctype, (HEADER.lower().encode(),
+                                                                        fake.permit(input=form).encode())])
+    assert json.loads(sent[1]["body"]) == {"error": "permit.mismatch"}
+    # a field twice: refused, the input would be ambiguous
+    sent, _ = _asgi_call(app, body + b"&tier=x", [ctype, (HEADER.lower().encode(), fake.permit(input=form).encode())])
+    assert sent[0]["status"] == 400 and json.loads(sent[1]["body"]) == {"error": "permit.body_not_form"}
+
+
+def test_form_input():
+    assert form_input(b"a=1&b=x+y&c=caf%C3%A9&d=") == {"a": "1", "b": "x y", "c": "caf\u00e9", "d": ""}
+    assert form_input(b"") == {}
+    for bad in (b"a=1&a=2", b"a", "\u00e9=1".encode("utf-8"), b"a=%ZZ&b"):
+        with pytest.raises(PermitError):
+            form_input(bad)
 
 
 def test_the_agent_sends_the_permit_with_the_call():

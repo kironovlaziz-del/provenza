@@ -43,7 +43,8 @@ function Signals({ ev }: { ev: NonNullable<FoundAgentT["evidence"]> }) {
   return (
     <div style={{ fontSize: 11, marginTop: 4 }}>
       {ev.confidence && (
-        <span className={`pill ${ev.confidence === "high" ? "pill-medium" : "pill-neutral"}`} style={{ marginRight: 6 }}>
+        <span className={`pill ${ev.confidence === "high" ? "pill-medium" : "pill-neutral"}`} style={{ marginRight: 6 }}
+          title={t(`found.confidence_why_${ev.confidence}`)}>
           {t(`found.confidence_${ev.confidence}`)}
         </span>
       )}

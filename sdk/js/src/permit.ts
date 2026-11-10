@@ -22,7 +22,8 @@
  * Checked: the signature against the organization's JWKS (refetched when an
  * unknown key id appears, after a rotation), the issuer, the tool (aud), the
  * SHA-256 of the canonical input (the JSON body must be the input the agent
- * checked), the expiry. Then the permit is redeemed with Provenza: used once
+ * checked; a form body - an HTTP tool set to send a form - is read back into
+ * its string arguments, formInput()), the expiry. Then the permit is redeemed with Provenza: used once
  * across every replica of the tool. With redeem: false only this process
  * remembers what it has seen. What cannot be verified is refused.
  */
@@ -195,6 +196,42 @@ export class PermitVerifier {
 }
 
 const statusOf = (err: PermitError) => (err.code === "permit.unverifiable" ? 503 : 403);
+const BAD_BODY = new Set(["permit.body_not_json", "permit.body_not_form"]);
+const bodyStatus = (err: PermitError) =>
+  err.code === "permit.body_too_large" ? 413 : BAD_BODY.has(err.code) ? 400 : statusOf(err);
+
+export const FORM_TYPE = "application/x-www-form-urlencoded";
+
+const isForm = (contentType: unknown) =>
+  typeof contentType === "string" && (contentType.split(";")[0] ?? "").trim().toLowerCase() === FORM_TYPE;
+
+/**
+ * The input of a form body: each field once, as a string - what an HTTP tool
+ * that sends a form was called with (its arguments are strings). A field
+ * given twice, or a body that is not a form, is refused: the input would be
+ * ambiguous.
+ */
+export function formInput(text: string): Record<string, string> {
+  if (text === "") return {};
+  const out: Record<string, string> = Object.create(null);
+  if (!/^[\x20-\x7e]*$/.test(text)) throw new PermitError("permit.body_not_form", "the body is not a form");
+  for (const part of text.split("&")) {
+    const eq = part.indexOf("=");
+    if (eq < 0) throw new PermitError("permit.body_not_form", "the body is not a form");
+    let key: string, value: string;
+    try {
+      key = decodeURIComponent(part.slice(0, eq).replace(/\+/g, " "));
+      value = decodeURIComponent(part.slice(eq + 1).replace(/\+/g, " "));
+    } catch {
+      throw new PermitError("permit.body_not_form", "the body is not a form");
+    }
+    if (Object.prototype.hasOwnProperty.call(out, key)) {
+      throw new PermitError("permit.body_not_form", `the field ${JSON.stringify(key)} is given twice`);
+    }
+    out[key] = value;
+  }
+  return { ...out };
+}
 
 async function readJson(req: any): Promise<unknown> {
   if (req.body !== undefined && !(req.body instanceof Uint8Array) && typeof req.body !== "string") return req.body;
@@ -212,6 +249,11 @@ async function readJson(req: any): Promise<unknown> {
     raw = Buffer.concat(chunks);
   }
   const text = raw.toString("utf8");
+  if (isForm(req.headers?.["content-type"])) {
+    const data = formInput(text);
+    req.body = data;
+    return data;
+  }
   try {
     const data = text.trim() ? JSON.parse(text) : {};
     req.body = data;
@@ -224,7 +266,7 @@ async function readJson(req: any): Promise<unknown> {
 /**
  * Express / Connect middleware: the request runs only with a valid permit for
  * `tool` and its JSON body as the input (after express.json(), or it reads the
- * body itself and sets req.body). `tool` may be a function of the request
+ * body itself and sets req.body; a form body: its fields, formInput()). `tool` may be a function of the request
  * (undefined = not governed, passed through). The Permit is in req.permit.
  */
 export function permitMiddleware(verifier: PermitVerifier, opts: { tool: string | ((req: any) => string | undefined) }) {
@@ -238,7 +280,7 @@ export function permitMiddleware(verifier: PermitVerifier, opts: { tool: string 
       req.permit = await verifier.verify(Array.isArray(token) ? token[0] : token, { tool, input });
     } catch (err) {
       if (!(err instanceof PermitError)) return next(err);
-      res.statusCode = err.code === "permit.body_too_large" ? 413 : err.code === "permit.body_not_json" ? 400 : statusOf(err);
+      res.statusCode = bodyStatus(err);
       res.setHeader("content-type", "application/json");
       res.end(JSON.stringify({ error: err.code }));
       return;
@@ -255,17 +297,20 @@ export function withPermit(verifier: PermitVerifier, tool: string,
     try {
       const text = await request.text();
       if (text.length > MAX_BODY) throw new PermitError("permit.body_too_large");
-      try {
-        input = text.trim() ? JSON.parse(text) : {};
-      } catch {
-        throw new PermitError("permit.body_not_json");
+      if (isForm(request.headers.get("content-type"))) {
+        input = formInput(text);
+      } else {
+        try {
+          input = text.trim() ? JSON.parse(text) : {};
+        } catch {
+          throw new PermitError("permit.body_not_json");
+        }
       }
       const permit = await verifier.verify(request.headers.get(PERMIT_HEADER), { tool, input });
       return await handler(request, permit, input);
     } catch (err) {
       if (!(err instanceof PermitError)) throw err;
-      const status = err.code === "permit.body_too_large" ? 413 : err.code === "permit.body_not_json" ? 400 : statusOf(err);
-      return Response.json({ error: err.code }, { status });
+      return Response.json({ error: err.code }, { status: bodyStatus(err) });
     }
   };
 }

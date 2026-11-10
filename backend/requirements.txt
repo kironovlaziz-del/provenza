@@ -29,6 +29,9 @@ psycopg2-binary==2.9.13
 
 # Crypto
 cryptography==50.0.2
+# RE2 for the `pattern` of HTTP tool input schemas (app/pvp/schema_check.py):
+# linear time, and the same regular expressions as Go's regexp in the egress proxy
+google-re2==1.1.20251105
 
 # Agent Manifest (AgenTrust v0.2): signed manifests of agents, app/services/agent_manifest.py
 agent-manifest==0.15.0

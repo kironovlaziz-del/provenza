@@ -17,6 +17,7 @@ export function EnrollPanel({ token, hybrid, rekey = false, enrollmentId }:
   const [done, setDone] = useState<AgentKeysFile | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [connected, setConnected] = useState(false);   // the token was spent by Connect
   const cmd = enrollCommand(token, hybrid, rekey);
   const supported = browserCanEnroll();
 
@@ -41,10 +42,11 @@ export function EnrollPanel({ token, hybrid, rekey = false, enrollmentId }:
     <div style={{ display: "grid", gap: 14 }}>
       {enrollmentId !== undefined && !done && (
         <>
-          <ConnectPanel token={token} enrollmentId={enrollmentId} />
-          <p className="hint-text" style={{ margin: 0 }}>{t("connect.other")}</p>
+          <ConnectPanel token={token} enrollmentId={enrollmentId} onConnected={() => setConnected(true)} />
+          {!connected && <p className="hint-text" style={{ margin: 0 }}>{t("connect.other")}</p>}
         </>
       )}
+      {!connected && (<>
       <div className="field" style={{ margin: 0 }}>
         <label>{t("enroll.browser_title")}</label>
         {done ? (
@@ -84,6 +86,7 @@ export function EnrollPanel({ token, hybrid, rekey = false, enrollmentId }:
           <p className="hint-text">{t("enroll.command_hint")}</p>
         </div>
       )}
+      </>)}
     </div>
   );
 }

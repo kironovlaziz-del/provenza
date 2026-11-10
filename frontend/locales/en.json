@@ -301,6 +301,12 @@
     "load_failed": "Could not load incidents."
   },
   "shadow_ai": {
+    "port_confirmed": "{{api}} answered",
+    "port_unconfirmed": "no model API answered",
+    "port_models": "models: {{list}}",
+    "port_more": "+{{n}} more",
+    "port_why_confirmed": "The endpoint agent asked the model API that belongs on this port (on this machine only) and it answered in that API's own format.",
+    "port_why_unconfirmed": "The port is open, but no model API answered there: most likely another web server (a developer's own app). Low risk.",
     "title": "Shadow AI Sightings",
     "report": "Report a sighting",
     "cancel": "Cancel",
@@ -1073,6 +1079,8 @@
     "provider.self_hosted_only": "This organization allows only self-hosted AI providers, and this connection is not on your own network. Nothing was sent.",
     "http_tool.not_found": "No such HTTP tool, or it is disabled.",
     "http_tool.name_taken": "A tool named \"{{name}}\" already exists.",
+    "http_tool.schema_unsupported": "The input schema cannot be checked: {{problems}}.",
+    "http_tool.form_needs_body": "A form body needs POST, PUT or PATCH.",
     "http_tool.placeholder_undeclared": "The URL uses placeholders the input schema does not declare: {{names}}.",
     "http_tool.agent_key_required": "An agent key is required.",
     "permit.invalid": "The permit is not valid.",
@@ -2382,6 +2390,8 @@
     "dismiss": "Dismiss"
   },
   "found": {
+    "confidence_why_high": "Two independent signals agree, or an LLM SDK library is loaded in the process (a direct fact).",
+    "confidence_why_medium": "One signal only: a connection to an LLM API. Its address can also serve other sites behind a shared CDN.",
     "title": "Agents Found",
     "hint": "AI agents found running on your devices: known products (coding agents, agent frameworks, agent platforms) and unrecognized programs that talk to an LLM API or load an LLM SDK. Nobody had to register them: review each one, then register it to put it under policies, or ignore it.",
     "stat_new": "To review",
@@ -2911,7 +2921,10 @@
       "url_hint": "Path placeholders such as {id} take one argument each. GET and DELETE send the other arguments as the query string, other methods as a JSON body.",
       "description": "Description (shown to the agent's model)",
       "schema": "Input schema (JSON Schema, optional)",
-      "schema_hint": "Checked before anything is sent: required arguments, types, allowed values, and no extra arguments when additionalProperties is false.",
+      "schema_hint": "Checked all the way down before anything is sent: required arguments, types, allowed values, lengths, ranges and patterns (RE2), no extra arguments when additionalProperties is false. Keywords it does not check ($ref, anyOf, ...) are refused.",
+      "body": "Body",
+      "body_form": "Form",
+      "body_hint": "JSON, or a form (application/x-www-form-urlencoded): a form tool takes string arguments only, so the API reads back exactly the arguments the permit is bound to.",
       "schema_invalid": "The input schema is not valid JSON.",
       "send_permit": "Send the signed permit with the call (POST, PUT, PATCH), so an API using the Provenza permit middleware accepts only calls made through Provenza",
       "endpoint": "Endpoint",

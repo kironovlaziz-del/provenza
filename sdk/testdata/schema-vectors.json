@@ -1,0 +1,1002 @@
+{
+ "about": "JSON Schema checks of HTTP tool arguments: the server (backend/app/pvp/schema_check.py) and the egress proxy (proxy/internal/egress/schema.go) give the same answers. A value \"DEEPn\" stands for {\"x\": ... n levels ... \"leaf\"}.",
+ "groups": [
+  {
+   "name": "nested object, required, no extras",
+   "schema": {
+    "type": "object",
+    "properties": {
+     "customer": {
+      "type": "object",
+      "properties": {
+       "id": {
+        "type": "integer",
+        "minimum": 1
+       },
+       "email": {
+        "type": "string",
+        "pattern": "^[^@\\s]+@[^@\\s]+$",
+        "maxLength": 254
+       }
+      },
+      "required": [
+       "id"
+      ],
+      "additionalProperties": false
+     }
+    },
+    "required": [
+     "customer"
+    ],
+    "additionalProperties": false
+   },
+   "cases": [
+    {
+     "value": {
+      "customer": {
+       "id": 7,
+       "email": "a@b.c"
+      }
+     },
+     "valid": true
+    },
+    {
+     "value": {
+      "customer": {
+       "id": 7
+      }
+     },
+     "valid": true
+    },
+    {
+     "value": {
+      "customer": {
+       "email": "a@b.c"
+      }
+     },
+     "valid": false
+    },
+    {
+     "value": {
+      "customer": {
+       "id": 0
+      }
+     },
+     "valid": false
+    },
+    {
+     "value": {
+      "customer": {
+       "id": 7,
+       "extra": 1
+      }
+     },
+     "valid": false
+    },
+    {
+     "value": {
+      "customer": {
+       "id": 7
+      },
+      "extra": 1
+     },
+     "valid": false
+    },
+    {
+     "value": {
+      "customer": {
+       "id": "7"
+      }
+     },
+     "valid": false
+    },
+    {
+     "value": {
+      "customer": {
+       "id": 7.0
+      }
+     },
+     "valid": false
+    },
+    {
+     "value": {
+      "customer": {
+       "id": true
+      }
+     },
+     "valid": false
+    },
+    {
+     "value": {
+      "customer": {
+       "id": 7,
+       "email": "no-at-sign"
+      }
+     },
+     "valid": false
+    },
+    {
+     "value": {
+      "customer": {
+       "id": 7,
+       "email": "a@b.c\n"
+      }
+     },
+     "valid": false
+    },
+    {
+     "value": {},
+     "valid": false
+    }
+   ]
+  },
+  {
+   "name": "arrays",
+   "schema": {
+    "type": "object",
+    "properties": {
+     "tags": {
+      "type": "array",
+      "items": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 3
+      },
+      "minItems": 1,
+      "maxItems": 3
+     }
+    }
+   },
+   "cases": [
+    {
+     "value": {
+      "tags": [
+       "a",
+       "bc"
+      ]
+     },
+     "valid": true
+    },
+    {
+     "value": {
+      "tags": []
+     },
+     "valid": false
+    },
+    {
+     "value": {
+      "tags": [
+       "a",
+       "b",
+       "c",
+       "d"
+      ]
+     },
+     "valid": false
+    },
+    {
+     "value": {
+      "tags": [
+       "abcd"
+      ]
+     },
+     "valid": false
+    },
+    {
+     "value": {
+      "tags": [
+       ""
+      ]
+     },
+     "valid": false
+    },
+    {
+     "value": {
+      "tags": [
+       "a",
+       1
+      ]
+     },
+     "valid": false
+    },
+    {
+     "value": {
+      "tags": "a"
+     },
+     "valid": false
+    },
+    {
+     "value": {
+      "tags": [
+       "ééé"
+      ]
+     },
+     "valid": true
+    },
+    {
+     "value": {
+      "tags": [
+       "😀😀😀"
+      ]
+     },
+     "valid": true
+    },
+    {
+     "value": {
+      "tags": [
+       "😀😀😀😀"
+      ]
+     },
+     "valid": false
+    }
+   ]
+  },
+  {
+   "name": "numbers",
+   "schema": {
+    "type": "object",
+    "properties": {
+     "n": {
+      "type": "number",
+      "minimum": 0.5,
+      "exclusiveMaximum": 10
+     },
+     "i": {
+      "type": "integer",
+      "maximum": 12345678901234567890
+     },
+     "x": {
+      "type": "integer",
+      "exclusiveMinimum": -1
+     }
+    }
+   },
+   "cases": [
+    {
+     "value": {
+      "n": 0.5
+     },
+     "valid": true
+    },
+    {
+     "value": {
+      "n": 0.4999
+     },
+     "valid": false
+    },
+    {
+     "value": {
+      "n": 9.999
+     },
+     "valid": true
+    },
+    {
+     "value": {
+      "n": 10
+     },
+     "valid": false
+    },
+    {
+     "value": {
+      "n": 10.0
+     },
+     "valid": false
+    },
+    {
+     "value": {
+      "n": 1
+     },
+     "valid": true
+    },
+    {
+     "value": {
+      "n": true
+     },
+     "valid": false
+    },
+    {
+     "value": {
+      "n": "1"
+     },
+     "valid": false
+    },
+    {
+     "value": {
+      "i": 12345678901234567890
+     },
+     "valid": true
+    },
+    {
+     "value": {
+      "i": 12345678901234567891
+     },
+     "valid": false
+    },
+    {
+     "value": {
+      "i": 100.0
+     },
+     "valid": false
+    },
+    {
+     "value": {
+      "x": 0
+     },
+     "valid": true
+    },
+    {
+     "value": {
+      "x": -1
+     },
+     "valid": false
+    }
+   ]
+  },
+  {
+   "name": "enum and const",
+   "schema": {
+    "type": "object",
+    "properties": {
+     "tier": {
+      "enum": [
+       "gold",
+       "silver",
+       1,
+       null
+      ]
+     },
+     "v": {
+      "const": {
+       "a": [
+        1,
+        2
+       ]
+      }
+     },
+     "on": {
+      "const": true
+     }
+    }
+   },
+   "cases": [
+    {
+     "value": {
+      "tier": "gold"
+     },
+     "valid": true
+    },
+    {
+     "value": {
+      "tier": 1
+     },
+     "valid": true
+    },
+    {
+     "value": {
+      "tier": 1.0
+     },
+     "valid": true
+    },
+    {
+     "value": {
+      "tier": null
+     },
+     "valid": true
+    },
+    {
+     "value": {
+      "tier": true
+     },
+     "valid": false
+    },
+    {
+     "value": {
+      "tier": "bronze"
+     },
+     "valid": false
+    },
+    {
+     "value": {
+      "v": {
+       "a": [
+        1,
+        2
+       ]
+      }
+     },
+     "valid": true
+    },
+    {
+     "value": {
+      "v": {
+       "a": [
+        2,
+        1
+       ]
+      }
+     },
+     "valid": false
+    },
+    {
+     "value": {
+      "v": {
+       "a": [
+        1,
+        2
+       ],
+       "b": 1
+      }
+     },
+     "valid": false
+    },
+    {
+     "value": {
+      "on": true
+     },
+     "valid": true
+    },
+    {
+     "value": {
+      "on": 1
+     },
+     "valid": false
+    }
+   ]
+  },
+  {
+   "name": "type lists and null",
+   "schema": {
+    "type": "object",
+    "properties": {
+     "id": {
+      "type": [
+       "string",
+       "integer"
+      ]
+     },
+     "note": {
+      "type": [
+       "string",
+       "null"
+      ]
+     }
+    }
+   },
+   "cases": [
+    {
+     "value": {
+      "id": "a"
+     },
+     "valid": true
+    },
+    {
+     "value": {
+      "id": 3
+     },
+     "valid": true
+    },
+    {
+     "value": {
+      "id": 3.5
+     },
+     "valid": false
+    },
+    {
+     "value": {
+      "note": null
+     },
+     "valid": true
+    },
+    {
+     "value": {
+      "note": 1
+     },
+     "valid": false
+    }
+   ]
+  },
+  {
+   "name": "additionalProperties as a schema",
+   "schema": {
+    "type": "object",
+    "properties": {
+     "a": {
+      "type": "string"
+     }
+    },
+    "additionalProperties": {
+     "type": "integer"
+    }
+   },
+   "cases": [
+    {
+     "value": {
+      "a": "x",
+      "b": 1,
+      "c": 2
+     },
+     "valid": true
+    },
+    {
+     "value": {
+      "a": "x",
+      "b": "1"
+     },
+     "valid": false
+    }
+   ]
+  },
+  {
+   "name": "patterns: RE2 meaning",
+   "schema": {
+    "type": "object",
+    "properties": {
+     "d": {
+      "type": "string",
+      "pattern": "^\\d+$"
+     },
+     "w": {
+      "type": "string",
+      "pattern": "^\\w+$"
+     },
+     "s": {
+      "type": "string",
+      "pattern": "ab"
+     }
+    }
+   },
+   "cases": [
+    {
+     "value": {
+      "d": "123"
+     },
+     "valid": true
+    },
+    {
+     "value": {
+      "d": "٣"
+     },
+     "valid": false
+    },
+    {
+     "value": {
+      "d": "12\n"
+     },
+     "valid": false
+    },
+    {
+     "value": {
+      "w": "abc_1"
+     },
+     "valid": true
+    },
+    {
+     "value": {
+      "w": "é"
+     },
+     "valid": false
+    },
+    {
+     "value": {
+      "s": "xxabyy"
+     },
+     "valid": true
+    },
+    {
+     "value": {
+      "s": "a b"
+     },
+     "valid": false
+    }
+   ]
+  },
+  {
+   "name": "annotations are read by nobody",
+   "schema": {
+    "type": "object",
+    "title": "t",
+    "description": "d",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "properties": {
+     "a": {
+      "type": "string",
+      "format": "email",
+      "default": "x",
+      "examples": [
+       "y"
+      ],
+      "deprecated": false,
+      "readOnly": false,
+      "writeOnly": false,
+      "$comment": "c"
+     }
+    }
+   },
+   "cases": [
+    {
+     "value": {
+      "a": "not an email"
+     },
+     "valid": true
+    },
+    {
+     "value": {
+      "a": 1
+     },
+     "valid": false
+    }
+   ]
+  },
+  {
+   "name": "a keyword this check does not know: every call refused",
+   "schema": {
+    "type": "object",
+    "properties": {
+     "a": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "integer"
+       }
+      ]
+     }
+    }
+   },
+   "cases": [
+    {
+     "value": {
+      "a": "x"
+     },
+     "valid": false
+    },
+    {
+     "value": {},
+     "valid": true
+    }
+   ]
+  },
+  {
+   "name": "nesting limit of the arguments",
+   "schema": {
+    "type": "object"
+   },
+   "cases": [
+    {
+     "value": "DEEP31",
+     "valid": true
+    },
+    {
+     "value": "DEEP40",
+     "valid": false
+    }
+   ]
+  }
+ ],
+ "schemas_refused": [
+  {
+   "type": "object",
+   "properties": {
+    "a": {
+     "$ref": "#/defs/x"
+    }
+   }
+  },
+  {
+   "type": "object",
+   "oneOf": []
+  },
+  {
+   "type": "object",
+   "patternProperties": {
+    "^x": {}
+   }
+  },
+  {
+   "type": "object",
+   "properties": {
+    "a": {
+     "type": "strin"
+    }
+   }
+  },
+  {
+   "type": "object",
+   "properties": {
+    "a": {
+     "type": []
+    }
+   }
+  },
+  {
+   "type": "object",
+   "properties": {
+    "a": {
+     "pattern": "(a)\\1"
+    }
+   }
+  },
+  {
+   "type": "object",
+   "properties": {
+    "a": {
+     "pattern": "(?=x)"
+    }
+   }
+  },
+  {
+   "type": "object",
+   "properties": {
+    "a": {
+     "pattern": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    }
+   }
+  },
+  {
+   "type": "object",
+   "properties": {
+    "a": {
+     "minLength": -1
+    }
+   }
+  },
+  {
+   "type": "object",
+   "properties": {
+    "a": {
+     "maxItems": 1.5
+    }
+   }
+  },
+  {
+   "type": "object",
+   "properties": {
+    "a": {
+     "minimum": "1"
+    }
+   }
+  },
+  {
+   "type": "object",
+   "properties": {
+    "a": {
+     "enum": []
+    }
+   }
+  },
+  {
+   "type": "object",
+   "required": [
+    "a",
+    "a"
+   ]
+  },
+  {
+   "type": "object",
+   "properties": {
+    "a": {
+     "items": [
+      {
+       "type": "string"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "type": "object",
+   "properties": {
+    "a": true
+   }
+  },
+  {
+   "type": "object",
+   "properties": {
+    "a": {
+     "nullable": true
+    }
+   }
+  }
+ ],
+ "schemas_accepted": [
+  {
+   "type": "object",
+   "properties": {
+    "customer": {
+     "type": "object",
+     "properties": {
+      "id": {
+       "type": "integer",
+       "minimum": 1
+      },
+      "email": {
+       "type": "string",
+       "pattern": "^[^@\\s]+@[^@\\s]+$",
+       "maxLength": 254
+      }
+     },
+     "required": [
+      "id"
+     ],
+     "additionalProperties": false
+    }
+   },
+   "required": [
+    "customer"
+   ],
+   "additionalProperties": false
+  },
+  {
+   "type": "object",
+   "properties": {
+    "tags": {
+     "type": "array",
+     "items": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 3
+     },
+     "minItems": 1,
+     "maxItems": 3
+    }
+   }
+  },
+  {
+   "type": "object",
+   "properties": {
+    "n": {
+     "type": "number",
+     "minimum": 0.5,
+     "exclusiveMaximum": 10
+    },
+    "i": {
+     "type": "integer",
+     "maximum": 12345678901234567890
+    },
+    "x": {
+     "type": "integer",
+     "exclusiveMinimum": -1
+    }
+   }
+  },
+  {
+   "type": "object",
+   "properties": {
+    "tier": {
+     "enum": [
+      "gold",
+      "silver",
+      1,
+      null
+     ]
+    },
+    "v": {
+     "const": {
+      "a": [
+       1,
+       2
+      ]
+     }
+    },
+    "on": {
+     "const": true
+    }
+   }
+  },
+  {
+   "type": "object",
+   "properties": {
+    "id": {
+     "type": [
+      "string",
+      "integer"
+     ]
+    },
+    "note": {
+     "type": [
+      "string",
+      "null"
+     ]
+    }
+   }
+  },
+  {
+   "type": "object",
+   "properties": {
+    "a": {
+     "type": "string"
+    }
+   },
+   "additionalProperties": {
+    "type": "integer"
+   }
+  },
+  {
+   "type": "object",
+   "properties": {
+    "d": {
+     "type": "string",
+     "pattern": "^\\d+$"
+    },
+    "w": {
+     "type": "string",
+     "pattern": "^\\w+$"
+    },
+    "s": {
+     "type": "string",
+     "pattern": "ab"
+    }
+   }
+  },
+  {
+   "type": "object",
+   "title": "t",
+   "description": "d",
+   "$schema": "https://json-schema.org/draft/2020-12/schema",
+   "properties": {
+    "a": {
+     "type": "string",
+     "format": "email",
+     "default": "x",
+     "examples": [
+      "y"
+     ],
+     "deprecated": false,
+     "readOnly": false,
+     "writeOnly": false,
+     "$comment": "c"
+    }
+   }
+  },
+  {
+   "type": "object"
+  },
+  {
+   "type": "object",
+   "properties": {
+    "a": {
+     "pattern": "(a+)+$"
+    }
+   }
+  }
+ ],
+ "form": [
+  {
+   "arguments": {
+    "b": "2 3",
+    "a": "x&y=z",
+    "c": "café",
+    "d": "",
+    "e": "~-._*'()!"
+   },
+   "body": "a=x%26y%3Dz&b=2+3&c=caf%C3%A9&d=&e=~-._%2A%27%28%29%21",
+   "refused": false
+  },
+  {
+   "arguments": {
+    "n": 1
+   },
+   "refused": true
+  },
+  {
+   "arguments": {
+    "t": true
+   },
+   "refused": true
+  },
+  {
+   "arguments": {
+    "l": [
+     "a"
+    ]
+   },
+   "refused": true
+  },
+  {
+   "arguments": {},
+   "body": "",
+   "refused": false
+  }
+ ]
+}

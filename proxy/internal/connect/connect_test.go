@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 type runs struct{ calls []string }
@@ -167,5 +168,24 @@ func TestAPortTakenByAnotherProgram(t *testing.T) {
 	o.Port = ln.Addr().(*net.TCPAddr).Port
 	if err := Do(o); err == nil || !strings.Contains(err.Error(), "--port") {
 		t.Fatalf("%v", err)
+	}
+}
+
+// A client's command that does not finish (waiting for a prompt, or another
+// program of that name) is stopped: connect goes on and says what to run.
+func TestRunCommandStopsAHangingClient(t *testing.T) {
+	old := commandTimeout
+	commandTimeout = 300 * time.Millisecond
+	defer func() { commandTimeout = old }()
+	started := time.Now()
+	err := RunCommand("sleep", "30")
+	if err == nil || !strings.Contains(err.Error(), "did not finish") {
+		t.Fatalf("err = %v", err)
+	}
+	if time.Since(started) > 5*time.Second {
+		t.Fatalf("waited %s", time.Since(started))
+	}
+	if err := RunCommand("true"); err != nil {
+		t.Fatal(err)
 	}
 }
