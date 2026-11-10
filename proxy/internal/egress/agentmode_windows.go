@@ -11,6 +11,7 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 )
 
@@ -28,7 +29,7 @@ func listenUnix(string) (net.Listener, error) {
 // Users - could read. It cannot tell, so it refuses: a file whose access list
 // could not be read is not accepted.
 func identityFileProblem(path string, _ os.FileInfo) error {
-	cmd := exec.Command("powershell.exe", "-NoProfile", "-NonInteractive", "-Command",
+	cmd := exec.Command(system32(`WindowsPowerShell\v1.0\powershell.exe`), "-NoProfile", "-NonInteractive", "-Command",
 		"$p=$env:PROVENZA_ACL_PATH; (Get-Acl -LiteralPath $p).Sddl; "+
 			"[Security.Principal.WindowsIdentity]::GetCurrent().User.Value")
 	cmd.Env = append(os.Environ(), "PROVENZA_ACL_PATH="+path)
@@ -48,4 +49,14 @@ func identityFileProblem(path string, _ os.FileInfo) error {
 
 func fixCommand(path string) string {
 	return `icacls "` + path + `" /inheritance:r /grant:r "%USERNAME%:F"`
+}
+
+// system32: a tool of Windows itself, by its full path, not by name from the
+// PATH (which may hold another program of that name first).
+func system32(rel string) string {
+	root := os.Getenv("SystemRoot")
+	if root == "" {
+		root = `C:\Windows`
+	}
+	return filepath.Join(root, "System32", rel)
 }

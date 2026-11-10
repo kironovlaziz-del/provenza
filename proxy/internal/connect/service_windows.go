@@ -26,7 +26,7 @@ func detachAttr() *syscall.SysProcAttr {
 // now belongs to something else). Windows lists no command line cheaply, so
 // the image name is what is checked.
 func procIsAgent(pid int) bool {
-	out, err := exec.Command("tasklist", "/FI", fmt.Sprintf("PID eq %d", pid), "/FO", "CSV", "/NH").Output()
+	out, err := exec.Command(sys32("tasklist.exe"), "/FI", fmt.Sprintf("PID eq %d", pid), "/FO", "CSV", "/NH").Output()
 	if err != nil {
 		return false
 	}
@@ -37,7 +37,7 @@ func procIsAgent(pid int) bool {
 // procTerminate: the process ends (Windows has no SIGTERM for a background
 // process), and a moment for it to go.
 func procTerminate(pid int) {
-	_ = exec.Command("taskkill", "/PID", fmt.Sprint(pid), "/F").Run()
+	_ = exec.Command(sys32("taskkill.exe"), "/PID", fmt.Sprint(pid), "/F").Run()
 	for i := 0; i < 30; i++ {
 		if !procIsAgent(pid) {
 			return
@@ -56,7 +56,7 @@ func service(o Options) error {
 	if err := portFree(o); err != nil {
 		return err
 	}
-	if err := o.Run("reg", o.runKeyAddArgs()...); err != nil {
+	if err := o.Run(sys32("reg.exe"), o.runKeyAddArgs()...); err != nil {
 		o.printf("  ! could not set agent mode to start at sign-in (%v): after a restart, run\n", err)
 		o.printf("      %s connect %s\n", quote(o.Binary), o.Client.Name)
 	} else {
@@ -77,10 +77,10 @@ func service(o Options) error {
 
 // removeService: the sign-in entry taken away (agent mode itself is stopped by the caller).
 func removeService(o Options) error {
-	if err := o.Run("reg", "query", runKey, "/v", o.runValueName()); err != nil {
+	if err := o.Run(sys32("reg.exe"), "query", runKey, "/v", o.runValueName()); err != nil {
 		return nil // not set
 	}
-	if err := o.Run("reg", "delete", runKey, "/v", o.runValueName(), "/f"); err != nil {
+	if err := o.Run(sys32("reg.exe"), "delete", runKey, "/v", o.runValueName(), "/f"); err != nil {
 		return fmt.Errorf("could not remove %s\\%s: %w", runKey, o.runValueName(), err)
 	}
 	o.printf("  ✓ agent mode no longer starts at sign-in\n")

@@ -19,7 +19,7 @@ import (
 // keep the rights Windows gives them anyway). When it cannot be done the
 // enrollment fails: a key that others may read is not left behind.
 func protectFile(path string) error {
-	out, err := exec.Command("whoami", "/user", "/fo", "csv", "/nh").Output()
+	out, err := exec.Command(sys32("whoami.exe"), "/user", "/fo", "csv", "/nh").Output()
 	if err != nil {
 		return fmt.Errorf("could not tell which user this is: %w", err)
 	}
@@ -27,7 +27,7 @@ func protectFile(path string) error {
 	if err != nil || len(rec) != 2 || !strings.HasPrefix(rec[1], "S-1-") {
 		return fmt.Errorf("could not tell which user this is (whoami: %q)", strings.TrimSpace(string(out)))
 	}
-	if b, err := exec.Command("icacls", path, "/inheritance:r", "/grant:r", "*"+rec[1]+":F").CombinedOutput(); err != nil {
+	if b, err := exec.Command(sys32("icacls.exe"), path, "/inheritance:r", "/grant:r", "*"+rec[1]+":F").CombinedOutput(); err != nil {
 		return fmt.Errorf("could not restrict %s to this user (icacls: %s): %w", path, strings.TrimSpace(string(b)), err)
 	}
 	return nil
