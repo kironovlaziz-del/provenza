@@ -254,6 +254,17 @@ Ed25519 + ML-DSA-65, and proven to the server over its challenge - and runs
 provenza-proxy connect gemini-cli      # or: claude-code, cursor, openai
 ```
 
+**On Windows** (10 or 11, amd64 or arm64) choose *Windows (PowerShell)* beside the
+client: the command runs `/api/v1/agent-enrollment/connect.ps1` in the client's
+user's PowerShell (as a script block, so no execution policy is changed; not as
+administrator). It does the same three steps with `provenza-proxy-windows-<arch>.exe`
+(checked against `SHA256SUMS`, installed in `%LOCALAPPDATA%\provenza`). Differences on
+Windows: agent mode listens on `127.0.0.1` (no unix sockets), runs in the background and
+starts again at the user's sign-in (the user's own `Run` registry key; nothing needs
+administrator rights), and does not restart by itself after a crash, only at the next sign-in. The
+identity file in `%USERPROFILE%\.config\provenza` is limited to that user (`icacls`) when
+it is made, and refused when anyone else - Everyone, Users, Authenticated Users - could read it.
+
 As the agent's user, with its identity in `~/.config/provenza/provenza-agent.json`
 (or `--identity <file>`, `$PROVENZA_IDENTITY`):
 

@@ -5,54 +5,31 @@ import (
 	"encoding/hex"
 	"log"
 	"net"
-	"os"
 	"strings"
 )
 
-// discoverGateway reports the machine's default gateway, parsed from
-// /proc/net/route (Linux). The gateway is frequently also the DHCP
-// server and/or the network firewall, so surfacing it gives the admin a
-// starting point for those. Reading /proc/net/route is a local kernel
-// table read - no scanning, no privileges.
+// discoverGateway reports the machine's default gateway (defaultGateway:
+// /proc/net/route on Linux, the adapters' settings on Windows). The gateway
+// is frequently also the DHCP server and/or the network firewall, so
+// surfacing it gives the admin a starting point for those. A local table
+// read - no scanning, no privileges.
 func discoverGateway(rep *Reporter) {
-	data, err := os.ReadFile("/proc/net/route")
-	if err != nil {
-		// Not Linux, or /proc unavailable - nothing to do, not an error
-		// worth alarming about.
-		return
+	gwIP, iface, via := defaultGateway()
+	if gwIP == nil || gwIP.IsUnspecified() {
+		return // none, or not readable here: not worth alarming about
+	}
+	details := map[string]interface{}{"interface": iface}
+	if names, err := net.LookupAddr(gwIP.String()); err == nil && len(names) > 0 {
+		details["ptr"] = strings.TrimSuffix(names[0], ".")
 	}
 
-	lines := strings.Split(string(data), "\n")
-	// Header is line 0; each subsequent line is a route. The default
-	// route is the one whose Destination is 00000000.
-	for _, line := range lines[1:] {
-		fields := strings.Fields(line)
-		if len(fields) < 3 {
-			continue
-		}
-		iface, destHex, gwHex := fields[0], fields[1], fields[2]
-		if destHex != "00000000" {
-			continue
-		}
-		gwIP := parseLittleEndianHexIP(gwHex)
-		if gwIP == nil || gwIP.IsUnspecified() {
-			continue
-		}
-
-		details := map[string]interface{}{"interface": iface}
-		if names, err := net.LookupAddr(gwIP.String()); err == nil && len(names) > 0 {
-			details["ptr"] = strings.TrimSuffix(names[0], ".")
-		}
-
-		log.Printf("[Discovery/GW] Found default gateway: %s (via %s)", gwIP, iface)
-		rep.Add(DiscoveredService{
-			ServiceType:   "gateway",
-			Host:          gwIP.String(),
-			DiscoveredVia: "routing_table",
-			Details:       details,
-		})
-		return // one default route is enough
-	}
+	log.Printf("[Discovery/GW] Found default gateway: %s (via %s)", gwIP, iface)
+	rep.Add(DiscoveredService{
+		ServiceType:   "gateway",
+		Host:          gwIP.String(),
+		DiscoveredVia: via,
+		Details:       details,
+	})
 }
 
 // parseLittleEndianHexIP parses the 8-hex-char, little-endian IPv4 form

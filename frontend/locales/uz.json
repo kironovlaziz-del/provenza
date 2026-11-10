@@ -3615,6 +3615,12 @@
   "connect": {
     "title": "AI mijozini ulash",
     "client": "Mijoz",
+    "system": "Tizim",
+    "systems": {
+      "linux": "Linux",
+      "windows": "Windows (PowerShell)"
+    },
+    "where_windows": "Windows 10 yoki 11, amd64 yoki arm64: PowerShell'da mijoz ishlaydigan foydalanuvchi nomidan ishga tushiring, administrator emas. Agent rejimi tizimga kirganingizda ishga tushadi; kalitlar foydalanuvchi profilida qoladi. O'sha mashinada egress proksi bo'lsa chaqiruvlar u orqali o'tadi; boshqa joyda to'g'ridan-to'g'ri Provenza shlyuzlariga.",
     "hint": "Ushbu bitta buyruqni mijoz ishlaydigan mashinada, u ishlaydigan foydalanuvchi nomidan ishga tushiring. U ushbu serverdan provenza-proxy ni yuklab oladi, agent kalitlarini o'sha yerda yaratadi (ular mashinadan chiqmaydi) va mijozni ulaydi: uning har bir chaqiruvi shu agent nomidan imzolanadi, tekshiriladi va qayd etiladi. Undagi token bir marta ishlaydi.",
     "clients": {
       "gemini-cli": "Gemini CLI",

@@ -7,6 +7,10 @@ this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- CI: `connect.ps1` is tested end to end on Windows (Windows PowerShell, the real `provenza-proxy.exe`, a stand-in server): download and checksum, enrollment, the client's entry, agent mode and its sign-in entry, a second run over the running agent, removal.
+- Endpoint agent on Windows: network discovery reports the DNS servers and the default gateway from the adapters' settings (the adapters that are up, the preferred one first; IPv6 placeholders and link-local addresses are not servers), and the adapters' DNS suffixes are used as domains for the Active Directory lookup, as `/etc/resolv.conf` is on Linux.
+- Endpoint agent on Windows: LLM SDK libraries (`jiter`, `tiktoken`, `tokenizers`) are found among the loaded modules of likely agents (interpreters, processes connected to an LLM API), as on Linux. Only module paths are looked at, and only for those names.
+- Agents → Connect for Windows: a *System* choice beside the client gives a PowerShell command (`/api/v1/agent-enrollment/connect.ps1`) that does what `connect.sh` does with `provenza-proxy-windows-*.exe`: downloads and checks it, enrolls the agent (its keys stay on that machine) and connects the client. Needs the Windows binaries of this release in the image.
 - `provenza-proxy` for Windows (`provenza-proxy-windows-amd64.exe`, `-arm64.exe`, served next to the Linux ones): its `enroll` and `connect` commands run on Windows. Agent mode starts in the background and at the user's sign-in (the user's own Run key, no administrator rights). The identity file is limited to its user (`icacls`) when it is made, and refused when anyone else could read it. The one-command Connect for Windows follows.
 - README: the Agent Manifest issuer is listed in AgenTrust's integrations (community tier).
 - `robots.txt` and `sitemap.xml`. Closed by default: robots.txt keeps every crawler out and there is no sitemap. A public demo or project site opens the sign-in page to search engines with `ALLOW_SEARCH_INDEXING=true` and `PUBLIC_BASE_URL` in `deploy/.env`.

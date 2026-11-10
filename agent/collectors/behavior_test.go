@@ -145,3 +145,29 @@ func TestResolverKeepsLastGoodAnswer(t *testing.T) {
 		t.Fatalf("lost addresses on DNS failure: %v", got)
 	}
 }
+
+func TestSDKMarkersFromWindowsPaths(t *testing.T) {
+	paths := []string{
+		`C:\Windows\System32\kernel32.dll`,
+		`C:\Users\Ann\AppData\Local\Programs\Python\Python312\Lib\site-packages\jiter\jiter.cp312-win_amd64.pyd`,
+		`C:\Users\Ann\.venv\Lib\site-packages\TikToken\_tiktoken.cp312-win_amd64.pyd`, // case does not matter
+		`C:\Users\Ann\.venv\Lib\site-packages\tokenizers\tokenizers.pyd`,
+	}
+	got := sdkMarkersFromPaths(paths)
+	want := []string{"huggingface-tokenizers", "openai-or-anthropic-python", "tiktoken"}
+	if len(got) != len(want) {
+		t.Fatalf("got %v want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("got %v want %v", got, want)
+		}
+	}
+	// an ordinary process: nothing; a file only NAMED like a marker is not one
+	if got := sdkMarkersFromPaths([]string{`C:\Windows\System32\ntdll.dll`, `C:\tools\jiter.exe`}); len(got) != 0 {
+		t.Fatalf("got %v", got)
+	}
+	if got := sdkMarkersFromPaths(nil); len(got) != 0 {
+		t.Fatalf("got %v", got)
+	}
+}

@@ -335,6 +335,16 @@ jobs:
           go test -count=1 ./internal/connect/
           go test -count=1 -run 'SDDL|IdentityFileProblem' ./internal/egress/
 
+      # The one command of Agents -> Connect for Windows, end to end: the
+      # backend's connect.ps1 in Windows PowerShell, against a stand-in server,
+      # with the binary built here. It enrolls, connects a client, starts agent
+      # mode and its sign-in entry, runs again over the running agent, takes it all out.
+      - name: Connect on Windows (connect.ps1, end to end)
+        run: |
+          go build -trimpath -o "$RUNNER_TEMP/provenza-proxy.exe" .
+          PROVENZA_E2E_PROXY_EXE="$RUNNER_TEMP/provenza-proxy.exe" \
+            go test -count=1 -timeout 5m -v -run ConnectPS1 ./internal/connect/
+
   endpoint-agent:
     name: Endpoint agent (vet, tests, static build)
     runs-on: ubuntu-latest

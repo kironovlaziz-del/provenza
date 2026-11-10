@@ -12,8 +12,8 @@ import (
 // as an unprivileged process using the Go standard library:
 //
 //   - DNS SRV lookups         -> Active Directory / Kerberos / LDAP
-//   - /etc/resolv.conf        -> in-use DNS servers
-//   - /proc/net/route         -> default gateway (often DHCP/firewall)
+//   - /etc/resolv.conf        -> in-use DNS servers (Windows: the adapters' settings)
+//   - /proc/net/route         -> default gateway, often DHCP/firewall (Windows: the adapters' settings)
 //
 // Methods that require raw sockets or elevated capabilities (mDNS/LLMNR
 // listening, ARP scanning, passive DHCP sniffing) are intentionally NOT

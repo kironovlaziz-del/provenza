@@ -27,7 +27,9 @@ import (
 //   - env:  names of LLM API key variables in the environment - only the
 //     names are compared and reported, never a value;
 //   - sdk:  native libraries of LLM SDKs mapped into the process
-//     (jiter: OpenAI / Anthropic Python SDKs; tiktoken; tokenizers).
+//     (jiter: OpenAI / Anthropic Python SDKs; tiktoken; tokenizers). On
+//     Windows: the process's loaded modules (the same markers, matched
+//     on their paths); the environment of another process is not read there.
 //
 // Reading another user's /proc/<pid>/{fd,environ,maps} needs root (or
 // CAP_SYS_PTRACE + CAP_DAC_READ_SEARCH); without it only processes of the
@@ -231,6 +233,17 @@ func sdkMarkers(maps []byte) []string {
 	}
 	sort.Strings(out)
 	return out
+}
+
+// sdkMarkersFromPaths is sdkMarkers for a list of file paths (the loaded
+// modules of a Windows process): separators and case are made the Linux form.
+func sdkMarkersFromPaths(paths []string) []string {
+	var b strings.Builder
+	for _, p := range paths {
+		b.WriteString(strings.ToLower(strings.ReplaceAll(p, "\\", "/")))
+		b.WriteByte('\n')
+	}
+	return sdkMarkers([]byte(b.String()))
 }
 
 var unsafeID = regexp.MustCompile(`[^a-z0-9_.-]+`)
