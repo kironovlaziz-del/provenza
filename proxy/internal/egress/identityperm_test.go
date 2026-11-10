@@ -14,6 +14,7 @@ func TestSDDLProblem(t *testing.T) {
 		"O:" + me + "D:P(A;;FA;;;" + me + ")",
 		"O:BAD:(A;;FA;;;OW)(A;;0x1200a9;;;CO)",
 		"D:(D;;FA;;;WD)(A;;FA;;;" + me + ")", // a deny entry for Everyone is not a leak
+		"O:LAD:P(A;;FA;;;LA)",                // the user is the built-in Administrator account
 		"D:(A;;FA;;;" + me + ")S:(AU;SA;FA;;;WD)",
 	}
 	for _, s := range ok {
@@ -27,6 +28,7 @@ func TestSDDLProblem(t *testing.T) {
 		"Authenticated": "D:(A;;FA;;;AU)",
 		"another user":  "D:(A;;FA;;;S-1-5-21-1111111111-2222222222-3333333333-1002)",
 		"no DACL":       "O:BAG:BA",
+		"Guest":         "D:(A;;FA;;;LG)",
 		"unknown kind":  "D:(Q;;FA;;;SY)",
 		"short entry":   "D:(A;;FA;;SY)",
 		"unterminated":  "D:(A;;FA;;;SY",

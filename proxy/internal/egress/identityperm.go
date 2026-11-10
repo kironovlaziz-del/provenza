@@ -14,9 +14,11 @@ type permError struct{ path, msg string }
 func (e *permError) Error() string { return e.path + " " + e.msg }
 
 // trusted trustees of an identity file on Windows (SDDL abbreviations): the
-// system, the local administrators, and the creator-owner / owner-rights
-// placeholders that name the file's owner.
-var trusted = map[string]bool{"SY": true, "BA": true, "CO": true, "OW": true}
+// system, the local administrators, the built-in Administrator account (LA:
+// Windows writes the user's own SID so when that account is the user, as on
+// a CI runner, and an administrator may take any file anyway), and the
+// creator-owner / owner-rights placeholders that name the file's owner.
+var trusted = map[string]bool{"SY": true, "BA": true, "LA": true, "CO": true, "OW": true}
 
 // sddlProblem: why a Windows access list (SDDL string) lets someone other than
 // the file's user in (nil: it does not). Only the DACL's allow entries
