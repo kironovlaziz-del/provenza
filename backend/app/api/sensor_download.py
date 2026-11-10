@@ -12,6 +12,7 @@ binaries, served by the control plane itself.
     GET /api/v1/egress-sensor/download/provenzasensor.service
     GET /api/v1/egress-sensor/download/SHA256SUMS
     GET /api/v1/egress-sensor/download/provenza-proxy-linux-{amd64,arm64}
+    GET /api/v1/egress-sensor/download/provenza-proxy-windows-{amd64,arm64}.exe
     GET /api/v1/egress-sensor/download/provenza-agent-linux-{amd64,arm64}
     GET /api/v1/egress-sensor/download/provenza-agent-darwin-{amd64,arm64}
     GET /api/v1/egress-sensor/download/provenza-agent-windows-{amd64,arm64}.exe
@@ -49,6 +50,9 @@ FILES = {
     # the egress proxy and the endpoint agent (the image's "edge" stage), for other hosts
     "provenza-proxy-linux-amd64": ("provenza-proxy-linux-amd64", "application/octet-stream"),
     "provenza-proxy-linux-arm64": ("provenza-proxy-linux-arm64", "application/octet-stream"),
+    # the same proxy for Windows: only its client commands (enroll, connect) are meant there
+    "provenza-proxy-windows-amd64.exe": ("provenza-proxy-windows-amd64.exe", "application/octet-stream"),
+    "provenza-proxy-windows-arm64.exe": ("provenza-proxy-windows-arm64.exe", "application/octet-stream"),
     "provenza-agent-linux-amd64": ("provenza-agent-linux-amd64", "application/octet-stream"),
     "provenza-agent-linux-arm64": ("provenza-agent-linux-arm64", "application/octet-stream"),
     # the endpoint agent for workstations, and the scripts that install it

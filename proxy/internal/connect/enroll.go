@@ -228,5 +228,9 @@ func writeIdentity(path string, id *Identity) error {
 	if err := f.Close(); err != nil {
 		return err
 	}
+	if err := protectFile(tmp); err != nil { // Windows: the access list; refused, not skipped
+		os.Remove(tmp)
+		return err
+	}
 	return os.Rename(tmp, path)
 }

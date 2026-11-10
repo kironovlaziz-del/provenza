@@ -7,6 +7,7 @@ this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- `provenza-proxy` for Windows (`provenza-proxy-windows-amd64.exe`, `-arm64.exe`, served next to the Linux ones): its `enroll` and `connect` commands run on Windows. Agent mode starts in the background and at the user's sign-in (the user's own Run key, no administrator rights). The identity file is limited to its user (`icacls`) when it is made, and refused when anyone else could read it. The one-command Connect for Windows follows.
 - README: the Agent Manifest issuer is listed in AgenTrust's integrations (community tier).
 - `robots.txt` and `sitemap.xml`. Closed by default: robots.txt keeps every crawler out and there is no sitemap. A public demo or project site opens the sign-in page to search engines with `ALLOW_SEARCH_INDEXING=true` and `PUBLIC_BASE_URL` in `deploy/.env`.
 - Self-hosting: Provenza's Caddy can serve other applications on the same server. Site blocks go in `/etc/provenza/caddy-sites/*.caddy`, and the applications join the `provenza_sites` network, which they share only with Caddy.

@@ -41,6 +41,8 @@ RUN set -eu; mkdir -p /dist; \
     for arch in amd64 arm64; do \
       (cd proxy && CGO_ENABLED=0 GOOS=linux GOARCH=$arch go build -trimpath -ldflags "-s -w" \
         -o /dist/provenza-proxy-linux-$arch .); \
+      (cd proxy && CGO_ENABLED=0 GOOS=windows GOARCH=$arch go build -trimpath -ldflags "-s -w" \
+        -o /dist/provenza-proxy-windows-$arch.exe .); \
       for os in linux darwin windows; do \
         ext=""; [ "$os" = windows ] && ext=".exe"; \
         (cd agent && CGO_ENABLED=0 GOOS=$os GOARCH=$arch go build -trimpath -ldflags "-s -w" \
@@ -48,7 +50,7 @@ RUN set -eu; mkdir -p /dist; \
       done; \
     done; \
     cp agent/install/install-agent.sh agent/install/install-agent.ps1 /dist/; \
-    cd /dist && sha256sum provenza-proxy-linux-* provenza-agent-* install-agent.* > SHA256SUMS.edge
+    cd /dist && sha256sum provenza-proxy-linux-* provenza-proxy-windows-* provenza-agent-* install-agent.* > SHA256SUMS.edge
 
 # ---------------------------------------------------------------- build stage
 FROM python:${PYTHON_VERSION}-slim AS build
@@ -84,7 +86,7 @@ COPY extension/ /opt/provenza/extension/
 COPY deploy/backend-entrypoint.sh /usr/local/bin/provenza-entrypoint
 COPY --from=sensor /dist/ /app/sensor-dist/
 COPY --from=edge /dist/ /tmp/edge-dist/
-RUN cd /tmp/edge-dist && cp provenza-proxy-linux-* provenza-agent-* install-agent.* /app/sensor-dist/ \
+RUN cd /tmp/edge-dist && cp provenza-proxy-linux-* provenza-proxy-windows-* provenza-agent-* install-agent.* /app/sensor-dist/ \
  && cat SHA256SUMS.edge >> /app/sensor-dist/SHA256SUMS && rm -rf /tmp/edge-dist
 RUN chmod 0755 /usr/local/bin/provenza-entrypoint \
  && rm -f /app/apply_*.py /app/celerybeat-schedule \

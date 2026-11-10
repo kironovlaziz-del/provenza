@@ -294,6 +294,47 @@ jobs:
       - name: Static build
         run: CGO_ENABLED=0 go build -trimpath -o provenza-proxy .
 
+      # every binary the server serves (deploy/backend.Dockerfile, edge stage)
+      - name: Builds for Windows and macOS (vet, build)
+        run: |
+          for os in windows darwin; do
+            for arch in amd64 arm64; do
+              GOOS=$os GOARCH=$arch go vet ./...
+              CGO_ENABLED=0 GOOS=$os GOARCH=$arch go build -trimpath -o /dev/null .
+              echo "ok  $os/$arch"
+            done
+          done
+
+  egress-proxy-windows:
+    name: Egress proxy on Windows (client commands)
+    runs-on: windows-latest
+    timeout-minutes: 15
+
+    defaults:
+      run:
+        working-directory: proxy
+        shell: bash
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: proxy/go.mod
+          cache: false   # standard library only
+
+      - name: Vet
+        run: go vet ./...
+
+      # `provenza-proxy enroll` and `connect` on Windows: the sign-in entry's text,
+      # the identity file's access list (set by enroll, checked at load) on a real
+      # Windows access list. The rest of the proxy's tests are for Linux.
+      - name: Test (enroll, connect, access lists)
+        run: |
+          go test -count=1 ./internal/connect/
+          go test -count=1 -run 'SDDL|IdentityFileProblem' ./internal/egress/
+
   endpoint-agent:
     name: Endpoint agent (vet, tests, static build)
     runs-on: ubuntu-latest
