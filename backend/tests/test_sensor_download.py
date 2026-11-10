@@ -65,3 +65,16 @@ async def test_serves_the_agent_for_every_system(client, tmp_path, monkeypatch):
     # no Windows binary without .exe, no other systems
     for n in ("provenza-agent-windows-amd64", "provenza-agent-freebsd-amd64"):
         assert (await client.get(f"{BASE}/{n}")).status_code == 404, n
+
+
+async def test_serves_the_proxy_for_windows(client, tmp_path, monkeypatch):
+    """provenza-proxy for Windows (its enroll and connect commands): .exe names only."""
+    names = ["provenza-proxy-windows-amd64.exe", "provenza-proxy-windows-arm64.exe"]
+    for n in names:
+        (tmp_path / n).write_bytes(b"bin " + n.encode())
+    monkeypatch.setattr(settings, "SENSOR_DIST_DIR", str(tmp_path))
+    for n in names:
+        r = await client.get(f"{BASE}/{n}")
+        assert r.status_code == 200 and r.content == b"bin " + n.encode(), n
+    for n in ("provenza-proxy-windows-amd64", "provenza-proxy-windows-386.exe"):
+        assert (await client.get(f"{BASE}/{n}")).status_code == 404, n

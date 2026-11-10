@@ -47,6 +47,9 @@ func main() {
 	if len(os.Args) > 1 && os.Args[1] == "enroll" {
 		os.Exit(runEnroll(os.Args[2:]))
 	}
+	if len(os.Args) > 1 && os.Args[1] == "agent-start" {
+		os.Exit(runAgentStart(os.Args[2:]))
+	}
 	path := flag.String("config", "/etc/provenza/proxy.json", "configuration file (JSON)")
 	genkey := flag.Bool("genkey", false, "print a new signing key (for signing_key_file; the encryption key "+
 		"sealed credentials are opened with is derived from it) and exit; its fingerprint goes to stderr")
@@ -167,7 +170,7 @@ func runConnect(args []string) int {
 		"else Provenza's own gateways (the identity's server)")
 	port := fs.Int("port", 8480, "agent mode's port on 127.0.0.1")
 	remove := fs.Bool("remove", false, "take the client's entry and agent mode out again")
-	noService := fs.Bool("no-service", false, "do not run agent mode as a systemd --user service")
+	noService := fs.Bool("no-service", false, "do not run agent mode as a service of this user (systemd --user; at sign-in on Windows)")
 	fs.Usage = func() {
 		fmt.Fprintf(fs.Output(), "usage: provenza-proxy connect <%s> [flags]\n", strings.Join(connect.Names(), "|"))
 		fs.PrintDefaults()
@@ -226,6 +229,39 @@ func runConnect(args []string) int {
 	err = connect.Do(connect.Options{Client: client, Identity: abs, AgentID: id.AgentID, Proxy: *proxy, Port: *port,
 		Binary: self, Home: home, Remove: *remove, Service: !*noService, Out: os.Stdout, Run: connect.RunCommand})
 	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	return 0
+}
+
+// runAgentStart: `provenza-proxy agent-start`, what the sign-in entry of
+// `connect` runs on Windows: agent mode started in the background, as
+// `connect` itself starts it, and this process exits (no console window stays).
+func runAgentStart(args []string) int {
+	fs := flag.NewFlagSet("agent-start", flag.ContinueOnError)
+	home, _ := os.UserHomeDir()
+	agentID := fs.Int64("agent-id", 0, "the agent's number")
+	identity := fs.String("identity", "", "the agent's identity file (absolute)")
+	port := fs.Int("port", 8480, "agent mode's port on 127.0.0.1")
+	proxy := fs.String("proxy", "", "the egress proxy agent mode passes requests to")
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+	if *agentID < 1 || *identity == "" || !filepath.IsAbs(*identity) || *proxy == "" || *port < 1 || *port > 65535 {
+		fmt.Fprintln(os.Stderr, "usage: provenza-proxy agent-start -agent-id N -identity <absolute path> -port N -proxy URL")
+		return 2
+	}
+	self, err := os.Executable()
+	if err == nil {
+		self, err = filepath.EvalSymlinks(self)
+	}
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	o := connect.Options{AgentID: *agentID, Identity: *identity, Proxy: *proxy, Port: *port, Binary: self, Home: home}
+	if _, err := connect.StartDetached(o); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}

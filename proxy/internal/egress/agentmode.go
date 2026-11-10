@@ -44,7 +44,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/kironovlaziz-del/provenza/proxy/internal/canon"
@@ -73,8 +72,8 @@ func LoadAgentIdentity(path string) (*AgentIdentity, error) {
 	if err != nil {
 		return nil, err
 	}
-	if st.Mode().Perm()&0o077 != 0 {
-		return nil, fmt.Errorf("%s is readable by other users; chmod 600 it (it holds the agent's private key)", path)
+	if err := identityFileProblem(path, st); err != nil {
+		return nil, err
 	}
 	raw, err := os.ReadFile(path)
 	if err != nil {
@@ -190,17 +189,7 @@ func AgentListener(listen string) (net.Listener, error) {
 			return nil, err
 		}
 	}
-	old := syscall.Umask(0o177) // the socket is created with mode 0600: no moment where others may connect
-	l, err := net.Listen("unix", path)
-	syscall.Umask(old)
-	if err != nil {
-		return nil, err
-	}
-	if err := os.Chmod(path, 0o600); err != nil {
-		l.Close()
-		return nil, err
-	}
-	return l, nil
+	return listenUnix(path)
 }
 
 // loopback: an address only this host can reach.

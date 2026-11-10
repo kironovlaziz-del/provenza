@@ -13,6 +13,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/kironovlaziz-del/provenza/proxy/internal/canon"
@@ -86,7 +87,7 @@ func TestEnrollMakesTheKeysHere(t *testing.T) {
 		var saved Identity
 		raw, _ := os.ReadFile(path)
 		json.Unmarshal(raw, &saved)
-		if st.Mode().Perm() != 0o600 || saved.PrivateKey != id.PrivateKey || saved.Server != srv.URL {
+		if (runtime.GOOS != "windows" && st.Mode().Perm() != 0o600) || saved.PrivateKey != id.PrivateKey || saved.Server != srv.URL {
 			t.Fatalf("identity file: %v %+v", st.Mode(), saved)
 		}
 		if old, _ := filepath.Glob(path + ".*.old"); len(old) != 1 {
