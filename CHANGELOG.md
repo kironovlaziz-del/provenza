@@ -149,6 +149,8 @@ this project adheres to [Semantic Versioning](https://semver.org/).
   integrity check stay open. The Incidents and Audit pages are hidden from
   plain users accordingly.
 - `follow-redirects` 1.16.2 in the console (GHSA-mrwp-f3q8-3g9p).
+- Passwords are hashed with `bcrypt` 5.0.0 directly; `passlib` (unmaintained, broken with bcrypt 4.1+) is gone. Every existing hash verifies unchanged, nothing to migrate: a password over 72 bytes that passlib cut silently still signs in. A new password over 72 bytes (UTF-8) is refused - by the API, `create_admin` and the installer - instead of being cut. A missing or malformed stored hash is a wrong password, not a server error.
+- Sign-in: an unknown organization or e-mail now takes as long as a wrong password (one bcrypt check against a dummy hash), so the response time no longer tells which accounts exist.
 
 ### Fixed
 

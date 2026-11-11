@@ -38,6 +38,8 @@ def _password() -> str:
             sys.exit("Passwords do not match.")
     if len(pw) < MIN_PASSWORD:
         sys.exit(f"Password must be at least {MIN_PASSWORD} characters.")
+    if len(pw.encode("utf-8")) > 72:   # all bcrypt reads (app/core/security.py)
+        sys.exit("Password must be at most 72 bytes (UTF-8).")
     return pw
 
 

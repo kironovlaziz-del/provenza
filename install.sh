@@ -221,6 +221,7 @@ if [ -z "${PROVENZA_ADMIN_PASSWORD:-}" ]; then
     printf '%s? Repeat the password%s: ' "$B" "$N" >/dev/tty
     IFS= read -rs p2 </dev/tty; printf '\n' >/dev/tty
     if [ "${#p1}" -lt 12 ]; then warn "at least 12 characters"; continue; fi
+    if [ "$(printf '%s' "$p1" | wc -c)" -gt 72 ]; then warn "at most 72 bytes"; continue; fi
     if [ "$p1" != "$p2" ]; then warn "the passwords do not match"; continue; fi
     break
   done
@@ -228,6 +229,8 @@ if [ -z "${PROVENZA_ADMIN_PASSWORD:-}" ]; then
   unset p1 p2
 fi
 [ "${#PROVENZA_ADMIN_PASSWORD}" -ge 12 ] || die "the administrator password needs at least 12 characters"
+# bcrypt reads 72 bytes; a longer password is refused rather than cut (backend/app/core/security.py)
+[ "$(printf '%s' "$PROVENZA_ADMIN_PASSWORD" | wc -c)" -le 72 ] || die "the administrator password can be at most 72 bytes"
 export PROVENZA_ADMIN_PASSWORD
 
 # ---------------------------------------------------------------- 3. stack
