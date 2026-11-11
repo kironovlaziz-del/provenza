@@ -10,7 +10,7 @@ alembic==1.14.0
 
 # Config & validation
 pydantic==2.14.1
-pydantic-settings==2.16.1
+pydantic-settings==2.16.2
 
 # Auth
 PyJWT==2.15.1
