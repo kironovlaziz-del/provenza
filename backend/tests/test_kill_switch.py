@@ -282,3 +282,49 @@ async def test_killing_twice_is_not_an_error(client, admin_token):
     first = await client.post(f"{A}/{a['id']}/kill", json=body, headers=auth_headers(admin_token))
     again = await client.post(f"{A}/{a['id']}/kill", json=body, headers=auth_headers(admin_token))
     assert again.status_code == 200 and again.json()["event_id"] == first.json()["event_id"]
+
+
+async def test_retiring_a_stopped_agent_ends_its_own_stop(client, admin_token):
+    """Retired is final: a stop of that agent alone has nothing left to hold, so
+    it ends - recorded, marked retired - instead of staying in force for good. A
+    team or organization-wide stop holds others too and stays."""
+    h = auth_headers(admin_token)
+    a = await _agent(client, admin_token)
+    b = await _agent(client, admin_token)
+    team = await _team(client, admin_token, "ks-retire-" + secrets.token_hex(3))
+    await _assign(client, admin_token, a["id"], team["id"])
+    await _assign(client, admin_token, b["id"], team["id"])
+    own_a = (await _stop(client, admin_token, "agent", a["id"])).json()
+    own_b = (await _stop(client, admin_token, "agent", b["id"])).json()
+    team_stop = (await _stop(client, admin_token, "team", team["id"])).json()
+
+    r = await client.put(f"{A}/{a['id']}", json={"status": "retired"}, headers=h)
+    assert r.status_code == 200, r.text
+    assert r.json()["status"] == "retired"
+
+    active = {e["id"] for e in (await client.get(K, headers=h)).json()["active"]}
+    assert own_a["id"] not in active                       # ended
+    assert {own_b["id"], team_stop["id"]} <= active        # another agent's stop, the team's: untouched
+    ended = next(e for e in (await client.get(f"{K}/events", headers=h)).json() if e["id"] == own_a["id"])
+    assert ended["lift_reason"] == "Agent retired" and ended["lift_result"]["retired"] is True
+    assert ended["lift_result"]["restored"] == [] and ended["lifted_by_email"]
+    assert await _status(client, admin_token, a["id"]) == "retired"   # nothing given back
+
+    audit = (await client.get("/api/v1/audit-logs", params={"entity_type": "kill_switch"}, headers=h)).json()
+    items = audit["items"] if isinstance(audit, dict) else audit
+    assert any(x["entity_id"] == own_a["id"] and x["action"] == "lifted" for x in items)
+
+    # lifting the team stop later gives back b only after its own stop; a stays retired
+    await _lift(client, admin_token, team_stop["id"])
+    assert await _status(client, admin_token, a["id"]) == "retired"
+    assert await _status(client, admin_token, b["id"]) == "suspended"
+
+
+async def test_retiring_an_agent_without_a_stop_changes_no_stop(client, admin_token):
+    h = auth_headers(admin_token)
+    a = await _agent(client, admin_token)
+    other = await _agent(client, admin_token)
+    held = (await _stop(client, admin_token, "agent", other["id"])).json()
+    r = await client.put(f"{A}/{a['id']}", json={"status": "retired"}, headers=h)
+    assert r.status_code == 200, r.text
+    assert [e["id"] for e in (await client.get(K, headers=h)).json()["active"]] == [held["id"]]

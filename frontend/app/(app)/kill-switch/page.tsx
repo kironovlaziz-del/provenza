@@ -159,6 +159,8 @@ export default function KillSwitchPage() {
           <div className="panel-header"><h2>{t("ks.active")}</h2></div>
           <div className="panel-body">
             {active.length === 0 && <p className="hint-text ag-small">{t("ks.no_active")}</p>}
+            {/* many stops: a scrolling list, never hidden - each one still holds agents */}
+            <div className={active.length > 3 ? "ks-scroll" : undefined}>
             {active.map((ev) => (
               <div key={ev.id} className="ks-event">
                 <div className="ks-event-head">
@@ -193,6 +195,7 @@ export default function KillSwitchPage() {
                 )}
               </div>
             ))}
+            </div>
           </div>
         </section>
 
@@ -268,7 +271,7 @@ export default function KillSwitchPage() {
         {/* ---------------- history ---------------- */}
         <section className="panel ag-section">
           <div className="panel-header"><h2>{t("ks.history")}</h2></div>
-          <div className="ag-table-wrap">
+          <div className={`ag-table-wrap${events.length > 8 ? " ks-scroll ks-scroll-tall" : ""}`}>
             <table className="table-cards">
               <thead>
                 <tr>
@@ -305,9 +308,10 @@ export default function KillSwitchPage() {
                       <td data-label={t("ks.undo_col")} className="ks-names">
                         {ev.active ? <span className="pill pill-critical">{t("ks.in_force")}</span> : (
                           <>
+                            {r?.retired && <span className="pill pill-neutral">{t("ks.ended_retired")}</span>}
                             <div>{t("ks.lifted_by", { when: fmt(ev.lifted_at), who: ev.lifted_by_email ?? "—" })}</div>
-                            {ev.lift_reason && <div className="ag-reason">{ev.lift_reason}</div>}
-                            {r && (
+                            {ev.lift_reason && !r?.retired && <div className="ag-reason">{ev.lift_reason}</div>}
+                            {r && !r.retired && (
                               <div className="hint-text">
                                 {t("ks.result", { restored: r.restored.length, kept: r.kept.length, skipped: r.skipped.length })}
                                 {(r.kept.length > 0 || r.skipped.length > 0) && (
