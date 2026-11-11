@@ -436,11 +436,24 @@ async def update_agent(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_role(UserRole.admin)),
 ):
-    agent = await AgentRegistry(db).update_agent(agent_id, current_user.org_id, data)
+    registry = AgentRegistry(db)
+    was = (await registry.get_agent(agent_id, current_user.org_id)).status
+    agent = await registry.update_agent(agent_id, current_user.org_id, data)
     await AuditService(db).log(
         current_user.org_id, current_user.id, "agent", agent_id, "updated",
         data.model_dump(exclude_unset=True),
     )
+    if agent.status == "retired" and was != "retired":
+        from app.services import kill_switch
+
+        # its own stop has nothing left to hold: it ends, recorded like a lift
+        for event in await kill_switch.end_for_retired(db, current_user.org_id, current_user.id, agent_id):
+            await AuditService(db).log(current_user.org_id, current_user.id, "kill_switch", event.id, "lifted", {
+                "scope": event.scope, "reason": event.lift_reason, "retired": True,
+                "restored": [], "kept": [], "skipped": [a["id"] for a in (event.lift_result or {}).get("skipped") or []],
+            })
+            await kill_switch.notify(db, event, lifted=True)
+        await db.refresh(agent)
     return agent
 
 

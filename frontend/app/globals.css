@@ -1354,6 +1354,10 @@ tbody tr.clickable:hover {
 .agent-page .ks-event-head { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .agent-page .ks-event-head .ag-row-actions { margin-left: auto; min-width: 0; }
 .agent-page .ks-names { font-size: 12px; overflow-wrap: anywhere; }
+/* a long list of stops or of history scrolls in place, the page stays short */
+.agent-page .ks-scroll { max-height: 440px; overflow-y: auto; overscroll-behavior: contain; padding-right: 4px; }
+.agent-page .ks-scroll-tall { max-height: 560px; }
+.agent-page .ks-scroll thead th { position: sticky; top: 0; z-index: 1; background: var(--bg-panel); }
 /* blocked terms page */
 .agent-page .bt-filters { display: flex; flex-wrap: wrap; gap: 8px; padding-top: 0; }
 .agent-page .bt-filters input[type="search"] { flex: 1 1 200px; min-width: 0; }

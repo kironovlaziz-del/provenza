@@ -36,6 +36,8 @@ export interface KillEventT {
     kept: StoppedAgent[];
     skipped: StoppedAgent[];
     chains_not_resumed: number;
+    // ended because its agent was retired, not lifted: nothing was given back
+    retired?: boolean;
   } | null;
 }
 

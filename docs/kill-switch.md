@@ -60,6 +60,15 @@ For each agent the stop suspended:
 Terminated delegation chains stay terminated; the agents start new ones.
 The result is stored on the event (`lift_result`) and shown in the history.
 
+**Retiring a stopped agent** (agent page → Retire) ends the stop that holds
+that agent alone: retired is final, so the stop has nothing left to hold. It is
+recorded like a lift, by whoever retired the agent, with `lift_result.retired`
+set and nothing given back, and the history shows *Ended: agent retired*. A
+stop of a team or of every agent holds others too and stays in force.
+
+The stops in force and the history scroll in place once there are many; a stop
+in force is never hidden.
+
 ## Records
 
 - Audit log: entity `kill_switch`, actions `engaged` and `lifted` (with the

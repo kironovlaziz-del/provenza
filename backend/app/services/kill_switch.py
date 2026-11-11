@@ -314,6 +314,26 @@ async def lift(db: AsyncSession, org_id: int, user_id: Optional[int], event_id: 
     return event
 
 
+RETIRED_REASON = "Agent retired"
+
+
+async def end_for_retired(db: AsyncSession, org_id: int, user_id: Optional[int], agent_id: int) -> List[KillSwitchEvent]:
+    """The agent was retired: a stop of that agent alone has nothing left to
+    hold - retired is final, the agent never comes back - so it ends, marked
+    `retired`, rather than staying "in force" for good. Stops of a team or of
+    every agent hold others too: they stay. The caller writes the audit records
+    (which commit)."""
+    ended = []
+    for event in await active_events(db, org_id):
+        if event.scope == "agent" and event.agent_id == agent_id:
+            event = await lift(db, org_id, user_id, event.id, RETIRED_REASON)
+            # nothing restored: lift() skips an agent that is not suspended any more
+            event.lift_result = {**(event.lift_result or {}), "retired": True}
+            ended.append(event)
+    await db.flush()
+    return ended
+
+
 def event_out(e: KillSwitchEvent, users: Optional[Dict[int, str]] = None) -> Dict[str, Any]:
     users = users or {}
     s = e.stopped or {}
