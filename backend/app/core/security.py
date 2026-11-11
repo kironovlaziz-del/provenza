@@ -5,17 +5,66 @@ from typing import Optional
 import hashlib
 import hmac
 import secrets
+import bcrypt
 import jwt
-from passlib.context import CryptContext
 from app.core.config import settings
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# ---------------------------------------------------------------------------
+# Passwords: bcrypt, called directly (passlib, which wrapped it, is no longer
+# maintained and breaks with bcrypt 4.1+).
+#
+# bcrypt reads at most 72 bytes of a password. passlib cut longer ones there
+# silently, and bcrypt 5 refuses them instead. So:
+#   - a new password longer than 72 bytes (UTF-8) is refused where it is set
+#     (password_problem, the schemas, create_admin);
+#   - a password is checked against a stored hash by its first 72 bytes, as
+#     passlib made those hashes - an old long password still signs in.
+# The hashes passlib wrote ($2b$, 12 rounds) are plain bcrypt: nothing to
+# migrate.
+# ---------------------------------------------------------------------------
 
-def verify_password(plain_password: str, hashed_password: str) -> bool:
-    return pwd_context.verify(plain_password, hashed_password)
+BCRYPT_ROUNDS = 12          # ~0.25 s a hash; tests lower it (tests/conftest.py)
+MAX_PASSWORD_BYTES = 72     # all bcrypt reads
+
+# Checked when there is no stored hash to check against (an unknown user or
+# organization): the answer then takes as long as a wrong password does, so
+# its timing does not tell which accounts exist. Made once, on first use.
+_dummy_hash: Optional[bytes] = None
+
+
+def password_problem(password: str) -> Optional[str]:
+    """Why a new password cannot be set (None: it can)."""
+    if len(password.encode("utf-8")) > MAX_PASSWORD_BYTES:
+        return f"password must be at most {MAX_PASSWORD_BYTES} bytes (UTF-8)"
+    return None
+
+
+def verify_password(plain_password: str, hashed_password: Optional[str]) -> bool:
+    """Whether the password matches the stored bcrypt hash. Never raises: a
+    missing or malformed hash is a wrong password. Without a hash (None) it
+    still does the work of one check, so it takes as long."""
+    secret = (plain_password or "").encode("utf-8")[:MAX_PASSWORD_BYTES]
+    if not hashed_password:
+        bcrypt.checkpw(secret, _dummy())
+        return False
+    try:
+        return bcrypt.checkpw(secret, hashed_password.encode("ascii"))
+    except (ValueError, UnicodeEncodeError):
+        return False
+
 
 def get_password_hash(password: str) -> str:
-    return pwd_context.hash(password)
+    problem = password_problem(password)
+    if problem:
+        raise ValueError(problem)
+    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt(rounds=BCRYPT_ROUNDS)).decode("ascii")
+
+
+def _dummy() -> bytes:
+    global _dummy_hash
+    if _dummy_hash is None or _dummy_hash[4:6] != f"{BCRYPT_ROUNDS:02d}".encode():
+        _dummy_hash = bcrypt.hashpw(secrets.token_bytes(16).hex().encode(), bcrypt.gensalt(rounds=BCRYPT_ROUNDS))
+    return _dummy_hash
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
     to_encode = data.copy()

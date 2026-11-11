@@ -3,6 +3,7 @@ from pydantic import BaseModel, EmailStr, Field, field_validator
 from datetime import datetime
 from typing import Literal, Optional
 from app.models.user import UserRole
+from app.core.security import password_problem
 
 
 SLUG_PATTERN = re.compile(r"^[a-z0-9](?:[a-z0-9-]{1,61}[a-z0-9])?$")
@@ -14,6 +15,13 @@ def _validate_slug(v: str) -> str:
         raise ValueError(
             "slug must be 3-63 chars, lowercase letters, digits and hyphens"
         )
+    return v
+
+
+def _new_password(v: str) -> str:
+    problem = password_problem(v)
+    if problem:
+        raise ValueError(problem)
     return v
 
 
@@ -35,6 +43,11 @@ class UserCreate(UserBase):
     def _slug(cls, v: str) -> str:
         return _validate_slug(v)
 
+    @field_validator("password")
+    @classmethod
+    def _password(cls, v: str) -> str:
+        return _new_password(v)
+
 
 class UserInvite(BaseModel):
     """Admin inviting a teammate into the existing organization."""
@@ -42,6 +55,11 @@ class UserInvite(BaseModel):
     name: str
     role: UserRole = UserRole.user
     password: str = Field(min_length=8)
+
+    @field_validator("password")
+    @classmethod
+    def _password(cls, v: str) -> str:
+        return _new_password(v)
 
 
 class UserRoleUpdate(BaseModel):
@@ -55,6 +73,11 @@ class UserStatusUpdate(BaseModel):
 class PasswordChange(BaseModel):
     current_password: str
     new_password: str = Field(min_length=8)
+
+    @field_validator("new_password")
+    @classmethod
+    def _password(cls, v: str) -> str:
+        return _new_password(v)
 
 
 class UserOut(UserBase):

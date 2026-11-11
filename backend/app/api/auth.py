@@ -90,6 +90,7 @@ async def login(
     )
 
     if not org:
+        verify_password(user_data.password, None)   # as long as a wrong password takes
         raise generic_error
 
     user_result = await db.execute(
@@ -100,7 +101,8 @@ async def login(
     )
     user = user_result.scalar_one_or_none()
 
-    if not user or not verify_password(user_data.password, user.hashed_password):
+    # no such user: still one bcrypt check, so the timing does not tell who has an account
+    if not verify_password(user_data.password, user.hashed_password if user else None) or not user:
         raise generic_error
 
     if user.status != "active":

@@ -251,8 +251,8 @@ def main() -> int:
         say(f"deleted organization '{SLUG}'")
         return 0
     password = os.environ.get("PROVENZA_DEMO_PASSWORD", "")
-    if len(password) < MIN_PASSWORD:
-        sys.exit(f"set PROVENZA_DEMO_PASSWORD (at least {MIN_PASSWORD} characters): the viewer's password")
+    if len(password) < MIN_PASSWORD or len(password.encode("utf-8")) > 72:
+        sys.exit(f"set PROVENZA_DEMO_PASSWORD (at least {MIN_PASSWORD} characters, at most 72 bytes): the viewer's password")
 
     async def run() -> None:   # one event loop: the database pool belongs to it
         org_id, admin_password = await recreate_org(SLUG, email, password)

@@ -44,7 +44,7 @@ from app.core import security as _security  # noqa: E402
 # setup: org_and_users hashes two passwords and every token is a real login.
 # Tests check behaviour, not hashing cost, so they use the minimum, 4 rounds.
 # A hash carries its own cost, so verification works exactly as in production.
-_security.pwd_context.update(bcrypt__rounds=4)
+_security.BCRYPT_ROUNDS = 4
 
 
 TEST_DATABASE_URL = (
