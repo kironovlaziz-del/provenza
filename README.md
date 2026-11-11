@@ -25,6 +25,7 @@
 
 <p align="center">
   <a href="#-try-the-live-demo"><b>👀 Live demo</b></a> &nbsp;·&nbsp;
+  <a href="docs/quickstart.md"><b>⏱ Quickstart</b></a> &nbsp;·&nbsp;
   <a href="#-deploy-on-your-server"><b>🚀 Deploy</b></a> &nbsp;·&nbsp;
   <a href="#-what-makes-it-different"><b>✨ Why it's different</b></a> &nbsp;·&nbsp;
   <a href="#-features"><b>🧩 Features</b></a> &nbsp;·&nbsp;
@@ -74,6 +75,9 @@ It also puts the egress proxy and the endpoint agent on the server, with their k
 nothing to copy from the interface; add `--sensor` for the eBPF egress sensor.
 Upgrades are one command, `sudo provenza upgrade`: it backs up first and rolls back if the
 new version does not come up. Full guide: [docs/self-hosting.md](docs/self-hosting.md).
+
+**First time?** The [quickstart](docs/quickstart.md) goes from this install to Claude Code
+calling a tool through Provenza: checked, refused by one line of policy, and proven offline.
 
 **Connect an agent** from the interface: Agents → New agent → **Connect an AI client**
 gives one command for the machine where Gemini CLI, Claude Code, Cursor or any

@@ -370,8 +370,8 @@ Next steps
   3. Policies → Signed policy → ${B}Prepare the first release${N} → ${B}Sign with passkey${N}.
      The egress proxy on this host trusts that release (and only what follows
      from it); until then it refuses every request.
-  4. Agents → create an enrollment token, then on the agent's host:
-       pip install provenza
+  4. Connect a first agent (Claude Code, Gemini CLI, Cursor): docs/quickstart.md,
+     https://github.com/kironovlaziz-del/provenza/blob/main/docs/quickstart.md
   5. ${B}Back up deploy/.env now${N} (off this server): without its ENCRYPTION_KEY
      no backup can be read.
 

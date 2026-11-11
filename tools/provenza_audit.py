@@ -770,8 +770,10 @@ def cmd_receipt(args) -> int:
     doc = _load(args.file)
     trust = Trust(args.fingerprint)
     action, cp, fp = check_receipt(doc, trust, args.agent_fingerprint, args.approver_passkey, args.proxy_fingerprint)
+    # a refused call was never executed: the gateway decided it and is the witness of that
+    did = {"allowed": "executed", "denied": "refused"}.get(action.get("decision"), "recorded")
     who = (f"signed by agent key {fingerprint(action['signed_by']['public_key'], action['signed_by'].get('pq_public_key'))}"
-           if action.get("signed_by") else f"executed and witnessed by the Provenza {action['executed_by']}")
+           if action.get("signed_by") else f"{did} and witnessed by the Provenza {action['executed_by']}")
     print(f"VERIFIED  action {action['action_id']} ({action['tool_name']}, {action['decision']}) of agent "
           f"{action['agent_id']}: {who}")
     print(f"          sealed in seal {doc['seal']['seal_id']}, audit record of organization {cp['org_id']}, "

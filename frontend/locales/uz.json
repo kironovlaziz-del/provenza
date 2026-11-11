@@ -3643,7 +3643,8 @@
     },
     "waiting": "Mashina ulanganda bu sahifa buni ko'rsatadi.",
     "where": "Linux, amd64 yoki arm64. O'sha mashinada egress proksi bo'lsa (Provenza serverida bor) chaqiruvlar u orqali o'tadi; boshqa joyda to'g'ridan-to'g'ri Provenza shlyuzlariga.",
-    "done": "Ulandi: agent #{{id}}. Uning chaqiruvlari Agent faoliyatida ko'rinadi.",
+    "done": "Ulandi: agent #{{id}}. Uning chaqiruvlari agent sahifasida, So'nggi amallar bo'limida ko'rinadi.",
+    "open_agent": "Agentni ochish",
     "other": "Tokendan foydalanishning boshqa usullari:"
   },
   "nav": {

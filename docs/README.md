@@ -2,6 +2,7 @@
 
 ## Running it
 
+- [Quickstart](quickstart.md): install, connect Claude Code, see a tool call checked, refused and proven offline
 - [Self-hosting](self-hosting.md): install, HTTPS, backups, upgrades, troubleshooting
 - [Production stack](../deploy/README.md): the containers `install.sh` runs
 - [Monitoring](monitoring.md): the Observability page, Grafana, alert rules and where alerts go

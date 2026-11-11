@@ -3643,7 +3643,8 @@
     },
     "waiting": "This page shows when the machine has connected.",
     "where": "Linux, amd64 or arm64. With an egress proxy on that machine (the Provenza server has one) calls go through it; elsewhere straight to Provenza's gateways.",
-    "done": "Connected: agent #{{id}}. Its calls appear in Agent activity.",
+    "done": "Connected: agent #{{id}}. Its calls appear on its page, under Recent actions.",
+    "open_agent": "Open the agent",
     "other": "Other ways to use the token:"
   },
   "nav": {
