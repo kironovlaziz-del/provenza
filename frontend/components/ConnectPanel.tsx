@@ -5,6 +5,7 @@
 // one-time token (its keys are made there and never leave it) and connects
 // the client through agent mode (backend app/api/connect_script.py).
 import React, { useEffect, useState } from "react";
+import Link from "next/link";
 import { useTranslation } from "react-i18next";
 import { listEnrollments, type EnrollmentT } from "@/lib/enrollment_api";
 
@@ -63,7 +64,10 @@ export function ConnectPanel({ token, enrollmentId, onConnected }:
     <div className="field" style={{ margin: 0 }}>
       <label>{t("connect.title")}</label>
       {used ? (
-        <span className="pill pill-low">✓ {t("connect.done", { id: used.agent_id ?? "?" })}</span>
+        <span>
+          <span className="pill pill-low">✓ {t("connect.done", { id: used.agent_id ?? "?" })}</span>
+          {used.agent_id != null && <> <Link href={`/agents/${used.agent_id}`}>{t("connect.open_agent")} →</Link></>}
+        </span>
       ) : (
         <div style={{ display: "grid", gap: 8 }}>
           <p className="hint-text" style={{ margin: 0 }}>{t("connect.hint")}</p>

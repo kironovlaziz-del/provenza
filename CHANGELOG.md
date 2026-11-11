@@ -7,6 +7,8 @@ this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- **Quickstart** ([docs/quickstart.md](docs/quickstart.md)): from `install.sh` to Claude Code calling an MCP tool through Provenza, refused by one line of policy and proven offline with the receipt and `tools/provenza_audit.py`. `backend/tests/test_quickstart.py` walks the same steps on the server, so the guide breaks the build when it goes stale. Linked from the README, the docs index, self-hosting and the installer's last message.
+- An agent's **Recent actions** show each action's number, linking to its receipt (Audit Log → Evidence opens with it, `?action=<id>`). After Connect, a link opens the new agent.
 - `provenza-proxy connect`: a client's own command (`claude mcp add`) that has not finished in 60 s is stopped and connect says what to run by hand, instead of hanging the window; on Windows the console shows `ok` instead of a check mark it cannot draw. Agents → Connect hides the other ways to use the token once Connect has spent it. On Windows, `agent-start` (run at sign-in) closes its console window at once - closing it by hand while agent mode was starting stopped it - and writes what it did to agent mode's log.
 - HTTP tools: the arguments are checked against the input schema all the way down, by the server and by the egress proxy with the same rules and shared test vectors (`sdk/testdata/schema-vectors.json`): types, `enum`/`const`, nested `properties`/`required`/`additionalProperties`, `items`, lengths, ranges, `pattern` (RE2 on both sides: linear time, no ReDoS). A schema keyword the check does not understand (`$ref`, `anyOf`, ...) is refused when the tool is saved and when it is called. New backend dependency: `google-re2`.
 - HTTP tools: a body can be sent as a form (`body_encoding: "form"`, string arguments only); the Python and JS SDKs' permit middleware read a form body back into the same arguments (`form_input`, `formInput`).
@@ -150,6 +152,7 @@ this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- `tools/provenza_audit.py receipt`: a refused action is reported as "refused and witnessed by" the gateway, not "executed".
 - In-app help: a link in bold text (**[Policies](/policy-hierarchy)**) is
   shown as a link, not as raw markdown.
 - The endpoint agent's default ingest URL had `shadow_ai` instead of

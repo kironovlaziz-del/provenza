@@ -4,7 +4,8 @@
 // check it was decided by, its place in a sealed Merkle batch, the audit
 // checkpoint) and TRACE exports, verifiable offline with tools/provenza_audit.py.
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { useTranslation } from "react-i18next";
 import { Form } from "@/components/Form";
 import { errorMessage } from "@/lib/errors";
@@ -31,7 +32,10 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
 
 export function PvpEvidence() {
   const { t, i18n } = useTranslation();
-  const [actionId, setActionId] = useState("");
+  // ?action=<id>: opened from an action (an agent's Recent actions) - show its receipt at once
+  const asked = useSearchParams().get("action") ?? "";
+  const askedId = /^[1-9][0-9]{0,15}$/.test(asked) ? asked : "";
+  const [actionId, setActionId] = useState(askedId);
   const [chainId, setChainId] = useState("");
   const [receipt, setReceipt] = useState<Receipt | null>(null);
   const [busy, setBusy] = useState(false);
@@ -48,6 +52,11 @@ export function PvpEvidence() {
       setBusy(false);
     }
   }
+
+  useEffect(() => {
+    if (askedId) run(async () => setReceipt((await getReceipt(Number(askedId))) as Receipt));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [askedId]);
 
   const a = receipt?.action;
   return (

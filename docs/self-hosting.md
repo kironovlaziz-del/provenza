@@ -146,6 +146,9 @@ hierarchy → Signed policy → Prepare the first release → Sign with passkey*
 
 ### First steps after installing
 
+The [quickstart](quickstart.md) walks through the first agent end to end. For a
+production setup:
+
 1. **Back up `deploy/.env`** to somewhere off the server, such as a password manager. Without its `ENCRYPTION_KEY`, no backup can be read.
 2. Sign in and follow the **setup checklist** on the dashboard:
    - connect an AI provider;

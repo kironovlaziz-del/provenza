@@ -397,6 +397,7 @@ export default function AgentDetailPage() {
             <table className="table-cards">
               <thead>
                 <tr>
+                  <th>{t("evidence.action_id")}</th>
                   <th>{t("chains.tl_time")}</th>
                   <th>{t("chains.tl_tool")}</th>
                   <th>{t("chains.tl_result")}</th>
@@ -404,9 +405,13 @@ export default function AgentDetailPage() {
                 </tr>
               </thead>
               <tbody>
-                {actions.length === 0 && <tr className="empty-row"><td colSpan={4} className="hint-text" style={{ textAlign: "center", padding: 24 }}>{t("chains.no_actions")}</td></tr>}
+                {actions.length === 0 && <tr className="empty-row"><td colSpan={5} className="hint-text" style={{ textAlign: "center", padding: 24 }}>{t("chains.no_actions")}</td></tr>}
                 {actions.map((a) => (
                   <tr key={a.id}>
+                    <td data-label={t("evidence.action_id")} className="mono" style={{ fontSize: 12 }}>
+                      {/* the action's receipt: what an auditor checks offline */}
+                      <Link href={`/audit?tab=evidence&action=${a.id}`} title={t("evidence.receipt_title")}>#{a.id}</Link>
+                    </td>
                     <td data-label={t("chains.tl_time")} className="mono" style={{ fontSize: 12, whiteSpace: "nowrap" }}>{fmt(a.created_at)}</td>
                     <td data-label={t("chains.tl_tool")} className="mono" style={{ fontSize: 12 }}>{a.tool_name}</td>
                     <td data-label={t("chains.tl_result")}><span className={`pill ${a.policy_check_result === "denied" ? "pill-critical" : "pill-low"}`}>{a.policy_check_result}</span></td>
