@@ -57,3 +57,43 @@ func winQuote(s string) string {
 	b.WriteByte('"')
 	return b.String()
 }
+
+// runValue: one value of the Run key, as `reg query` lists it.
+type runValue struct{ Name, Data string }
+
+// parseRunValues: the REG_SZ / REG_EXPAND_SZ values in `reg query <key>` output
+// ("    <name>    REG_SZ    <data>"; the type is the same in every language).
+func parseRunValues(out string) []runValue {
+	var vals []runValue
+	for _, line := range strings.Split(strings.ReplaceAll(out, "\r", ""), "\n") {
+		for _, typ := range []string{"    REG_SZ    ", "    REG_EXPAND_SZ    "} {
+			i := strings.Index(line, typ)
+			if i < 0 {
+				continue
+			}
+			name := strings.TrimSpace(line[:i])
+			if name != "" {
+				vals = append(vals, runValue{Name: name, Data: strings.TrimSpace(line[i+len(typ):])})
+			}
+			break
+		}
+	}
+	return vals
+}
+
+// parseListener: the pid listening on addr in `netstat -ano -p TCP` output
+// ("  TCP    127.0.0.1:8480    0.0.0.0:0    LISTENING    6744"; the state word
+// is translated in some languages, so the foreign address 0.0.0.0:0 is what
+// marks a listener).
+func parseListener(out, addr string) int {
+	for _, line := range strings.Split(strings.ReplaceAll(out, "\r", ""), "\n") {
+		f := strings.Fields(line)
+		if len(f) < 5 || !strings.EqualFold(f[0], "TCP") || f[1] != addr || f[2] != "0.0.0.0:0" {
+			continue
+		}
+		if pid, err := strconv.Atoi(f[len(f)-1]); err == nil && pid > 0 {
+			return pid
+		}
+	}
+	return 0
+}

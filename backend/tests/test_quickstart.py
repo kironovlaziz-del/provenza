@@ -32,17 +32,17 @@ from tests.test_mcp_gateway import _agent, _call, _sync, fake  # noqa: F401  (fa
 ROOT = Path(__file__).resolve().parents[2]
 SERVERS = "/api/v1/mcp-servers"
 
-# the tools of https://mcp.deepwiki.com/mcp, as its tools/list describes them
+# the tools of https://mcp.deepwiki.com/mcp, as its tools/list names them (checked on a real sync, Nov 2026)
 DEEPWIKI = [
     {"name": "read_wiki_structure", "description": "Get a list of documentation topics for a GitHub repository",
      "inputSchema": {"type": "object", "properties": {"repoName": {"type": "string"}}, "required": ["repoName"]}},
     {"name": "read_wiki_contents", "description": "View documentation about a GitHub repository",
      "inputSchema": {"type": "object", "properties": {"repoName": {"type": "string"}}, "required": ["repoName"]}},
-    {"name": "ask_question", "description": "Ask any question about a GitHub repository",
+    {"name": "ask_wiki_question", "description": "Ask any question about a GitHub repository",
      "inputSchema": {"type": "object", "properties": {"repoName": {"type": "string"}, "question": {"type": "string"}},
                      "required": ["repoName", "question"]}},
 ]
-TOOLS = ("deepwiki.read_wiki_structure", "deepwiki.ask_question")
+TOOLS = ("deepwiki.read_wiki_structure", "deepwiki.ask_wiki_question")
 ASK = {"repoName": "kironovlaziz-del/provenza", "question": "How does Provenza verify a delegation?"}
 
 
@@ -70,7 +70,7 @@ async def test_the_quickstart_path(client, admin_token, fake, tmp_path):  # noqa
     assert r.status_code == 200, r.text
     server = r.json()
     report = await _sync(client, admin_token, server)
-    assert sorted(report["added"]) == ["deepwiki.ask_question", "deepwiki.read_wiki_contents",
+    assert sorted(report["added"]) == ["deepwiki.ask_wiki_question", "deepwiki.read_wiki_contents",
                                        "deepwiki.read_wiki_structure"]
     listed = (await client.get(f"{SERVERS}/{server['id']}/tools", headers=auth_headers(admin_token))).json()
     for tool in listed:
@@ -85,30 +85,30 @@ async def test_the_quickstart_path(client, admin_token, fake, tmp_path):  # noqa
     # 5. it sees exactly the approved tools of its rights, and a call runs
     r = await _call(client, agent, "tools/list")
     assert sorted(t["name"] for t in r.json()["result"]["tools"]) == sorted(TOOLS)
-    r = await _call(client, agent, "tools/call", {"name": "deepwiki.ask_question", "arguments": ASK})
+    r = await _call(client, agent, "tools/call", {"name": "deepwiki.ask_wiki_question", "arguments": ASK})
     assert r.status_code == 200, r.text
     assert "hybrid key" in r.json()["result"]["content"][0]["text"]
     allowed = (await _actions(client, admin_token, agent["id"]))[0]
-    assert allowed["tool_name"] == "deepwiki.ask_question" and allowed["policy_check_result"] == "allowed"
+    assert allowed["tool_name"] == "deepwiki.ask_wiki_question" and allowed["policy_check_result"] == "allowed"
 
     # a tool that was not approved is not there at all
     r = await _call(client, agent, "tools/call", {"name": "deepwiki.read_wiki_contents", "arguments": {"repoName": "x/y"}})
     assert r.json()["error"]["code"] == -32602
 
     # 6. one line in the organization's policy, the YAML the guide shows
-    yaml = "version: 1\ntools:\n  deny: [\"deepwiki.ask_question\"]\n"
+    yaml = "version: 1\ntools:\n  deny: [\"deepwiki.ask_wiki_question\"]\n"
     r = await client.put("/api/v1/policy-layers", json={"scope": "org", "yaml": yaml, "revision": 0},
                          headers=auth_headers(admin_token))
     assert r.status_code == 200, r.text
     calls_before = len([b for _, b in fake.requests if b["method"] == "tools/call"])
-    r = await _call(client, agent, "tools/call", {"name": "deepwiki.ask_question", "arguments": ASK})
+    r = await _call(client, agent, "tools/call", {"name": "deepwiki.ask_wiki_question", "arguments": ASK})
     body = r.json()
     refusal = json.dumps(body.get("error") or body.get("result"))
     assert "error" in body or body["result"].get("isError") is True, body
     assert "Blocked by policy 'organization policy'" in refusal, refusal
     assert len([b for _, b in fake.requests if b["method"] == "tools/call"]) == calls_before   # never sent
     denied = (await _actions(client, admin_token, agent["id"]))[0]
-    assert denied["tool_name"] == "deepwiki.ask_question" and denied["policy_check_result"] == "denied"
+    assert denied["tool_name"] == "deepwiki.ask_wiki_question" and denied["policy_check_result"] == "denied"
     assert denied["reason"] == "Blocked by policy 'organization policy'", denied["reason"]
     # the other tool still works
     r = await _call(client, agent, "tools/call", {"name": "deepwiki.read_wiki_structure",
@@ -128,7 +128,7 @@ async def test_the_quickstart_path(client, admin_token, fake, tmp_path):  # noqa
         done = _audit_tool("receipt", str(path), "--fingerprint", fp)
         assert done.returncode == 0, done.stdout + done.stderr
         did = "executed" if decision == "allowed" else "refused"
-        assert done.stdout.startswith(f"VERIFIED  action {action['id']} (deepwiki.ask_question, {decision}) of agent "
+        assert done.stdout.startswith(f"VERIFIED  action {action['id']} (deepwiki.ask_wiki_question, {decision}) of agent "
                                       f"{agent['id']}: {did} and witnessed by the Provenza mcp_gateway"), done.stdout
 
         # changed after the fact: refused
@@ -136,3 +136,25 @@ async def test_the_quickstart_path(client, admin_token, fake, tmp_path):  # noqa
         path.write_text(json.dumps(receipt))
         done = _audit_tool("receipt", str(path), "--fingerprint", fp)
         assert done.returncode == 1, done.stdout + done.stderr
+
+
+@pytest.mark.asyncio
+async def test_gateway_tools_says_which_names_are_usable(client, admin_token, fake):  # noqa: F811
+    """GET /agents/gateway-tools: what the console checks an agent's tool names
+    against - the quickstart's mistake (a name DeepWiki does not have) shows
+    before any call."""
+    fake.tools = [dict(t) for t in DEEPWIKI]
+    r = await client.post(SERVERS, json={"slug": "deepwiki", "name": "DeepWiki",
+                                         "url": "https://mcp.deepwiki.com/mcp"}, headers=auth_headers(admin_token))
+    server = r.json()
+    await _sync(client, admin_token, server)
+    listed = (await client.get(f"{SERVERS}/{server['id']}/tools", headers=auth_headers(admin_token))).json()
+    first = next(t for t in listed if t["exposed_name"] == "deepwiki.read_wiki_structure")
+    await client.post(f"{SERVERS}/{server['id']}/tools/{first['id']}/approve", headers=auth_headers(admin_token))
+
+    r = await client.get("/api/v1/agents/gateway-tools", headers=auth_headers(admin_token))
+    assert r.status_code == 200, r.text
+    by_name = {t["name"]: t for t in r.json()["tools"]}
+    assert by_name["deepwiki.read_wiki_structure"] == {"name": "deepwiki.read_wiki_structure", "kind": "mcp", "usable": True}
+    assert by_name["deepwiki.ask_wiki_question"]["usable"] is False      # synced, not approved
+    assert "deepwiki.ask_question" not in by_name                        # no such tool

@@ -54,6 +54,7 @@ func unitOwnsPort(Options) bool { return false }
 // user's sign-in (the Run key of the user's own registry hive: no
 // administrator rights, nothing for other users).
 func service(o Options) error {
+	replaceEarlier(o)
 	if err := portFree(o); err != nil {
 		return err
 	}
@@ -95,4 +96,43 @@ func killTree(p *os.Process) error {
 		return p.Kill()
 	}
 	return nil
+}
+
+// listenerPid: the process listening on o's loopback port (0: none, or not known).
+func listenerPid(o Options) int {
+	out, err := exec.Command(sys32("netstat.exe"), "-ano", "-p", "TCP").Output()
+	if err != nil {
+		return 0
+	}
+	return parseListener(string(out), o.listen())
+}
+
+// procServes: the agent mode with this pid is the one listening on o's port.
+func procServes(pid int, o Options) bool { return pid > 1 && listenerPid(o) == pid }
+
+// agentModesServing: the agent mode listening on o's port, if one does.
+func agentModesServing(o Options) []int {
+	if pid := listenerPid(o); pid > 1 && procIsAgent(pid) {
+		return []int{pid}
+	}
+	return nil
+}
+
+// replaceEarlierServices: the sign-in entries of earlier agents serving o, removed.
+func replaceEarlierServices(o Options) []int64 {
+	out, err := exec.Command(sys32("reg.exe"), "query", runKey).Output()
+	if err != nil {
+		return nil
+	}
+	var gone []int64
+	for _, v := range parseRunValues(string(out)) {
+		id := numberIn(v.Name, "ProvenzaAgent", "")
+		if id == 0 || id == o.AgentID || !servesSame(v.Data, o, "", "-port", "-identity") {
+			continue
+		}
+		if o.Run(sys32("reg.exe"), "delete", runKey, "/v", v.Name, "/f") == nil {
+			gone = append(gone, id)
+		}
+	}
+	return gone
 }

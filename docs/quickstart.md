@@ -79,7 +79,7 @@ Leave the rest as it is and save. Press **Sync**: three tools appear, each
 *Awaiting approval*. **Approve** two of them:
 
 - `deepwiki.read_wiki_structure`
-- `deepwiki.ask_question`
+- `deepwiki.ask_wiki_question`
 
 Leave `deepwiki.read_wiki_contents` unapproved. An approval pins the tool's
 exact definition. If DeepWiki changes it later, agents lose the tool until
@@ -89,8 +89,10 @@ you approve the new one.
 
 **AI → Agents → Register agent**:
 
-- **Allowed tools:** `deepwiki.read_wiki_structure, deepwiki.ask_question`.
-  Use exact names: an agent's rights list tools, not patterns.
+- **Allowed tools:** `deepwiki.read_wiki_structure, deepwiki.ask_wiki_question`.
+  Use exact names, as the MCP tools list shows them after **Sync**: an
+  agent's rights list tools, not patterns. A name that matches no tool, or a
+  tool not approved yet, is pointed out under the field.
 - **Signing key:** keep *Enrollment token* and *Post-quantum hybrid*.
 - Leave the name empty: the agent is named after the client and the machine,
   for example `claude-code@laptop`.
@@ -125,12 +127,12 @@ Start Claude Code again, so it picks up the new MCP server. `/mcp` lists
 
 > Use the provenza tools: how does github.com/kironovlaziz-del/provenza verify a delegation?
 
-Claude Code asks permission to use `deepwiki.ask_question`. Allow it, and the
+Claude Code asks permission to use `deepwiki.ask_wiki_question`. Allow it, and the
 answer comes back.
 
 In Provenza, open the agent (**Open the agent**, or **AI → Agents →
 claude-code@…**). Under **Recent actions**
-the call is listed: `deepwiki.ask_question`, **allowed**. Provenza checked it
+the call is listed: `deepwiki.ask_wiki_question`, **allowed**. Provenza checked it
 against the agent's rights and the policy before it reached DeepWiki, and
 recorded it.
 
@@ -138,14 +140,14 @@ recorded it.
 
 **Rules → Policy hierarchy → Organization**, in the form:
 
-- **Denied tools:** `deepwiki.ask_question`
+- **Denied tools:** `deepwiki.ask_wiki_question`
 
 Press **Save**. In YAML that is:
 
 ```yaml
 version: 1
 tools:
-  deny: ["deepwiki.ask_question"]
+  deny: ["deepwiki.ask_wiki_question"]
 ```
 
 Ask Claude Code the same question again. This time the tool answers:
@@ -180,7 +182,7 @@ python3 provenza_audit.py receipt receipt-2.json --fingerprint SHA256:…
 On Windows, use `curl.exe` and `py` in place of `curl` and `python3`.
 
 ```
-VERIFIED  action 2 (deepwiki.ask_question, denied) of agent 1: refused and witnessed by the Provenza mcp_gateway
+VERIFIED  action 2 (deepwiki.ask_wiki_question, denied) of agent 1: refused and witnessed by the Provenza mcp_gateway
           sealed in seal 1, audit record of organization 1, checkpoint of 7 records signed by SHA256:…
 ```
 
@@ -223,7 +225,27 @@ and it says `NOT VERIFIED`.
 | The connect command stops with *supports Linux on amd64 and arm64* | It runs on Linux and Windows. On macOS, use a Linux VM for now. |
 | `/mcp` in Claude Code does not show `provenza` | Start Claude Code again. `claude mcp list` should list it at `http://127.0.0.1:8480/_mcp`. |
 | `/mcp` shows `provenza` with no tools | The tools are not approved, or the names under the agent's **Allowed tools** differ from the approved ones. |
-| *Unknown tool* | The tool is not approved, or not in the agent's rights. |
+| *Unknown tool* | The tool is not approved, or not in the agent's rights. The agent's page points out names that match no tool; **Edit tools** there fixes them. |
+| Windows PowerShell: *The underlying connection was closed* | Windows PowerShell 5.1 may not offer TLS 1.2. Run `[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12` and the command again. |
+
+**No AI client at hand?** Agent mode answers MCP requests itself, so the same
+call can be made from a terminal. On Linux:
+
+```bash
+curl -s http://127.0.0.1:8480/_mcp -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"deepwiki.ask_wiki_question","arguments":{"repoName":"kironovlaziz-del/provenza","question":"How is a delegation verified?"}}}'
+```
+
+In Windows PowerShell:
+
+```powershell
+$call = @{ jsonrpc = '2.0'; id = 1; method = 'tools/call'; params = @{ name = 'deepwiki.ask_wiki_question'; arguments = @{ repoName = 'kironovlaziz-del/provenza'; question = 'How is a delegation verified?' } } } | ConvertTo-Json -Depth 5
+Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8480/_mcp -ContentType 'application/json' -Headers @{Accept='application/json, text/event-stream'} -Body $call | ConvertTo-Json -Depth 10
+```
+
+Connecting a new agent on a computer where you connected one before replaces
+the earlier agent's agent mode (its process and its start at sign-in): the
+identity file there now holds the new agent.
 
 To take the client out again: `~/.local/bin/provenza-proxy connect claude-code --remove`
 on Linux, or `& "$env:LOCALAPPDATA\provenza\provenza-proxy.exe" connect claude-code --remove`

@@ -8,6 +8,7 @@ this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 - **Quickstart** ([docs/quickstart.md](docs/quickstart.md)): from `install.sh` to Claude Code calling an MCP tool through Provenza, refused by one line of policy and proven offline with the receipt and `tools/provenza_audit.py`. `backend/tests/test_quickstart.py` walks the same steps on the server, so the guide breaks the build when it goes stale. Linked from the README, the docs index, self-hosting and the installer's last message.
+- **Allowed tools are checked and can be edited.** Under "Allowed tools" (a new agent, and the agent's page) the console points out a name that matches no MCP server or HTTP tool (a typo, or a tool the server renamed) and a tool not approved yet; on the agent's page an admin edits them in place (**Edit tools**; not when a role sets the rights). `GET /agents/gateway-tools` lists the names, each with whether an agent holding it sees it.
 - **Retiring a stopped agent ends its own stop.** A stop of that one agent had nothing left to hold once the agent was retired, yet stayed *in force* for good. It now ends with the retirement, recorded like a lift (audit `kill_switch` / `lifted`, `retired: true`, nothing given back) and shown as *Ended: agent retired*. Stops of a team or of every agent stay. On the Kill switch page, the stops in force (from four) and the history (from nine) scroll in place instead of stretching the page.
 - An agent's **Recent actions** show each action's number, linking to its receipt (Audit Log → Evidence opens with it, `?action=<id>`). After Connect, a link opens the new agent.
 - `provenza-proxy connect`: a client's own command (`claude mcp add`) that has not finished in 60 s is stopped and connect says what to run by hand, instead of hanging the window; on Windows the console shows `ok` instead of a check mark it cannot draw. Agents → Connect hides the other ways to use the token once Connect has spent it. On Windows, `agent-start` (run at sign-in) closes its console window at once - closing it by hand while agent mode was starting stopped it - and writes what it did to agent mode's log.
@@ -155,6 +156,8 @@ this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- `provenza-proxy connect` on a computer where an earlier agent of the same user was connected: the earlier agent's agent mode kept 127.0.0.1:8480 and connecting stopped with "taken by another program" (or, after the next sign-in, came back with the new identity). It is now replaced: its process stopped, its start at sign-in (Windows Run entry, systemd --user unit) and pid file removed - only for an agent mode of this user serving the same port or identity file; another agent on another port, and any other program, are left alone.
+- Quickstart: DeepWiki's question tool is `ask_wiki_question` (the guide said `ask_question`, a name its server no longer has); the guide now also shows the call from a terminal, and the TLS 1.2 fix for Windows PowerShell 5.1.
 - `tools/provenza_audit.py receipt`: a refused action is reported as "refused and witnessed by" the gateway, not "executed".
 - In-app help: a link in bold text (**[Policies](/policy-hierarchy)**) is
   shown as a link, not as raw markdown.
