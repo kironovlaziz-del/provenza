@@ -363,6 +363,33 @@ async def governance_graph(
     return graph
 
 
+@router.get("/gateway-tools")
+async def gateway_tools(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """The tool names an agent can be given through Provenza's gateways - the
+    tools of the MCP servers (usable: approved, definition unchanged) and the
+    enabled HTTP tools - so the console can say when a name in an agent's
+    rights matches none of them (a typo, or a tool not approved yet). An agent
+    may also hold names of tools it runs itself: those are not listed here."""
+    from app.models.http_tool import HttpTool
+    from app.models.mcp import MCPServer, MCPTool
+    from app.pvp.mcp_gateway import MCPGateway
+
+    org_id = current_user.org_id
+    usable = {t.exposed_name for t, _ in await MCPGateway(db)._approved(org_id)}
+    rows = (await db.execute(
+        select(MCPTool.exposed_name).join(MCPServer, MCPServer.id == MCPTool.server_id)
+        .where(MCPTool.org_id == org_id, MCPTool.removed_at.is_(None), MCPServer.enabled.is_(True))
+    )).scalars().all()
+    tools = [{"name": n, "kind": "mcp", "usable": n in usable} for n in sorted(set(rows))]
+    http = (await db.execute(select(HttpTool.name).where(HttpTool.org_id == org_id, HttpTool.enabled.is_(True)))
+            ).scalars().all()
+    tools += [{"name": n, "kind": "http", "usable": True} for n in sorted(set(http))]
+    return {"tools": tools}
+
+
 @router.get("/", response_model=Page[AgentOut])
 async def list_agents(
     pagination: PaginationParams = Depends(),

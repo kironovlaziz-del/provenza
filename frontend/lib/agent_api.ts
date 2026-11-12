@@ -235,3 +235,16 @@ export async function listSigningKeys(agentId: number) {
   const { data } = await api.get<SigningKeyT[]>(`/agents/${agentId}/signing-keys`);
   return data;
 }
+
+/** A tool an agent can be given through Provenza's gateways (GET /agents/gateway-tools). */
+export interface GatewayTool {
+  name: string;
+  kind: "mcp" | "http";
+  /** approved, its definition unchanged: an agent holding the name sees it */
+  usable: boolean;
+}
+
+export async function listGatewayTools(): Promise<GatewayTool[]> {
+  const { data } = await api.get<{ tools: GatewayTool[] }>("/agents/gateway-tools");
+  return data.tools;
+}

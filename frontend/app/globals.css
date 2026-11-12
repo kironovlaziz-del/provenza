@@ -459,6 +459,14 @@ tbody tr.clickable:hover {
   margin: 8px 0 0;
 }
 
+/* a name in an agent's rights that its gateways will not show it */
+.warn-text {
+  color: var(--risk-medium);
+  font-size: 12px;
+  margin: 4px 0 0;
+}
+.tool-names-hint p { overflow-wrap: anywhere; }
+
 .hint-text {
   color: var(--text-muted);
   font-size: 12px;
@@ -1353,6 +1361,10 @@ tbody tr.clickable:hover {
 }
 .agent-page .ks-event-head { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .agent-page .ks-event-head .ag-row-actions { margin-left: auto; min-width: 0; }
+.agent-page .ag-edit-tools { align-self: flex-start; }
+.agent-page .ag-tools-edit { flex: 1; min-width: 0; }
+.agent-page .ag-tools-edit input { width: 100%; }
+.agent-page .ag-tools-actions { display: flex; gap: 8px; margin-top: 8px; }
 .agent-page .ks-names { font-size: 12px; overflow-wrap: anywhere; }
 /* a long list of stops or of history scrolls in place, the page stays short */
 .agent-page .ks-scroll { max-height: 440px; overflow-y: auto; overscroll-behavior: contain; padding-right: 4px; }

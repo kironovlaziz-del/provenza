@@ -12,7 +12,9 @@ import (
 	"errors"
 	"net"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -187,5 +189,66 @@ func TestRunCommandStopsAHangingClient(t *testing.T) {
 	}
 	if err := RunCommand("true"); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// A new enrollment on a machine with an earlier agent of this user: the
+// earlier agent mode (its unit, its process) serving the same port or identity
+// file is replaced; an agent mode of another agent on another port, with
+// another identity file, is left alone.
+func TestAnEarlierAgentIsReplaced(t *testing.T) {
+	r := &runs{}
+	o, out := opts(t, "gemini-cli", r, "")
+	unitDir := filepath.Dir(o.unitPath())
+	os.MkdirAll(unitDir, 0o755)
+	earlier, other := o, o
+	earlier.AgentID = 6
+	other.AgentID, other.Port, other.Identity = 5, o.Port+1, "/home/a/other/agent.json"
+	os.WriteFile(earlier.unitPath(), []byte(earlier.Unit()), 0o644)
+	os.WriteFile(other.unitPath(), []byte(other.Unit()), 0o644)
+
+	// agent modes as processes: the earlier one (pid file) and the other one
+	start := func(x Options) *exec.Cmd {
+		c := exec.Command("sh", "-c", "sleep 30", "sh", "-agent-identity", x.Identity, "-listen", x.listen())
+		if err := c.Start(); err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { c.Process.Kill(); c.Wait() })
+		return c
+	}
+	pe, po := start(earlier), start(other)
+	os.MkdirAll(o.stateDir(), 0o700)
+	os.WriteFile(earlier.pidPath(), []byte(strconv.Itoa(pe.Process.Pid)+"\n"), 0o600)
+	waited := make(chan error, 1)
+	go func() { waited <- pe.Wait() }()
+
+	if err := Do(o); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(earlier.unitPath()); !os.IsNotExist(err) {
+		t.Fatalf("the earlier unit stays: %v", err)
+	}
+	if _, err := os.Stat(other.unitPath()); err != nil {
+		t.Fatalf("the other agent's unit was removed: %v", err)
+	}
+	calls := strings.Join(r.calls, "\n")
+	if !strings.Contains(calls, "systemctl --user disable --now provenza-agent-6.service") ||
+		strings.Contains(calls, "provenza-agent-5.service") {
+		t.Fatalf("calls:\n%s", calls)
+	}
+	select {
+	case <-waited:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the earlier agent mode still runs")
+	}
+	if _, err := os.Stat(earlier.pidPath()); !os.IsNotExist(err) {
+		t.Fatal("the earlier pid file stays")
+	}
+	if !procIsAgent(po.Process.Pid) {
+		t.Fatal("the other agent's agent mode was stopped")
+	}
+	if !strings.Contains(out.String(), "the earlier agent #6 no longer starts here (this machine's agent is now #7)") ||
+		!strings.Contains(out.String(), "stopped the agent mode of the earlier agent #6") {
+		t.Fatalf("output:\n%s", out.String())
 	}
 }

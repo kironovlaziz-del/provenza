@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -49,6 +50,7 @@ func unitOwnsPort(o Options) bool {
 // service: the unit written and started; when this user has no systemd
 // session (su, a container), what to run instead.
 func service(o Options) error {
+	replaceEarlier(o)
 	if err := portFree(o); err != nil {
 		return err
 	}
@@ -103,3 +105,76 @@ func removeService(o Options) error {
 
 // killTree: the process (a client command that did not finish).
 func killTree(p *os.Process) error { return p.Kill() }
+
+// procServes: the agent mode with this pid listens on o's address or signs with o's identity file.
+func procServes(pid int, o Options) bool {
+	raw, err := os.ReadFile(fmt.Sprintf("/proc/%d/cmdline", pid))
+	if err != nil {
+		return false
+	}
+	args := strings.Split(strings.TrimRight(string(raw), "\x00"), "\x00")
+	for i := 0; i+1 < len(args); i++ {
+		if args[i] == "-listen" && args[i+1] == o.listen() ||
+			args[i] == "-agent-identity" && samePath(args[i+1], o.Identity) {
+			return true
+		}
+	}
+	return false
+}
+
+// agentModesServing: this user's agent modes that serve o (only this user's
+// processes: another user's cmdline is readable, so the owner is checked).
+func agentModesServing(o Options) []int {
+	dirs, _ := filepath.Glob("/proc/[0-9]*")
+	var out []int
+	for _, d := range dirs {
+		pid, err := strconv.Atoi(filepath.Base(d))
+		if err != nil || pid < 2 {
+			continue
+		}
+		st, err := os.Stat(d)
+		if err != nil {
+			continue
+		}
+		if sys, ok := st.Sys().(*syscall.Stat_t); !ok || int(sys.Uid) != os.Getuid() {
+			continue
+		}
+		if procIsAgent(pid) && procServes(pid, o) {
+			out = append(out, pid)
+		}
+	}
+	return out
+}
+
+// replaceEarlierServices: the units of earlier agents serving o, stopped and removed.
+func replaceEarlierServices(o Options) []int64 {
+	units, _ := filepath.Glob(filepath.Join(filepath.Dir(o.unitPath()), "provenza-agent-*.service"))
+	var gone []int64
+	for _, u := range units {
+		id := numberIn(filepath.Base(u), "provenza-agent-", ".service")
+		if id == 0 || id == o.AgentID {
+			continue
+		}
+		raw, err := os.ReadFile(u)
+		if err != nil {
+			continue
+		}
+		exec := ""
+		for _, line := range strings.Split(string(raw), "\n") {
+			if strings.HasPrefix(line, "ExecStart=") {
+				exec = strings.TrimPrefix(line, "ExecStart=")
+			}
+		}
+		if !servesSame(exec, o, "-listen", "", "-agent-identity") {
+			continue
+		}
+		_ = o.Run("systemctl", "--user", "disable", "--now", filepath.Base(u))
+		if os.Remove(u) == nil {
+			gone = append(gone, id)
+		}
+	}
+	if len(gone) > 0 {
+		_ = o.Run("systemctl", "--user", "daemon-reload")
+	}
+	return gone
+}

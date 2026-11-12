@@ -5,7 +5,9 @@ import { useParams } from "next/navigation";
 import Link from "next/link";
 import { useTranslation } from "react-i18next";
 import { PageHeader } from "@/components/PageHeader";
-import { downloadAgentManifest, getAgent, updateAgent, killAgent, listAgentActions, listKeyRevocations, listSigningKeys, revokeSigningKey, setSigningKey } from "@/lib/agent_api";
+import { downloadAgentManifest, getAgent, updateAgent, killAgent, listAgentActions, listGatewayTools, listKeyRevocations, listSigningKeys, revokeSigningKey, setSigningKey, type GatewayTool } from "@/lib/agent_api";
+import { ToolNamesHint } from "@/components/ToolNamesHint";
+import { splitNames } from "@/lib/tool_names";
 import type { Agent, AgentActionT, KeyRevocationT, SigningKeyT } from "@/lib/agent_types";
 import { useAuth } from "@/lib/auth";
 import { getIdentityOverview } from "@/lib/agent_identity_api";
@@ -36,6 +38,13 @@ export default function AgentDetailPage() {
   const [rekey, setRekey] = useState<EnrollmentT | null>(null);
   const [directAllowed, setDirectAllowed] = useState(false);
   const [statusError, setStatusError] = useState<string | null>(null);
+  // "Allowed tools": edited in place by an admin (not when a role sets the rights)
+  const [gatewayTools, setGatewayTools] = useState<GatewayTool[] | null>(null);
+  const [toolsDraft, setToolsDraft] = useState<string | null>(null);
+  const [toolsSaving, setToolsSaving] = useState(false);
+  useEffect(() => {
+    if (isAdmin) listGatewayTools().then(setGatewayTools).catch(() => undefined);
+  }, [isAdmin]);
 
   useEffect(() => {
     if (!isAdmin) return;
@@ -133,6 +142,22 @@ export default function AgentDetailPage() {
     }
   }
 
+  async function saveTools() {
+    if (toolsDraft === null) return;
+    setToolsSaving(true);
+    setStatusError(null);
+    try {
+      setAgent(await updateAgent(agentId, { allowed_tools: splitNames(toolsDraft) }));
+      setToolsDraft(null);
+    } catch (err) {
+      const detail = (err as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail;
+      setStatusError(translateApiError(detail, t, t("agents.tools_save_failed")));
+    } finally {
+      setToolsSaving(false);
+    }
+  }
+  const toolsEditable = isAdmin && !agent.role_id && agent.status !== "retired";
+
   const chips = (label: string, values?: string[] | null) => (
     <div className="ag-rights-row">
       <div className="ag-label">{label}</div>
@@ -206,7 +231,32 @@ export default function AgentDetailPage() {
             <div className="panel-body ag-stack">
               <AgentAssignment agent={agent} isAdmin={isAdmin} onChanged={() => { getAgent(agentId).then(setAgent).catch(() => undefined); }} />
               {chips(t("agents.capabilities"), agent.capabilities)}
-              {chips(t("agents.tools"), agent.allowed_tools)}
+              {toolsDraft === null ? (
+                <>
+                  {chips(t("agents.tools"), agent.allowed_tools)}
+                  {isAdmin && <ToolNamesHint names={agent.allowed_tools ?? []} known={gatewayTools} />}
+                  {toolsEditable && (
+                    <button type="button" className="btn btn-sm ag-edit-tools"
+                      onClick={() => setToolsDraft((agent.allowed_tools ?? []).join(", "))}>
+                      {t("agents.tools_edit")}
+                    </button>
+                  )}
+                </>
+              ) : (
+                <div className="ag-rights-row">
+                  <label className="ag-label" htmlFor="ag-tools">{t("agents.tools")}</label>
+                  <div className="ag-tools-edit">
+                    <input id="ag-tools" value={toolsDraft} onChange={(e) => setToolsDraft(e.target.value)}
+                      placeholder="deepwiki.read_wiki_structure, deepwiki.ask_wiki_question" autoFocus />
+                    <p className="hint-text">{t("agents.comma_hint")}</p>
+                    <ToolNamesHint names={splitNames(toolsDraft)} known={gatewayTools} />
+                    <div className="ag-tools-actions">
+                      <button type="button" className="btn btn-sm btn-primary" disabled={toolsSaving} onClick={saveTools}>{t("common.save")}</button>
+                      <button type="button" className="btn btn-sm" disabled={toolsSaving} onClick={() => setToolsDraft(null)}>{t("common.cancel")}</button>
+                    </div>
+                  </div>
+                </div>
+              )}
               {chips(t("agents.models"), agent.allowed_models)}
               {(user?.role === "admin" || user?.role === "approver") && (
                 <Link href={`/policy-hierarchy?agent=${agent.id}`} className="ag-small">{t("ph.agent_effective_link")} →</Link>

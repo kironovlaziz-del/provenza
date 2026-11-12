@@ -5,7 +5,9 @@ import { useRouter } from "next/navigation";
 import { useTranslation } from "react-i18next";
 import { PageHeader } from "@/components/PageHeader";
 import { Form } from "@/components/Form";
-import { registerAgent } from "@/lib/agent_api";
+import { listGatewayTools, registerAgent, type GatewayTool } from "@/lib/agent_api";
+import { ToolNamesHint } from "@/components/ToolNamesHint";
+import { splitNames } from "@/lib/tool_names";
 import { linkFoundAgent } from "@/lib/endpoints_api";
 import { issueEnrollment, type EnrollmentT } from "@/lib/enrollment_api";
 import { attestCommand, podSpecSnippet } from "@/lib/attestation_api";
@@ -65,8 +67,11 @@ export default function NewAgentPage() {
   const [ttl, setTtl] = useState(24);
   const [issued, setIssued] = useState<EnrollmentT | null>(null);
 
+  // the tool names the gateways know: a name in "Allowed tools" that matches none is pointed out
+  const [gatewayTools, setGatewayTools] = useState<GatewayTool[] | null>(null);
   useEffect(() => {
     Promise.all([listTeams(), listRoles()]).then(([ts, rs]) => { setTeams(ts); setRoles(rs); }).catch(() => undefined);
+    listGatewayTools().then(setGatewayTools).catch(() => undefined);
   }, []);
   // roles an agent of the chosen team can have: the team's own and org-wide ones
   // no team chosen: every role (a team's role then sets its team); a team chosen: its roles and org-wide ones
@@ -322,6 +327,7 @@ export default function NewAgentPage() {
                   <div className="field">
                     <label>{t("agents.tools")}</label>
                     <input value={tools} onChange={(e) => setTools(e.target.value)} placeholder="openai.chat, google.analytics.read" />
+                    <ToolNamesHint names={splitNames(tools)} known={gatewayTools} />
                   </div>
                   <div className="field">
                     <label>{t("agents.models")}</label>
