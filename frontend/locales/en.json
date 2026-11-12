@@ -3507,6 +3507,7 @@
     "no_passkey": "Add a passkey: it confirms your sign-ins and what you sign, with your device's PIN.",
     "refuse": "Refuse",
     "refuse_confirm": "End this sign-in? If it was not you, change your password.",
+    "incident_waiting": "This sign-in is still waiting for you:",
     "takeover": "End the other session (passkey)",
     "unknown_address": "unknown address",
     "unknown_browser": "unknown browser",

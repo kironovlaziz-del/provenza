@@ -151,6 +151,7 @@ this project adheres to [Semantic Versioning](https://semver.org/).
   integrity check stay open. The Incidents and Audit pages are hidden from
   plain users accordingly.
 - `follow-redirects` 1.16.2 in the console (GHSA-mrwp-f3q8-3g9p).
+- **A second sign-in's incident tells what became of it.** Each blocked sign-in of an administrator or approver keeps its own incident (`signing_sessions.incident_id`, migration `e1f2a3b4c5d6`), and the outcome is written into it: let in from the open session (passkey, or the password while there is none) or the other session ended with the passkey resolves it - the person confirmed it; refused, or signed out while waiting, keeps it open. A takeover no longer opens a second incident. While the sign-in waits, its incident page offers **Let in** and **Refuse**, as the banner does, and the banner links to the incident.
 - Passwords are hashed with `bcrypt` 5.0.0 directly; `passlib` (unmaintained, broken with bcrypt 4.1+) is gone. Every existing hash verifies unchanged, nothing to migrate: a password over 72 bytes that passlib cut silently still signs in. A new password over 72 bytes (UTF-8) is refused - by the API, `create_admin` and the installer - instead of being cut. A missing or malformed stored hash is a wrong password, not a server error.
 - Sign-in: an unknown organization or e-mail now takes as long as a wrong password (one bcrypt check against a dummy hash), so the response time no longer tells which accounts exist.
 

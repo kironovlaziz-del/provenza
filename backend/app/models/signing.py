@@ -65,3 +65,5 @@ class SigningSession(Base):
     admitted_by = Column(String(32), ForeignKey("signing_sessions.id", ondelete="SET NULL"))
     admission = Column(JSONB)            # the passkey's (or password's) consent to let it in
     revocation = Column(JSONB)           # signed out: {"statement", "signature"} by the session key
+    # a blocked sign-in's incident: what happened to the sign-in is written into it
+    incident_id = Column(Integer, ForeignKey("ai_incidents.id", ondelete="SET NULL"))
