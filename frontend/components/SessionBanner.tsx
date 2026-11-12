@@ -50,17 +50,6 @@ export function SessionBanner() {
     }
   }
 
-  async function admit(p: SessionPeer) {
-    if (session?.has_passkey) return run(() => admitSession(p.session_id, true));
-    const password = await promptDialog(t("session.admit_password", "Let this sign-in in? Type your password to confirm:"));
-    if (password) await run(() => admitSession(p.session_id, false, password));
-  }
-
-  async function refuse(p: SessionPeer) {
-    if (await confirmDialog(t("session.refuse_confirm", "End this sign-in? If it was not you, change your password."), { danger: true }))
-      await run(() => refuseSession(p.session_id));
-  }
-
   const waiting = session.waiting ?? [];
   const style: React.CSSProperties = {
     display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", padding: "10px 16px", fontSize: 13,
@@ -76,10 +65,8 @@ export function SessionBanner() {
         {waiting.map((p) => (
           <span key={p.session_id} style={{ display: "inline-flex", gap: 8, alignItems: "center" }}>
             <span>{describe(p, (k, d) => t(k, d ?? k))}</span>
-            <button className="btn btn-sm" disabled={busy} onClick={() => admit(p)}>
-              {session.has_passkey ? t("session.admit_passkey", "Let in (passkey)") : t("session.admit", "Let in")}
-            </button>
-            <button className="btn btn-sm btn-danger" disabled={busy} onClick={() => refuse(p)}>{t("session.refuse", "Refuse")}</button>
+            <SignInDecision peer={p} hasPasskey={session.has_passkey} busy={busy} run={run} />
+            {p.incident_id != null && <Link href={`/incidents/${p.incident_id}`}>#{p.incident_id}</Link>}
           </span>
         ))}
         {error && <span className="error-text">{error}</span>}
@@ -108,4 +95,29 @@ export function SessionBanner() {
     );
   }
   return null;
+}
+
+/** Let a waiting sign-in in (passkey, or the password while there is no
+ *  passkey yet) or refuse it - in the banner and on the sign-in's incident. */
+export function SignInDecision({ peer, hasPasskey, busy, run }: {
+  peer: SessionPeer; hasPasskey: boolean; busy: boolean; run: (fn: () => Promise<void>) => Promise<void>;
+}) {
+  const { t } = useTranslation();
+  async function admit() {
+    if (hasPasskey) return run(() => admitSession(peer.session_id, true));
+    const password = await promptDialog(t("session.admit_password", "Let this sign-in in? Type your password to confirm:"));
+    if (password) await run(() => admitSession(peer.session_id, false, password));
+  }
+  async function refuse() {
+    if (await confirmDialog(t("session.refuse_confirm", "End this sign-in? If it was not you, change your password."), { danger: true }))
+      await run(() => refuseSession(peer.session_id));
+  }
+  return (
+    <>
+      <button className="btn btn-sm" disabled={busy} onClick={admit}>
+        {hasPasskey ? t("session.admit_passkey", "Let in (passkey)") : t("session.admit", "Let in")}
+      </button>
+      <button className="btn btn-sm btn-danger" disabled={busy} onClick={refuse}>{t("session.refuse", "Refuse")}</button>
+    </>
+  );
 }

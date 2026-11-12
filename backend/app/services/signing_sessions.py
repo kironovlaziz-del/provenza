@@ -12,7 +12,10 @@ Sessions
   second sign-in while one is active is "blocked" - it can do nothing but
   wait, and the open session is told at once (an incident and a
   notification). The open session lets it in only with the person's passkey
-  (or the password, for a person who has no passkey yet), or ends it. The
+  (or the password, for a person who has no passkey yet), or ends it - from
+  the banner or from the incident. The incident records the outcome: let in
+  (or the other session ended with the passkey) resolves it, refused keeps
+  it open. The
   blocked session may end the other one itself, but only with the passkey:
   someone who knows the password and holds no passkey can neither get in
   nor push the owner out.
@@ -118,14 +121,18 @@ async def open_session(db: AsyncSession, user: User, request: Optional[Request],
     others = (await db.execute(select(SigningSession).where(*_live(user_id, "active")))).scalars().all()
     sid = uuid.uuid4().hex
     who = _client(request)
-    db.add(SigningSession(id=sid, org_id=org_id, user_id=user_id, status="blocked" if others else "active",
-                          expires_at=_now() + lifetime, **who))
+    incident = None
     if others:
-        db.add(AIIncident(
+        # one incident per blocked sign-in; what becomes of the sign-in is written into it (_settle)
+        incident = AIIncident(
             org_id=org_id, severity="high", category=CONFLICT_INCIDENT, status="open",
             summary=f"A second sign-in of {email} while a session is open - blocked until the open session "
                     f"lets it in with the passkey",
-            impact=f"address {who['ip'] or '?'}, browser {who['user_agent'] or '?'}"))
+            impact=f"address {who['ip'] or '?'}, browser {who['user_agent'] or '?'}")
+        db.add(incident)
+        await db.flush()
+    db.add(SigningSession(id=sid, org_id=org_id, user_id=user_id, status="blocked" if others else "active",
+                          expires_at=_now() + lifetime, incident_id=incident.id if incident else None, **who))
     await db.commit()
     if others:
         from app.services import notification_service
@@ -193,7 +200,8 @@ async def state(db: AsyncSession, user: User, s: Optional[SigningSession]) -> Di
         return {"signing": False, "session_id": None, "status": "active", "has_passkey": has_passkey}
 
     def view(x: SigningSession) -> Dict[str, Any]:
-        return {"session_id": x.id, "created_at": x.created_at, "ip": x.ip, "user_agent": x.user_agent}
+        return {"session_id": x.id, "created_at": x.created_at, "ip": x.ip, "user_agent": x.user_agent,
+                "incident_id": x.incident_id}
 
     waiting = elsewhere = []
     if s.status == "active":
@@ -328,6 +336,22 @@ async def certify(db: AsyncSession, user: User, s: SigningSession, params: Dict[
     await db.commit()
 
 
+async def _settle(db: AsyncSession, blocked: SigningSession, outcome: str, *, resolved: bool) -> None:
+    """What became of a blocked sign-in, written into its incident (no commit).
+    Decided by the person - let in from the open session, or the other session
+    ended with the passkey - it is resolved: the person confirmed it. Refused,
+    it stays open: someone else may hold the password."""
+    if blocked.incident_id is None:
+        return
+    incident = await db.get(AIIncident, blocked.incident_id)
+    if incident is None:
+        return
+    note = f"{_now().strftime('%Y-%m-%d %H:%M UTC')}: {outcome}"
+    incident.root_cause = f"{incident.root_cause}\n{note}" if incident.root_cause else note
+    if resolved and incident.status != "resolved":
+        incident.status, incident.resolved_at = "resolved", _now()
+
+
 async def _blocked(db: AsyncSession, user: User, sid: Any) -> SigningSession:
     t = await db.get(SigningSession, sid) if isinstance(sid, str) else None
     if t is None or t.user_id != user.id or t.status != "blocked" or _aware(t.expires_at) <= _now():
@@ -354,6 +378,8 @@ async def admit(db: AsyncSession, user: User, s: SigningSession, blocked_id: Any
             raise api_error(status.HTTP_403_FORBIDDEN, "auth.password_incorrect")
         consent = {"method": "password", "at": int(time.time())}
     target.status, target.admitted_by, target.admission = "active", s.id, consent
+    how = "the passkey" if consent.get("method") != "password" else "the password (no passkey yet)"
+    await _settle(db, target, f"let in from the open session ({s.ip or '?'}) with {how}", resolved=True)
     await db.commit()
 
 
@@ -361,7 +387,10 @@ async def refuse(db: AsyncSession, user: User, s: SigningSession, blocked_id: An
     """The open session ends a blocked one. Refusing needs no passkey."""
     if s.status != "active":
         raise api_error(status.HTTP_403_FORBIDDEN, "auth.session_blocked")
-    await end(db, await _blocked(db, user, blocked_id), "refused")
+    target = await _blocked(db, user, blocked_id)
+    await _settle(db, target, f"refused from the open session ({s.ip or '?'}). If it was not you, "
+                              f"change your password.", resolved=False)
+    await end(db, target, "refused")
 
 
 async def takeover(db: AsyncSession, user: User, s: SigningSession, statement: Dict[str, Any],
@@ -375,9 +404,13 @@ async def takeover(db: AsyncSession, user: User, s: SigningSession, statement: D
         SigningSession.user_id == user.id, SigningSession.id != s.id, SigningSession.status != "ended")
         .values(status="ended", ended_at=_now(), end_reason="taken_over"))
     s.status, s.admission = "active", _evidence(statement, key, assertion)
-    db.add(AIIncident(org_id=user.org_id, severity="high", category=CONFLICT_INCIDENT, status="open",
-                      summary=f"{user.email} ended the other open session with the passkey from a new sign-in",
-                      impact=f"address {s.ip or '?'}, browser {s.user_agent or '?'}"))
+    if s.incident_id is not None:
+        await _settle(db, s, "this sign-in ended the other open session with the passkey", resolved=True)
+    else:   # blocked before sign-ins kept their incident
+        db.add(AIIncident(org_id=user.org_id, severity="high", category=CONFLICT_INCIDENT, status="resolved",
+                          resolved_at=_now(), root_cause="confirmed with the passkey",
+                          summary=f"{user.email} ended the other open session with the passkey from a new sign-in",
+                          impact=f"address {s.ip or '?'}, browser {s.user_agent or '?'}"))
     await db.commit()
 
 
@@ -392,6 +425,8 @@ async def sign_out(db: AsyncSession, s: Optional[SigningSession], revocation: Op
         if (isinstance(st, dict) and st.get("type") == "provenza.session.revoke" and st.get("session_id") == s.id
                 and isinstance(sig, str) and verify_payload(st, sig, s.public_key)):
             s.revocation = {"statement": st, "signature": sig}
+    if s.status == "blocked":
+        await _settle(db, s, "the waiting sign-in signed out before it was let in", resolved=False)
     await end(db, s, "signed_out")
 
 

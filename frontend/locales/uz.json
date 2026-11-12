@@ -3507,6 +3507,7 @@
     "no_passkey": "Passkey qo'shing: u kirishlaringizni va imzolaganlaringizni qurilmangiz PIN kodi bilan tasdiqlaydi.",
     "refuse": "Rad etish",
     "refuse_confirm": "Bu kirish tugatilsinmi? Agar bu siz bo'lmasangiz, parolingizni almashtiring.",
+    "incident_waiting": "Bu kirish hali sizni kutmoqda:",
     "takeover": "Boshqa sessiyani tugatish (passkey)",
     "unknown_address": "noma'lum manzil",
     "unknown_browser": "noma'lum brauzer",

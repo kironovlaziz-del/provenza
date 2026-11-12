@@ -8,13 +8,15 @@ import { PageHeader } from "@/components/PageHeader";
 import { RiskPill, StatusPill } from "@/components/Pill";
 import { getIncident, updateIncident } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { errorMessage } from "@/lib/errors";
+import { SignInDecision } from "@/components/SessionBanner";
 import type { Incident } from "@/lib/types";
 
 export default function IncidentDetailPage() {
   const params = useParams<{ id: string }>();
   const incidentId = Number(params.id);
   const { t, i18n } = useTranslation();
-  const { user } = useAuth();
+  const { user, session, refreshSession } = useAuth();
   const canTriage = user?.role === "admin" || user?.role === "approver"; // the API refuses others
 
   const [incident, setIncident] = useState<Incident | null>(null);
@@ -38,6 +40,24 @@ export default function IncidentDetailPage() {
     if (!Number.isNaN(incidentId)) refresh();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [incidentId]);
+
+  // a sign-in still waiting for this session: decided here as in the banner
+  const waiting = session?.status === "active" ? (session.waiting ?? []).find((p) => p.incident_id === incidentId) : undefined;
+  const [deciding, setDeciding] = useState(false);
+  const [decideError, setDecideError] = useState<string | null>(null);
+  async function decide(fn: () => Promise<void>) {
+    setDeciding(true);
+    setDecideError(null);
+    try {
+      await fn();
+      await refreshSession();
+      refresh();
+    } catch (err) {
+      setDecideError(errorMessage(err, t, t("session.failed", "That did not work - try again.")));
+    } finally {
+      setDeciding(false);
+    }
+  }
 
   async function handleSave() {
     setSaving(true);
@@ -98,6 +118,16 @@ export default function IncidentDetailPage() {
             </dl>
           </div>
         </div>
+
+        {waiting && session && (
+          <div className="panel" role="alert" style={{ marginBottom: 20, borderColor: "var(--risk-critical)" }}>
+            <div className="panel-body" style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+              <span style={{ fontWeight: 600 }}>{t("session.incident_waiting", "This sign-in is still waiting for you:")}</span>
+              <SignInDecision peer={waiting} hasPasskey={session.has_passkey} busy={deciding} run={decide} />
+              {decideError && <span className="error-text">{decideError}</span>}
+            </div>
+          </div>
+        )}
 
         {canTriage && <div className="panel">
           <div className="panel-header">

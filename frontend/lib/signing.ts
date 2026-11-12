@@ -14,6 +14,8 @@ export interface SessionPeer {
   created_at: string;
   ip: string | null;
   user_agent: string | null;
+  /** a waiting sign-in's incident (Incidents): its outcome is written there */
+  incident_id?: number | null;
 }
 
 export interface SessionState {

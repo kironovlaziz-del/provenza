@@ -155,6 +155,29 @@ class TestOneSessionAtATime:
                               headers=auth_headers(admin_token))
         assert r.status_code == 204, r.text
         assert (await client.get("/api/v1/users/me", headers=auth_headers(second))).status_code == 200
+        # the incident says so, and is resolved: the person let the sign-in in
+        assert waiting[0]["incident_id"] == incident[0].id
+        await db_session.refresh(incident[0])
+        assert incident[0].status == "resolved" and incident[0].resolved_at is not None
+        assert "let in from the open session" in incident[0].root_cause and "password" in incident[0].root_cause
+
+    @pytest.mark.asyncio
+    async def test_refused_sign_in_keeps_its_incident_open(self, client, admin_token, org_and_users, db_session):
+        second = await _login(client, org_and_users)
+        sid = (await _state(client, second))["session_id"]
+        incident_id = (await _state(client, admin_token))["waiting"][0]["incident_id"]
+        r = await client.post(f"{S}/refuse", json={"blocked_session_id": sid}, headers=auth_headers(admin_token))
+        assert r.status_code == 204
+        incident = await db_session.get(AIIncident, incident_id)
+        await db_session.refresh(incident)
+        assert incident.status == "open" and "refused from the open session" in incident.root_cause
+
+    @pytest.mark.asyncio
+    async def test_one_incident_per_sign_in(self, client, admin_token, org_and_users, db_session):
+        for _ in range(2):
+            await _login(client, org_and_users)
+        waiting = (await _state(client, admin_token))["waiting"]
+        assert len(waiting) == 2 and waiting[0]["incident_id"] != waiting[1]["incident_id"]
 
     @pytest.mark.asyncio
     async def test_refused_session_is_over(self, client, admin_token, org_and_users):
@@ -317,7 +340,9 @@ class TestPasskeys:
         assert (await client.get(S, headers=auth_headers(admin_token))).status_code == 401
         n = (await db_session.execute(select(AIIncident).where(AIIncident.category == "session_conflict"))
              ).scalars().all()
-        assert len(n) == 2                                               # the sign-in and the takeover
+        assert len(n) == 1                                               # the sign-in's, with the takeover in it
+        await db_session.refresh(n[0])
+        assert n[0].status == "resolved" and "ended the other open session with the passkey" in n[0].root_cause
 
     @pytest.mark.asyncio
     async def test_removing_a_passkey(self, client, admin_token, org_and_users):
