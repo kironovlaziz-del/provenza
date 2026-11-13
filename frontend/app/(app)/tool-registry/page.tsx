@@ -264,7 +264,7 @@ export default function ToolRegistryPage() {
               </button>
             ))}
           </div>
-          <div className="panel-body" style={{ overflowX: "auto", paddingTop: 0 }}>
+          <div className="panel-body scroll-box" style={{ paddingTop: 0 }}>
             <table>
               <thead>
                 <tr>
@@ -375,12 +375,13 @@ export default function ToolRegistryPage() {
                         <button
                           className="btn btn-sm"
                           disabled={busy}
+                          title={t("registry.remove_hint")}
                           onClick={async () => {
                             if (await confirmDialog(t("registry.confirm_delete", "Remove this entry?")))
                               run(() => deleteToolEntry(e.id), t("registry.saved", "Saved"));
                           }}
                         >
-                          ✕
+                          {t("registry.remove")}
                         </button>
                       </td>
                     )}
