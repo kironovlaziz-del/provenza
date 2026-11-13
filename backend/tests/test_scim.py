@@ -88,12 +88,12 @@ async def test_without_a_valid_token_nothing(client, admin_token):
 @pytest.mark.asyncio
 async def test_okta_style_lifecycle_offboards_the_agents(client, admin_token, db_session):
     token = await _token(client, admin_token)
-    u = await _create(client, token, "ann.lee@acme.example")
-    assert u["active"] and u["displayName"] == "Ann Lee" and u["userName"] == "ann.lee@acme.example"
+    u = await _create(client, token, "ann.lee@provenza.example")
+    assert u["active"] and u["displayName"] == "Ann Lee" and u["userName"] == "ann.lee@provenza.example"
     row = await db_session.get(User, int(u["id"]))
     assert row.role == "user" and row.scim_managed
 
-    found = (await client.get(f"{S}/Users", params={"filter": 'userName eq "ANN.LEE@acme.example"'},
+    found = (await client.get(f"{S}/Users", params={"filter": 'userName eq "ANN.LEE@provenza.example"'},
                               headers=_h(token))).json()
     assert found["totalResults"] == 1 and found["Resources"][0]["id"] == u["id"]
     assert (await client.get(f"{S}/Users", params={"filter": 'title co "x"'}, headers=_h(token))).status_code == 400
@@ -132,7 +132,7 @@ async def test_okta_style_lifecycle_offboards_the_agents(client, admin_token, db
 @pytest.mark.asyncio
 async def test_entra_style_patch_and_delete(client, admin_token, db_session):
     token = await _token(client, admin_token)
-    u = await _create(client, token, "bo@acme.example", externalId="entra-oid-1")
+    u = await _create(client, token, "bo@provenza.example", externalId="entra-oid-1")
     r = await client.patch(f"{S}/Users/{u['id']}", json={"Operations": [
         {"op": "Replace", "path": "displayName", "value": "Bo Chen"},
         {"op": "Add", "path": "title", "value": "Engineer"},              # not kept, not an error
@@ -157,7 +157,7 @@ async def test_adoption_uniqueness_and_the_last_admin(client, admin_token, db_se
     r = await client.patch(f"{S}/Users/{admin.id}", json={"Operations": [{"op": "replace", "path": "active",
                                                                            "value": False}]}, headers=_h(token))
     assert r.status_code == 409 and r.json()["scimType"] == "mutability"
-    other = await _create(client, token, "cy@acme.example")
+    other = await _create(client, token, "cy@provenza.example")
     r = await client.put(f"{S}/Users/{other['id']}", json={"userName": admin.email, "active": True}, headers=_h(token))
     assert r.status_code == 409 and r.json()["scimType"] == "uniqueness"
     assert (await client.get(f"{S}/Users/999999", headers=_h(token))).status_code == 404
@@ -166,15 +166,15 @@ async def test_adoption_uniqueness_and_the_last_admin(client, admin_token, db_se
 @pytest.mark.asyncio
 async def test_one_organizations_token_sees_only_its_users(client, admin_token, db_session):
     token = await _token(client, admin_token)
-    await _create(client, token, "mine@acme.example")
+    await _create(client, token, "mine@provenza.example")
     await _create_org_with_admin_and_approver(db_session, org_slug="scim-other", admin_email="a@other.example",
                                               approver_email="b@other.example")
     await db_session.commit()
     other_admin = await _login(client, "scim-other", "a@other.example", "TestPass123!")
     other_token = await _token(client, other_admin)
     listed = (await client.get(f"{S}/Users", headers=_h(other_token))).json()
-    assert [u for u in listed["Resources"] if u["userName"] == "mine@acme.example"] == []
-    mine_id = (await client.get(f"{S}/Users", params={"filter": 'userName eq "mine@acme.example"'},
+    assert [u for u in listed["Resources"] if u["userName"] == "mine@provenza.example"] == []
+    mine_id = (await client.get(f"{S}/Users", params={"filter": 'userName eq "mine@provenza.example"'},
                                 headers=_h(token))).json()["Resources"][0]["id"]
     assert (await client.get(f"{S}/Users/{mine_id}", headers=_h(other_token))).status_code == 404
 

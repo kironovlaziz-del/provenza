@@ -88,7 +88,7 @@ class Provider:
         assert q["code_challenge_method"] == "S256" and q["client_id"] == CLIENT_ID
         now = int(time.time())
         base = {"iss": self.issuer, "aud": CLIENT_ID, "sub": "idp-user-1", "iat": now, "exp": now + 300,
-                "nonce": q["nonce"], "email": "ann@acme.example", "email_verified": True, "name": "Ann"}
+                "nonce": q["nonce"], "email": "ann@provenza.example", "email_verified": True, "name": "Ann"}
         code = secrets.token_urlsafe(16)
         self.codes[code] = (q["code_challenge"], {**base, **claims})
         return f"{A}/callback?code={code}&state={q['state']}"
@@ -133,7 +133,7 @@ async def _sign_in(client, idp, slug, **claims):
     return landing, r.json()["access_token"]
 
 
-async def _user(db_session, email="ann@acme.example"):
+async def _user(db_session, email="ann@provenza.example"):
     org_id = (await db_session.execute(select(Organization.id))).scalars().first()
     db_session.add(User(org_id=org_id, email=email, name="Ann", hashed_password="!", role="user", status="active"))
     await db_session.commit()
@@ -149,8 +149,8 @@ async def test_settings(client, admin_token, approver_token, idp):
     r = await client.put(f"{ADMIN}/settings", json={**body, "issuer": idp.issuer + "/nope"},
                          headers=auth_headers(admin_token))
     assert r.status_code == 422                                                        # discovery checked first
-    out = await _configure(client, admin_token, idp, allowed_domains=["@ACME.example"])
-    assert out["has_secret"] and "client_secret" not in out and out["allowed_domains"] == ["acme.example"]
+    out = await _configure(client, admin_token, idp, allowed_domains=["@PROVENZA.example"])
+    assert out["has_secret"] and "client_secret" not in out and out["allowed_domains"] == ["provenza.example"]
     assert out["redirect_uri"].endswith("/api/v1/auth/sso/callback")
 
 
@@ -163,11 +163,11 @@ async def test_a_full_sign_in(client, admin_token, idp, db_session):
     assert (await client.get(f"{A}/no-such-org/info")).json() == {"sso": False, "password": True}
     landing, token = await _sign_in(client, idp, slug)
     me = await client.get("/api/v1/users/me", headers=auth_headers(token))
-    assert me.status_code == 200 and me.json()["email"] == "ann@acme.example"
+    assert me.status_code == 200 and me.json()["email"] == "ann@provenza.example"
     # the hand-off code works once
     code = landing.split("#code=", 1)[1]
     assert (await client.post(f"{A}/exchange", json={"code": code})).status_code == 401
-    u = (await db_session.execute(select(User).where(User.email == "ann@acme.example"))).scalar_one()
+    u = (await db_session.execute(select(User).where(User.email == "ann@provenza.example"))).scalar_one()
     await db_session.refresh(u)
     assert u.oidc_subject == f"{idp.issuer} idp-user-1"
 
@@ -180,10 +180,10 @@ async def test_a_full_sign_in(client, admin_token, idp, db_session):
     ({"exp": int(time.time()) - 3600}, "sso.bad_token"),
     ({"email_verified": False}, "sso.email_unverified"),
     ({"email": "eve@evil.example"}, "sso.domain_not_allowed"),
-    ({"email": "nobody@acme.example"}, "sso.no_account"),
+    ({"email": "nobody@provenza.example"}, "sso.no_account"),
 ])
 async def test_what_is_refused(client, admin_token, idp, db_session, claims, code):
-    await _configure(client, admin_token, idp, allowed_domains=["acme.example"])
+    await _configure(client, admin_token, idp, allowed_domains=["provenza.example"])
     await _user(db_session)
     landing, token = await _sign_in(client, idp, await _slug(db_session), **claims)
     assert token is None and landing == f"/login?sso_error={code}"
@@ -218,8 +218,8 @@ async def test_bound_to_the_provider_account(client, admin_token, idp, db_sessio
 
 @pytest.mark.asyncio
 async def test_jit_creates_with_the_default_role(client, admin_token, idp, db_session):
-    await _configure(client, admin_token, idp, jit=True, default_role="approver", allowed_domains=["acme.example"])
-    _, token = await _sign_in(client, idp, await _slug(db_session), email="new@acme.example")
+    await _configure(client, admin_token, idp, jit=True, default_role="approver", allowed_domains=["provenza.example"])
+    _, token = await _sign_in(client, idp, await _slug(db_session), email="new@provenza.example")
     assert (await client.get("/api/v1/users/me", headers=auth_headers(token))).json()["role"] == "approver"
 
 

@@ -7,6 +7,7 @@ this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- **A welcome page at `/`** for visitors who are not signed in (a signed-in user still goes straight to the dashboard): what Provenza does, one agent call played step by step - allowed, then refused by policy - with its audit record and receipt, the problems it solves, how it works, and the way to sign in. Black and white with a deep grid; nothing on it comes from the server, so a visitor learns nothing about the organizations there. English and Uzbek. `/login` is unchanged.
 - **Quickstart** ([docs/quickstart.md](docs/quickstart.md)): from `install.sh` to Claude Code calling an MCP tool through Provenza, refused by one line of policy and proven offline with the receipt and `tools/provenza_audit.py`. `backend/tests/test_quickstart.py` walks the same steps on the server, so the guide breaks the build when it goes stale. Linked from the README, the docs index, self-hosting and the installer's last message.
 - Long lists scroll in their own box, the table header on top: the incidents (platform and agents), the open incidents in Inbox (each now opens its own incident) and the tool registry. An incident's browser string shows two lines in the list, whole on its page. The tool registry's unlabeled "✕" is now **Remove**, saying what removing does in Monitor and Enforce mode.
 - **Allowed tools are checked and can be edited.** Under "Allowed tools" (a new agent, and the agent's page) the console points out a name that matches no MCP server or HTTP tool (a typo, or a tool the server renamed) and a tool not approved yet; on the agent's page an admin edits them in place (**Edit tools**; not when a role sets the rights). `GET /agents/gateway-tools` lists the names, each with whether an agent holding it sees it.
@@ -714,7 +715,7 @@ this project adheres to [Semantic Versioning](https://semver.org/).
 
 - **Login throttling can no longer be walked around.** The per-account
   counter is keyed by the organization slug as the lookup normalizes it, so
-  spellings like `"ACME "` and `" acme"` share one budget; a successful
+  spellings like `"PROVENZA "` and `" provenza"` share one budget; a successful
   login gives back only its own attempt and never resets the per-IP
   counter, so a valid password for one account cannot be used to keep
   guessing others. Each limit now counts only its own counter: the

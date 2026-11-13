@@ -105,7 +105,7 @@ export default function RegisterPage() {
                 setSlugTouched(true);
                 update("org_slug", e.target.value.toLowerCase());
               }}
-              placeholder="acme"
+              placeholder="provenza"
               pattern="[a-z0-9\-]+"
             />
             <span className="hint-text">{t("register.org_slug_hint")}</span>

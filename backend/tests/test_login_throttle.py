@@ -6,7 +6,7 @@
 Login throttling cannot be walked around.
 
   - the per-account counter is keyed by the organization slug as the
-    lookup normalizes it, so "ACME ", " acme" and "acme" share one budget;
+    lookup normalizes it, so "PROVENZA ", " provenza" and "provenza" share one budget;
   - a successful login never resets the per-IP counter: someone who knows
     one valid password cannot use it to keep guessing other accounts;
   - legitimate sign-ins still never use up an IP's budget;

@@ -49,7 +49,7 @@
     "register_failed": "Tashkilotni yaratib bo'lmadi.",
     "password_hint": "Kamida 6 ta belgi",
     "org_slug": "Tashkilot",
-    "org_slug_hint": "Ro'yxatdan o'tishda tanlagan qisqa identifikatoringiz (masalan, acme)",
+    "org_slug_hint": "Ro'yxatdan o'tishda tanlagan qisqa identifikatoringiz (masalan, provenza)",
     "mfa_prompt": "Autentifikator ilovasidagi 6 xonali kodni kiriting.",
     "mfa_code": "Kod",
     "mfa_recovery_hint": "Telefoningizni yo'qotdingizmi? Uning o'rniga tiklash kodlaridan birini kiriting.",
@@ -911,7 +911,7 @@
   "register": {
     "title": "Yangi tashkilot",
     "org_name": "Tashkilot nomi",
-    "org_name_placeholder": "Acme Corp",
+    "org_name_placeholder": "Provenza Corp",
     "your_name": "Ismingiz",
     "your_name_placeholder": "Aziz Karimov",
     "email": "Email",
@@ -3776,5 +3776,165 @@
     "truncated": "Faylda 20 000 dan ortiq kishi-va-xizmat juftligi bor: qolgani hisoblanmadi. Uni qismlarga bo'lib import qiling.",
     "after": "Topilmalar bir daqiqa ichida ro'yxatda paydo bo'ladi; kim foydalanishini ko'rish uchun birini oching.",
     "failed": "Jurnalni import qilib bo'lmadi."
+  },
+  "welcome": {
+    "nav_how": "Qanday ishlaydi",
+    "nav_why": "Nimani hal qiladi",
+    "github": "GitHub",
+    "sign_in": "Kirish",
+    "eyebrow": "Ochiq kodli AI boshqaruvi · o'z serveringizda",
+    "title_a": "Har bir AI agent harakat qilishdan oldin tekshiriladi.",
+    "title_b": "Har bir qarorni isbotlash mumkin.",
+    "lead": "Provenza xodimlaringiz, AI agentlaringiz va ular ishlatadigan vositalar o'rtasida turadi. U hech kim ruxsat bermagan AI foydalanishni topadi, har bir agentga faqat siz ruxsat berganini qilishga imkon beradi va istalgan kishi tekshira oladigan imzolangan yozuv yuritadi.",
+    "cta_sign_in": "Tashkilotingizga kirish",
+    "cta_see": "Chaqiruv qanday tekshirilishini ko'rish",
+    "feed_title": "Qarorlar, real vaqtda",
+    "feed_example": "namuna",
+    "events": [
+      {
+        "tag": "ruxsat",
+        "kind": "solid",
+        "what": "deepwiki.ask_wiki_question",
+        "who": "claude-code@laptop · siyosat tekshiruvidan o'tdi"
+      },
+      {
+        "tag": "rad etildi",
+        "kind": "dash",
+        "what": "github.delete_repo",
+        "who": "release-bot · tashkilot siyosati rad etdi"
+      },
+      {
+        "tag": "kutilmoqda",
+        "kind": "ghost",
+        "what": "payments.refund",
+        "who": "support-agent · inson qarorini kutmoqda"
+      },
+      {
+        "tag": "topildi",
+        "kind": "ghost",
+        "what": "chat.example-ai.com",
+        "who": "shadow AI · brauzer kengaytmasi aniqladi"
+      },
+      {
+        "tag": "tasdiqlandi",
+        "kind": "solid",
+        "what": "kvitansiya #41",
+        "who": "oflayn tekshirildi · Ed25519 + ML-DSA-65"
+      },
+      {
+        "tag": "ruxsat",
+        "kind": "solid",
+        "what": "jira.create_issue",
+        "who": "triage-agent · planner-agent topshirdi"
+      },
+      {
+        "tag": "bloklandi",
+        "kind": "dash",
+        "what": "topshiriq zanjiri",
+        "who": "vakolat kengaytirildi · imtiyoz oshirish rad etildi"
+      },
+      {
+        "tag": "to'xtatildi",
+        "kind": "dash",
+        "what": "barcha agentlar",
+        "who": "kill switch · passkey bilan bekor qilindi"
+      }
+    ],
+    "facts": [
+      "O'z serveringizda, ma'lumotlar sizda qoladi",
+      "Ochiq kod, Apache-2.0",
+      "MCP va A2A shlyuzlari",
+      "Postkvant gibrid imzolar",
+      "EU AI Act uchun dalillar",
+      "Har bir agent uchun kill switch",
+      "Linux, Windows va macOS uchun endpoint agent"
+    ],
+    "how_title": "Bitta agent chaqiruvi, qadamma-qadam",
+    "how_sub": "AI yordamchi vositadan foydalanishni so'raydi. Vositaga yetib borishidan oldin Provenza nima qilishini kuzating.",
+    "scenario_allow": "Ssenariy: ruxsat berilgan chaqiruv",
+    "scenario_deny": "Ssenariy: siyosat rad etdi",
+    "scenario": "Ssenariy",
+    "btn_allow": "Ruxsat berilgan",
+    "btn_deny": "Siyosat rad etgan",
+    "agent_k": "AI agent",
+    "agent_d": "Chaqiruvni o'z kaliti bilan imzolaydi. Kalit noutbukdan hech qachon chiqmaydi.",
+    "gate_k": "Provenza tekshiradi",
+    "chk_sig": "Imzo: bu haqiqatan shu agent",
+    "chk_rights": "Huquqlar: bu vosita uning ro'yxatida bor",
+    "chk_policy": "Siyosat: tashkilot siyosati",
+    "chk_policy_ok": "Siyosat: tashkilot siyosati ruxsat berdi",
+    "chk_policy_no": "Siyosat: tashkilot siyosati rad etdi",
+    "tool_k": "Vosita",
+    "tool_d": "Tasdiqlangan MCP server. Agentlar faqat administrator tasdiqlagan vositalarni ko'radi.",
+    "waiting": "Kutilmoqda…",
+    "tool_ok": "Javob berdi",
+    "tool_no": "Chaqiruv unga yetib bormadi",
+    "audit_h": "Audit jurnali, xesh-zanjir",
+    "audit_wait": "Qaror kutilmoqda…",
+    "audit_ok": "#41  ask_wiki_question  ruxsat  · #40 ga bog'langan",
+    "audit_no": "#42  ask_wiki_question  rad etildi  · #41 ga bog'langan",
+    "receipt_h": "Kvitansiya, oflayn tekshiruv",
+    "receipt_wait": "Ed25519 + ML-DSA-65, ikkalasi ham tasdiqlanishi shart",
+    "receipt_ok": "VERIFIED  harakat 41: bajarildi va qayd etildi",
+    "receipt_no": "VERIFIED  harakat 42: rad etildi va qayd etildi",
+    "caps": [
+      "Agent deepwiki.ask_wiki_question ni chaqirishni so'raydi va so'rovni imzolaydi.",
+      "Chaqiruv to'g'ridan-to'g'ri vositaga emas, Provenza'ga boradi.",
+      "Provenza imzoni agentning ro'yxatdan o'tgan ochiq kaliti bilan tekshiradi.",
+      "Bu vosita agent huquqlarida borligini va tasdiqlanganini tekshiradi.",
+      "",
+      "",
+      "Qaror xesh-zanjirli audit jurnaliga yoziladi.",
+      "Har kim kvitansiyani serverga ishonmasdan, ochiq kalit bilan oflayn tekshira oladi."
+    ],
+    "cap5_ok": "Tashkilot siyosati bunga ruxsat beradi.",
+    "cap5_no": "Tashkilot siyosati bu vositani rad etadi. Chaqiruv shu yerda to'xtaydi.",
+    "cap6_ok": "Faqat endi chaqiruv DeepWiki'ga yetib boradi va javob qaytadi.",
+    "cap6_no": "DeepWiki chaqiruvni umuman olmaydi. Agent aniq rad javobini oladi.",
+    "why_title": "AI bir vaqtning o'zida barcha eshiklardan kirdi",
+    "why_sub": "Ko'pchilik vositalar bitta eshikni kuzatadi. Provenza uchalasini bitta qoidalar to'plami bilan qamrab oladi.",
+    "problem": "Muammo",
+    "with": "Provenza bilan",
+    "problems": [
+      {
+        "title": "Shadow AI",
+        "problem": "Xodimlar ish ma'lumotlarini hech kim tasdiqlamagan AI vositalariga joylaydi va qaysilari ekanini hech kim bilmaydi.",
+        "solution": "Provenza noutbuklarda, brauzerlarda, DNS va proksi jurnallarida AI foydalanishni topadi, sizga ko'rsatadi va siyosatingiz ruxsat bermagan xizmatlarni yopadi."
+      },
+      {
+        "title": "Hech kim tekshirmaydigan agentlar",
+        "problem": "AI agentlar vositalarni chaqiradi va bir-biriga vazifa topshiradi, ularni sozlagan odamning huquqlari bilan.",
+        "solution": "Har bir agentning o'z kaliti va huquqlar ro'yxati bor. Har bir chaqiruv siyosat tekshiruvidan o'tadi, xavflilari inson qarorini kutadi, bitta kill switch esa hammasini to'xtatadi."
+      },
+      {
+        "title": "Keyin isbot yo'q",
+        "problem": "Biror narsa noto'g'ri ketganda jurnallarni o'zgartirish mumkin va kim nimaga ruxsat berganini hech kim ko'rsata olmaydi.",
+        "solution": "Har bir qaror imzolangan nazorat nuqtalari bilan xesh-zanjirli jurnalga tushadi. Kvitansiya postkvant gibrid imzolar bilan oflayn tekshiriladi."
+      }
+    ],
+    "steps_title": "Qanday ishlaydi",
+    "steps": [
+      {
+        "title": "Aniqlash",
+        "text": "Endpoint agent, brauzer kengaytmasi va tarmoq jurnallari orqali xodimlar qaysi AI xizmatlaridan foydalanishini va qaysi agentlar ishlayotganini ko'ring."
+      },
+      {
+        "title": "Qaror qilish",
+        "text": "Tashkilot, jamoalar va alohida agentlar uchun siyosatlar yozing. Agentlar foydalanishi mumkin bo'lgan vositalarni tasdiqlang."
+      },
+      {
+        "title": "Majburlash",
+        "text": "Chaqiruvlar shlyuzdan o'tadi: ruxsat beriladi, rad etiladi yoki inson qarorini kutadi. Bitta tugma bilan hammasini to'xtating."
+      },
+      {
+        "title": "Isbotlash",
+        "text": "Auditor serveringizga ishonmasdan tekshira oladigan imzolangan, xesh-zanjirli yozuvlar va kvitansiyalar."
+      }
+    ],
+    "cta_title": "Bu yerda tashkilotingiz bormi?",
+    "cta_text": "Tashkilot identifikatori, email va parolingiz bilan kiring.",
+    "cta_install": "Serveringizga o'rnatish",
+    "footer_source": "Manba kodi",
+    "footer_security": "Xavfsizlik modeli"
   }
 }

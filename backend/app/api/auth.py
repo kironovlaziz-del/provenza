@@ -46,7 +46,7 @@ async def auth_config():
 
 def _account_key(org_slug: str, email: str) -> str:
     """Rate-limit key for one account, normalized exactly like the lookup
-    below ("ACME ", " acme" and "acme" are the same organization, so they
+    below ("PROVENZA ", " provenza" and "provenza" are the same organization, so they
     must share one counter)."""
     return f"{org_slug.strip().lower()}:{email.strip().lower()}"
 

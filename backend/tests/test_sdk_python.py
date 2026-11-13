@@ -157,12 +157,12 @@ async def test_sdk_attests_where_it_runs(client, admin_token, tmp_path):
     from tests.test_attestation_oidc import Issuer, _default, _policy
 
     issuer = Issuer()
-    pol = await _policy(client, admin_token, issuer, claim_rules={"repository": ["acme/agents"]})
+    pol = await _policy(client, admin_token, issuer, claim_rules={"repository": ["provenza/agents"]})
     agent = await _sdk_agent(client, admin_token, tmp_path)
     await _default(client, admin_token, pol["id"])
     try:
         res = await agent.aattest(issuer.token())
-        assert res["ok"] is True and res["identity"]["sub"] == "repo:acme/agents:ref:refs/heads/main"
-        assert (await agent.aattest(issuer.token(repository="acme/other")))["ok"] is False
+        assert res["ok"] is True and res["identity"]["sub"] == "repo:provenza/agents:ref:refs/heads/main"
+        assert (await agent.aattest(issuer.token(repository="provenza/other")))["ok"] is False
     finally:
         await _default(client, admin_token, 0)

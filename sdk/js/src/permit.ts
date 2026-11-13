@@ -9,7 +9,7 @@
  * organization's permit key, for one tool, one input, a few minutes. The agent
  * sends it with the call; the tool verifies it here and refuses without it:
  *
- *   const verifier = new PermitVerifier("https://provenza.example.com", "acme");
+ *   const verifier = new PermitVerifier("https://provenza.example.com", "provenza");
  *   app.post("/update", express.json(), permitMiddleware(verifier, { tool: "crm.update" }), handler);
  *   // or any fetch-style server (Next.js route, Hono, Bun, Deno):
  *   export const POST = withPermit(verifier, "crm.update", async (request, permit) => Response.json({ ok: true }));

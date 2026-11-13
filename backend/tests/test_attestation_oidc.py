@@ -34,7 +34,7 @@ from tests.enrollment_helpers import enroll, sign_both
 GITHUB = "https://token.actions.githubusercontent.com"
 P = "/api/v1/attestation"
 A = "/api/v1/agents"
-RULES = {"repository": ["acme/agents"], "ref": ["refs/heads/main"]}
+RULES = {"repository": ["provenza/agents"], "ref": ["refs/heads/main"]}
 
 
 class Issuer:
@@ -45,7 +45,7 @@ class Issuer:
         jwk.update(kid="gh-1", use="sig", alg="RS256")
         self.jwks = {"keys": [jwk]}
 
-    def token(self, repository="acme/agents", ref="refs/heads/main", run="1", aud="provenza", **over):
+    def token(self, repository="provenza/agents", ref="refs/heads/main", run="1", aud="provenza", **over):
         now = int(time.time())
         claims = {"iss": self.iss, "aud": aud, "iat": now, "nbf": now, "exp": now + 600,
                   "sub": f"repo:{repository}:ref:{ref}", "repository": repository,
@@ -100,7 +100,7 @@ def test_rules_must_name_a_workload():
                 {"bad path!": ["x"]}, {"repository": []}):
         with pytest.raises(AttestationError):
             normalize_rules(bad)
-    assert normalize_rules({"repository": "acme/agents"}) == {"repository": ["acme/agents"]}
+    assert normalize_rules({"repository": "provenza/agents"}) == {"repository": ["provenza/agents"]}
 
 
 @pytest.mark.asyncio
@@ -128,10 +128,10 @@ async def test_the_organization_default_makes_every_agent_attest(client, admin_t
         assert (await attest(client, agent, github.token(aud="other")))["reason"] == "attestation.wrong_audience"
         assert (await attest(client, agent, Issuer().token()))["ok"] is False    # someone else's key
         res = await attest(client, agent, github.token())
-        assert res["ok"] is True and res["identity"]["claims"] == {"repository": "acme/agents", "ref": "refs/heads/main"}
+        assert res["ok"] is True and res["identity"]["claims"] == {"repository": "provenza/agents", "ref": "refs/heads/main"}
         assert (await act(client, agent)).status_code == 200
         st = (await client.get(f"{P}/agents/{agent['id']}", headers=auth_headers(admin_token))).json()
-        assert st["required"] and st["binding"]["subject"] == "repo:acme/agents:ref:refs/heads/main"
+        assert st["required"] and st["binding"]["subject"] == "repo:provenza/agents:ref:refs/heads/main"
         # the default policy cannot be deleted from under the organization
         r = await client.delete(f"{P}/policies/{pol['id']}", headers=auth_headers(admin_token))
         assert r.status_code == 409
@@ -141,13 +141,13 @@ async def test_the_organization_default_makes_every_agent_attest(client, admin_t
 
 @pytest.mark.asyncio
 async def test_an_agent_is_bound_to_its_workload(client, admin_token, github, db_session):
-    pol = await _policy(client, admin_token, github, claim_rules={"repository_owner": ["acme"]})
+    pol = await _policy(client, admin_token, github, claim_rules={"repository_owner": ["provenza"]})
     agent = await enroll(client, admin_token, "bound-bot", allowed_tools=("kb.search",))
     await _default(client, admin_token, pol["id"])
     try:
-        assert (await attest(client, agent, github.token(repository="acme/agents")))["ok"] is True
+        assert (await attest(client, agent, github.token(repository="provenza/agents")))["ok"] is True
         # another workload the policy allows, with this agent's key: refused, incident
-        moved = await attest(client, agent, github.token(repository="acme/other"))
+        moved = await attest(client, agent, github.token(repository="provenza/other"))
         assert moved["ok"] is False and moved["reason"] == "attestation.workload_changed"
         incident = (await db_session.execute(select(AgentIncident).where(
             AgentIncident.agent_id == agent["id"], AgentIncident.incident_type == "attestation_workload_changed"))
@@ -159,9 +159,9 @@ async def test_an_agent_is_bound_to_its_workload(client, admin_token, github, db
         assert (await client.post(f"{P}/agents/{agent['id']}/unbind",
                                   headers=auth_headers(admin_token))).status_code == 200
         assert (await act(client, agent)).status_code == 403
-        assert (await attest(client, agent, github.token(repository="acme/other")))["ok"] is True
+        assert (await attest(client, agent, github.token(repository="provenza/other")))["ok"] is True
         st = (await client.get(f"{P}/agents/{agent['id']}", headers=auth_headers(admin_token))).json()
-        assert st["binding"]["subject"] == "repo:acme/other:ref:refs/heads/main"
+        assert st["binding"]["subject"] == "repo:provenza/other:ref:refs/heads/main"
     finally:
         await _default(client, admin_token, 0)
 
