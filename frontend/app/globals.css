@@ -1988,3 +1988,11 @@ a.btn, a.btn:hover { text-decoration: none; }
 tr.sub-row > td { background: var(--bg-app); }
 .sighting-people { padding: 4px 0; max-width: 760px; }
 .sighting-people table { width: 100%; }
+
+/* A list that grows (incidents, the tool registry) scrolls in its own box,
+   like a terminal window, instead of stretching the page; a table's header
+   stays on top. */
+.scroll-box { max-height: 560px; overflow: auto; overscroll-behavior: contain; }
+.scroll-box thead th { position: sticky; top: 0; z-index: 1; background: var(--bg-panel); }
+/* long secondary text (a browser string) in a list row: two lines, the rest on the detail page */
+.clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }

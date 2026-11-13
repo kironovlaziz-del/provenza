@@ -128,10 +128,10 @@ export default function InboxPage() {
                   <h2>{t("inbox.open_incidents")} ({incidentCount})</h2>
                   <Link href="/incidents" className="btn btn-sm">{t("inbox.open_all")}</Link>
                 </div>
-                <div className="panel-body inbox-list">
+                <div className="panel-body inbox-list scroll-box">
                   {loaded && incidentCount === 0 && <p className="hint-text">{t("inbox.no_incidents")}</p>}
                   {incidents.slice(0, 10).map((i) => (
-                    <Link key={`p${i.id}`} href="/incidents" className="inbox-row">
+                    <Link key={`p${i.id}`} href={`/incidents/${i.id}`} className="inbox-row">
                       <RiskPill level={i.severity} />
                       <span className="inbox-row-main">
                         <b>{i.summary}</b>

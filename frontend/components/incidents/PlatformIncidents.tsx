@@ -152,7 +152,7 @@ export function PlatformIncidents() {
           </div>
         </div>
         {error && <p className="error-text" style={{ padding: "0 16px" }}>{error}</p>}
-        <div style={{ overflowX: "auto" }}>
+        <div className="scroll-box">
           <table>
             <thead>
               <tr>
@@ -172,7 +172,7 @@ export function PlatformIncidents() {
                   <td><RiskPill level={i.severity} /></td>
                   <td>
                     <Link href={`/incidents/${i.id}`}><strong>{i.summary}</strong></Link>
-                    {i.impact && <div className="hint-text">{i.impact}</div>}
+                    {i.impact && <div className="hint-text clamp-2" title={i.impact}>{i.impact}</div>}
                   </td>
                   <td className="u-mono">{i.category}</td>
                   <td><StatusPill status={i.status} /></td>

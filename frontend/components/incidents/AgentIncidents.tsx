@@ -145,7 +145,7 @@ export function AgentIncidents() {
             </label>
           </div>
         </div>
-        <div style={{ overflowX: "auto" }}>
+        <div className="scroll-box">
           <table>
             <thead>
               <tr>
