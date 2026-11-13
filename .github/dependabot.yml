@@ -24,6 +24,9 @@ updates:
     groups:
       react:
         patterns: ["react", "react-dom", "@types/react", "@types/react-dom"]
+        # react-i18next names the i18next it needs as a peer, one PR for the pair
+      i18next:
+        patterns: ["i18next", "react-i18next"]
 
   - package-ecosystem: github-actions
     directory: /
@@ -33,3 +36,4 @@ updates:
     labels:
       - dependencies
       - ci
+      
