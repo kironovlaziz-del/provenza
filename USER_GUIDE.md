@@ -17,7 +17,7 @@ development, see [README.md](README.md).
    invited from **Settings → Users**. **Register organization** on the
    login page appears only when the server allows public sign-up.
 3. To sign in, enter your **Organization** short identifier (e.g.
-   `acme`), your **email**, and your **password**.
+   `provenza`), your **email**, and your **password**.
 4. Use the **Language** selector (top of the login page) to switch
    between English and O‘zbekcha at any time.
 

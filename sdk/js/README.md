@@ -202,7 +202,7 @@ const chk = await agent.check("crm.update", payload);
 await fetch(url, { method: "POST", body: JSON.stringify(payload), headers: permitHeaders(chk) });
 
 // the tool
-const verifier = new PermitVerifier("https://provenza.example.com", "acme");
+const verifier = new PermitVerifier("https://provenza.example.com", "provenza");
 app.post("/update", express.json(), permitMiddleware(verifier, { tool: "crm.update" }), handler);
 export const POST = withPermit(verifier, "crm.update", async (request, permit, input) => Response.json({ ok: true }));
 ```

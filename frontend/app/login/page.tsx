@@ -124,7 +124,7 @@ export default function LoginPage() {
               autoFocus
               value={orgSlug}
               onChange={(e) => setOrgSlug(e.target.value.toLowerCase())}
-              placeholder="acme"
+              placeholder="provenza"
               pattern="[a-z0-9\-]+"
             />
             <span className="hint-text">{t("auth.org_slug_hint")}</span>

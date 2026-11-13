@@ -73,7 +73,7 @@ export class FakeProvenza {
       verifyEd25519(this.publicKey, body.signature, { type: "provenza.agent.attestation", v: 1, challenge: "a".repeat(64),
         agent_id: 42, kind: "oidc", evidence_sha256: createHash("sha256").update(body.evidence).digest("hex") });
       this.attested = body;
-      return ok(200, { ok: true, kind: body.kind, identity: { sub: "repo:acme/agents" } });
+      return ok(200, { ok: true, kind: body.kind, identity: { sub: "repo:provenza/agents" } });
     }
     if (path === "/agents/egress-check") {
       this.egress = { id: 5, targets: this.egressTargets ?? ["127.0.0.1:9"] };

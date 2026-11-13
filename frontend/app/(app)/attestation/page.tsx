@@ -270,7 +270,7 @@ export default function AttestationPage() {
                   <div className="field">
                     <label htmlFor="ap-rules">{t("attest.claim_rules")}</label>
                     <textarea id="ap-rules" className="mono" rows={4} value={form.rules} style={{ fontSize: 12 }}
-                      placeholder={"repository = acme/agents\nref = refs/heads/main"}
+                      placeholder={"repository = provenza/agents\nref = refs/heads/main"}
                       onChange={(e) => setForm({ ...form, rules: e.target.value })} />
                     <p className="hint-text">{t("attest.claim_rules_hint")}</p>
                   </div>

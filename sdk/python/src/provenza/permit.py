@@ -11,7 +11,7 @@ sends it with the call; the tool verifies it here and refuses without it:
 
     from provenza.permit import PermitVerifier, PermitMiddleware
 
-    verifier = PermitVerifier("https://provenza.example.com", org="acme")
+    verifier = PermitVerifier("https://provenza.example.com", org="provenza")
     app = PermitMiddleware(app, verifier, tool="crm.update")     # any ASGI app
 
     # or by hand, in any framework

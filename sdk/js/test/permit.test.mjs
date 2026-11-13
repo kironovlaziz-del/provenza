@@ -22,7 +22,7 @@ class FakeProvenza {
   jwksCalls = 0;
   down = false;
 
-  constructor(org = "acme") {
+  constructor(org = "provenza") {
     this.org = org;
     this.rotate();
   }

@@ -49,7 +49,7 @@
     "register_failed": "Could not create organization.",
     "password_hint": "At least 6 characters",
     "org_slug": "Organization",
-    "org_slug_hint": "The short identifier you chose when registering (e.g. acme)",
+    "org_slug_hint": "The short identifier you chose when registering (e.g. provenza)",
     "mfa_prompt": "Enter the 6-digit code from your authenticator app.",
     "mfa_code": "Code",
     "mfa_recovery_hint": "Lost your phone? Enter one of your recovery codes instead.",
@@ -911,7 +911,7 @@
   "register": {
     "title": "New organization",
     "org_name": "Organization name",
-    "org_name_placeholder": "Acme Corp",
+    "org_name_placeholder": "Provenza Corp",
     "your_name": "Your name",
     "your_name_placeholder": "John Smith",
     "email": "Email",
@@ -3776,5 +3776,165 @@
     "truncated": "The file names more than 20,000 person-and-service pairs: the rest was not counted. Import it in parts.",
     "after": "The sightings appear in the list within a minute; open one to see who uses it.",
     "failed": "The log could not be imported."
+  },
+  "welcome": {
+    "nav_how": "How it works",
+    "nav_why": "What it solves",
+    "github": "GitHub",
+    "sign_in": "Sign in",
+    "eyebrow": "Open-source AI governance · self-hosted",
+    "title_a": "Every AI agent is checked before it acts.",
+    "title_b": "Every decision can be proven.",
+    "lead": "Provenza sits between your people, your AI agents and the tools they use. It finds AI use nobody approved, lets each agent do only what you allowed, and keeps a signed record anyone can verify.",
+    "cta_sign_in": "Sign in to your organization",
+    "cta_see": "See a call being checked",
+    "feed_title": "Decisions, as they happen",
+    "feed_example": "example",
+    "events": [
+      {
+        "tag": "allowed",
+        "kind": "solid",
+        "what": "deepwiki.ask_wiki_question",
+        "who": "claude-code@laptop · policy check passed"
+      },
+      {
+        "tag": "denied",
+        "kind": "dash",
+        "what": "github.delete_repo",
+        "who": "release-bot · denied by organization policy"
+      },
+      {
+        "tag": "held",
+        "kind": "ghost",
+        "what": "payments.refund",
+        "who": "support-agent · waiting for a person"
+      },
+      {
+        "tag": "found",
+        "kind": "ghost",
+        "what": "chat.example-ai.com",
+        "who": "shadow AI · seen by the browser extension"
+      },
+      {
+        "tag": "verified",
+        "kind": "solid",
+        "what": "receipt #41",
+        "who": "checked offline · Ed25519 + ML-DSA-65"
+      },
+      {
+        "tag": "allowed",
+        "kind": "solid",
+        "what": "jira.create_issue",
+        "who": "triage-agent · delegated by planner-agent"
+      },
+      {
+        "tag": "blocked",
+        "kind": "dash",
+        "what": "delegation chain",
+        "who": "scope widened · privilege escalation refused"
+      },
+      {
+        "tag": "stopped",
+        "kind": "dash",
+        "what": "all agents",
+        "who": "kill switch · lifted with a passkey"
+      }
+    ],
+    "facts": [
+      "Self-hosted, your data stays with you",
+      "Open source, Apache-2.0",
+      "MCP and A2A gateways",
+      "Post-quantum hybrid signatures",
+      "Evidence for the EU AI Act",
+      "Kill switch for every agent",
+      "Endpoint agent for Linux, Windows and macOS"
+    ],
+    "how_title": "One agent call, step by step",
+    "how_sub": "An AI assistant asks to use a tool. Watch what Provenza does before the tool is reached.",
+    "scenario_allow": "Scenario: allowed call",
+    "scenario_deny": "Scenario: refused by policy",
+    "scenario": "Scenario",
+    "btn_allow": "Allowed call",
+    "btn_deny": "Refused by policy",
+    "agent_k": "AI agent",
+    "agent_d": "Signs the call with its own key. The key never leaves the laptop.",
+    "gate_k": "Provenza checks",
+    "chk_sig": "Signature: it really is this agent",
+    "chk_rights": "Rights: this tool is in its list",
+    "chk_policy": "Policy: organization policy",
+    "chk_policy_ok": "Policy: allowed by the organization policy",
+    "chk_policy_no": "Policy: denied by the organization policy",
+    "tool_k": "Tool",
+    "tool_d": "An approved MCP server. Agents only see tools an administrator approved.",
+    "waiting": "Waiting…",
+    "tool_ok": "Answered",
+    "tool_no": "Never received the call",
+    "audit_h": "Audit log, hash-chained",
+    "audit_wait": "Waiting for the decision…",
+    "audit_ok": "#41  ask_wiki_question  allowed  · chained to #40",
+    "audit_no": "#42  ask_wiki_question  denied  · chained to #41",
+    "receipt_h": "Receipt, checked offline",
+    "receipt_wait": "Ed25519 + ML-DSA-65, both must verify",
+    "receipt_ok": "VERIFIED  action 41: executed and witnessed",
+    "receipt_no": "VERIFIED  action 42: refused and witnessed",
+    "caps": [
+      "The agent asks to call deepwiki.ask_wiki_question and signs the request.",
+      "The call goes to Provenza, not straight to the tool.",
+      "Provenza checks the signature against the agent's registered public key.",
+      "It checks that this tool is in the agent's rights and was approved.",
+      "",
+      "",
+      "The decision is written to a hash-chained audit log.",
+      "Anyone can verify the receipt offline with a public key, without trusting the server."
+    ],
+    "cap5_ok": "The organization policy allows it.",
+    "cap5_no": "The organization policy denies this tool. The call stops here.",
+    "cap6_ok": "Only now does the call reach DeepWiki, and the answer goes back.",
+    "cap6_no": "DeepWiki never receives the call. The agent gets a clear refusal.",
+    "why_title": "AI came in through every door at once",
+    "why_sub": "Most tools watch one door. Provenza covers all three under one set of rules.",
+    "problem": "Problem",
+    "with": "With Provenza",
+    "problems": [
+      {
+        "title": "Shadow AI",
+        "problem": "People paste work into AI tools nobody approved, and no one knows which ones.",
+        "solution": "Provenza finds AI use on laptops, in browsers and in DNS and proxy logs, shows it to you, and closes the services your policy does not allow."
+      },
+      {
+        "title": "Agents nobody checks",
+        "problem": "AI agents call tools and hand tasks to each other, with the access of whoever set them up.",
+        "solution": "Each agent has its own key and a list of rights. Every call passes a policy check, risky ones wait for a person, and one kill switch stops them all."
+      },
+      {
+        "title": "No proof afterwards",
+        "problem": "When something goes wrong, logs can be edited and nobody can show who allowed what.",
+        "solution": "Every decision goes into a hash-chained log with signed checkpoints. A receipt verifies offline, with post-quantum hybrid signatures."
+      }
+    ],
+    "steps_title": "How it works",
+    "steps": [
+      {
+        "title": "Discover",
+        "text": "See which AI services people use and which agents run, from the endpoint agent, the browser extension and network logs."
+      },
+      {
+        "title": "Decide",
+        "text": "Write policies for the organization, teams and single agents. Approve the tools agents may use."
+      },
+      {
+        "title": "Enforce",
+        "text": "Calls pass the gateway: allowed, refused, or held for a person. Stop everything with one switch."
+      },
+      {
+        "title": "Prove",
+        "text": "Signed, hash-chained records and receipts that an auditor checks without trusting your server."
+      }
+    ],
+    "cta_title": "Already part of an organization here?",
+    "cta_text": "Sign in with your organization's identifier, your e-mail and your password.",
+    "cta_install": "Install on your server",
+    "footer_source": "Source code",
+    "footer_security": "Security model"
   }
 }

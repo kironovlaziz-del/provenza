@@ -169,7 +169,7 @@ Pick a preset (GitHub Actions, Google Cloud, Azure, GitLab CI, SPIFFE). It
 fills the issuer and example rules. Then name **your** workload in the rules:
 
 ```
-repository = acme/agents          # GitHub: the repository (owner/name)
+repository = provenza/agents          # GitHub: the repository (owner/name)
 ref = refs/heads/main             # only the main branch
 ```
 
@@ -177,7 +177,7 @@ A public issuer signs tokens for everyone. Without a rule naming your
 organization, any repository in the world would pass. So a policy without a
 rule on a workload claim is refused, and so is a rule that matches
 everything (`*`). Nested claims use dots, for example
-`google.compute_engine.project_id = acme-prod`.
+`google.compute_engine.project_id = provenza-prod`.
 
 The agent fetches its token and attests with the SDK:
 

@@ -174,8 +174,8 @@ async def test_get_query_redirects_errors_and_oversized_answers(client, admin_to
                 input_schema={"type": "object", "properties": {"q": {"type": "string"}, "tags": {"type": "array"}}},
                 max_response_bytes=1024)
     agent = await _agent(client, admin_token, tools=("crm.find",))
-    out = (await _call(client, agent, tool="crm.find", args={"q": "acme", "tags": ["a", "b"]})).json()
-    assert out["status"] == 200 and api.calls[-1]["path"] == "/customers?q=acme&tags=a&tags=b"
+    out = (await _call(client, agent, tool="crm.find", args={"q": "provenza", "tags": ["a", "b"]})).json()
+    assert out["status"] == 200 and api.calls[-1]["path"] == "/customers?q=provenza&tags=a&tags=b"
     assert permits.HEADER not in api.calls[-1]["headers"]     # no body: the permit could not match the input
     api.reply = (302, {})
     out = (await _call(client, agent, tool="crm.find", args={"q": "x"})).json()

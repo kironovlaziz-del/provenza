@@ -237,7 +237,7 @@ The tool runs nothing without a valid permit for exactly this call:
 ```python
 from provenza.permit import PermitMiddleware, PermitVerifier, require_permit
 
-verifier = PermitVerifier("https://provenza.example.com", org="acme")
+verifier = PermitVerifier("https://provenza.example.com", org="provenza")
 app = PermitMiddleware(app, verifier, tool="crm.update")   # any ASGI app: FastAPI, Starlette, ...
 
 @require_permit(verifier, "db.read")                         # or a plain function

@@ -6,7 +6,7 @@
 #   provenza demo status
 #   provenza demo disable      stop the nightly reset and delete the demo organization
 #
-# The demo is its own organization ("Acme Bank (Provenza demo)"): it sees
+# The demo is its own organization ("Provenza Bank (demo)"): it sees
 # nothing of the others, and they see nothing of it. Visitors sign in as its
 # viewer - an auditor, which reads everything and changes nothing - with the
 # e-mail and password you publish. That login cannot change its own password,

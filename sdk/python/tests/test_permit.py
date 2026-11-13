@@ -30,7 +30,7 @@ def b64(raw: bytes) -> str:
 class FakeProvenza:
     """JWKS + redeem, as the server answers them."""
 
-    def __init__(self, org="acme"):
+    def __init__(self, org="provenza"):
         self.org, self.keys, self.redeemed, self.jwks_calls, self.down = org, {}, set(), 0, False
         self.kid = self.rotate()
 

@@ -99,7 +99,7 @@ export function SsoPanel() {
             <div className="form-row">
               <div className="field">
                 <label htmlFor="sso-iss">{t("sso.issuer")}</label>
-                <input id="sso-iss" className="mono" value={form.issuer} placeholder="https://acme.okta.com"
+                <input id="sso-iss" className="mono" value={form.issuer} placeholder="https://provenza.okta.com"
                   onChange={(e) => setForm({ ...form, issuer: e.target.value })} />
               </div>
               <div className="field">
@@ -115,7 +115,7 @@ export function SsoPanel() {
               </div>
               <div className="field">
                 <label htmlFor="sso-domains">{t("sso.domains")}</label>
-                <input id="sso-domains" className="mono" value={form.domains} placeholder="acme.com"
+                <input id="sso-domains" className="mono" value={form.domains} placeholder="provenza.com"
                   onChange={(e) => setForm({ ...form, domains: e.target.value })} />
               </div>
               <div className="field" style={{ maxWidth: 160 }}>

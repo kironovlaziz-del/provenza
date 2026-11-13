@@ -307,7 +307,7 @@ sudo provenza demo enable                    # organization "demo", demo@<your d
 sudo provenza demo enable --password '...'   # or your own (12 characters or more)
 ```
 
-makes an organization of its own, "Acme Bank (Provenza demo)", and fills it
+makes an organization of its own, "Provenza Bank (demo)", and fills it
 the way real agents would (`backend/scripts/demo_seed.py`): agents that enroll
 with their own keys, a signed delegation chain, allowed, denied and held
 actions, a refused capability escalation, AI tools found on employees'
