@@ -35,7 +35,7 @@
   border-radius: 999px; font-weight: 600; text-decoration: none; font-size: 15px;
   transition: transform .2s ease, background-color .2s ease;
 }
-.wl-btn-white { background: #fff; color: #000 !important; }
+.wl a.wl-btn-white { background: #fff; color: #000 !important; }   /* beats .wl a, which is !important too */
 .wl-btn-white:hover { transform: translateY(-2px); }
 .wl-btn-line { border: 1px solid var(--wl-line-2); color: #fff !important; }
 .wl-btn-line:hover { background: #111; }
