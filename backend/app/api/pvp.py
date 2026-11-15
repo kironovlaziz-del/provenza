@@ -89,6 +89,30 @@ async def receipt(action_id: int, db: AsyncSession = Depends(get_db), user: User
     return (await build(db, user.org_id, action_id)).model_dump(mode="json")
 
 
+@router.get("/authority/{action_id}")
+async def authority(action_id: int, db: AsyncSession = Depends(get_db),
+                    user: User = Depends(require_role(UserRole.admin, UserRole.approver))):
+    """Proof of Authority for one action (docs/proof-of-authority.md): its
+    receipt with the signed policy releases it was decided under and its
+    delegation hops - checked offline by tools/provenza_audit.py authority.
+    The releases hold the whole signed policy, so it is for those who may
+    read that (administrators, approvers, auditors, compliance officers)."""
+    from app.pvp import authority as authority_proof
+
+    return await authority_proof.build(db, user.org_id, action_id)
+
+
+@router.get("/completeness")
+async def completeness(agent_id: int, since: int, until: int, db: AsyncSession = Depends(get_db),
+                       user: User = Depends(require_role(UserRole.admin, UserRole.approver))):
+    """Every action of one agent over a period (Unix seconds), shown to be all
+    of them: consecutive chained seals with every action they hold - checked
+    offline by tools/provenza_audit.py completeness."""
+    from app.pvp import completeness as completeness_report
+
+    return await completeness_report.build(db, user.org_id, agent_id, since, until)
+
+
 @router.get("/receipts/{action_id}/trace")
 async def receipt_trace(action_id: int, request: Request, db: AsyncSession = Depends(get_db),
                         user: User = Depends(get_current_user)):

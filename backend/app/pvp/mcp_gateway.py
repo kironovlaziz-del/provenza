@@ -293,7 +293,11 @@ class MCPGateway:
                 "credential": {"object": "mcp_server", "id": server.id,
                                "source": server.credential_source or "none", "header": server.auth_header}}
 
-    async def call(self, agent: Agent, name: str, arguments: Dict[str, Any], chain_id: Optional[int]) -> dict:
+    async def call(self, agent: Agent, name: str, arguments: Dict[str, Any], chain_id: Optional[int],
+                   signed_request: Optional[PVPActionRequest] = None) -> dict:
+        """`signed_request`: the agent's own signed action.request for this
+        call (agent mode signs one - X-Provenza-Action), already verified; it
+        becomes part of the action's evidence (Proof of Authority)."""
         org_id, agent_id = agent.org_id, agent.id
         found = await self._approved(org_id, name)
         if not found:
@@ -312,7 +316,7 @@ class MCPGateway:
         orc = PVPOrchestrator(self.db)
         check = await orc.check(org_id, PVPActionRequest(
             agent_id=agent_id, chain_id=chain_id, action_type="tool_call", tool_name=name, input=arguments,
-            tool_digest=live_digest))
+            tool_digest=live_digest), signed_request=signed_request)
 
         refusal = None
         if await enforcement.enforced(self.db, org_id):

@@ -111,6 +111,7 @@ class SignedPolicy:
     bundle: Dict[str, Any]
     manifest: Dict[str, Any]
     problem: Optional[str] = None           # set: the release does not verify - nothing is allowed
+    bundle_sha256: str = ""
     _registry: Optional[list] = field(default=None, repr=False)
 
     @property
@@ -259,7 +260,7 @@ async def in_force(db: AsyncSession, org_id: int) -> Optional[SignedPolicy]:
         return cached
     release = await db.get(PolicyRelease, head[0])
     problem = await _verify_chain(db, release)
-    sp = SignedPolicy(release.id, release.number, release.bundle, release.manifest, problem)
+    sp = SignedPolicy(release.id, release.number, release.bundle, release.manifest, problem, release.bundle_sha256)
     if problem is None:
         _cache[org_id] = sp
     elif (org_id, release.id) not in _reported:

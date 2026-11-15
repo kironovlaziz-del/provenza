@@ -114,6 +114,12 @@ class ActionCheck(Base):
     # its id, and when a tool redeemed it - once
     permit_jti = Column(String(64), unique=True)
     permit_redeemed_at = Column(DateTime(timezone=True))
+    # Proof of Authority (docs/proof-of-authority.md): the signed policy
+    # release the verdict was given under, and the agent's own signed
+    # action.request (payload and signature) when it sent one
+    release_number = Column(Integer)
+    release_bundle_sha256 = Column(String(64))
+    requested = Column(JSONB)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 

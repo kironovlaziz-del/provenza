@@ -339,6 +339,28 @@ async def inclusion_proof(db: AsyncSession, org_id: int, log_id: int) -> Dict[st
     }
 
 
+async def inclusion_proofs(db: AsyncSession, org_id: int, log_ids: List[int]) -> Dict[int, Dict[str, Any]]:
+    """inclusion_proof for many records under ONE checkpoint, reading the
+    log's leaves once (a completeness report proves hundreds of seals)."""
+    if not log_ids:
+        return {}
+    rows = list((await db.execute(select(AIAuditLog).where(
+        AIAuditLog.org_id == org_id, AIAuditLog.id.in_(log_ids)))).scalars())
+    if len(rows) != len(set(log_ids)):
+        raise ProofError("audit.not_found", "audit record not found")
+    top = max(r.seq for r in rows)
+    cp = await latest_checkpoint(db, org_id)
+    if cp is None or cp.tree_size < top:
+        cp = await checkpoint(db, org_id)
+    if cp is None or cp.tree_size < top:  # pragma: no cover
+        raise ProofError("audit.no_checkpoint", "no checkpoint covers this record yet")
+    leaves = await leaves_of(db, org_id, cp.tree_size)
+    cp_out, hand = checkpoint_out(cp), [handover_out(h) for h in await handovers(db, org_id)]
+    return {r.id: {"format": PROOF_FORMAT, "record": _record_out(r), "leaf_index": r.seq - 1,
+                   "tree_size": cp.tree_size, "inclusion_path": ac.hexes(ac.inclusion_proof(r.seq - 1, leaves)),
+                   "checkpoint": cp_out, "key_handovers": hand} for r in rows}
+
+
 async def consistency(db: AsyncSession, org_id: int, old_size: int, new_size: Optional[int] = None) -> Dict[str, Any]:
     old = await checkpoint_for(db, org_id, old_size)
     if old is None:

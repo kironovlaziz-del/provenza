@@ -1212,7 +1212,14 @@
     "log_import.too_large": "Jurnal bitta yuklash uchun juda katta: uni qismlarga bo'ling.",
     "log_import.unreadable": "Faylni o'qib bo'lmadi. gzip fayl kesilgan bo'lishi mumkin.",
     "ingestion.logs_need_gateway_key": "Jurnal qatorlari uchun Gateway kaliti kerak.",
-    "agent_manifest.unavailable": "Bu server Agent Manifest'larni imzolay olmaydi."
+    "agent_manifest.unavailable": "Bu server Agent Manifest'larni imzolay olmaydi.",
+    "pvp.no_evidence": "Bu harakat kvitansiyalar paydo bo'lishidan oldin yozilgan.",
+    "pvp.release_history_too_long": "Imzolangan siyosat tarixi juda uzun ({{max}} tadan ortiq reliz).",
+    "pvp.chain_too_long": "Topshiriq zanjiri juda uzun ({{max}} tadan ortiq).",
+    "pvp.no_actions_in_period": "Bu davrda hech qanday harakat yozilmagan.",
+    "pvp.period_too_large": "Bu davrda harakatlar juda ko'p ({{max_actions}} tadan ortiq): qisqaroq davrni tanlang.",
+    "pvp.bad_period": "Davr oxiri boshlanishidan oldin.",
+    "pvp.period_before_seal_chain": "Bu davr muhrlangan to'plamlar zanjirga bog'lanishidan oldin muhrlangan: uning to'liqligini ko'rsatib bo'lmaydi."
   },
   "discovery": {
     "title": "Tarmoq kashfiyoti",
@@ -2999,7 +3006,19 @@
     "chain_id": "Zanjir ID",
     "verify_title": "Oflayn tekshirish",
     "verify_hint": "Repozitoriyadagi tekshirish vositasi imzolarni, xeshlarni, Merkle kiritilishini va har bir kvitansiyani faqat fayllar va tashkilotning ochiq kaliti yordamida tekshiradi:",
-    "failed": "Topilmadi yoki hali mavjud emas."
+    "failed": "Topilmadi yoki hali mavjud emas.",
+    "requested_signed": "so'rovni agent imzolagan",
+    "release": "Imzolangan siyosat",
+    "release_n": "reliz #{{n}}",
+    "no_release": "qayd etilmagan (imzolangan reliz amalda bo'lmagan yoki Proof of Authority'dan oldin yozilgan)",
+    "download_authority": "Vakolat isbotini yuklab olish",
+    "authority_hint": "Vakolat isboti harakat ortidagi zanjirni qo'shadi: administratorlar passkey bilan imzolagan siyosat relizi, undagi agent huquqlari va kaliti, topshiriq bosqichlari, agentning o'z imzosi va tasdiqlovchining passkey'i. Tekshirish vositasi har bir bo'g'inni tekshiradi va qaysilari isbotlanmaganini aytadi.",
+    "completeness_title": "Agentning to'liqlik hisoboti",
+    "completeness_hint": "Bitta agentning davr ichidagi barcha harakatlari va ularning hammasi ekanligi isboti: davrning muhrlangan to'plamlari imzolangan audit jurnalida uzluksiz zanjir hosil qiladi va har biri aynan berilgan harakatlarni saqlaydi.",
+    "agent_id": "Agent ID",
+    "from": "Boshlanishi",
+    "to": "Oxiri",
+    "download_completeness": "Hisobotni yuklab olish"
   },
   "profile": {
     "title": "Mening profilim",

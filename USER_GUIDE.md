@@ -532,6 +532,20 @@ The log is tamper-evident (details in `docs/audit-proofs.md`):
   after the announcement period (24 h by default) the old key hands over.
   Any admin can cancel before that.
 
+**Audit Log → Evidence** answers *who allowed* an agent action
+(details in `docs/proof-of-authority.md`):
+
+- Show an action's receipt, then **Download proof of authority**: one file
+  with the policy release administrators signed with their passkeys, the
+  agent's rights and key in it, the delegation hops, the agent's own
+  signature and the approver's passkey.
+  `python tools/provenza_audit.py authority authority-41.json` checks every
+  link and says which ones are not proven (for example, no signed policy
+  release was in force).
+- **Completeness report of an agent**: every action of one agent over a
+  period, shown to be all of them.
+  `python tools/provenza_audit.py completeness <file>` checks it.
+
 ---
 
 ## 12. Runtime: egress sensors

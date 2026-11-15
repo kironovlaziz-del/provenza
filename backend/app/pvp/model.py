@@ -40,7 +40,7 @@ import math
 from typing import Annotated, Any, Dict, List, Literal, Optional, Union
 
 from pydantic import (BaseModel, ConfigDict, Field, StrictInt, StrictStr, StringConstraints, TypeAdapter,
-                      field_validator, model_validator)
+                      field_validator, model_serializer, model_validator)
 
 from app.core import audit_chain
 from app.core.agent_signing import (SCHEME_CLASSIC, SCHEME_HYBRID, canonical_bytes, canonical_text, content_hash,
@@ -324,6 +324,45 @@ class PVPWitness(BaseModel):
         return out
 
 
+class PVPReleaseRef(BaseModel):
+    """The signed policy release a verdict was given under: its number and
+    the SHA-256 of its bundle (docs/proof-of-authority.md)."""
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    number: Id
+    bundle_sha256: Sha256Hex
+
+
+# what the agent signs when it asks for a check (PVPActionRequest.signed_payload)
+REQUEST_FIELDS = ("type", "agent_id", "chain_id", "action_type", "tool_name", "input_sha256", "tool_version",
+                  "tool_digest", "nonce", "issued_at")
+
+
+class PVPRequested(BaseModel):
+    """The agent's own signed action.request for an action a gateway executed
+    (or one it recorded itself): proof that the agent - not only a holder of
+    its API key - asked for exactly this call."""
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    payload: Dict[StrictStr, Any]
+    signed_by: PVPSignature
+
+    def problems(self, action: Dict[str, Any]) -> List[str]:
+        p, out = self.payload, []
+        if set(p) != set(REQUEST_FIELDS) or p.get("type") != "action.request":
+            out.append("requested_fields")
+        out += [f"requested_mismatch:{k}" for k in ("agent_id", "chain_id", "action_type", "tool_name",
+                                                    "input_sha256") if p.get(k) != action.get(k)]
+        if not self.signed_by.verify(p):
+            out.append("requested_signature_invalid")
+        return out
+
+
+# members added after evidence was first written: left out when empty, so the
+# evidence of older actions keeps exactly the form - and the hash - it was sealed with
+_LATER_MEMBERS = ("release", "requested")
+
+
 class PVPAction(_ActionShape):
     """A recorded action - allowed or not: refused attempts are recorded too."""
     type: Literal["action"] = "action"
@@ -345,6 +384,18 @@ class PVPAction(_ActionShape):
                                   "llm_gateway"]] = None
     # the executor's own signed receipt, when it has a key (an egress proxy)
     witness: Optional[PVPWitness] = None
+    # Proof of Authority: the signed release in force for the verdict, and
+    # the agent's own signed request (docs/proof-of-authority.md)
+    release: Optional[PVPReleaseRef] = None
+    requested: Optional[PVPRequested] = None
+
+    @model_serializer(mode="wrap")
+    def _without_empty_later_members(self, handler):
+        out = handler(self)
+        for k in _LATER_MEMBERS:
+            if out.get(k) is None:
+                out.pop(k, None)
+        return out
 
     @model_validator(mode="after")
     def _evidence(self):
@@ -361,6 +412,8 @@ class PVPAction(_ActionShape):
         out = []
         if self.witness is not None:
             out += self.witness.problems(self.model_dump(mode="json"))
+        if self.requested is not None:
+            out += self.requested.problems(self.model_dump(mode="json"))
         if self.signed_by is None:
             return out if self.executed_by is not None and self.signed_payload is None else out + ["unsigned"]
         p = self.signed_payload or {}

@@ -45,8 +45,8 @@ from app.core.agent_signing import verify_agent_signature
 from app.models.agent import Agent
 from app.models.agent_action import ActionCheck, AgentAction
 from app.models.delegation import ActionNonce, DelegationChain, DelegationHop, DelegationNonce
-from app.pvp.model import PVPAction, PVPActionRecord, PVPActionRequest, PVPCheck, PVPDelegation
-from app.pvp import approvals, permits
+from app.pvp.model import PVPAction, PVPActionRecord, PVPActionRequest, PVPCheck, PVPDelegation, signature_of
+from app.pvp import approvals, permits, signed_policy
 from app.services.agent_audit import AgentAudit
 from app.services.agent_policy_engine import ALLOWED, DENIED, PENDING_APPROVAL, Decision
 from app.services.agent_identity import keyless_refused, pq_signature_required
@@ -93,6 +93,13 @@ class Delegated:
     effective_tools: List[str] = field(default_factory=list)
 
 
+def requested_of(req: PVPActionRequest, agent: Agent) -> dict:
+    """An agent's verified signed action.request as evidence (PVPRequested):
+    what it signed and the keys that verified it."""
+    sig = signature_of(req.signature, req.pq_signature, agent.public_key, agent.pq_public_key)
+    return {"payload": req.signed_payload(), "signed_by": sig.model_dump(mode="json")}
+
+
 class PVPOrchestrator:
     def __init__(self, db: AsyncSession):
         self.db = db
@@ -100,7 +107,7 @@ class PVPOrchestrator:
     # ------------------------------------------------------------ actions
 
     async def check(self, org_id: int, req: PVPActionRequest, *, require_signature: bool = False,
-                    permit: bool = True) -> PVPCheck:
+                    permit: bool = True, signed_request: Optional[PVPActionRequest] = None) -> PVPCheck:
         """Run the policy engine for a proposed action and issue a single-use
         check bound to exactly this action (agent, chain, tool, input hash,
         capabilities, verdict).
@@ -112,7 +119,12 @@ class PVPOrchestrator:
         Gateways and the egress proxy call without it: they are the witness.
         permit: False issues no permit for the tool (enforce mode's REST path,
         app/pvp/enforcement.py). A check whose signature was verified says
-        so (agent_signed)."""
+        so (agent_signed) and keeps the signed request for the action's
+        evidence (Proof of Authority, docs/proof-of-authority.md), with the
+        signed release the verdict was given under.
+        signed_request: the agent's own signed request, already verified by
+        the caller (verify_signed_request), for an executor that checks with
+        what it computed itself (the tool digest) - the request it was given."""
         checked = (await self.db.execute(select(Agent).where(
             Agent.id == req.agent_id, Agent.org_id == org_id))).scalar_one_or_none()
         signed = False
@@ -161,8 +173,14 @@ class PVPOrchestrator:
         )
         if approval is not None:
             await approvals.bind(self.db, approval.id, chk.id)
-        if signed:
+        proof = signed_request if signed_request is not None else (req if signed else None)
+        if proof is not None:
             chk.agent_signed = True
+            chk.requested = requested_of(proof, checked)
+        policy = await signed_policy.in_force(self.db, org_id)
+        if policy is not None and policy.problem is None and policy.bundle_sha256:
+            chk.release_number, chk.release_bundle_sha256 = policy.number, policy.bundle_sha256
+        if proof is not None or chk.release_number is not None:
             await self.db.commit()
         token = None
         if chk.decision == "allowed" and permit:

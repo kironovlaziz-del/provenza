@@ -1212,7 +1212,14 @@
     "log_import.too_large": "The log is too large for one upload: split it into parts.",
     "log_import.unreadable": "The file could not be read. A gzip file may be cut off.",
     "ingestion.logs_need_gateway_key": "Log lines need a Gateway ingestion key.",
-    "agent_manifest.unavailable": "This server cannot sign Agent Manifests."
+    "agent_manifest.unavailable": "This server cannot sign Agent Manifests.",
+    "pvp.no_evidence": "This action was recorded before receipts existed.",
+    "pvp.release_history_too_long": "The signed policy history is too long to include (more than {{max}} releases).",
+    "pvp.chain_too_long": "The delegation chain is too long to include (more than {{max}}).",
+    "pvp.no_actions_in_period": "No action was recorded in this period.",
+    "pvp.period_too_large": "Too many actions in this period (more than {{max_actions}}): choose a shorter one.",
+    "pvp.bad_period": "The end of the period is before its start.",
+    "pvp.period_before_seal_chain": "This period was sealed before sealed batches were chained: completeness cannot be shown for it."
   },
   "discovery": {
     "title": "Network Discovery",
@@ -2999,7 +3006,19 @@
     "chain_id": "Chain ID",
     "verify_title": "Verify offline",
     "verify_hint": "The repository's verification tool checks signatures, hashes, the Merkle inclusion and every receipt with nothing but the files and the organization's public key:",
-    "failed": "Not found, or not available yet."
+    "failed": "Not found, or not available yet.",
+    "requested_signed": "the agent signed the request",
+    "release": "Signed policy",
+    "release_n": "release #{{n}}",
+    "no_release": "none recorded (no signed release in force, or recorded before Proof of Authority)",
+    "download_authority": "Download proof of authority",
+    "authority_hint": "The proof of authority adds the chain behind the action: the policy release administrators signed with their passkeys, the agent's rights and key in it, the delegation hops, the agent's own signature and the approver's passkey. The verification tool checks every link and says which ones are not proven.",
+    "completeness_title": "Completeness report of an agent",
+    "completeness_hint": "Every action of one agent over a period, shown to be all of them: the sealed batches of the period form an unbroken chain in the signed audit log, and each holds exactly the actions given.",
+    "agent_id": "Agent ID",
+    "from": "From",
+    "to": "To",
+    "download_completeness": "Download report"
   },
   "profile": {
     "title": "My profile",

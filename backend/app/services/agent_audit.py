@@ -360,7 +360,8 @@ class AgentAudit:
             from app.pvp.evidence import stamp
 
             await self.db.flush()
-            stamp(action, check_token)
+            chk = await self.db.get(ActionCheck, check_id) if check_id is not None else None
+            stamp(action, check_token, chk)
 
         if decision and decision.result == DENIED and decision.incident_type:
             self.db.add(

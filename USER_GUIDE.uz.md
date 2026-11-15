@@ -565,6 +565,20 @@ Jurnalni sezdirmasdan o‘zgartirib bo‘lmaydi (batafsil: `docs/audit-proofs.md
   tasdiqlaydi va e’lon muddatidan (standart 24 soat) keyin eski kalit
   topshiradi. Undan oldin istalgan admin bekor qila oladi.
 
+**Audit Log → Evidence** agent amaliga *kim ruxsat berganini* ko‘rsatadi
+(batafsil: `docs/proof-of-authority.md`):
+
+- Amal kvitansiyasini oching va **Vakolat isbotini yuklab olish**ni bosing:
+  bitta faylda administratorlar passkey bilan imzolagan siyosat relizi,
+  undagi agent huquqlari va kaliti, topshiriq bosqichlari, agentning o‘z
+  imzosi va tasdiqlovchining passkey’i bor.
+  `python tools/provenza_audit.py authority authority-41.json` har bir
+  bo‘g‘inni tekshiradi va qaysilari isbotlanmaganini aytadi (masalan,
+  imzolangan siyosat relizi amalda bo‘lmagan).
+- **Agentning to‘liqlik hisoboti**: bitta agentning davr ichidagi barcha
+  amallari va ularning hammasi ekanligi isboti.
+  `python tools/provenza_audit.py completeness <fayl>` uni tekshiradi.
+
 ---
 
 ## 12. Runtime: egress sensorlari

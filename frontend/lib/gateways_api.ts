@@ -243,6 +243,12 @@ export const getActionTrace = async (actionId: number) =>
   (await api.get<Record<string, unknown>>(`/pvp/receipts/${actionId}/trace`)).data;
 export const getChainTrace = async (chainId: number) =>
   (await api.get<Record<string, unknown>>(`/pvp/chains/${chainId}/trace`)).data;
+/** Proof of Authority: the receipt with the signed releases and delegation hops behind it. */
+export const getAuthority = async (actionId: number) =>
+  (await api.get<Record<string, unknown>>(`/pvp/authority/${actionId}`)).data;
+/** Every action of one agent over a period (Unix seconds), shown to be all of them. */
+export const getCompleteness = async (agentId: number, since: number, until: number) =>
+  (await api.get<Record<string, unknown>>("/pvp/completeness", { params: { agent_id: agentId, since, until } })).data;
 
 /** Save a JSON document as a file (receipts and TRACE exports are for auditors). */
 export function downloadJson(name: string, value: unknown) {

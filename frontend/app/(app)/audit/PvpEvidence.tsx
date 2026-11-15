@@ -2,19 +2,21 @@
 
 // Evidence for auditors: the receipt of one agent action (signed record, the
 // check it was decided by, its place in a sealed Merkle batch, the audit
-// checkpoint) and TRACE exports, verifiable offline with tools/provenza_audit.py.
+// checkpoint), its Proof of Authority, an agent's completeness report and
+// TRACE exports, verifiable offline with tools/provenza_audit.py.
 
 import React, { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useTranslation } from "react-i18next";
 import { Form } from "@/components/Form";
 import { errorMessage } from "@/lib/errors";
-import { downloadJson, getActionTrace, getChainTrace, getReceipt } from "@/lib/gateways_api";
+import { downloadJson, getActionTrace, getAuthority, getChainTrace, getCompleteness, getReceipt } from "@/lib/gateways_api";
 
 type Receipt = {
   action?: {
     action_id?: number; agent_id?: number; tool_name?: string; action_type?: string; decision?: string;
     recorded_at?: number; executed_by?: string | null; signed_by?: unknown;
+    release?: { number?: number } | null; requested?: unknown;
   };
   seal?: { seal_id?: number; leaf_index?: number; size?: number; root?: string } | null;
   checkpoint?: unknown;
@@ -30,6 +32,12 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
   );
 }
 
+/** yyyy-mm-dd of a date, in the browser's time zone (a date input's value). */
+function day(d: Date) {
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
 export function PvpEvidence() {
   const { t, i18n } = useTranslation();
   // ?action=<id>: opened from an action (an agent's Recent actions) - show its receipt at once
@@ -37,6 +45,9 @@ export function PvpEvidence() {
   const askedId = /^[1-9][0-9]{0,15}$/.test(asked) ? asked : "";
   const [actionId, setActionId] = useState(askedId);
   const [chainId, setChainId] = useState("");
+  const [agentId, setAgentId] = useState("");
+  const [from, setFrom] = useState(() => day(new Date(Date.now() - 7 * 86400_000)));
+  const [to, setTo] = useState(() => day(new Date()));
   const [receipt, setReceipt] = useState<Receipt | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -96,6 +107,10 @@ export function PvpEvidence() {
                   </Row>
                   <Row label={t("evidence.witness")}>
                     {a.signed_by ? t("evidence.signed_by_agent") : a.executed_by ? t("evidence.executed_by", { by: a.executed_by }) : "—"}
+                    {!a.signed_by && a.requested ? <span className="hint-text"> · {t("evidence.requested_signed")}</span> : null}
+                  </Row>
+                  <Row label={t("evidence.release")}>
+                    {a.release?.number ? t("evidence.release_n", { n: a.release.number }) : t("evidence.no_release")}
                   </Row>
                   <Row label={t("evidence.seal")}>
                     {receipt.seal
@@ -111,12 +126,47 @@ export function PvpEvidence() {
                   {t("evidence.download_receipt")}
                 </button>
                 <button className="btn btn-sm" disabled={busy}
+                        onClick={() => run(async () => downloadJson(`authority-${a.action_id}.json`, await getAuthority(a.action_id!)))}>
+                  {t("evidence.download_authority")}
+                </button>
+                <button className="btn btn-sm" disabled={busy}
                         onClick={() => run(async () => downloadJson(`trace-action-${a.action_id}.json`, await getActionTrace(a.action_id!)))}>
                   {t("evidence.download_trace")}
                 </button>
               </div>
+              <p className="hint-text u-mt-8">{t("evidence.authority_hint")}</p>
             </>
           )}
+        </div>
+      </div>
+
+      <div className="panel u-mb-16">
+        <div className="panel-header"><h2>{t("evidence.completeness_title")}</h2></div>
+        <div className="panel-body">
+          <p className="hint-text">{t("evidence.completeness_hint")}</p>
+          <Form onSubmit={(e) => {
+            e.preventDefault();
+            const since = Math.floor(new Date(`${from}T00:00:00`).getTime() / 1000);
+            const until = Math.floor(new Date(`${to}T23:59:59`).getTime() / 1000);
+            run(async () => downloadJson(`completeness-agent-${agentId}-${from}-${to}.json`,
+                                         await getCompleteness(Number(agentId), since, until)));
+          }}>
+            <div className="form-row" style={{ alignItems: "flex-end" }}>
+              <div className="field" style={{ maxWidth: 160 }}>
+                <label htmlFor="ev-agent">{t("evidence.agent_id")}</label>
+                <input id="ev-agent" required type="number" min={1} value={agentId} onChange={(e) => setAgentId(e.target.value)} />
+              </div>
+              <div className="field" style={{ maxWidth: 180 }}>
+                <label htmlFor="ev-from">{t("evidence.from")}</label>
+                <input id="ev-from" required type="date" value={from} max={to} onChange={(e) => setFrom(e.target.value)} />
+              </div>
+              <div className="field" style={{ maxWidth: 180 }}>
+                <label htmlFor="ev-to">{t("evidence.to")}</label>
+                <input id="ev-to" required type="date" value={to} min={from} onChange={(e) => setTo(e.target.value)} />
+              </div>
+              <button className="btn btn-primary" type="submit" disabled={busy}>{t("evidence.download_completeness")}</button>
+            </div>
+          </Form>
         </div>
       </div>
 
@@ -143,7 +193,7 @@ export function PvpEvidence() {
         <div className="panel-header"><h2>{t("evidence.verify_title")}</h2></div>
         <div className="panel-body">
           <p className="hint-text">{t("evidence.verify_hint")}</p>
-          <pre className="u-mono">{"python tools/provenza_audit.py receipt receipt-123.json\npython tools/provenza_audit.py trace trace-chain-7.json"}</pre>
+          <pre className="u-mono">{"python tools/provenza_audit.py receipt receipt-123.json\npython tools/provenza_audit.py authority authority-123.json\npython tools/provenza_audit.py completeness completeness-agent-5-….json\npython tools/provenza_audit.py trace trace-chain-7.json"}</pre>
         </div>
       </div>
     </>

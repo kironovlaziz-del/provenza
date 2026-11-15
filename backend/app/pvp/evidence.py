@@ -22,7 +22,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
 from app.core.agent_signing import canonical_bytes, content_hash
-from app.pvp.model import PVPAction, signature_of
+from app.pvp.model import PVPAction, PVPReleaseRef, PVPRequested, signature_of
 
 
 def _unix(dt: datetime) -> int:
@@ -31,9 +31,25 @@ def _unix(dt: datetime) -> int:
     return int(dt.timestamp())
 
 
-def action_view(action, check_token: Optional[str] = None) -> PVPAction:
+def _authority(check) -> Dict[str, Any]:
+    """What the check it was recorded under adds for Proof of Authority
+    (docs/proof-of-authority.md): the signed release the verdict was given
+    under and the agent's own signed request - each only when there is one."""
+    out: Dict[str, Any] = {}
+    if check is None:
+        return out
+    if check.release_number and check.release_bundle_sha256:
+        out["release"] = PVPReleaseRef(number=check.release_number, bundle_sha256=check.release_bundle_sha256)
+    if check.requested:
+        out["requested"] = PVPRequested.model_validate(check.requested)
+    return out
+
+
+def action_view(action, check_token: Optional[str] = None, check=None) -> PVPAction:
     """A stored action as PVP (current state). The check token is taken from
-    the signed payload (where the agent put it) unless given."""
+    the signed payload (where the agent put it) unless given; `check` (the
+    ActionCheck it was recorded under) adds the release and the agent's
+    signed request."""
     payload = action.signed_payload
     token = check_token or (payload or {}).get("check_id")
     return PVPAction(
@@ -47,6 +63,7 @@ def action_view(action, check_token: Optional[str] = None) -> PVPAction:
                                action.signer_public_key, action.signer_pq_public_key),
         executed_by=action.executed_by,
         witness=action.witness,
+        **_authority(check),
     )
 
 
@@ -54,8 +71,8 @@ def evidence_hash(evidence: Dict[str, Any]) -> str:
     return hashlib.sha256(canonical_bytes(evidence)).hexdigest()
 
 
-def stamp(action, check_token: Optional[str] = None) -> None:
+def stamp(action, check_token: Optional[str] = None, check=None) -> None:
     """Fix the evidence of a just-recorded action (it must have its id and
     created_at). Called once, at record time."""
-    evidence = action_view(action, check_token).model_dump(mode="json")
+    evidence = action_view(action, check_token, check).model_dump(mode="json")
     action.evidence, action.evidence_sha256 = evidence, evidence_hash(evidence)
