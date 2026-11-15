@@ -511,7 +511,9 @@ passed in `params._meta["provenza/chain_id"]`.
 for it: on each `tools/call` it adds `X-Provenza-Action`, base64url of
 `{"nonce", "issued_at", "signature", "pq_signature"}` - and `mandate_id`
 when the call is for a task a person gave (§3.1; the client names it in
-`params._meta["provenza/mandate_id"]` or the header `X-Provenza-Mandate-Id`)
+`params._meta["provenza/mandate_id"]` or the header `X-Provenza-Mandate-Id`;
+when it names none, agent mode names the agent's task in force, which it
+reads at `GET /agents/{id}/mandates/current`)
 - over the `action.request` the server rebuilds from the call (`action_type:
 "tool_call"`, the tool's exposed name, `input_sha256` of the arguments, the
 chain from `_meta`, no tool version or digest). The gateway verifies it like

@@ -36,9 +36,14 @@ The agent names the task on its calls, inside its signed request:
 - **SDKs** - read it with `agent.current_task()` and wrap the work in
   `with agent.task(task["id"]):` (JavaScript: `currentTask()` and
   `withTask(id, fn)`; Go: `CurrentTask(ctx)` and `WithTask(ctx, id)`);
-- **agent mode** (`provenza-proxy`) - the client sends the header
+- **agent mode** (`provenza-proxy`) - nothing to set up for an MCP client:
+  agent mode reads the agent's task in force (with the agent's key, every
+  10 seconds at most) and signs each MCP `tools/call` for it. A client
+  that knows better names the task itself - the header
   `X-Provenza-Mandate-Id: <id>`, or `params._meta["provenza/mandate_id"]`
-  on an MCP `tools/call`, and agent mode signs it with the call;
+  - and that comes first. Behind an egress proxy, agent mode reads the
+  task through the proxy's relay to Provenza (`relay_provenza`); without
+  it, calls name no task;
 - the agent reads the task in force with its own key:
   `GET /api/v1/agents/{id}/mandates/current`.
 

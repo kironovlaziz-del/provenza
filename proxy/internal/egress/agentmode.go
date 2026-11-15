@@ -27,6 +27,9 @@ package egress
 // The task a person gave the agent (docs/proof-of-authority.md): a client
 // names it per request with X-Provenza-Mandate-Id - or, on an MCP tools/call,
 // params._meta["provenza/mandate_id"] - and agent mode signs it with the call.
+// An MCP tools/call that names none is made for the agent's task in force,
+// which agent mode reads from Provenza with the agent's key (taskSource): a
+// stock MCP client then acts for the task without knowing of it.
 
 import (
 	"bytes"
@@ -48,6 +51,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/kironovlaziz-del/provenza/proxy/internal/canon"
@@ -283,6 +287,77 @@ func positiveID(v string) (*int64, bool) {
 	return &n, true
 }
 
+// taskTTL: how long agent mode goes by the task it last read. A task given or
+// ended in between is seen that much later; the server refuses a call that
+// names a task no longer in force, so the wait costs refusals, never rights.
+const taskTTL = 10 * time.Second
+
+// taskSource reads the agent's task in force (GET /agents/{id}/mandates/current,
+// with the agent's key) and remembers the answer for taskTTL. No answer - the
+// server down, an egress proxy that does not relay Provenza - is no task.
+type taskSource struct {
+	url    string
+	key    string
+	client *http.Client
+	now    func() time.Time
+	logger *slog.Logger
+
+	mu     sync.Mutex
+	at     time.Time
+	id     *int64
+	warned bool
+}
+
+func (t *taskSource) current() *int64 {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if !t.at.IsZero() && t.now().Sub(t.at) < taskTTL {
+		return t.id
+	}
+	id, err := t.read()
+	if err != nil && !t.warned {
+		t.warned = true
+		t.logger.Warn("provenza agent mode: the agent's task could not be read; calls name none", "err", err)
+	} else if err == nil {
+		t.warned = false
+	}
+	t.at, t.id = t.now(), id
+	return id
+}
+
+func (t *taskSource) read() (*int64, error) {
+	req, err := http.NewRequest(http.MethodGet, t.url, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("X-Agent-Key", t.key)
+	req.Header.Set("Accept", "application/json")
+	resp, err := t.client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	raw, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("HTTP %d", resp.StatusCode)
+	}
+	var out struct {
+		Mandate *struct {
+			ID int64 `json:"id"`
+		} `json:"mandate"`
+	}
+	if err := json.Unmarshal(raw, &out); err != nil {
+		return nil, err
+	}
+	if out.Mandate == nil || out.Mandate.ID < 1 || out.Mandate.ID > 1<<31-1 {
+		return nil, nil
+	}
+	return &out.Mandate.ID, nil
+}
+
 // AgentListener: the socket agent mode listens on - "unix:<path>" (created
 // with mode 0600; a stale socket at the path is replaced) or a loopback TCP
 // address.
@@ -373,6 +448,15 @@ func newAgentMode(id *AgentIdentity, listen, upstream string, logger *slog.Logge
 	if logger == nil {
 		logger = slog.Default()
 	}
+	// the server itself, or through an egress proxy that relays Provenza (relay.go)
+	taskPath := fmt.Sprintf("/api/v1/agents/%d/mandates/current", id.AgentID)
+	if !server {
+		taskPath = RelayPrefix + taskPath
+	}
+	tasks := &taskSource{url: target.String() + taskPath, key: id.APIKey, now: now, logger: logger,
+		client: &http.Client{Timeout: 5 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error {
+			return http.ErrUseLastResponse
+		}}}
 	rp := &httputil.ReverseProxy{
 		Rewrite: func(pr *httputil.ProxyRequest) {
 			pr.SetURL(target)
@@ -432,6 +516,9 @@ func newAgentMode(id *AgentIdentity, listen, upstream string, logger *slog.Logge
 			if tool, args, chain, metaMandate, ok := mcpToolCall(body); ok {
 				if metaMandate != nil {
 					mandate = metaMandate
+				}
+				if mandate == nil {
+					mandate = tasks.current() // the task in force, for a client that names none
 				}
 				action, err := id.SignAction(tool, args, chain, mandate, now())
 				if err != nil {

@@ -484,6 +484,10 @@ func TestAgentModeSignsEachMCPToolCall(t *testing.T) {
 	}
 	var got []string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet { // the agent's task in force: none
+			w.Write([]byte(`{"mandate":null}`))
+			return
+		}
 		got = append(got, r.Header.Get(actionHeader))
 		w.Write([]byte("{}"))
 	}))
@@ -555,5 +559,75 @@ func TestAgentModeSignsEachMCPToolCall(t *testing.T) {
 	req.Header.Set(mandateHeader, "-1")
 	if resp, err := http.DefaultClient.Do(req); err != nil || resp.StatusCode != http.StatusBadRequest {
 		t.Fatalf("a bad task id was passed on: %v %v", err, resp)
+	}
+}
+
+// A stock MCP client names no task: agent mode reads the agent's task in
+// force with the agent's key and signs each tools/call for it.
+func TestAgentModeNamesTheTaskInForce(t *testing.T) {
+	ev := enforceVectors(t)
+	id, err := LoadAgentIdentity(identityFile(t, agentFields(ev), 0o600))
+	if err != nil {
+		t.Fatal(err)
+	}
+	task, reads := `{"mandate":{"id":21,"task":"Reconcile the October invoices"}}`, 0
+	var got []map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet {
+			if r.URL.Path != "/api/v1/agents/5/mandates/current" || r.Header.Get("X-Agent-Key") != id.APIKey {
+				t.Errorf("the task was asked for at %s with key %q", r.URL.Path, r.Header.Get("X-Agent-Key"))
+			}
+			reads++
+			if task == "" {
+				w.WriteHeader(http.StatusServiceUnavailable)
+				return
+			}
+			w.Write([]byte(task))
+			return
+		}
+		raw, _ := base64.RawURLEncoding.DecodeString(r.Header.Get(actionHeader))
+		var sig map[string]any
+		_ = json.Unmarshal(raw, &sig)
+		got = append(got, sig)
+		w.Write([]byte("{}"))
+	}))
+	defer srv.Close()
+	clock := time.Now()
+	h, err := newAgentMode(id, "127.0.0.1:8480", srv.URL+"/api/v1", nil, func() time.Time { return clock })
+	if err != nil {
+		t.Fatal(err)
+	}
+	am := httptest.NewServer(h)
+	defer am.Close()
+	call := func(body string) {
+		resp, err := http.Post(am.URL+"/_mcp", "application/json", strings.NewReader(body))
+		if err != nil || resp.StatusCode != 200 {
+			t.Fatalf("%v %v", err, resp)
+		}
+	}
+	plain := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"files.list"}}`
+	call(plain)
+	call(plain)
+	// the client's own word comes first
+	call(`{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"files.list","_meta":{"provenza/mandate_id":12}}}`)
+	if got[0]["mandate_id"] != float64(21) || got[1]["mandate_id"] != float64(21) || got[2]["mandate_id"] != float64(12) {
+		t.Fatalf("tasks named: %v", got)
+	}
+	if reads != 1 {
+		t.Fatalf("the task was read %d times within its lifetime", reads)
+	}
+	// ended meanwhile: seen after taskTTL
+	task = `{"mandate":null}`
+	clock = clock.Add(taskTTL + time.Second)
+	call(plain)
+	if _, named := got[3]["mandate_id"]; named || reads != 2 {
+		t.Fatalf("an ended task is still named: %v (reads %d)", got[3], reads)
+	}
+	// Provenza does not answer: the call goes on, naming no task
+	task = ""
+	clock = clock.Add(taskTTL + time.Second)
+	call(plain)
+	if _, named := got[4]["mandate_id"]; named {
+		t.Fatalf("a task named with no answer: %v", got[4])
 	}
 }
