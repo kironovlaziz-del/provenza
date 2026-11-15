@@ -68,6 +68,23 @@ def _free_port() -> int:
         return s.getsockname()[1]
 
 
+def _one_at_a_time(client) -> None:
+    """Every request to the app in this test, whoever makes it, runs alone.
+
+    The test's client and the real proxy (through the bridge, with its own
+    polls in the background) all reach one app on ONE database session - this
+    test's transaction. A session serves one request at a time; in production
+    each request has its own. Without this the proxy's poll could run inside
+    the test's own request, and the session refuses that."""
+    lock, request = asyncio.Lock(), client.request
+
+    async def alone(*args, **kwargs):
+        async with lock:
+            return await request(*args, **kwargs)
+
+    client.request = alone
+
+
 async def _http_server(handle):
     """A minimal HTTP/1.1 server in this event loop: handle(method, target, headers, body) -> (status, headers, body)."""
     async def serve(reader, writer):
@@ -134,6 +151,8 @@ async def test_the_go_proxy_against_this_server(client, admin_token, db_session,
                 "choices": [{"message": {"role": "assistant", "content": "the answer"}, "finish_reason": "stop"}],
                 "usage": {"prompt_tokens": 9, "completion_tokens": 3}}).encode()
         return 201, {"Content-Type": "application/json"}, b'{"id":"ch_1"}'
+
+    _one_at_a_time(client)
 
     async def bridge(method, target, headers, body):   # real HTTP -> this test's app and transaction
         keep = {k: v for k, v in headers.items() if k.lower() not in ("host", "content-length", "connection")}
@@ -466,6 +485,8 @@ async def test_enroll_and_agent_mode_against_this_server(client, admin_token, db
 
     if hybrid and not pq_available():
         pytest.skip("ML-DSA needs cryptography >= 48")
+
+    _one_at_a_time(client)
 
     async def bridge(method, target, headers, body):
         keep = {k: v for k, v in headers.items() if k.lower() not in ("host", "content-length", "connection")}
