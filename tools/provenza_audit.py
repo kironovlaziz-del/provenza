@@ -45,6 +45,22 @@ not share code with one, so what it says does not depend on trusting either.
         the manifest that governs it signed exactly this release with
         passkeys it lists (user verified). Chain releases by checking each
         one's governing manifest against the release before it
+  authority PROOF.json [--fingerprint SHA256:...]... [--agent-fingerprint SHA256:...]
+                       [--passkey SHA256:...]... [--require-full]
+        a Proof of Authority (GET /pvp/authority/{action_id};
+        docs/proof-of-authority.md): the receipt as above, and the chain of
+        authority behind it - the signed policy release it was decided
+        under, verified back to the organization's first release; the
+        agent's rights and key in that release; each delegation hop signed
+        by the delegating agent's key; the agent's own signature on the
+        call; the approver's passkey listed in the signed manifest. A link
+        that is absent (no signed release, a keyless agent) is reported as
+        not proven; --require-full makes that a failure
+  completeness REPORT.json [--fingerprint SHA256:...]... [--list N] [--require-full]
+        GET /pvp/completeness?agent_id=&since=&until=: consecutive chained
+        seals, each one's record in the signed log and its root the Merkle
+        root of exactly the actions given - so the agent's actions listed
+        are all Provenza recorded for it between the first and the last
   trace EXPORT.json [--fingerprint SHA256:...]...
         a TRACE v0.2 Trust Record export (GET /pvp/receipts/{id}/trace or
         /pvp/chains/{id}/trace): the JWT is signed EdDSA by the key in
@@ -585,6 +601,25 @@ def check_release(doc, passkey_fps=None):
     return rel, signed
 
 
+REQUEST_FIELDS = ("type", "agent_id", "chain_id", "action_type", "tool_name", "input_sha256", "tool_version",
+                  "tool_digest", "nonce", "issued_at")
+
+
+def check_requested(req, action) -> str:
+    """The agent's own signed action.request (Proof of Authority): it asks
+    for exactly this call, and the agent's key signed it. Returns the key
+    fingerprint."""
+    p, sig = req.get("payload") or {}, req.get("signed_by") or {}
+    if set(p) != set(REQUEST_FIELDS) or p.get("type") != "action.request":
+        raise Fail("the agent's request: not a signed action.request")
+    for k in ("agent_id", "chain_id", "action_type", "tool_name", "input_sha256"):
+        if p.get(k) != action.get(k):
+            raise Fail(f"the agent's request asks for another call ({k})")
+    _verify_pair("the agent's request", sig["public_key"], sig.get("pq_public_key"), sig["signature"],
+                 sig.get("pq_signature"), canonical(p))
+    return fingerprint(sig["public_key"], sig.get("pq_public_key"))
+
+
 WITNESS_TYPE = "provenza.proxy.receipt"
 WITNESS_FIELDS = ("check_id", "agent_id", "chain_id", "action_type", "tool_name", "input_sha256", "output_sha256",
                   "decision")
@@ -643,6 +678,11 @@ def check_receipt(doc, trust=None, agent_fp=None, passkey_fps=None, proxy_fps=No
                      signed_by["signature"], signed_by.get("pq_signature"), canonical(sp))
         if agent_fp and fingerprint(signed_by["public_key"], signed_by.get("pq_public_key")) != agent_fp:
             raise Fail("the action was signed by another key than the agent fingerprint you gave")
+    # 3a. the agent's own signed request for this call (a gateway executed it)
+    if action.get("requested") is not None:
+        rfp = check_requested(action["requested"], action)
+        if agent_fp and rfp != agent_fp:
+            raise Fail("the request was signed by another key than the agent fingerprint you gave")
     # 3b. the executor's own receipt (an egress proxy with a key)
     if action.get("witness") is not None:
         check_witness(action["witness"], action, proxy_fps)
@@ -662,6 +702,247 @@ def check_receipt(doc, trust=None, agent_fp=None, passkey_fps=None, proxy_fps=No
     elif passkey_fps:
         raise Fail("the receipt carries no approval, yet you gave approver passkeys")
     return action, cp, fp
+
+
+# ---------------------------------------------------------------- Proof of Authority
+
+def check_release_chain(docs, passkey_fps=None):
+    """Every release from the organization's first one to the last in the
+    file verifies (check_release), and each is governed by the one before it
+    - the history is unbroken. --passkey pins the release last in the file
+    (the one the action was decided under). Returns (last document, [(number,
+    {user_id: passkey fingerprint})] for each release)."""
+    prev, signed_by = None, []
+    for i, d in enumerate(docs):
+        last = i == len(docs) - 1
+        rel, signed = check_release(d, passkey_fps if last else None)
+        gov = d.get("governed_by")
+        if prev is None:
+            if gov is not None:
+                raise Fail(f"release #{rel['number']} is governed by release #{gov.get('number')}, which the file "
+                           f"does not carry - the history must start at the organization's first release")
+        elif gov is None or gov.get("number") != prev["release"]["number"] \
+                or gov.get("manifest_sha256") != prev["release"]["manifest"]["sha256"] \
+                or gov.get("bundle_sha256") != prev["release"]["bundle"]["sha256"]:
+            raise Fail(f"release #{rel['number']} is not governed by release #{prev['release']['number']} "
+                       f"before it - the history is broken")
+        prev = d
+        signed_by.append((rel["number"], signed))
+    return prev, signed_by
+
+
+def _signer_of_passkey(manifest, fp):
+    """(user id, role) of the person whose passkey has this fingerprint in a
+    signed manifest, or None."""
+    for uid, person in (manifest.get("signers") or {}).items():
+        for key in (person.get("passkeys") or {}).values():
+            if key.get("fingerprint") == fp:
+                return uid, person.get("role")
+    return None
+
+
+def delegation_path(deleg, action):
+    """The hops that brought the acting agent into its chain, from the agent
+    back to the chain's root: at each step the latest hop to that agent
+    before the one after it."""
+    hops, root, cur = deleg.get("hops") or [], deleg.get("root_agent_id"), action["agent_id"]
+    path, below = [], None
+    while cur != root:
+        cands = [h for h in hops if h["to_agent_id"] == cur and (below is None or h["hop_id"] < below)]
+        if not cands or len(path) > len(hops):
+            raise Fail(f"no delegation in the file brings agent {cur} into chain {deleg.get('chain_id')}")
+        h = max(cands, key=lambda x: x["hop_id"])
+        path.append(h)
+        cur, below = h["from_agent_id"], h["hop_id"]
+    return path
+
+
+def check_hop(h, manifest=None):
+    """A delegation hop: the delegating agent's key signed exactly it, and -
+    with a signed manifest - that key is the one the manifest lists. Returns
+    the key fingerprint, or None for an unsigned hop (a keyless agent)."""
+    p, sig = h.get("signed_payload"), h.get("signed_by")
+    if not p or not sig:
+        return None
+    if p.get("from_agent_id") != h["from_agent_id"] or p.get("to_agent_id") != h["to_agent_id"]:
+        raise Fail(f"delegation hop {h['hop_id']}: the signed delegation names other agents")
+    _verify_pair(f"delegation hop {h['hop_id']}", sig["public_key"], sig.get("pq_public_key"), sig["signature"],
+                 sig.get("pq_signature"), canonical(p))
+    fp = fingerprint(sig["public_key"], sig.get("pq_public_key"))
+    if manifest is not None and (manifest.get("agents") or {}).get(str(h["from_agent_id"])) != fp:
+        raise Fail(f"delegation hop {h['hop_id']}: agent {h['from_agent_id']}'s key is not the one in the "
+                   f"signed manifest")
+    return fp
+
+
+def check_authority(doc, trust=None, agent_fp=None, passkey_fps=None):
+    """Proof of Authority (docs/proof-of-authority.md). Returns (lines to
+    print, links not proven)."""
+    if doc.get("pvp") != "pvp/1" or doc.get("type") != "authority":
+        raise Fail("not a Proof of Authority (pvp/1)")
+    receipt = doc.get("receipt") or {}
+    action, cp, fp = check_receipt(receipt, trust, agent_fp)
+    lines, gaps = [], []
+    allowed = action.get("decision") == "allowed"
+
+    # the agent's key: its signed record, or its signed request for a gateway-executed call
+    key_fp, how = None, None
+    if action.get("signed_by"):
+        sb = action["signed_by"]
+        key_fp, how = fingerprint(sb["public_key"], sb.get("pq_public_key")), "signed the action record"
+    elif action.get("requested"):
+        sb = action["requested"]["signed_by"]
+        key_fp, how = fingerprint(sb["public_key"], sb.get("pq_public_key")), "signed the request for this call"
+
+    # 1-2. the signed policy and the agent's rights in it
+    manifest = None
+    ref = action.get("release")
+    if ref:
+        docs = doc.get("releases") or []
+        if not docs:
+            raise Fail(f"the action names signed release #{ref['number']}, but the file carries no releases")
+        last, signed_by = check_release_chain(docs, passkey_fps)
+        rel = last["release"]
+        if rel["number"] != ref["number"] or rel["bundle"]["sha256"] != ref["bundle_sha256"]:
+            raise Fail(f"the releases in the file end at #{rel['number']}, not at release #{ref['number']} the "
+                       f"action was decided under")
+        bundle, manifest = last["bundle"], last["manifest"]
+        signers = ", ".join(f"administrator {u} (passkey {f})" for u, f in sorted(signed_by[-1][1].items()))
+        lines.append(f"policy:     release #{rel['number']} (bundle v{bundle['version']} {rel['bundle']['sha256'][:16]}) "
+                     f"signed by {signers}; history verified from release #{signed_by[0][0]}")
+        entry = (bundle.get("agents") or {}).get(str(action["agent_id"]))
+        if entry is None:
+            raise Fail(f"agent {action['agent_id']} is not in the signed policy (release #{rel['number']})")
+        if allowed:
+            if entry.get("status") != "active":
+                raise Fail(f"the signed policy has agent {action['agent_id']} {entry.get('status')}, yet the action "
+                           f"was allowed")
+            if action.get("action_type") != "model_call" and action["tool_name"] not in (entry.get("allowed_tools") or []):
+                raise Fail(f"the signed policy does not give agent {action['agent_id']} the tool "
+                           f"{action['tool_name']}, yet the action was allowed")
+        signed_fp = (manifest.get("agents") or {}).get(str(action["agent_id"]))
+        if key_fp and signed_fp != key_fp:
+            raise Fail(f"the agent's key {key_fp} is not the one the signed manifest lists ({signed_fp})")
+        lines.append(f"rights:     the signed policy gives agent {action['agent_id']} "
+                     f"{'the tool ' + action['tool_name'] if action.get('action_type') != 'model_call' else 'its models'}"
+                     f"{'' if not signed_fp else '; its key ' + signed_fp + ' is the one in the signed manifest'}")
+    else:
+        gaps.append("policy: the action names no signed release - the organization had none in force, or the "
+                    "action predates Proof of Authority; its rights rest on the server's word")
+
+    # 3. the delegation chain
+    if action.get("chain_id"):
+        deleg = doc.get("delegation")
+        if not deleg or deleg.get("chain_id") != action["chain_id"]:
+            raise Fail(f"the action is in delegation chain {action['chain_id']}, but the file does not carry it")
+        path = delegation_path(deleg, action)
+        steps = []
+        for h in path:
+            hfp = check_hop(h, manifest)
+            steps.append(f"agent {h['from_agent_id']} -> agent {h['to_agent_id']} (hop {h['hop_id']}, "
+                         f"{'signed by ' + hfp if hfp else 'NOT signed'})")
+            if hfp is None:
+                gaps.append(f"delegation: hop {h['hop_id']} is not signed (a keyless agent)")
+        incoming = path[0] if path else None
+        tools = ((incoming or {}).get("signed_payload") or {}).get("delegated_tools")
+        if allowed and tools is not None and action["tool_name"] not in tools:
+            raise Fail(f"the delegation to agent {action['agent_id']} does not pass on {action['tool_name']}, yet "
+                       f"the action was allowed")
+        lines.append("delegation: " + ("; ".join(reversed(steps)) if steps else
+                                       f"agent {action['agent_id']} is the chain's root"))
+    else:
+        lines.append(f"delegation: none - agent {action['agent_id']} acted on its own rights")
+
+    # 4. the agent's own signature
+    if key_fp:
+        lines.append(f"agent:      agent {action['agent_id']} {how} with key {key_fp}")
+    elif action.get("executed_by"):
+        gaps.append(f"agent: the agent did not sign this call - only its API key identified it to the "
+                    f"{action['executed_by']}")
+    # 5. the person's approval
+    if receipt.get("approval"):
+        ap = receipt["approval"]
+        afp = passkey_fingerprint(ap["passkey"]["public_key"])
+        who = f"user {ap['statement']['user_id']}"
+        listed = False
+        if manifest is not None:
+            found = _signer_of_passkey(manifest, afp)
+            if found is None:
+                gaps.append(f"approval: passkey {afp} is not in the signed manifest (added after the release?) - "
+                            f"the approver's standing rests on the server's word")
+            else:
+                who, listed = f"{found[1]} {found[0]}", True
+        lines.append(f"approval:   approved by {who} with passkey {afp}"
+                     f"{' (listed in the signed manifest)' if listed else ''}")
+    # 6. the record
+    lines.append(f"record:     sealed in seal {receipt['seal']['seal_id']}; checkpoint of {cp['tree_size']} records "
+                 f"of organization {cp['org_id']} signed by {fp}")
+    return action, lines, gaps
+
+
+def merkle_root(hashes):
+    """RFC 9162 Merkle tree hash over leaf data (here: evidence hashes)."""
+    if not hashes:
+        return hashlib.sha256(b"").digest()
+    level = [_leaf(h) for h in hashes]
+
+    def mth(nodes):
+        if len(nodes) == 1:
+            return nodes[0]
+        k = 1
+        while k * 2 < len(nodes):
+            k *= 2
+        return _node(mth(nodes[:k]), mth(nodes[k:]))
+    return mth(level)
+
+
+def check_completeness(doc, trust=None):
+    """A completeness report: consecutive chained seals, each one's audit
+    record in the signed log and its root exactly the Merkle root of the
+    evidence given for it. Returns (all members, the agent's members,
+    first seal, last seal, checkpoint fingerprints)."""
+    if doc.get("pvp") != "pvp/1" or doc.get("type") != "completeness":
+        raise Fail("not a completeness report (pvp/1)")
+    seals_ = doc.get("seals") or []
+    if not seals_:
+        raise Fail("the report carries no seals")
+    prev, members_all, fps, org = None, [], set(), None
+    for s in seals_:
+        payload, cp, fp = check_proof(s["audit_proof"], trust if trust is not None else Trust())
+        fps.add(fp)
+        if (payload.get("entity_type"), payload.get("entity_id")) != (SEAL_ENTITY, s["seal_id"]):
+            raise Fail(f"seal {s['seal_id']}: its audit record is not that seal's")
+        org = payload["org_id"] if org is None else org
+        if payload["org_id"] != org:
+            raise Fail("the seals belong to different organizations")
+        meta = payload.get("metadata") or {}
+        if "prev_seal_id" not in meta:
+            raise Fail(f"seal {s['seal_id']} predates the seal chain - completeness cannot be shown that far back")
+        members = s.get("members") or []
+        if len(members) != meta.get("size"):
+            raise Fail(f"seal {s['seal_id']}: {len(members)} actions given, the seal holds {meta.get('size')}")
+        ids = [m["action_id"] for m in members]
+        if ids != sorted(ids) or len(set(ids)) != len(ids) or (ids and (ids[0], ids[-1]) != (
+                meta.get("first_action_id"), meta.get("last_action_id"))):
+            raise Fail(f"seal {s['seal_id']}: the actions given are not the ones it seals")
+        root = merkle_root([hashlib.sha256(canonical(m)).digest() for m in members])
+        if root.hex() != meta.get("root"):
+            raise Fail(f"seal {s['seal_id']}: the actions given do not hash to its root - one was added, "
+                       f"dropped or altered")
+        if prev is not None and (meta.get("prev_seal_id"), meta.get("prev_root")) != (prev[0], prev[1]):
+            raise Fail(f"seal {s['seal_id']} does not follow seal {prev[0]} - a seal is missing between them")
+        prev = (s["seal_id"], meta.get("root"))
+        members_all += members
+    mine = [m for m in members_all if m.get("agent_id") == doc.get("agent_id")]
+    return members_all, mine, seals_[0]["seal_id"], seals_[-1]["seal_id"], fps
+
+
+def _first_is_genesis(doc) -> bool:
+    """The report's first seal is the organization's very first one: nothing
+    was sealed before it."""
+    rec = doc["seals"][0]["audit_proof"]["record"]
+    meta = (json.loads(rec["canonical"]).get("metadata") or {})
+    return "prev_seal_id" in meta and meta["prev_seal_id"] is None
 
 
 def _jcs_number(x):
@@ -806,6 +1087,67 @@ def cmd_release(args) -> int:
     if not args.passkey:
         print("note: no --passkey given - this proves the quorum of the manifest it names signed, not that "
               "the manifest's passkeys are the ones you trust")
+    return 0
+
+
+def cmd_authority(args) -> int:
+    doc = _load(args.file)
+    trust = Trust(args.fingerprint)
+    action, lines, gaps = check_authority(doc, trust, args.agent_fingerprint, args.passkey)
+    head = "VERIFIED" if not gaps else "VERIFIED, WITH GAPS"
+    print(f"{head}  proof of authority for action {action['action_id']} ({action['tool_name']}, "
+          f"{action['decision']}) of agent {action['agent_id']}")
+    for line in lines:
+        print("          " + line)
+    for g in gaps:
+        print("not proven: " + g)
+    if not args.passkey and action.get("release"):
+        print("note: no --passkey given - this proves the policy's quorum signed, not that those passkeys are the "
+              "ones you trust")
+    _note(trust)
+    return 1 if gaps and args.require_full else 0
+
+
+def _when(t):
+    import datetime as _dt
+    return _dt.datetime.fromtimestamp(t, _dt.timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+
+
+def cmd_completeness(args) -> int:
+    doc = _load(args.file)
+    trust = Trust(args.fingerprint)
+    members, mine, first, last, fps = check_completeness(doc, trust)
+    span = (min(m["recorded_at"] for m in members), max(m["recorded_at"] for m in members))
+    period = doc.get("period") or {}
+    since, until = period.get("since", span[0]), period.get("until", span[1])
+    inside = [m for m in mine if since <= m["recorded_at"] <= until]
+    print(f"VERIFIED  seals {first}..{last} are unbroken: {len(members)} action(s) recorded between "
+          f"{_when(span[0])} and {_when(span[1])}, signed by {', '.join(sorted(fps))}")
+    print(f"          agent {doc.get('agent_id')}: {len(inside)} action(s) in the period "
+          f"{_when(since)} - {_when(until)}, and no other in these seals")
+    by = {}
+    for m in inside:
+        by[m["decision"]] = by.get(m["decision"], 0) + 1
+    if by:
+        print("          " + ", ".join(f"{n} {d}" for d, n in sorted(by.items())))
+    for m in inside[: args.list]:
+        print(f"          #{m['action_id']}  {_when(m['recorded_at'])}  {m['tool_name']}  {m['decision']}")
+    gap = False
+    if span[0] > since and not _first_is_genesis(doc):
+        gap = True
+        print(f"not proven: the seals start at {_when(span[0])}, after the period's start - an earlier seal "
+              f"may hold actions of the period")
+    if span[1] < until:
+        issued = doc.get("issued_at")
+        print(f"note: the last sealed action is at {_when(span[1])}; for the rest of the period the report rests "
+              f"on the server's word that nothing more was recorded"
+              f"{' before it was issued at ' + _when(issued) if isinstance(issued, int) else ''}")
+    if gap and args.require_full:
+        _note(trust)
+        return 1
+    print("note: actions Provenza never saw (a tool called directly, without the egress lockdown or the "
+          "sensor) cannot be in any report")
+    _note(trust)
     return 0
 
 
@@ -956,13 +1298,29 @@ def main(argv=None) -> int:
     rr.add_argument("file")
     rr.add_argument("--passkey", action="append", default=[],
                     help="fingerprint of an administrator passkey you trust; repeatable")
+    au = sub.add_parser("authority")
+    au.add_argument("file")
+    au.add_argument("--fingerprint", action="append", default=[])
+    au.add_argument("--agent-fingerprint")
+    au.add_argument("--passkey", action="append", default=[],
+                    help="fingerprint of an administrator passkey you trust; one of them must have signed the "
+                         "release the action was decided under; repeatable")
+    au.add_argument("--require-full", action="store_true",
+                    help="fail (exit 1) when a link is not proven, not only when one is broken")
+    co = sub.add_parser("completeness")
+    co.add_argument("file")
+    co.add_argument("--fingerprint", action="append", default=[])
+    co.add_argument("--list", type=int, default=20, help="how many of the agent's actions to list (default 20)")
+    co.add_argument("--require-full", action="store_true",
+                    help="fail (exit 1) when the seals do not cover the whole period asked for")
     t = sub.add_parser("trace")
     t.add_argument("file")
     t.add_argument("--fingerprint", action="append", default=[])
     args = p.parse_args(argv)
     try:
         return {"verify": cmd_verify, "checkpoint": cmd_checkpoint, "consistency": cmd_consistency,
-                "receipt": cmd_receipt, "trace": cmd_trace, "release": cmd_release}[args.cmd](args)
+                "receipt": cmd_receipt, "trace": cmd_trace, "release": cmd_release,
+                "authority": cmd_authority, "completeness": cmd_completeness}[args.cmd](args)
     except TrustFail as e:
         for line in e.lines:  # the trust chain first: it, not the signature, is the usual culprit
             print(line)

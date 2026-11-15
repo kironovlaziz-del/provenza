@@ -166,6 +166,85 @@ func (id *AgentIdentity) Sign(d Descriptor, chainID *int64, now time.Time) (stri
 	return base64.RawURLEncoding.EncodeToString(out), nil
 }
 
+// actionHeader: the agent's own signed action.request for an MCP tools/call
+// (Proof of Authority, docs/proof-of-authority.md). The server keeps it as
+// part of the action's evidence, so the record shows the agent - not only a
+// holder of its API key - asked for exactly this call.
+const actionHeader = "X-Provenza-Action"
+
+// mcpChainMeta: where an MCP client names its delegation chain (params._meta).
+const mcpChainMeta = "provenza/chain_id"
+
+// SignAction: X-Provenza-Action for a tool call - base64url JSON of the
+// nonce, the time and the signatures over the request the server rebuilds
+// from the call (PVPActionRequest.signed_payload: the tool, the hash of the
+// arguments as the server parses them, the chain).
+func (id *AgentIdentity) SignAction(tool string, arguments any, chainID *int64, now time.Time) (string, error) {
+	inputSHA, err := canon.SHA256(arguments)
+	if err != nil {
+		return "", err
+	}
+	nonce := make([]byte, 16)
+	if _, err := rand.Read(nonce); err != nil {
+		return "", err
+	}
+	var chain any
+	if chainID != nil {
+		chain = *chainID
+	}
+	payload := map[string]any{"type": "action.request", "agent_id": id.AgentID, "chain_id": chain,
+		"action_type": "tool_call", "tool_name": tool, "input_sha256": inputSHA, "tool_version": nil,
+		"tool_digest": nil, "nonce": hex.EncodeToString(nonce), "issued_at": now.Unix()}
+	msg, err := canon.Bytes(payload)
+	if err != nil {
+		return "", err
+	}
+	out := map[string]any{"nonce": payload["nonce"], "issued_at": payload["issued_at"],
+		"signature": base64.StdEncoding.EncodeToString(ed25519.Sign(id.key, msg))}
+	if id.pqKey != nil {
+		pq, err := id.pqKey.Sign(nil, msg, nil)
+		if err != nil {
+			return "", err
+		}
+		out["pq_signature"] = base64.StdEncoding.EncodeToString(pq)
+	}
+	raw, err := json.Marshal(out)
+	if err != nil {
+		return "", err
+	}
+	return base64.RawURLEncoding.EncodeToString(raw), nil
+}
+
+// mcpToolCall: the tool, its arguments and the chain of an MCP tools/call
+// body (as the server will parse it); ok false for anything else.
+func mcpToolCall(body []byte) (tool string, arguments any, chainID *int64, ok bool) {
+	v, err := canon.Parse(body)
+	m, _ := v.(map[string]any)
+	if err != nil || m == nil || m["method"] != "tools/call" || m["id"] == nil {
+		return "", nil, nil, false
+	}
+	params, _ := m["params"].(map[string]any)
+	name, _ := params["name"].(string)
+	if params == nil || name == "" {
+		return "", nil, nil, false
+	}
+	arguments = params["arguments"]
+	if arguments == nil {
+		arguments = map[string]any{} // the server's default
+	}
+	if _, isObject := arguments.(map[string]any); !isObject {
+		return "", nil, nil, false // the server refuses it anyway
+	}
+	if meta, _ := params["_meta"].(map[string]any); meta != nil {
+		if n, isNum := meta[mcpChainMeta].(json.Number); isNum {
+			if c, err := strconv.ParseInt(string(n), 10, 64); err == nil && c > 0 {
+				chainID = &c
+			}
+		}
+	}
+	return name, arguments, chainID, true
+}
+
 // AgentListener: the socket agent mode listens on - "unix:<path>" (created
 // with mode 0600; a stale socket at the path is replaced) or a loopback TCP
 // address.
@@ -305,11 +384,21 @@ func newAgentMode(id *AgentIdentity, listen, upstream string, logger *slog.Logge
 		out.Body, out.ContentLength = io.NopCloser(bytes.NewReader(body)), int64(len(body))
 		// the agent's own key travels only in X-Agent-Key; whatever the client sent instead is dropped
 		for _, h := range []string{"Authorization", "X-Agent-Key", "X-Provenza-Check-Id", requestHeader,
-			descriptorHeader, proxyModeHeader} {
+			descriptorHeader, proxyModeHeader, actionHeader} {
 			out.Header.Del(h)
 		}
 		out.Header.Set("X-Agent-Key", id.APIKey)
 		out.Header.Set(requestHeader, signed)
+		if d.Route == "_mcp" && r.Method == http.MethodPost {
+			if tool, args, chain, ok := mcpToolCall(body); ok {
+				action, err := id.SignAction(tool, args, chain, now())
+				if err != nil {
+					refuse(w, http.StatusInternalServerError, "provenza_sign", "the tool call could not be signed")
+					return
+				}
+				out.Header.Set(actionHeader, action)
+			}
+		}
 		rp.ServeHTTP(w, out)
 	}), nil
 }

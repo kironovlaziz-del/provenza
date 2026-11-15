@@ -303,8 +303,24 @@ runs every minute and commits the organization's new evidence in batches.
 It computes an RFC 9162 Merkle root over `SHA-256(canonical evidence)`,
 taken in action-id order, and writes it as **one** audit record
 (`entity_type: "pvp_action_seal"`, metadata `root`, `size`, `first_action_id`,
-`last_action_id`). The next signed checkpoint then covers that record. A
-receipt asked for before the next run seals the action on the spot.
+`last_action_id`, `prev_seal_id`, `prev_root`). The next signed checkpoint
+then covers that record. A receipt asked for before the next run seals the
+action on the spot. `prev_seal_id` and `prev_root` name the organization's
+seal before it, so the seals form a chain: a completeness report shows that
+none was left out ([proof-of-authority.md](../proof-of-authority.md)). Seals
+written before the chain existed have neither member.
+
+**Authority members.** Two members of the evidence serve Proof of Authority
+and are present only when they have a value, so the evidence of older
+actions keeps exactly the form and hash it was sealed with:
+
+- `release` - `{"number", "bundle_sha256"}`: the signed policy release in
+  force when the verdict was given;
+- `requested` - `{"payload", "signed_by"}`: the agent's own signed
+  `action.request` for this call (§3.1), kept when the agent signed one -
+  through an SDK, or through agent mode's `X-Provenza-Action` header on an
+  MCP call (§5.1). It names the same agent, chain, type, tool and
+  `input_sha256` as the action.
 
 **`receipt`** (`GET /api/v1/pvp/receipts/{action_id}`) is valid offline when
 all of the following hold:
@@ -327,7 +343,9 @@ all of the following hold:
    signed: the statement approves exactly this call (agent, chain, type,
    tool, `input_sha256`), the session key signed it within its
    certificate's validity, and the certificate is a WebAuthn assertion of
-   the person's passkey (user verified) over that session key.
+   the person's passkey (user verified) over that session key;
+8. when the action carries `requested`, its payload is an `action.request`
+   for exactly this call and the agent's key signed it.
 
 `PVPReceipt.problems()` runs checks 1-6 on the server's side.
 `tools/provenza_audit.py receipt RECEIPT.json` runs them independently: it
@@ -454,6 +472,17 @@ rights, policies and the Tool Registry use. The admin flow is: add a server
 (`POST /api/v1/mcp-servers`) → sync → read the tools → approve each one
 (`…/tools/{id}/approve` pins the definition that was read). A chain is
 passed in `params._meta["provenza/chain_id"]`.
+
+**The agent's signature.** An MCP client cannot sign, but agent mode signs
+for it: on each `tools/call` it adds `X-Provenza-Action`, base64url of
+`{"nonce", "issued_at", "signature", "pq_signature"}` over the
+`action.request` the server rebuilds from the call (`action_type:
+"tool_call"`, the tool's exposed name, `input_sha256` of the arguments, the
+chain from `_meta`, no tool version or digest). The gateway verifies it like
+a signed check (signature, freshness, single-use nonce) before anything
+runs, refuses the call with JSON-RPC error `-32001` when it does not verify,
+and keeps it as the action's `requested`. Without the header the call runs
+as before, identified by the agent's key alone.
 
 **Limitations.**
 - A call that needs human approval (ASI09) is recorded as pending and is

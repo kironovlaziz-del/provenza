@@ -29,4 +29,8 @@ class PVPActionSeal(Base):
     # may reference the append-only log in a way that changes how the
     # database guards it (a FK would answer TRUNCATE before its trigger does)
     audit_log_id = Column(Integer)
+    # the organization's seal before this one: seals form a chain, so a
+    # completeness report (app/pvp/completeness.py) shows no seal was left out
+    prev_seal_id = Column(Integer, ForeignKey("pvp_action_seals.id"))
+    prev_root = Column(String(64))
     created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())

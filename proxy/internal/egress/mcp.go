@@ -677,7 +677,7 @@ func (p *Proxy) relayMCP(w http.ResponseWriter, r *http.Request, key string, raw
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", r.Header.Get("Accept"))
 	req.Header.Set("X-Agent-Key", key)
-	for _, h := range []string{"MCP-Protocol-Version", "Mcp-Method", "Mcp-Name", "Mcp-Session-Id"} {
+	for _, h := range []string{"MCP-Protocol-Version", "Mcp-Method", "Mcp-Name", "Mcp-Session-Id", actionHeader} {
 		if v := r.Header.Get(h); v != "" {
 			req.Header.Set(h, v)
 		}

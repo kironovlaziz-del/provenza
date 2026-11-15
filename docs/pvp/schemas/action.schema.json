@@ -1,5 +1,47 @@
 {
   "$defs": {
+    "PVPReleaseRef": {
+      "additionalProperties": false,
+      "description": "The signed policy release a verdict was given under: its number and\nthe SHA-256 of its bundle (docs/proof-of-authority.md).",
+      "properties": {
+        "bundle_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Bundle Sha256",
+          "type": "string"
+        },
+        "number": {
+          "maximum": 2147483647,
+          "minimum": 1,
+          "title": "Number",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "number",
+        "bundle_sha256"
+      ],
+      "title": "PVPReleaseRef",
+      "type": "object"
+    },
+    "PVPRequested": {
+      "additionalProperties": false,
+      "description": "The agent's own signed action.request for an action a gateway executed\n(or one it recorded itself): proof that the agent - not only a holder of\nits API key - asked for exactly this call.",
+      "properties": {
+        "payload": {
+          "title": "Payload",
+          "type": "object"
+        },
+        "signed_by": {
+          "$ref": "#/$defs/PVPSignature"
+        }
+      },
+      "required": [
+        "payload",
+        "signed_by"
+      ],
+      "title": "PVPRequested",
+      "type": "object"
+    },
     "PVPSignature": {
       "additionalProperties": false,
       "description": "A signature as evidence: the bytes signed are canonical_bytes of the\nrecord's signed_payload; the keys are the ones that verified it when the\nrecord was made (never \"the agent's current key\"). Hybrid: Ed25519 AND\nML-DSA-65 over the same bytes, both must verify.",
@@ -244,6 +286,28 @@
       "minimum": 0,
       "title": "Recorded At",
       "type": "integer"
+    },
+    "release": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/PVPReleaseRef"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "requested": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/PVPRequested"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
     },
     "signed_by": {
       "anyOf": [

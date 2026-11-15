@@ -6,6 +6,7 @@ package egress
 
 import (
 	"context"
+	"crypto/ed25519"
 	"crypto/mldsa"
 	"encoding/base64"
 	"encoding/json"
@@ -470,4 +471,66 @@ func TestAgentModeToTheServersGateways(t *testing.T) {
 	if _, err := NewAgentMode(id, "127.0.0.1:8480", "http://provenza.example.com/api/v1", nil); err == nil {
 		t.Fatal("the agent's key over plain http to a remote server")
 	}
+}
+
+// Proof of Authority: agent mode signs each MCP tools/call as an
+// action.request the server rebuilds from the call - the arguments hashed
+// as the server parses them (the hash below is the server's content_hash).
+func TestAgentModeSignsEachMCPToolCall(t *testing.T) {
+	ev := enforceVectors(t)
+	id, err := LoadAgentIdentity(identityFile(t, agentFields(ev), 0o600))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got = append(got, r.Header.Get(actionHeader))
+		w.Write([]byte("{}"))
+	}))
+	defer srv.Close()
+	h, err := NewAgentMode(id, "127.0.0.1:8480", srv.URL+"/api/v1", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	am := httptest.NewServer(h)
+	defer am.Close()
+	post := func(body string, header string) {
+		req, _ := http.NewRequest(http.MethodPost, am.URL+"/_mcp", strings.NewReader(body))
+		if header != "" {
+			req.Header.Set(actionHeader, header) // a client's own is never passed on
+		}
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil || resp.StatusCode != 200 {
+			t.Fatalf("%v %v", err, resp)
+		}
+	}
+	post(`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"files.read",`+
+		`"arguments":{"path":"a.txt","n":1.5,"big":10000000000000000,"u":"é","f":1e-07},`+
+		`"_meta":{"provenza/chain_id":7}}}`, "forged")
+	post(`{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}`, "forged")
+	post(`{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"files.list"}}`, "")
+	if got[1] != "" {
+		t.Fatalf("tools/list got an action header: %q", got[1])
+	}
+	check := func(header, tool, inputSHA string, chain any) {
+		raw, err := base64.RawURLEncoding.DecodeString(header)
+		if err != nil {
+			t.Fatalf("%q: %v", header, err)
+		}
+		var sig map[string]any
+		if err := json.Unmarshal(raw, &sig); err != nil {
+			t.Fatal(err)
+		}
+		payload := map[string]any{"type": "action.request", "agent_id": int64(5), "chain_id": chain,
+			"action_type": "tool_call", "tool_name": tool, "input_sha256": inputSHA, "tool_version": nil,
+			"tool_digest": nil, "nonce": sig["nonce"], "issued_at": int64(sig["issued_at"].(float64))}
+		msg, _ := canon.Bytes(payload)
+		pub, _ := base64.StdEncoding.DecodeString(id.PublicKey)
+		s, _ := base64.StdEncoding.DecodeString(sig["signature"].(string))
+		if !ed25519.Verify(pub, msg, s) {
+			t.Fatalf("the signature of %s does not verify over the server's payload", tool)
+		}
+	}
+	check(got[0], "files.read", "0671ddd3a1b2e0bee2c077234676495c73195ae204996ff809c108155edcf66c", int64(7))
+	check(got[2], "files.list", "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a", nil)
 }

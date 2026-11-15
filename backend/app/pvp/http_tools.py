@@ -230,7 +230,7 @@ class HttpToolGateway:
         arguments = req.input
         check = await orc.check(org_id, req.model_copy(update={
             "action_type": "tool_call", "tool_digest": tool.digest, "signature": None, "pq_signature": None,
-            "nonce": None, "issued_at": None}))
+            "nonce": None, "issued_at": None}), signed_request=req)
 
         refusal = None
         if executor == EXECUTOR and await enforcement.enforced(self.db, org_id):

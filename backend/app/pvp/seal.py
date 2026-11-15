@@ -12,7 +12,14 @@ whose evidence is not sealed yet, in id order, and writes ONE audit record:
 
     entity_type "pvp_action_seal", action "sealed",
     metadata {"root": <hex>, "size": n, "first_action_id", "last_action_id",
-              "leaf_format": "pvp.action.evidence/1"}
+              "leaf_format": "pvp.action.evidence/1",
+              "prev_seal_id": <the organization's seal before it, or null>,
+              "prev_root": <that seal's root, or null>}
+
+The prev_ members chain the seals: a completeness report
+(app/pvp/completeness.py) shows that no seal - and so no action - between two
+of them was left out. Seals written before the chain existed carry no
+prev_ members; the chain starts at the first one that does.
 
 root is the RFC 9162 Merkle root (app/core/audit_chain.py, the same hashing
 as the audit log) over the actions' evidence hashes. The audit record is
@@ -59,7 +66,11 @@ async def seal_org(db: AsyncSession, org_id: int) -> Optional[PVPActionSeal]:
         return None
     ids = [r[0] for r in rows]
     root = ac.merkle_root([bytes.fromhex(r[1]) for r in rows]).hex()
-    seal = PVPActionSeal(org_id=org_id, first_action_id=ids[0], last_action_id=ids[-1], size=len(ids), root=root)
+    prev = (await db.execute(select(PVPActionSeal.id, PVPActionSeal.root).where(PVPActionSeal.org_id == org_id)
+                             .order_by(PVPActionSeal.id.desc()).limit(1))).first()
+    prev_id, prev_root = (prev[0], prev[1]) if prev else (None, None)
+    seal = PVPActionSeal(org_id=org_id, first_action_id=ids[0], last_action_id=ids[-1], size=len(ids), root=root,
+                         prev_seal_id=prev_id, prev_root=prev_root)
     db.add(seal)
     await db.flush()
     seal_id = seal.id
@@ -68,7 +79,7 @@ async def seal_org(db: AsyncSession, org_id: int) -> Optional[PVPActionSeal]:
     # the audit record commits everything above together with itself
     record = await AuditService(db).log(org_id, None, ENTITY, seal_id, "sealed", {
         "root": root, "size": len(ids), "first_action_id": ids[0], "last_action_id": ids[-1],
-        "leaf_format": LEAF_FORMAT,
+        "leaf_format": LEAF_FORMAT, "prev_seal_id": prev_id, "prev_root": prev_root,
     })
     seal = await db.get(PVPActionSeal, seal_id)
     seal.audit_log_id = record.id

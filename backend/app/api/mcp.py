@@ -22,13 +22,14 @@ refused with 403 (DNS rebinding).
 """
 
 import base64
+import json
 import re
 from datetime import datetime
 from typing import Any, Dict, List, Literal, Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 from fastapi.responses import JSONResponse, Response
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -44,6 +45,8 @@ from app.models.user import User, UserRole
 from app.pvp import guard as pvp_guard
 from app.pvp import mcp_client
 from app.pvp.mcp_gateway import CHAIN_META, MCPGateway, MCPGatewayError
+from app.pvp.model import PVPActionRequest
+from app.pvp.orchestrator import PVPOrchestrator
 from app.services.agent_identity import authenticate_agent_request
 from app.services.audit_service import AuditService
 
@@ -56,6 +59,11 @@ INSTRUCTIONS = ("Tools are served by Provenza. Every call is checked against you
                 "and recorded; a refused call returns isError with the reason.")
 HEADER_MISMATCH = -32020
 UNSUPPORTED_VERSION = -32022
+SIGNED_REQUEST_REFUSED = -32001
+# the agent's own signed action.request for a tools/call (agent mode sends it):
+# base64url of {"nonce", "issued_at", "signature", "pq_signature"} over the
+# request's signed_payload (docs/proof-of-authority.md)
+ACTION_HEADER = "x-provenza-action"
 
 
 # =============================================================== agent endpoint
@@ -194,14 +202,40 @@ async def mcp_endpoint(request: Request, db: AsyncSession = Depends(get_db), use
     chain_id = meta.get(CHAIN_META)
     if chain_id is not None and (isinstance(chain_id, bool) or not isinstance(chain_id, int) or chain_id < 1):
         return _error(rid, -32602, f"Invalid params: _meta['{CHAIN_META}'] must be a positive integer")
+    signed = None
+    if request.headers.get(ACTION_HEADER):
+        try:
+            signed = _signed_request(request.headers[ACTION_HEADER], agent, name, arguments, chain_id)
+            await PVPOrchestrator(db).verify_signed_request(agent.org_id, agent, signed)
+        except (ValueError, TypeError) as exc:
+            return _error(rid, SIGNED_REQUEST_REFUSED, "Refused by Provenza: the agent's signed request is malformed",
+                          str(exc)[:200])
+        except HTTPException as exc:
+            return _error(rid, SIGNED_REQUEST_REFUSED, "Refused by Provenza: the agent's signed request",
+                          exc.detail if isinstance(exc.detail, (str, dict)) else None)
     try:
-        return _result(rid, await gw.call(agent, name, arguments, chain_id), modern)
+        return _result(rid, await gw.call(agent, name, arguments, chain_id, signed_request=signed), modern)
     except MCPGatewayError as exc:
         return _error(rid, exc.code, exc.message)
     except HTTPException as exc:
         # refused by the orchestrator before any check existed (attestation, unknown chain, ...)
         return _error(rid, -32000, "Refused by Provenza",
                       exc.detail if isinstance(exc.detail, (str, dict)) else None)
+
+
+def _signed_request(header: str, agent, name: str, arguments: dict, chain_id) -> PVPActionRequest:
+    """The action.request the agent signed for this tools/call: the call as it
+    arrived, with the nonce, time and signatures from the header."""
+    raw = header.strip()
+    data = json.loads(base64.urlsafe_b64decode(raw + "=" * (-len(raw) % 4)).decode("utf-8"))
+    if not isinstance(data, dict) or set(data) - {"nonce", "issued_at", "signature", "pq_signature"}:
+        raise ValueError("expected nonce, issued_at, signature and pq_signature")
+    try:
+        return PVPActionRequest(agent_id=agent.id, chain_id=chain_id, action_type="tool_call", tool_name=name,
+                                input=arguments, nonce=data.get("nonce"), issued_at=data.get("issued_at"),
+                                signature=data.get("signature"), pq_signature=data.get("pq_signature"))
+    except ValidationError as exc:
+        raise ValueError(exc.errors()[0].get("msg", "invalid")) from None
 
 
 # ==================================================================== admin
