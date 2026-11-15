@@ -64,6 +64,16 @@ async def _give(client, token, agent_id, task="Reconcile the October invoices", 
     return r, st, s.sign(st)
 
 
+async def _end(client, token, agent_id, mandate_id):
+    """End a task as the web interface does: the end statement, signed with the session key."""
+    s = await signer.signer(client, token)
+    base = f"{A}/{agent_id}/mandates/{mandate_id}/end"
+    r = await client.post(base + "/statement", headers=auth_headers(token))
+    assert r.status_code == 200, r.text
+    st = r.json()["statement"]
+    return await client.post(base, json={"statement": st, "signature": s.sign(st)}, headers=auth_headers(token))
+
+
 async def _check(client, token, agent, mandate_id=None, tool_name="db.read", chain_id=None, inp=None,
                  signed=None):
     """A check; one that names a task is signed by the agent, as the SDKs sign it."""
@@ -140,7 +150,15 @@ async def test_give_read_and_end(client, admin_token):
     assert listed["current"]["id"] == second["id"]
     assert {m["id"]: m["status"] for m in listed["history"]} == {second["id"]: "active", first["id"]: "ended"}
 
+    # ending is signed: without the signed statement nothing ends
     r = await client.post(f"{A}/{agent['id']}/mandates/{second['id']}/end", headers=auth_headers(admin_token))
+    assert r.status_code == 422
+    r = await client.post(f"{A}/{agent['id']}/mandates/{second['id']}/end",
+                          json={"statement": st, "signature": sig}, headers=auth_headers(admin_token))
+    assert r.status_code == 422                      # a statement of something else
+    listed = (await client.get(f"{A}/{agent['id']}/mandates", headers=auth_headers(admin_token))).json()
+    assert listed["current"]["id"] == second["id"]
+    r = await _end(client, admin_token, agent["id"], second["id"])
     assert r.status_code == 200 and r.json()["status"] == "ended"
     r = await client.get(f"{A}/{agent['id']}/mandates/current", headers={"X-Agent-Key": agent["api_key"]})
     assert r.json()["mandate"] is None
@@ -207,7 +225,7 @@ async def test_calls_are_checked_against_the_task(client, admin_token, db_sessio
     chk = await _check(client, admin_token, agent, mid, signed=False)
     assert chk["decision"] == "denied" and "own signed request" in chk["reason"]
 
-    await client.post(f"{A}/{agent['id']}/mandates/{mid}/end", headers=auth_headers(admin_token))
+    assert (await _end(client, admin_token, agent["id"], mid)).status_code == 200
     chk = await _check(client, admin_token, agent, mid)
     assert chk["decision"] == "denied" and "was ended" in chk["reason"]
 
@@ -269,6 +287,48 @@ async def test_the_proof_starts_with_the_person_who_asked(client, admin_token):
     del bad["mandate"]
     assert "does not carry it" in _fails(bad)
 
+    # ended, signed: the proof of the earlier action says when and by whom
+    action_id = doc["action_id"]
+    assert (await _end(client, admin_token, agent["id"], mid)).status_code == 200
+    doc = await _authority(client, admin_token, action_id)
+    end = doc["mandate"]["ended"]["statement"]
+    assert end["type"] == "provenza.mandate.end" and end["mandate_id"] == mid
+    _, lines, gaps = tool.check_authority(doc)
+    assert gaps == [] and "ended" in lines[1] and "signed" in lines[1]
+    # an end the person did not sign, or of another task, is caught
+    bad = copy.deepcopy(doc)
+    bad["mandate"]["ended"]["statement"]["issued_at"] += 1
+    assert "does not verify" in _fails(bad)
+    bad = copy.deepcopy(doc)
+    bad["mandate"]["ended"]["statement"]["mandate_id"] += 1
+    assert "ends another task" in _fails(bad)
+    bad = copy.deepcopy(doc)
+    bad["mandate"]["ended"] = None
+    assert "no signed statement that ended it" in _fails(bad)
+    # an allowed action dated after the signed end
+    bad = copy.deepcopy(doc)
+    late = copy.deepcopy(bad["mandate"])
+    late["ended"]["statement"]["issued_at"] = doc["receipt"]["action"]["recorded_at"] - 3600
+    with pytest.raises(tool.Fail):
+        tool.check_mandate(late, doc["receipt"]["action"], doc["org_id"])
+
+
+@pytest.mark.asyncio
+async def test_a_replaced_task_names_what_replaced_it(client, admin_token):
+    agent = await _agent(client, admin_token)
+    await _release(client, admin_token)
+    r, _, _ = await _give(client, admin_token, agent["id"])
+    mid = r.json()["id"]
+    action_id = await _act(client, admin_token, agent, mid)
+    r, st2, _ = await _give(client, admin_token, agent["id"], task="Close the quarter")
+    doc = await _authority(client, admin_token, action_id)
+    assert doc["mandate"]["status"] == "ended" and doc["mandate"]["ended"]["statement"] == st2
+    _, lines, gaps = tool.check_authority(doc)
+    assert gaps == [] and "a new task replaced it" in lines[1]
+    bad = copy.deepcopy(doc)
+    bad["mandate"]["ended"]["statement"]["agent_id"] += 1
+    assert "does not replace it" in _fails(bad)
+
 
 @pytest.mark.asyncio
 async def test_a_task_given_after_the_release(client, admin_token, approver_token):
@@ -317,7 +377,7 @@ async def test_the_agent_signs_the_task_it_acts_for(client, admin_token, fake, d
         tool.check_authority(bad)
 
     # a task that ended: refused, and nothing ran
-    await client.post(f"{A}/{agent['id']}/mandates/{mid}/end", headers=auth_headers(admin_token))
+    assert (await _end(client, admin_token, agent["id"], mid)).status_code == 200
     r = await _call(client, agent, "tools/call", {"name": "files.read", "arguments": args},
                     headers={"X-Provenza-Action": _signed_header(agent, "files.read", args, mid)})
     assert "was ended" in json.dumps(r.json())

@@ -100,6 +100,7 @@ import base64
 import hashlib
 import json
 import sys
+import time
 
 try:
     from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
@@ -551,6 +552,8 @@ def check_approval(ap, action, check, passkey_fps=None) -> str:
 
 
 MANDATE_TYPE = "provenza.mandate"
+MANDATE_END_TYPE = "provenza.mandate.end"
+MANDATE_END_FIELDS = ("type", "v", "org_id", "user_id", "session_id", "mandate_id", "statement_sha256", "issued_at")
 CHECK_WINDOW = 300          # seconds a check may wait for its record (CHECK_TTL_SECONDS)
 MANDATE_FIELDS = ("type", "v", "org_id", "user_id", "session_id", "agent_id", "task", "tools", "valid_hours", "nonce",
                   "issued_at")
@@ -563,7 +566,7 @@ def check_mandate(m, action, org_id=None, root_agent_id=None) -> str:
     and the person's session key signed it, certified by their passkey.
     Returns the passkey fingerprint."""
     ref = action.get("mandate") or {}
-    st, cert = m.get("statement") or {}, (m.get("certificate") or {}).get("statement") or {}
+    st = m.get("statement") or {}
     if set(st) != set(MANDATE_FIELDS) or st.get("type") != MANDATE_TYPE or st.get("v") != 1:
         raise Fail("task: not a signed task statement")
     if m.get("mandate_id") != ref.get("id") or _sha(st) != ref.get("statement_sha256"):
@@ -583,18 +586,55 @@ def check_mandate(m, action, org_id=None, root_agent_id=None) -> str:
     at, until = action.get("recorded_at"), st["issued_at"] + st["valid_hours"] * 3600
     if allowed and isinstance(at, int) and not st["issued_at"] <= at <= until + CHECK_WINDOW:
         raise Fail("task: the action was allowed outside the time the task was given for")
-    if allowed and isinstance(at, int) and isinstance(m.get("ended_at"), int) and m["ended_at"] + CHECK_WINDOW < at:
-        raise Fail("task: the action was allowed after the task was ended")
+    fp = _session_signed(m, "task")
+    # what ended it, signed by a person: their end statement, or the statement
+    # of the task that replaced it
+    end = m.get("ended")
+    if end:
+        est = end.get("statement") or {}
+        if est.get("type") == MANDATE_END_TYPE:
+            if set(est) != set(MANDATE_END_FIELDS) or est.get("mandate_id") != m.get("mandate_id") \
+                    or est.get("statement_sha256") != ref.get("statement_sha256"):
+                raise Fail("task: the end statement ends another task")
+        elif est.get("type") == MANDATE_TYPE:
+            if set(est) != set(MANDATE_FIELDS) or est.get("agent_id") != st["agent_id"] \
+                    or not isinstance(est.get("issued_at"), int) or est["issued_at"] < st["issued_at"] \
+                    or _sha(est) == ref.get("statement_sha256"):
+                raise Fail("task: the task said to have replaced it does not replace it")
+        else:
+            raise Fail("task: what ended it is not a signed statement")
+        if est.get("org_id") != st["org_id"]:
+            raise Fail("task: ended in another organization")
+        _session_signed(end, "task end")
+        if allowed and isinstance(at, int) and est["issued_at"] + CHECK_WINDOW < at:
+            raise Fail("task: the action was allowed after the task was ended")
+    elif m.get("status") == "ended":
+        raise Fail("task: said to be ended, but the file carries no signed statement that ended it")
+    return fp
+
+
+def task_end(m):
+    """(unix time, user id) of the signed statement that ended the task, or None."""
+    est = (m.get("ended") or {}).get("statement")
+    return (est["issued_at"], est["user_id"]) if est else None
+
+
+def _session_signed(m, label) -> str:
+    """A statement a person signed with their session key (a task, its end):
+    the key is the one their passkey certified, for this person and session,
+    and it signed inside the certificate's validity. Returns the passkey
+    fingerprint."""
+    st, cert = m.get("statement") or {}, (m.get("certificate") or {}).get("statement") or {}
     if cert.get("type") != CERTIFICATE_TYPE or cert.get("public_key") != m.get("session_public_key"):
-        raise Fail("task: the session certificate is not for the key that signed")
+        raise Fail(f"{label}: the session certificate is not for the key that signed")
     for k in ("org_id", "user_id", "session_id"):
         if st.get(k) != cert.get(k):
-            raise Fail(f"task: signed in another session than the certificate names ({k})")
-    if not cert["not_before"] <= st["issued_at"] <= cert["not_after"]:
-        raise Fail("task: signed outside the session's validity")
+            raise Fail(f"{label}: signed in another session than the certificate names ({k})")
+    if not isinstance(st.get("issued_at"), int) or not cert["not_before"] <= st["issued_at"] <= cert["not_after"]:
+        raise Fail(f"{label}: signed outside the session's validity")
     if not _verify_ed25519(m["session_public_key"], m.get("signature"), canonical(st)):
-        raise Fail("task: the session key's signature does not verify")
-    _verify_passkey(m["passkey"], m["certificate"]["assertion"], hashlib.sha256(canonical(cert)).digest(), "task")
+        raise Fail(f"{label}: the session key's signature does not verify")
+    _verify_passkey(m["passkey"], m["certificate"]["assertion"], hashlib.sha256(canonical(cert)).digest(), label)
     return passkey_fingerprint(m["passkey"]["public_key"])
 
 
@@ -931,6 +971,11 @@ def check_authority(doc, trust=None, agent_fp=None, passkey_fps=None):
         lines.insert(0, f"task:       task #{m['mandate_id']} given by {who} with passkey {mfp}"
                         f"{' (listed in the signed manifest)' if listed else ''} to agent {st['agent_id']} for "
                         f"{st['valid_hours']} h ({scope}): {st['task'][:120]}")
+        ended = task_end(m)
+        if ended:
+            when = time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime(ended[0]))
+            lines.insert(1, f"            ended {when} by user {ended[1]}, signed"
+                            f"{' (a new task replaced it)' if m['ended']['statement']['type'] == MANDATE_TYPE else ''}")
     # 5. the person's approval
     if receipt.get("approval"):
         ap = receipt["approval"]

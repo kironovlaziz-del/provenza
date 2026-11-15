@@ -26,6 +26,13 @@ signed request: named by anyone holding only the agent's API key, it is
 refused.
 
 One mandate is in force per agent: giving a new one ends the one before.
+Ending is signed too, so when a task stopped being in force is the person's
+word, not the server's: the end statement
+
+    {"type": "provenza.mandate.end", "v": 1, "org_id", "user_id", "session_id",
+     "mandate_id", "statement_sha256", "issued_at"}
+
+or, for a task that was replaced, the statement of the task that replaced it.
 A delegated agent acts under the mandate of its chain's root agent.
 """
 
@@ -50,6 +57,7 @@ from app.services import signing_sessions
 from app.services.audit_service import AuditService
 
 MANDATE = "provenza.mandate"
+MANDATE_END = "provenza.mandate.end"
 V = 1
 MAX_TASK = 2000
 MAX_HOURS = 24 * 7
@@ -90,7 +98,7 @@ def _clean(agent: Agent, task: Any, tools: Optional[List[str]], hours: Any) -> T
     return task, tools, hours
 
 
-def build(user: User, session_id: int, agent: Agent, task: str, tools: Optional[List[str]], hours: int,
+def build(user: User, session_id: str, agent: Agent, task: str, tools: Optional[List[str]], hours: int,
           nonce: str) -> Dict[str, Any]:
     """The statement, without issued_at (taken from what the browser signed)."""
     return {"type": MANDATE, "v": V, "org_id": user.org_id, "user_id": user.id, "session_id": session_id,
@@ -121,13 +129,14 @@ async def give(db: AsyncSession, user: User, agent_id: int, task: Any, tools: Op
                                                       TaskMandate.signed["statement"]["nonce"].astext == nonce))
             ).first() is not None:
         raise api_error(status.HTTP_409_CONFLICT, "mandate.replayed")
-    now = _now()
-    # one task in force per agent: the new one ends the one before
+    now = datetime.fromtimestamp(st["issued_at"], timezone.utc)
+    # one task in force per agent: the new one ends the one before - its
+    # signed statement is what ended it
     await db.execute(update(TaskMandate).where(
         TaskMandate.org_id == user.org_id, TaskMandate.agent_id == agent.id, TaskMandate.status == "active")
-        .values(status="ended", ended_at=now, ended_by=user.id))
+        .values(status="ended", ended_at=now, ended_by=user.id, ended=proof))
     row = TaskMandate(org_id=user.org_id, agent_id=agent.id, user_id=user.id, task=task, tools=tools,
-                      expires_at=datetime.fromtimestamp(st["issued_at"], timezone.utc) + timedelta(hours=hours),
+                      expires_at=now + timedelta(hours=hours),
                       status="active", signed=proof, statement_sha256=statement_sha256(st))
     db.add(row)
     await db.flush()
@@ -137,14 +146,36 @@ async def give(db: AsyncSession, user: User, agent_id: int, task: Any, tools: Op
     return row
 
 
-async def end(db: AsyncSession, user: User, agent_id: int, mandate_id: int) -> TaskMandate:
-    row = (await db.execute(select(TaskMandate).where(
-        TaskMandate.id == mandate_id, TaskMandate.org_id == user.org_id, TaskMandate.agent_id == agent_id))
-    ).scalar_one_or_none()
+async def _row(db: AsyncSession, user: User, agent_id: int, mandate_id: int, lock: bool = False) -> TaskMandate:
+    q = select(TaskMandate).where(
+        TaskMandate.id == mandate_id, TaskMandate.org_id == user.org_id, TaskMandate.agent_id == agent_id)
+    row = (await db.execute(q.with_for_update() if lock else q)).scalar_one_or_none()
     if row is None:
         raise api_error(status.HTTP_404_NOT_FOUND, "mandate.not_found")
+    return row
+
+
+def build_end(user: User, session_id: str, row: TaskMandate) -> Dict[str, Any]:
+    """The end statement, without issued_at (taken from what the browser signed)."""
+    return {"type": MANDATE_END, "v": V, "org_id": user.org_id, "user_id": user.id, "session_id": session_id,
+            "mandate_id": row.id, "statement_sha256": row.statement_sha256}
+
+
+async def end_statement(db: AsyncSession, user: User, agent_id: int, mandate_id: int) -> Dict[str, Any]:
+    """What the person's session key signs to end the task."""
+    s = signing_sessions.require_certified(getattr(user, "_signing_session", None))
+    row = await _row(db, user, agent_id, mandate_id)
+    return dict(build_end(user, s.id, row), issued_at=int(time.time()))
+
+
+async def end(db: AsyncSession, user: User, agent_id: int, mandate_id: int, signed_statement: Any,
+              signature: Any) -> TaskMandate:
+    s = signing_sessions.require_certified(getattr(user, "_signing_session", None))
+    row = await _row(db, user, agent_id, mandate_id, lock=True)
+    proof = await signing_sessions.verify_signed(db, s, build_end(user, s.id, row), signed_statement, signature)
     if row.status == "active":
-        row.status, row.ended_at, row.ended_by = "ended", _now(), user.id
+        row.status, row.ended_by, row.ended = "ended", user.id, proof
+        row.ended_at = datetime.fromtimestamp(proof["statement"]["issued_at"], timezone.utc)
         await AuditService(db).log(user.org_id, user.id, ENTITY, row.id, "ended", {"agent_id": agent_id})
         await db.refresh(row)
     return row
@@ -201,6 +232,6 @@ def out(row: TaskMandate) -> Dict[str, Any]:
 
 def proof(row: TaskMandate) -> Dict[str, Any]:
     """The mandate as Proof of Authority carries it: the signed statement with
-    the session signature, its certificate and the passkey, and its state."""
-    return {"mandate_id": row.id, "status": row.status,
-            "ended_at": int(row.ended_at.timestamp()) if row.ended_at else None, **row.signed}
+    the session signature, its certificate and the passkey, its state, and -
+    once ended - what ended it, signed the same way."""
+    return {"mandate_id": row.id, "status": row.status, "ended": row.ended, **row.signed}

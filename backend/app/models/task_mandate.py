@@ -34,3 +34,6 @@ class TaskMandate(Base):
     created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
     ended_at = Column(DateTime(timezone=True))
     ended_by = Column(Integer, ForeignKey("users.id"))
+    # what ended it, signed: the person's end statement, or the statement of
+    # the task that replaced it (None while in force, and when it only expired)
+    ended = Column(JSONB(none_as_null=True))
