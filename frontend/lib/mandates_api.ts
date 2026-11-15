@@ -38,7 +38,16 @@ export async function giveMandate(agentId: number, task: string, tools: string[]
   return res.data;
 }
 
+/** Ending is signed like giving: when the task stopped is the person's word. */
 export async function endMandate(agentId: number, mandateId: number) {
-  const { data } = await api.post<MandateT>(`/agents/${agentId}/mandates/${mandateId}/end`);
-  return data;
+  const base = `/agents/${agentId}/mandates/${mandateId}/end`;
+  const { data } = await api.post<{ statement: Record<string, unknown> }>(`${base}/statement`);
+  let signature: string;
+  try {
+    signature = await signWithSessionKey(String(data.statement.session_id), data.statement);
+  } catch {
+    throw { response: { data: { detail: "session.no_key" } } };
+  }
+  const res = await api.post<MandateT>(base, { statement: data.statement, signature });
+  return res.data;
 }

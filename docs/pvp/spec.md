@@ -351,10 +351,21 @@ that long, until it is ended or a new one is given to the agent. A
 statement is accepted once (`nonce`). `statement_sha256` is SHA-256 of the
 statement's canonical form. `POST /api/v1/agents/{id}/mandates/statement`
 builds it, `POST /api/v1/agents/{id}/mandates` takes it signed,
-`POST …/mandates/{mandate_id}/end` ends it, and the agent reads the one in
-force with its own key at `GET …/mandates/current`. Proof of Authority
-(`GET /api/v1/pvp/authority/{action_id}`) carries it as `mandate`: the
-statement, the session signature, the session certificate and the passkey.
+and the agent reads the one in force with its own key at
+`GET …/mandates/current`. Ending is signed the same way
+(`POST …/mandates/{mandate_id}/end/statement`, then `POST …/end` with it
+signed):
+
+```json
+{"type": "provenza.mandate.end", "v": 1, "org_id": 1, "user_id": 3, "session_id": "…",
+ "mandate_id": 9, "statement_sha256": "<hex>", "issued_at": 1760003600}
+```
+
+Proof of Authority (`GET /api/v1/pvp/authority/{action_id}`) carries the
+task as `mandate`: the statement, the session signature, the session
+certificate and the passkey, and - once it ended - `ended`: the end
+statement, or the statement of the task that replaced it, with the same
+proof. The task stopped being in force at that statement's `issued_at`.
 
 **`receipt`** (`GET /api/v1/pvp/receipts/{action_id}`) is valid offline when
 all of the following hold:

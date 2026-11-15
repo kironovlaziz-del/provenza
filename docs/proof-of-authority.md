@@ -29,7 +29,10 @@ the agent is to do, which of its tools it may use for it (empty: all of
 them), and for how long (up to 7 days). The browser signs the task with the
 session key the person's passkey certified, as it signs an approval; only
 administrators and approvers give tasks. One task is in force per agent: a
-new one ends the one before, and **End the task** ends it at once.
+new one ends the one before, and **End the task** ends it at once. Ending
+is signed the same way, so when a task stopped being in force is a
+person's word too: the proof carries the end statement - or, for a task
+that was replaced, the signed task that replaced it.
 
 The agent names the task on its calls, inside its signed request:
 
@@ -82,6 +85,7 @@ python3 tools/provenza_audit.py authority authority-41.json \
 ```
 VERIFIED  proof of authority for action 41 (db.read, allowed) of agent 2
           task:       task #9 given by approver 3 with passkey SHA256:Q2xk… (listed in the signed manifest) to agent 1 for 8 h (db.read): Reconcile the October invoices
+                      ended 2026-11-15 17:02:11 UTC by user 3, signed
           policy:     release #4 (bundle v4 b587c3c109f5e4e7) signed by administrator 1 (passkey SHA256:jLXU…); history verified from release #1
           rights:     the signed policy gives agent 2 the tool db.read; its key SHA256:MnJ8… is the one in the signed manifest
           delegation: agent 1 -> agent 2 (hop 7, signed by SHA256:NDWC…)
@@ -94,7 +98,7 @@ What each line checks:
 
 | Link | Checked |
 |---|---|
-| **task** | When the call names a task: the file carries the task the evidence names (its statement hashes to it), the person's session key signed it and their passkey certified that key, and an allowed call is inside it - the agent it was given to or the root of its delegation chain, the tool, the time. The text is what the person signed. |
+| **task** | When the call names a task: the file carries the task the evidence names (its statement hashes to it), the person's session key signed it and their passkey certified that key, and an allowed call is inside it - the agent it was given to or the root of its delegation chain, the tool, the time. The text is what the person signed. A task that ended carries what ended it, signed by a person (their end statement, or the task that replaced it); an allowed call dated after that is a failure. |
 | **policy** | The release the action names (number and bundle hash, part of its sealed evidence) is in the file, and so is every release before it, back to the organization's first. Each one hashes to what was signed, carries its governing quorum's passkey signatures (WebAuthn, the person verified), and is governed by the release before it. `--passkey`: one of your passkeys signed the release the action was decided under. |
 | **rights** | For an allowed action, the signed bundle has the agent active and the tool in its allowed tools. The agent's key is the one the signed manifest lists. |
 | **delegation** | Each hop that brought the agent into its chain is signed by the delegating agent's key, and that key is in the signed manifest. A hop that names its tools passes this one on. |

@@ -76,8 +76,23 @@ async def current_mandate(agent_id: int, request: Request, db: AsyncSession = De
     return {"mandate": task_mandates.out(row) if row else None}
 
 
+class SignedEndIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    # the statement from POST .../end/statement with the session key's signature
+    statement: dict
+    signature: str = Field(max_length=200)
+
+
+@router.post("/{agent_id}/mandates/{mandate_id}/end/statement")
+async def end_statement(agent_id: int, mandate_id: int, db: AsyncSession = Depends(get_db),
+                        user: User = Depends(_signer)):
+    """What the person's session key signs to end the task."""
+    return {"statement": await task_mandates.end_statement(db, user, agent_id, mandate_id)}
+
+
 @router.post("/{agent_id}/mandates/{mandate_id}/end")
-async def end_mandate(agent_id: int, mandate_id: int, db: AsyncSession = Depends(get_db),
+async def end_mandate(agent_id: int, mandate_id: int, data: SignedEndIn, db: AsyncSession = Depends(get_db),
                       user: User = Depends(_signer)):
-    """End the task: the agent's calls that name it are refused from now on."""
-    return task_mandates.out(await task_mandates.end(db, user, agent_id, mandate_id))
+    """End the task, signed: the agent's calls that name it are refused from now on."""
+    return task_mandates.out(await task_mandates.end(db, user, agent_id, mandate_id, data.statement,
+                                                     data.signature))
