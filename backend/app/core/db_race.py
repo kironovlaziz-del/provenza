@@ -19,7 +19,7 @@ insert, and then returns the row that won.
 
 from typing import Any, Awaitable, Callable, Tuple
 
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, InvalidRequestError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
@@ -27,13 +27,24 @@ async def insert_or_get(db: AsyncSession, row: Any, existing: Callable[[], Await
     """Insert `row` (flushed, not committed), or - when another transaction
     inserted its like first - return what `existing()` now finds.
     Returns (the row, whether this call created it)."""
+    # A SAVEPOINT held by hand, not `async with`: where one session serves
+    # several requests in turn (the test suite does this), another request's
+    # commit can land between our insert and the end of the block. The
+    # savepoint is then already released with that commit - our row went in
+    # with it - and there is nothing left to release or undo.
+    savepoint = await db.begin_nested()
     try:
-        async with db.begin_nested():
-            db.add(row)
-            await db.flush()
-        return row, True
+        db.add(row)
+        await db.flush()
     except IntegrityError:
+        try:
+            await savepoint.rollback()      # undoes the insert only
+        except InvalidRequestError:
+            pass                            # already closed (see above)
         found = await existing()
         if found is None:       # not the row we raced for: another constraint, a real error
             raise
         return found, False
+    if savepoint.is_active:
+        await savepoint.commit()
+    return row, True

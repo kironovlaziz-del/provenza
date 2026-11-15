@@ -227,3 +227,54 @@ async def test_a_lost_race_elsewhere_is_a_conflict_not_a_fault(client, admin_tok
     Orig.sqlstate = "23503"          # a foreign key: a real fault
     with pytest.raises(IntegrityError):
         await client.get("/api/v1/inventory/summary", headers=auth_headers(admin_token))
+
+
+@pytest.mark.parametrize("when", ["before the insert", "after it"])
+async def test_a_commit_that_lands_inside_the_insert(db_session, org_and_users, when):
+    """One session serving several requests in turn (the test suite itself, in
+    tests that run a real proxy against this server): another request's commit
+    lands inside our insert. Whatever was open went in with that commit;
+    nothing is left to release, and nothing fails."""
+    from unittest.mock import patch
+
+    org = org_and_users["org"]
+    row = AISystem(org_id=org.id, name="A", kind="other", domain="general", risk_flags=[],
+                   review_status="unreviewed", source_key=f"k:{when}")
+    if when == "after it":
+        flush = db_session.flush
+
+        async def flush_then_someone_commits(*a, **kw):
+            await flush(*a, **kw)
+            await db_session.commit()
+
+        with patch.object(db_session, "flush", flush_then_someone_commits):
+            row, mine = await insert_or_get(db_session, row, _nothing)
+    else:
+        begin_nested = db_session.begin_nested
+
+        class Then:
+            """begin_nested(), and by the time it is entered someone has committed."""
+            def __init__(self):
+                self.inner = begin_nested()
+
+            def __await__(self):
+                return self._go().__await__()
+
+            async def _go(self):
+                sp = await self.inner
+                await db_session.commit()
+                return sp
+
+            async def __aenter__(self):
+                sp = await self.inner.__aenter__()
+                await db_session.commit()
+                return sp
+
+            async def __aexit__(self, *exc):
+                return await self.inner.__aexit__(*exc)
+
+        with patch.object(db_session, "begin_nested", Then):
+            row, mine = await insert_or_get(db_session, row, _nothing)
+    assert mine and row.id
+    assert await db_session.scalar(select(func.count()).select_from(AISystem)
+                                   .where(AISystem.source_key == f"k:{when}")) == 1
