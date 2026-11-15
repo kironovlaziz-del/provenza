@@ -109,3 +109,34 @@ async def test_a_plain_user_reads_neither_the_audit_trail_nor_the_incidents(clie
     # the effective policy is computed, never saved: an auditor may preview it
     r = await client.post("/api/v1/policy-layers/preview", headers=auditor, json={"scope": "org", "document": {}})
     assert r.status_code == 200, r.text
+
+
+async def test_one_click_into_the_public_demo(client, db_session, org_and_users, monkeypatch):
+    """POST /auth/demo ("Try the demo"): a session of the demo account, only
+    where a demo is set up, and never of an account that can change anything."""
+    from app.core.config import settings
+
+    await _token_for(client, db_session, org_and_users, UserRole.auditor)     # creates auditor@test.example.com
+    admin = org_and_users["admin"].email
+
+    # no demo here: nothing to click into, and the welcome page is not told of one
+    assert (await client.post("/api/v1/auth/demo")).status_code == 404
+    assert (await client.get("/api/v1/auth/config")).json()["demo_enabled"] is False
+
+    monkeypatch.setattr(settings, "DEMO_ACCOUNTS", "AUDITOR@test.example.com")
+    assert (await client.get("/api/v1/auth/config")).json()["demo_enabled"] is True
+    r = await client.post("/api/v1/auth/demo")
+    assert r.status_code == 200, r.text
+    h = auth_headers(r.json()["access_token"])
+    me = (await client.get("/api/v1/users/me", headers=h)).json()
+    assert me["email"] == "auditor@test.example.com" and me["role"] == "auditor"
+    # the session it gives is the demo account's: it reads, and changes nothing of its own
+    r = await client.post("/api/v1/users/me/mfa/setup", headers=h)
+    assert r.status_code == 403 and r.json()["detail"] == "demo.read_only"
+
+    # an administrator's e-mail listed by mistake is never signed in this way
+    monkeypatch.setattr(settings, "DEMO_ACCOUNTS", admin)
+    assert (await client.post("/api/v1/auth/demo")).status_code == 404
+    # nor an account that is not there
+    monkeypatch.setattr(settings, "DEMO_ACCOUNTS", "nobody@test.example.com")
+    assert (await client.post("/api/v1/auth/demo")).status_code == 404

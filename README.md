@@ -45,8 +45,8 @@ shadow AI, keeps a registry of every AI agent, checks each agent action against 
 
 ## 👀 Try the live demo
 
-**[stickstock.lol](https://stickstock.lol)** — organization `demo`, e-mail `demo@stickstock.lol`,
-password `provenza-demo`. A read-only login to a demo bank: agents with their own
+**[stickstock.lol](https://stickstock.lol)** — click **Try the demo** (or sign in: organization
+`demo`, e-mail `demo@stickstock.lol`, password `provenza-demo`). A read-only login to a demo bank: agents with their own
 keys, a signed delegation chain, denied and held actions, a refused privilege
 escalation, AI tools found on employees' laptops. In **Agent activity → Live Map**,
 click a delegation and check its signature in your browser. The data is made

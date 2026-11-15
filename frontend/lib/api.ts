@@ -146,6 +146,14 @@ export async function login(orgSlug: string, email: string, password: string) {
 /** Public: what the sign-in screens may offer (self-service sign-up is off by default). */
 export interface AppConfig {
   signup_enabled: boolean;
+  /** A public demo is set up on this server: the welcome page offers "Try the demo". */
+  demo_enabled?: boolean;
+}
+
+/** One click into the public demo: a session of its read-only account. */
+export async function demoLogin() {
+  const { data } = await api.post<{ access_token: string }>("/auth/demo");
+  return data;
 }
 
 export async function getAuthConfig(): Promise<AppConfig> {

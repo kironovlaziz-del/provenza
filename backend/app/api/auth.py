@@ -15,7 +15,7 @@ from pydantic import BaseModel
 from app.core import rate_limit, sessions
 from app.services import signing_sessions
 from app.schemas.user import LoginResult, MfaLogin, Token, UserLogin
-from app.models.user import User
+from app.models.user import User, UserRole
 from app.models.organization import Organization
 from app.services.audit_service import AuditService
 
@@ -29,6 +29,8 @@ router = APIRouter()
 LOGIN_IP_LIMIT = 10
 LOGIN_EMAIL_LIMIT = 5
 LOGIN_WINDOW_SECONDS = 300
+# "Try the demo": no password to guess, so the limit only keeps one address from piling up sessions
+DEMO_IP_LIMIT = 30
 MFA_TOKEN_MINUTES = 5          # time to type the code after the password
 MFA_IP_LIMIT = 20
 MFA_USER_LIMIT = 5             # codes per user per window: 6 digits do not survive guessing
@@ -40,8 +42,45 @@ async def auth_config():
     """Public, unauthenticated: what the sign-in screens may offer."""
     return {
         "signup_enabled": settings.ALLOW_PUBLIC_SIGNUP,
+        # a public demo is set up here (`provenza demo enable`): the welcome page offers "Try the demo"
+        "demo_enabled": bool(_demo_emails()),
         "features": {},
     }
+
+
+def _demo_emails() -> set:
+    return {e.strip().lower() for e in settings.DEMO_ACCOUNTS.split(",") if e.strip()}
+
+
+@router.post("/demo", response_model=Token)
+async def demo_login(request: Request, db: AsyncSession = Depends(get_db)):
+    """One click into the public demo (the welcome page's "Try the demo").
+
+    It gives nothing the visitor does not already have: the demo login is
+    published, and this signs in as that same account. Only where a demo is
+    set up (DEMO_ACCOUNTS, `provenza demo enable`) - elsewhere there is nothing
+    here - and only as a demo account that can change nothing: an active
+    auditor without a second factor. An administrator's e-mail put into
+    DEMO_ACCOUNTS by mistake is never signed in this way."""
+    from sqlalchemy import func
+
+    not_here = api_error(status.HTTP_404_NOT_FOUND, "demo.not_available")
+    emails = _demo_emails()
+    if not emails:
+        raise not_here
+    rate_limit.enforce(request, scope="demo", limit=DEMO_IP_LIMIT, window_seconds=LOGIN_WINDOW_SECONDS)
+    user = (await db.execute(
+        select(User).where(func.lower(User.email).in_(emails), User.role == UserRole.auditor.value,
+                           User.status == "active", User.totp_enabled.is_(False))
+        .order_by(User.id).limit(1))).scalar_one_or_none()
+    if user is None:
+        raise not_here
+    from app.services import sso
+
+    cfg = await sso.get_settings(db, user.org_id)
+    if cfg is not None and cfg.enabled and cfg.enforce:
+        raise not_here
+    return {"access_token": await signing_sessions.issue_token(db, user, request), "token_type": "bearer"}
 
 
 def _account_key(org_slug: str, email: str) -> str:

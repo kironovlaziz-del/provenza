@@ -315,7 +315,10 @@ machines. Visitors sign in as its viewer, an auditor: it reads everything and
 changes nothing, not even its own password, second factor or passkeys
 (`DEMO_ACCOUNTS` in `deploy/.env`), so one visitor cannot lock the others out.
 The organization sees nothing of the others on this installation, and they see
-nothing of it.
+nothing of it. While a demo is enabled, the welcome page at `/` shows **Try the
+demo**: one click signs the visitor in as that viewer, with no password to
+type (`POST /api/v1/auth/demo` - it signs in a demo account that is an active
+auditor and no other, and answers 404 on an installation without a demo).
 
 Every night at 04:20 (`provenza-demo.timer`) it is deleted and made again;
 `provenza demo reset` does it now. Only an organization the demo made is ever
