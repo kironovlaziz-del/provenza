@@ -163,6 +163,8 @@ this project adheres to [Semantic Versioning](https://semver.org/).
 - Sign-in: an unknown organization or e-mail now takes as long as a wrong password (one bcrypt check against a dummy hash), so the response time no longer tells which accounts exist.
 
 ### Fixed
+- AI Inventory: the page no longer shows "Could not load the inventory" on a first visit until it is reloaded. Its two requests both discover new systems; the one that lost the race failed instead of answering.
+- The signed-policy note at the top of every page ("N policy changes take effect only after signing") now goes away as soon as the release is signed, and appears as soon as a change is saved - it used to wait up to a minute or for a reload.
 
 - `provenza-proxy connect` on a computer where an earlier agent of the same user was connected: the earlier agent's agent mode kept 127.0.0.1:8480 and connecting stopped with "taken by another program" (or, after the next sign-in, came back with the new identity). It is now replaced: its process stopped, its start at sign-in (Windows Run entry, systemd --user unit) and pid file removed - only for an agent mode of this user serving the same port or identity file; another agent on another port, and any other program, are left alone.
 - Quickstart: DeepWiki's question tool is `ask_wiki_question` (the guide said `ask_question`, a name its server no longer has); the guide now also shows the call from a terminal, and the TLS 1.2 fix for Windows PowerShell 5.1.

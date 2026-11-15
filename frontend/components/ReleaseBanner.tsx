@@ -4,11 +4,13 @@
 // the signed policy (components/SignedPolicyPanel.tsx): a release that no
 // longer verifies or has expired (nothing is allowed), a draft waiting for
 // their signature, a release about to expire, changes not signed yet.
-// Polls every minute; hidden when there is nothing to say.
+// Looks again after every change made in this browser (a release signed, a
+// policy saved) and every minute; hidden when there is nothing to say.
 
 import Link from "next/link";
 import React, { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { CHANGED_EVENT } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { getReleaseState, type ReleaseState } from "@/lib/policy_release_api";
 
@@ -26,7 +28,11 @@ export function ReleaseBanner() {
     const load = () => getReleaseState().then(setSt).catch(() => setSt(null));
     load();
     const id = setInterval(load, POLL_MS);
-    return () => clearInterval(id);
+    // a change just made here: the banner follows it at once
+    let soon: ReturnType<typeof setTimeout> | undefined;
+    const changed = () => { clearTimeout(soon); soon = setTimeout(load, 300); };
+    window.addEventListener(CHANGED_EVENT, changed);
+    return () => { clearInterval(id); clearTimeout(soon); window.removeEventListener(CHANGED_EVENT, changed); };
   }, [admin]);
 
   if (!admin || !st) return null;

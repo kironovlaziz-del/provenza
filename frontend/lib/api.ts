@@ -83,8 +83,19 @@ function transientRead(error: any): boolean {
   return status === undefined || TRANSIENT.includes(status);
 }
 
+/** Fired on the window after every change this browser made on the server
+ * (any request that is not a read): what shows state on every page - the
+ * signed policy banner - looks again at once, not at its next poll. */
+export const CHANGED_EVENT = "provenza:changed";
+
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    const method = (response.config?.method || "get").toLowerCase();
+    if (typeof window !== "undefined" && method !== "get" && method !== "head") {
+      window.dispatchEvent(new Event(CHANGED_EVENT));
+    }
+    return response;
+  },
   async (error) => {
     if (transientRead(error)) {
       const cfg = error.config as typeof error.config & { _retries?: number };
