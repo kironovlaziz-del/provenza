@@ -1219,7 +1219,13 @@
     "pvp.no_actions_in_period": "Bu davrda hech qanday harakat yozilmagan.",
     "pvp.period_too_large": "Bu davrda harakatlar juda ko'p ({{max_actions}} tadan ortiq): qisqaroq davrni tanlang.",
     "pvp.bad_period": "Davr oxiri boshlanishidan oldin.",
-    "pvp.period_before_seal_chain": "Bu davr muhrlangan to'plamlar zanjirga bog'lanishidan oldin muhrlangan: uning to'liqligini ko'rsatib bo'lmaydi."
+    "pvp.period_before_seal_chain": "Bu davr muhrlangan to'plamlar zanjirga bog'lanishidan oldin muhrlangan: uning to'liqligini ko'rsatib bo'lmaydi.",
+    "mandate.agent_not_active": "Faqat faol agentga vazifa berish mumkin.",
+    "mandate.bad_task": "Vazifani 1 dan {{max}} belgigacha tasvirlang.",
+    "mandate.bad_hours": "Vazifa 1 dan {{max}} soatgacha amal qiladi.",
+    "mandate.bad_tools": "Agentning ruxsat etilgan vositalari orasida yo'q: {{tools}}.",
+    "mandate.replayed": "Bu imzolangan vazifa allaqachon berilgan.",
+    "mandate.not_found": "Vazifa topilmadi."
   },
   "discovery": {
     "title": "Tarmoq kashfiyoti",
@@ -2103,7 +2109,10 @@
     "require_egress": "Cheklangan egress talab qilinsin",
     "require_egress_hint": "Agent faqat oxirgi egress o'z-o'zini tekshiruvi uning xosti egress proksiga va boshqa hech narsaga ulana olmasligini ko'rsatgan paytda harakat qiladi. Xostlarni Shlyuzlar -> Tashqi API'lar -> Agentlarni tarmoqda cheklash orqali cheklang.",
     "egress_age": "Tekshiruv amal qilish muddati, soat",
-    "confirm_require_egress": "Cheklangan egress talab qilinsinmi? {{n}} ta faol agentda yaqinda o'tgan \"cheklangan\" egress tekshiruvi yo'q: ular cheklangan xostdan tekshiruv o'tkazmaguncha harakatlari rad etiladi."
+    "confirm_require_egress": "Cheklangan egress talab qilinsinmi? {{n}} ta faol agentda yaqinda o'tgan \"cheklangan\" egress tekshiruvi yo'q: ular cheklangan xostdan tekshiruv o'tkazmaguncha harakatlari rad etiladi.",
+    "require_task": "Insondan vazifani talab qilish",
+    "require_task_hint": "Har bir chaqiruv inson agentga bergan, uning passkey kaliti bilan imzolangan vazifani ko'rsatishi kerak (agent sahifasi -> Insondan vazifa). Vazifa ko'rsatmagan chaqiruvlar rad etiladi.",
+    "confirm_require_task": "Insondan vazifa talab qilinsinmi? Vazifa ko'rsatmagan agent chaqiruvlari kimdir har bir agentga uning sahifasida vazifa bermaguncha rad etiladi."
   },
   "gateway": {
     "title": "AI shlyuz",
@@ -2674,6 +2683,33 @@
     "unbind": "Bo'shatish",
     "confirm_unbind": "Bu agentning ish yuklamasiga bog'lanishi bo'shatilsinmi? Joriy attestatsiyasi hisobga olinmay qoladi; keyingi muvaffaqiyatli attestatsiya uni o'sha paytda ishlayotgan joyiga bog'laydi."
   },
+  "task": {
+    "title": "Insondan vazifa",
+    "hint": "Inson ushbu agentdan nimani so'ragani, uning passkey kaliti bilan imzolangan. Vazifani ko'rsatgan chaqiruvlar unga qarab tekshiriladi va ularning vakolat isboti vazifa bergan insondan boshlanadi.",
+    "current": "Joriy vazifa",
+    "none": "Amaldagi vazifa yo'q.",
+    "tools": "Ushbu vazifa uchun vositalar",
+    "all_tools": "agentning barcha vositalari",
+    "until": "gacha",
+    "give": "Vazifa berish",
+    "replace": "Yangi vazifa berish",
+    "end": "Vazifani tugatish",
+    "confirm_end": "Ushbu vazifa tugatilsinmi? Agentning uni ko'rsatgan chaqiruvlari bundan buyon rad etiladi.",
+    "what": "Agent nima qilishi kerak?",
+    "what_placeholder": "Oktabr hisob-fakturalarini bank ko'chirmasi bilan solishtirish",
+    "tools_placeholder": "Bo'sh: agentning barcha vositalari. Yoki bir nechtasi, vergul bilan",
+    "valid_for": "Amal qilish muddati",
+    "hours_one": "{{count}} soat",
+    "hours_other": "{{count}} soat",
+    "sign_note": "Vazifani ushbu seans kaliti bilan imzolaysiz, uni passkey kalitingiz tasdiqlagan. Yangi vazifa oldingisini tugatadi.",
+    "sign_and_give": "Imzolash va berish",
+    "give_failed": "Vazifani berib bo'lmadi",
+    "end_failed": "Vazifani tugatib bo'lmadi",
+    "earlier": "Oldingi vazifalar",
+    "status_active": "amalda",
+    "status_ended": "tugatilgan",
+    "status_expired": "muddati o'tgan"
+  },
   "ph": {
     "title": "Siyosatlar ierarxiyasi",
     "intro": "Bitta siyosat uch darajada: tashkilot → jamoa (va uning kichik jamoalari) → agent. Pastki daraja faqat yuqoridagini qattiqlashtira oladi: eng kichik limit g'olib, har bir darajaning ruxsat ro'yxati ruxsat berishi kerak, barcha taqiq va tasdiq ro'yxatlari amal qiladi. LLM shlyuz va agent amallariga qo'llaniladi.",
@@ -3011,8 +3047,10 @@
     "release": "Imzolangan siyosat",
     "release_n": "reliz #{{n}}",
     "no_release": "qayd etilmagan (imzolangan reliz amalda bo'lmagan yoki Proof of Authority'dan oldin yozilgan)",
+    "mandate": "Insondan vazifa",
+    "mandate_n": "#{{n}} vazifa, uni bergan inson imzolagan",
     "download_authority": "Vakolat isbotini yuklab olish",
-    "authority_hint": "Vakolat isboti harakat ortidagi zanjirni qo'shadi: administratorlar passkey bilan imzolagan siyosat relizi, undagi agent huquqlari va kaliti, topshiriq bosqichlari, agentning o'z imzosi va tasdiqlovchining passkey'i. Tekshirish vositasi har bir bo'g'inni tekshiradi va qaysilari isbotlanmaganini aytadi.",
+    "authority_hint": "Vakolat isboti harakat ortidagi zanjirni qo'shadi: chaqiruv ko'rsatgan bo'lsa, inson passkey bilan imzolab bergan vazifa; administratorlar passkey bilan imzolagan siyosat relizi, undagi agent huquqlari va kaliti, topshiriq bosqichlari, agentning o'z imzosi va tasdiqlovchining passkey'i. Tekshirish vositasi har bir bo'g'inni tekshiradi va qaysilari isbotlanmaganini aytadi.",
     "completeness_title": "Agentning to'liqlik hisoboti",
     "completeness_hint": "Bitta agentning davr ichidagi barcha harakatlari va ularning hammasi ekanligi isboti: davrning muhrlangan to'plamlari imzolangan audit jurnalida uzluksiz zanjir hosil qiladi va har biri aynan berilgan harakatlarni saqlaydi.",
     "agent_id": "Agent ID",

@@ -222,11 +222,16 @@ class PVPActionRequest(_ActionShape):
     issued_at: Optional[UnixTime] = None
     signature: Optional[Base64] = None
     pq_signature: Optional[Base64] = None
+    # the task a person gave, signed (app/services/task_mandates.py), that
+    # this call is for
+    mandate_id: Optional[Id] = None
 
     def signed_payload(self) -> Dict[str, Any]:
         """Exactly what POST /agents/actions/check verifies. "type" keeps a
-        request signature from ever passing for another kind of statement."""
-        return {
+        request signature from ever passing for another kind of statement.
+        mandate_id is signed only when named, so payloads of agents that name
+        none stay as they were."""
+        payload = {
             "type": "action.request",
             "agent_id": self.agent_id,
             "chain_id": self.chain_id,
@@ -238,6 +243,9 @@ class PVPActionRequest(_ActionShape):
             "nonce": self.nonce,
             "issued_at": self.issued_at,
         }
+        if self.mandate_id is not None:
+            payload["mandate_id"] = self.mandate_id
+        return payload
 
     @field_validator("input")
     @classmethod
@@ -349,8 +357,13 @@ class PVPRequested(BaseModel):
 
     def problems(self, action: Dict[str, Any]) -> List[str]:
         p, out = self.payload, []
-        if set(p) != set(REQUEST_FIELDS) or p.get("type") != "action.request":
+        if set(p) - {"mandate_id"} != set(REQUEST_FIELDS) or p.get("type") != "action.request":
             out.append("requested_fields")
+        # a refused call may have named a task that does not exist; an allowed one
+        # names in its evidence the task it signed for
+        named = (action.get("mandate") or {}).get("id")
+        if (named is not None or action.get("decision") == "allowed") and p.get("mandate_id") != named:
+            out.append("requested_mismatch:mandate_id")
         out += [f"requested_mismatch:{k}" for k in ("agent_id", "chain_id", "action_type", "tool_name",
                                                     "input_sha256") if p.get(k) != action.get(k)]
         if not self.signed_by.verify(p):
@@ -358,9 +371,18 @@ class PVPRequested(BaseModel):
         return out
 
 
+class PVPMandateRef(BaseModel):
+    """The task a person gave, signed, that the call was made for: its id
+    and SHA-256 of its canonical statement."""
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    id: Id
+    statement_sha256: Sha256Hex
+
+
 # members added after evidence was first written: left out when empty, so the
 # evidence of older actions keeps exactly the form - and the hash - it was sealed with
-_LATER_MEMBERS = ("release", "requested")
+_LATER_MEMBERS = ("release", "requested", "mandate")
 
 
 class PVPAction(_ActionShape):
@@ -388,6 +410,7 @@ class PVPAction(_ActionShape):
     # the agent's own signed request (docs/proof-of-authority.md)
     release: Optional[PVPReleaseRef] = None
     requested: Optional[PVPRequested] = None
+    mandate: Optional[PVPMandateRef] = None
 
     @model_serializer(mode="wrap")
     def _without_empty_later_members(self, handler):

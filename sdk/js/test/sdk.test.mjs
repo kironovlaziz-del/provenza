@@ -147,6 +147,18 @@ describe("governed tools", () => {
     assert.equal(server.checks.size, 0);
   });
 
+  test("a task a person gave", async () => {
+    const server = new FakeProvenza();
+    const { agent } = await connected(server);
+    const read = agent.tool("db.read", ({ i }) => ({ i }));
+    const task = await agent.currentTask();
+    assert.equal(task.id, 3);
+    await agent.withTask(task.id, () => read({ i: 1 }));
+    await read({ i: 2 });
+    // the fake verified each signature over the payload naming the task
+    assert.deepEqual([...server.checks.values()].map((c) => c.mandate_id ?? null), [3, null]);
+  });
+
   test("chains, delegation, background records", async () => {
     const server = new FakeProvenza();
     const { agent } = await connected(server, { recordMode: "background" });

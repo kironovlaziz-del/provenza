@@ -7,6 +7,7 @@ every link signed, and a standalone tool checks the file offline without
 trusting the Provenza server.
 
 ```
+a person's passkey ──────certify──► the task they gave the agent
 administrators' passkeys ──sign──► the policy release in force
                                      (its bundle: the agent's rights;
                                       its manifest: the agent's key)
@@ -18,6 +19,34 @@ the audit key ───────────sign─────► the checkp
 
 A **completeness report** goes with it: every action of one agent over a
 period, shown to be all of them.
+
+## A task from a person
+
+An agent gets its goal from a person and decides on its own how to reach
+it. That request is the first link of the chain, so a person can give it
+signed: on the agent's page, **Task from a person → Give a task** - what
+the agent is to do, which of its tools it may use for it (empty: all of
+them), and for how long (up to 7 days). The browser signs the task with the
+session key the person's passkey certified, as it signs an approval; only
+administrators and approvers give tasks. One task is in force per agent: a
+new one ends the one before, and **End the task** ends it at once.
+
+The agent names the task on its calls, inside its signed request:
+
+- **SDKs** - read it with `agent.current_task()` and wrap the work in
+  `with agent.task(task["id"]):` (JavaScript: `currentTask()` and
+  `withTask(id, fn)`; Go: `CurrentTask(ctx)` and `WithTask(ctx, id)`);
+- **agent mode** (`provenza-proxy`) - the client sends the header
+  `X-Provenza-Mandate-Id: <id>`, or `params._meta["provenza/mandate_id"]`
+  on an MCP `tools/call`, and agent mode signs it with the call;
+- the agent reads the task in force with its own key:
+  `GET /api/v1/agents/{id}/mandates/current`.
+
+Provenza then checks the call against the task: the agent it was given to
+(or a helper delegated by it, in its chain), the tool, the time, whether it
+was ended. A call outside it is refused, and the action's evidence names the
+task either way. With **Agent identity → Require a task from a person** on,
+a call that names no task is refused.
 
 ## Get one
 
@@ -44,6 +73,7 @@ python3 tools/provenza_audit.py authority authority-41.json \
 
 ```
 VERIFIED  proof of authority for action 41 (db.read, allowed) of agent 2
+          task:       task #9 given by approver 3 with passkey SHA256:Q2xk… (listed in the signed manifest) to agent 1 for 8 h (db.read): Reconcile the October invoices
           policy:     release #4 (bundle v4 b587c3c109f5e4e7) signed by administrator 1 (passkey SHA256:jLXU…); history verified from release #1
           rights:     the signed policy gives agent 2 the tool db.read; its key SHA256:MnJ8… is the one in the signed manifest
           delegation: agent 1 -> agent 2 (hop 7, signed by SHA256:NDWC…)
@@ -56,6 +86,7 @@ What each line checks:
 
 | Link | Checked |
 |---|---|
+| **task** | When the call names a task: the file carries the task the evidence names (its statement hashes to it), the person's session key signed it and their passkey certified that key, and an allowed call is inside it - the agent it was given to or the root of its delegation chain, the tool, the time. The text is what the person signed. |
 | **policy** | The release the action names (number and bundle hash, part of its sealed evidence) is in the file, and so is every release before it, back to the organization's first. Each one hashes to what was signed, carries its governing quorum's passkey signatures (WebAuthn, the person verified), and is governed by the release before it. `--passkey`: one of your passkeys signed the release the action was decided under. |
 | **rights** | For an allowed action, the signed bundle has the agent active and the tool in its allowed tools. The agent's key is the one the signed manifest lists. |
 | **delegation** | Each hop that brought the agent into its chain is signed by the delegating agent's key, and that key is in the signed manifest. A hop that names its tools passes this one on. |
@@ -75,6 +106,9 @@ and the first line reads `VERIFIED, WITH GAPS`:
   its key. `provenza-proxy connect` sets up agent mode.
 - `delegation` - a hop by a keyless agent (only where the organization
   allows keyless agents).
+- `task` - the passkey of the person who gave the task is not in the signed
+  manifest (added after the release): who they are rests on the server's
+  word. The next signed release lists it.
 
 `--require-full` turns gaps into a failure (exit status 1). A changed
 document, a missing release, a forged hop or a signature that does not
@@ -129,5 +163,5 @@ organization.
   own keys.
 
 Formats: [PVP specification](pvp/spec.md), section 3.4 (the evidence's
-`release` and `requested`, the seal chain) and section 5.1 (agent mode's
-`X-Provenza-Action`).
+`release`, `requested` and `mandate`, the seal chain, the signed task) and
+section 5.1 (agent mode's `X-Provenza-Action`).

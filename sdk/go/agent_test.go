@@ -101,6 +101,9 @@ func (f *fake) handle(w http.ResponseWriter, r *http.Request) {
 			"action_type": body["action_type"], "tool_name": body["tool_name"], "input_sha256": inHash,
 			"tool_version": body["tool_version"], "tool_digest": body["tool_digest"], "nonce": body["nonce"],
 			"issued_at": body["issued_at"]}
+		if m, named := body["mandate_id"]; named {
+			payload["mandate_id"] = m // signed only when named
+		}
 		sig, _ := body["signature"].(string)
 		nonce, _ := body["nonce"].(string)
 		if !verifySignatures(payload, sig, "", f.publicKey, "") || nonce == "" || f.nonces[nonce] {
@@ -122,6 +125,8 @@ func (f *fake) handle(w http.ResponseWriter, r *http.Request) {
 			out["permit"] = "permit-of-" + token
 		}
 		reply(w, 200, out)
+	case path == "/agents/42/mandates/current":
+		reply(w, 200, map[string]any{"mandate": map[string]any{"id": 3, "task": "Reconcile the October invoices"}})
 	case path == "/agents/42/attestation/challenge":
 		reply(w, 200, map[string]any{"agent_id": 42, "challenge": strings.Repeat("a", 64), "kind": "oidc"})
 	case path == "/agents/42/attestation":
@@ -414,6 +419,25 @@ func TestArgumentsMustBeAJSONObject(t *testing.T) {
 	}
 	if len(f.checks) != 0 {
 		t.Fatal("nothing must reach the server")
+	}
+}
+
+func TestATaskAPersonGave(t *testing.T) {
+	f := newFake(t)
+	a := connected(t, f)
+	task, err := a.CurrentTask(context.Background())
+	if err != nil || task["id"].(json.Number) != "3" {
+		t.Fatal(task, err)
+	}
+	id, _ := task["id"].(json.Number).Int64()
+	for _, ctx := range []context.Context{WithTask(context.Background(), id), context.Background()} {
+		if _, err := Call(ctx, a, "db.read", nil, func(ctx context.Context) (int, error) { return 1, nil }); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// the fake verified each signature over the payload naming the task
+	if f.checks[f.order[0]]["mandate_id"].(json.Number) != "3" || f.checks[f.order[1]]["mandate_id"] != nil {
+		t.Fatal("task", f.checks)
 	}
 }
 

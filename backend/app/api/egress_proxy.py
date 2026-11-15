@@ -734,7 +734,8 @@ async def proxy_check(data: ProxyCheckIn, request: Request, db: AsyncSession = D
         if p.get("agent_id") != agent.id:
             raise api_error(status.HTTP_403_FORBIDDEN, "enforcement.not_the_signed_request")
         signed = {"chain_id": p.get("chain_id"), "nonce": p.get("nonce"), "issued_at": p.get("issued_at"),
-                  "signature": sr["signature"], "pq_signature": sr.get("pq_signature")}
+                  "signature": sr["signature"], "pq_signature": sr.get("pq_signature"),
+                  "mandate_id": p.get("mandate_id")}
     try:
         req = PVPActionRequest(agent_id=agent.id, action_type=svc.ACTION_TYPE, tool_name=svc.PREFIX + data.route,
                                input=desc, **signed)
@@ -777,7 +778,8 @@ async def proxy_http_tool_plan(data: HttpToolCallIn, request: Request, db: Async
     try:
         req = PVPActionRequest(agent_id=data.agent_id, chain_id=data.chain_id, action_type="tool_call",
                                tool_name=data.tool_name, input=data.input, nonce=data.nonce,
-                               issued_at=data.issued_at, signature=data.signature, pq_signature=data.pq_signature)
+                               issued_at=data.issued_at, signature=data.signature, pq_signature=data.pq_signature,
+                               mandate_id=data.mandate_id)
     except ValueError as exc:
         raise api_error(status.HTTP_422_UNPROCESSABLE_ENTITY, "pvp.input_rejected", reason=str(exc)[:300])
     return await HttpToolGateway(db).plan(agent, req, proxy)

@@ -30,6 +30,8 @@ class AgentIdentitySettings(Base):
     # found its network confined to Provenza, and is no older than egress_check_max_age_hours
     require_confined_egress = Column(Boolean, nullable=False, default=False, server_default=false())
     egress_check_max_age_hours = Column(Integer, nullable=False, default=24, server_default="24")
+    # an agent acts only on a task a person gave it, signed (a TaskMandate)
+    require_task_mandate = Column(Boolean, nullable=False, default=False, server_default=false())
     # every agent must attest under this policy unless its role names its own
     # (services/attestation.py); NULL = only roles that require attestation
     default_attestation_policy_id = Column(Integer, ForeignKey("attestation_policies.id", ondelete="SET NULL"))

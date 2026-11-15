@@ -228,12 +228,13 @@ def _signed_request(header: str, agent, name: str, arguments: dict, chain_id) ->
     arrived, with the nonce, time and signatures from the header."""
     raw = header.strip()
     data = json.loads(base64.urlsafe_b64decode(raw + "=" * (-len(raw) % 4)).decode("utf-8"))
-    if not isinstance(data, dict) or set(data) - {"nonce", "issued_at", "signature", "pq_signature"}:
-        raise ValueError("expected nonce, issued_at, signature and pq_signature")
+    if not isinstance(data, dict) or set(data) - {"nonce", "issued_at", "signature", "pq_signature", "mandate_id"}:
+        raise ValueError("expected nonce, issued_at, signature, pq_signature and, optionally, mandate_id")
     try:
         return PVPActionRequest(agent_id=agent.id, chain_id=chain_id, action_type="tool_call", tool_name=name,
                                 input=arguments, nonce=data.get("nonce"), issued_at=data.get("issued_at"),
-                                signature=data.get("signature"), pq_signature=data.get("pq_signature"))
+                                signature=data.get("signature"), pq_signature=data.get("pq_signature"),
+                                mandate_id=data.get("mandate_id"))
     except ValidationError as exc:
         raise ValueError(exc.errors()[0].get("msg", "invalid")) from None
 

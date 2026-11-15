@@ -235,7 +235,8 @@ socket (`unix:<path>`, created with mode 0600, a stale one replaced) only its
 owner - run agent mode as the agent's user - and root reach it; a TCP address
 is taken on the loopback only (`127.0.0.1:8480`), where every local process
 reaches it, and agent mode warns so. It signs each request
-(`X-Provenza-Chain-Id` goes into the signed request), drops the client's
+(`X-Provenza-Chain-Id` goes into the signed request, and so does
+`X-Provenza-Mandate-Id` - the task a person gave the agent), drops the client's
 `Authorization` and sends the agent's key; answers, streams included, come
 back as the proxy sends them.
 

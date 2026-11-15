@@ -91,6 +91,8 @@ export interface CallOptions {
 
 export const RECORD_RETRIES_MS = [200, 1000];
 const chainStore = new AsyncLocalStorage<number | null>();
+// the task a person gave that calls are for (docs/proof-of-authority.md)
+const mandateStore = new AsyncLocalStorage<number | null>();
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 function asOutput(result: unknown): Json {
@@ -213,6 +215,21 @@ export class Agent {
     return chainStore.run(chainId, fn);
   }
 
+  /** Run fn with every governed call inside it acting for this task a person
+   *  gave (the id from currentTask()): each signed request names it, Provenza
+   *  refuses a call outside it, and the action's Proof of Authority starts
+   *  with the person who gave it. */
+  withTask<T>(mandateId: number | null, fn: () => T): T {
+    return mandateStore.run(mandateId, fn);
+  }
+
+  /** The task a person gave this agent, in force ({id, task, tools,
+   *  expires_at, ...}), or null. */
+  async currentTask(): Promise<Record<string, any> | null> {
+    const res = await this.connected().get(`/agents/${this.agentId}/mandates/current`);
+    return res?.mandate ?? null;
+  }
+
   private connected(): Client {
     if (!this.client) throw new ProvenzaConfigError("this needs connected mode");
     return this.client;
@@ -236,12 +253,16 @@ export class Agent {
       tool_name: spec.name, input_sha256: contentHash(input), tool_version: spec.version ?? null,
       tool_digest: spec.digest ?? null, nonce, issued_at: issuedAt,
     };
+    const mandateId = mandateStore.getStore() ?? null;
+    // signed only when named, as the server builds it
+    if (mandateId !== null) payload.mandate_id = mandateId;
     const keys = this.identity.keys;
     const [signature, pqSignature] = keys.sign(payload);
     const body = {
       agent_id: this.agentId, chain_id: chainId, action_type: actionType, tool_name: spec.name, input,
       ...(spec.version ? { tool_version: spec.version } : {}), ...(spec.digest ? { tool_digest: spec.digest } : {}),
       nonce, issued_at: issuedAt, signature, ...(pqSignature ? { pq_signature: pqSignature } : {}),
+      ...(mandateId !== null ? { mandate_id: mandateId } : {}),
     };
     const request: SignedRequest = { payload, signature, public_key: keys.publicKey,
       ...(pqSignature ? { pq_signature: pqSignature, pq_public_key: keys.pqPublicKey ?? undefined } : {}) };

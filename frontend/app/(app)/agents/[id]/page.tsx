@@ -15,6 +15,7 @@ import { issueEnrollment, type EnrollmentT } from "@/lib/enrollment_api";
 import { EnrollPanel } from "@/components/EnrollPanel";
 import { AgentAssignment } from "@/components/AgentAssignment";
 import { AgentAttestation } from "@/components/AgentAttestation";
+import { AgentTask } from "@/components/AgentTask";
 import { translateApiError } from "@/lib/errors";
 import { confirmDialog, promptDialog } from "@/components/Dialog";
 
@@ -263,6 +264,9 @@ export default function AgentDetailPage() {
               )}
             </div>
           </section>
+
+          {/* ---- the task a person gave ---- */}
+          <AgentTask agentId={agentId} active={agent.status === "active"} />
 
           {/* ---- identity ---- */}
           <section className="panel">

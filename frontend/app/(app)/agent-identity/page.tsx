@@ -149,6 +149,9 @@ export default function AgentIdentityPage() {
         { n: unchecked }));
       if (!ok) return;
     }
+    if (form.require_task_mandate && !data.settings.require_task_mandate) {
+      if (!await confirmDialog(t("identity.confirm_require_task"))) return;
+    }
     run(() => saveIdentitySettings(form), t("identity.saved", "Saved"));
   }
 
@@ -369,6 +372,16 @@ export default function AgentIdentityPage() {
                   onChange={(e) => setForm({ ...form, egress_check_max_age_hours: Number(e.target.value) })} />
               </div>
             )}
+            <label style={{ display: "flex", gap: 10, alignItems: "flex-start", marginBottom: 14 }}>
+              <input type="checkbox" checked={!!form.require_task_mandate} disabled={!isAdmin}
+                onChange={(e) => setForm({ ...form, require_task_mandate: e.target.checked })} style={{ width: "auto", marginTop: 3 }} />
+              <span>
+                <strong>{t("identity.require_task")}</strong>
+                <span className="hint-text" style={{ display: "block", fontSize: 12 }}>
+                  {t("identity.require_task_hint")}
+                </span>
+              </span>
+            </label>
             <div className="field" style={{ margin: 0, maxWidth: 260 }}>
               <label htmlFor="id-grace">{t("identity.grace", "Rotation grace period, minutes")}</label>
               <input id="id-grace" type="number" min={0} max={1440} disabled={!isAdmin} value={form.rotation_grace_minutes}
