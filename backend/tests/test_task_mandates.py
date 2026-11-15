@@ -64,9 +64,17 @@ async def _give(client, token, agent_id, task="Reconcile the October invoices", 
     return r, st, s.sign(st)
 
 
-async def _check(client, token, agent, mandate_id=None, tool_name="db.read", chain_id=None, inp=None):
-    r = await client.post(CHECK, json={"agent_id": agent["id"], "tool_name": tool_name, "input": inp or {"q": 1},
-                                       "chain_id": chain_id, "mandate_id": mandate_id}, headers=auth_headers(token))
+async def _check(client, token, agent, mandate_id=None, tool_name="db.read", chain_id=None, inp=None,
+                 signed=None):
+    """A check; one that names a task is signed by the agent, as the SDKs sign it."""
+    from app.pvp.model import PVPActionRequest
+
+    body = {"agent_id": agent["id"], "tool_name": tool_name, "input": inp or {"q": 1}, "chain_id": chain_id,
+            "mandate_id": mandate_id}
+    if mandate_id is not None if signed is None else signed:
+        body.update(nonce=secrets.token_hex(16), issued_at=int(time.time()))
+        body["signature"] = sign_payload(PVPActionRequest(**body).signed_payload(), agent["private_key"])
+    r = await client.post(CHECK, json=body, headers=auth_headers(token))
     assert r.status_code == 200, r.text
     return r.json()
 
@@ -195,6 +203,10 @@ async def test_calls_are_checked_against_the_task(client, admin_token, db_sessio
     chk = await _check(client, admin_token, agent, 999999)
     assert chk["decision"] == "denied" and "does not exist" in chk["reason"]
 
+    # named by someone who holds no key of the agent: it does not count
+    chk = await _check(client, admin_token, agent, mid, signed=False)
+    assert chk["decision"] == "denied" and "own signed request" in chk["reason"]
+
     await client.post(f"{A}/{agent['id']}/mandates/{mid}/end", headers=auth_headers(admin_token))
     chk = await _check(client, admin_token, agent, mid)
     assert chk["decision"] == "denied" and "was ended" in chk["reason"]
@@ -206,9 +218,11 @@ async def test_calls_are_checked_against_the_task(client, admin_token, db_sessio
         headers=auth_headers(admin_token))
     assert r.status_code == 200, r.text
     chk = await _check(client, admin_token, agent)
-    assert chk["decision"] == "denied" and "requires one" in chk["reason"]
+    assert chk["decision"] == "denied" and "requires the agent to name one" in chk["reason"]
     r, _, _ = await _give(client, admin_token, agent["id"])
     assert (await _check(client, admin_token, agent, r.json()["id"]))["decision"] == "allowed"
+    # required: the task is the agent's signed word, never an API key holder's claim
+    assert (await _check(client, admin_token, agent, r.json()["id"], signed=False))["decision"] == "denied"
 
 
 @pytest.mark.asyncio

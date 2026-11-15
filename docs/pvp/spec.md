@@ -147,7 +147,9 @@ signs the request with `nonce`, `issued_at` and `signature` (plus
 
 A request made for a task a person gave (§3.4, the signed task) also names
 it: `mandate_id`, which is then a member of the signed payload as well. A
-request that names none is signed without the member. The check refuses a
+request that names none is signed without the member. `mandate_id` counts
+only inside a request the agent signed; named without its signature, the
+call is refused. The check refuses a
 call outside the task - another agent (unless the task's agent is the root
 of the request's chain), a tool the task does not include, a task that
 expired or was ended - and, with the organization's `require_task_mandate`
