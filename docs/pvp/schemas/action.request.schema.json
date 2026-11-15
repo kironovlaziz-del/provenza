@@ -50,6 +50,20 @@
       "default": null,
       "title": "Issued At"
     },
+    "mandate_id": {
+      "anyOf": [
+        {
+          "maximum": 2147483647,
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Mandate Id"
+    },
     "nonce": {
       "anyOf": [
         {

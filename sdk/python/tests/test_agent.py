@@ -170,6 +170,20 @@ class TestTools:
         chains = [c["chain_id"] for c in server.checks.values()]
         assert chains == [9, None]
 
+    def test_task_context(self, agent, server):
+        @agent.tool(name="db.read")
+        def read():
+            return 1
+
+        task = agent.current_task()
+        assert task["id"] == 3 and task["task"].startswith("Reconcile")
+        with agent.task(task["id"]):
+            read()
+            agent.check("db.read", {"q": 1})
+        read()
+        # the fake verified each signature over the payload naming the task
+        assert [c.get("mandate_id") for c in server.checks.values()] == [3, 3, None]
+
     def test_delegation_is_signed(self, agent, server):
         out = agent.delegate(7, "summarize", ["read"], tools=["db.read", "db.read"], expires_in=600)
         assert out["verified"] is True     # the fake verified the payload signature

@@ -44,7 +44,7 @@ from app.models.user import User
 # can sign may act. An admin can relax either per organization (the UI warns).
 DEFAULTS = {"require_agent_key": True, "rotation_grace_minutes": 60, "require_pq_signatures": False,
             "allow_direct_registration": False, "require_confined_egress": False, "egress_check_max_age_hours": 24,
-            "default_attestation_policy_id": None}
+            "default_attestation_policy_id": None, "require_task_mandate": False}
 LAST_USED_RESOLUTION = timedelta(minutes=1)
 IMPERSONATION_INCIDENT = "agent_impersonation_attempt"
 
@@ -57,7 +57,7 @@ def _body(key: str) -> Callable[[Request, Any], Any]:
 
 def _path_id(req: Request, body: Any) -> Any:
     m = re.match(_P + r"/agents/(\d+)/(?:delegate|signing-key/challenge|signing-key/rotate"
-                      r"|attestation/challenge|attestation)/?$", req.url.path)
+                      r"|attestation/challenge|attestation|mandates/current)/?$", req.url.path)
     return m.group(1) if m else None
 
 
@@ -73,6 +73,8 @@ AGENT_ROUTES = [
     ("POST", _P + r"/agents/\d+/signing-key/(?:challenge|rotate)/?$", _path_id, True),
     # an agent proving where it runs (services/attestation.py)
     ("POST", _P + r"/agents/\d+/attestation(?:/challenge)?/?$", _path_id, True),
+    # the task a person gave it, in force (app/services/task_mandates.py)
+    ("GET", _P + r"/agents/\d+/mandates/current/?$", _path_id, False),
     ("GET", _P + r"/agent-identity/me/?$", None, False),
     ("POST", _P + r"/gateway/v1/.*$", None, True),
     ("GET", _P + r"/gateway/v1/.*$", None, True),
@@ -142,7 +144,7 @@ def _aware(dt: Optional[datetime]) -> Optional[datetime]:
     return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
 
 
-STRICT_TRUE = ("require_agent_key", "require_pq_signatures", "require_confined_egress")
+STRICT_TRUE = ("require_agent_key", "require_pq_signatures", "require_confined_egress", "require_task_mandate")
 STRICT_MIN = ("rotation_grace_minutes", "egress_check_max_age_hours")
 
 
@@ -179,7 +181,8 @@ async def working_settings(db: AsyncSession, org_id: int) -> dict:
             "allow_direct_registration": bool(row.allow_direct_registration),
             "require_confined_egress": bool(row.require_confined_egress),
             "egress_check_max_age_hours": row.egress_check_max_age_hours or 24,
-            "default_attestation_policy_id": row.default_attestation_policy_id, "source": "org"}
+            "default_attestation_policy_id": row.default_attestation_policy_id,
+            "require_task_mandate": bool(row.require_task_mandate), "source": "org"}
 
 
 async def keyless_refused(db: AsyncSession, agent: Agent) -> bool:

@@ -145,6 +145,14 @@ signs the request with `nonce`, `issued_at` and `signature` (plus
  "tool_version": null, "tool_digest": null, "nonce": "…", "issued_at": 1760000000}
 ```
 
+A request made for a task a person gave (§3.4, the signed task) also names
+it: `mandate_id`, which is then a member of the signed payload as well. A
+request that names none is signed without the member. The check refuses a
+call outside the task - another agent (unless the task's agent is the root
+of the request's chain), a tool the task does not include, a task that
+expired or was ended - and, with the organization's `require_task_mandate`
+on, a call that names no task.
+
 The freshness and replay rules are those of a delegation (§3.3): 300 s old
 at most, 30 s in the future, `nonce` single-use per agent. A missing
 signature is `action.signature_required`, a wrong one
@@ -310,7 +318,7 @@ seal before it, so the seals form a chain: a completeness report shows that
 none was left out ([proof-of-authority.md](../proof-of-authority.md)). Seals
 written before the chain existed have neither member.
 
-**Authority members.** Two members of the evidence serve Proof of Authority
+**Authority members.** Three members of the evidence serve Proof of Authority
 and are present only when they have a value, so the evidence of older
 actions keeps exactly the form and hash it was sealed with:
 
@@ -320,7 +328,31 @@ actions keeps exactly the form and hash it was sealed with:
   `action.request` for this call (§3.1), kept when the agent signed one -
   through an SDK, or through agent mode's `X-Provenza-Action` header on an
   MCP call (§5.1). It names the same agent, chain, type, tool and
-  `input_sha256` as the action.
+  `input_sha256` as the action;
+- `mandate` - `{"id", "statement_sha256"}`: the task a person gave that the
+  request named, when that task exists - also when the call was refused as
+  outside it. An allowed action's `requested.payload.mandate_id` is this id.
+
+**The signed task.** A person (administrator or approver) gives an agent a
+task by signing, with the session key their passkey certified (as an
+approval, check 7 below):
+
+```json
+{"type": "provenza.mandate", "v": 1, "org_id": 1, "user_id": 3, "session_id": "…",
+ "agent_id": 2, "task": "Reconcile the October invoices", "tools": ["db.read"],
+ "valid_hours": 8, "nonce": "<32 hex>", "issued_at": 1760000000}
+```
+
+`tools` is a subset of the agent's allowed tools, or `null` for all of
+them; `valid_hours` is 1 to 168; the task is in force from `issued_at` for
+that long, until it is ended or a new one is given to the agent. A
+statement is accepted once (`nonce`). `statement_sha256` is SHA-256 of the
+statement's canonical form. `POST /api/v1/agents/{id}/mandates/statement`
+builds it, `POST /api/v1/agents/{id}/mandates` takes it signed,
+`POST …/mandates/{mandate_id}/end` ends it, and the agent reads the one in
+force with its own key at `GET …/mandates/current`. Proof of Authority
+(`GET /api/v1/pvp/authority/{action_id}`) carries it as `mandate`: the
+statement, the session signature, the session certificate and the passkey.
 
 **`receipt`** (`GET /api/v1/pvp/receipts/{action_id}`) is valid offline when
 all of the following hold:
@@ -475,8 +507,10 @@ passed in `params._meta["provenza/chain_id"]`.
 
 **The agent's signature.** An MCP client cannot sign, but agent mode signs
 for it: on each `tools/call` it adds `X-Provenza-Action`, base64url of
-`{"nonce", "issued_at", "signature", "pq_signature"}` over the
-`action.request` the server rebuilds from the call (`action_type:
+`{"nonce", "issued_at", "signature", "pq_signature"}` - and `mandate_id`
+when the call is for a task a person gave (§3.1; the client names it in
+`params._meta["provenza/mandate_id"]` or the header `X-Provenza-Mandate-Id`)
+- over the `action.request` the server rebuilds from the call (`action_type:
 "tool_call"`, the tool's exposed name, `input_sha256` of the arguments, the
 chain from `_meta`, no tool version or digest). The gateway verifies it like
 a signed check (signature, freshness, single-use nonce) before anything

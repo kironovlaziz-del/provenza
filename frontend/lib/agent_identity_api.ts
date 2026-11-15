@@ -12,6 +12,8 @@ export interface IdentitySettings {
   /** Act only from a host whose latest egress check found it confined to the egress proxy. */
   require_confined_egress?: boolean;
   egress_check_max_age_hours?: number;
+  /** Every call must name a task a person gave the agent, signed (docs/proof-of-authority.md). */
+  require_task_mandate?: boolean;
   /** Every agent attests under this policy unless its role has one; 0 clears it when saving. */
   default_attestation_policy_id?: number | null;
   source?: "default" | "org";
@@ -48,6 +50,7 @@ export async function saveIdentitySettings(s: IdentitySettings) {
     allow_direct_registration: s.allow_direct_registration,
     require_confined_egress: s.require_confined_egress,
     egress_check_max_age_hours: s.egress_check_max_age_hours,
+    require_task_mandate: s.require_task_mandate,
     default_attestation_policy_id: s.default_attestation_policy_id,
   });
   return data;

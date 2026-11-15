@@ -394,7 +394,7 @@ func TestAgentModeSignsWithAHybridKey(t *testing.T) {
 	}
 
 	d := Descriptor{Route: "stripe", Method: "POST", Path: "/v1/charges", BodySHA256: sha256Hex([]byte("{}")), BodyBytes: 2}
-	header, err := id.Sign(d, nil, time.Now())
+	header, err := id.Sign(d, nil, nil, time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -494,10 +494,13 @@ func TestAgentModeSignsEachMCPToolCall(t *testing.T) {
 	}
 	am := httptest.NewServer(h)
 	defer am.Close()
-	post := func(body string, header string) {
+	post := func(body string, header string, mandate ...string) {
 		req, _ := http.NewRequest(http.MethodPost, am.URL+"/_mcp", strings.NewReader(body))
 		if header != "" {
 			req.Header.Set(actionHeader, header) // a client's own is never passed on
+		}
+		if len(mandate) > 0 {
+			req.Header.Set(mandateHeader, mandate[0])
 		}
 		resp, err := http.DefaultClient.Do(req)
 		if err != nil || resp.StatusCode != 200 {
@@ -509,10 +512,14 @@ func TestAgentModeSignsEachMCPToolCall(t *testing.T) {
 		`"_meta":{"provenza/chain_id":7}}}`, "forged")
 	post(`{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}`, "forged")
 	post(`{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"files.list"}}`, "")
+	// the task a person gave: named in params._meta, or with the header
+	post(`{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"files.list",`+
+		`"_meta":{"provenza/mandate_id":12}}}`, "")
+	post(`{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"files.list"}}`, "", "13")
 	if got[1] != "" {
 		t.Fatalf("tools/list got an action header: %q", got[1])
 	}
-	check := func(header, tool, inputSHA string, chain any) {
+	check := func(header, tool, inputSHA string, chain any, mandate ...int64) {
 		raw, err := base64.RawURLEncoding.DecodeString(header)
 		if err != nil {
 			t.Fatalf("%q: %v", header, err)
@@ -524,6 +531,14 @@ func TestAgentModeSignsEachMCPToolCall(t *testing.T) {
 		payload := map[string]any{"type": "action.request", "agent_id": int64(5), "chain_id": chain,
 			"action_type": "tool_call", "tool_name": tool, "input_sha256": inputSHA, "tool_version": nil,
 			"tool_digest": nil, "nonce": sig["nonce"], "issued_at": int64(sig["issued_at"].(float64))}
+		if len(mandate) > 0 {
+			payload["mandate_id"] = mandate[0]
+			if sig["mandate_id"] != float64(mandate[0]) {
+				t.Fatalf("the header does not name task %d: %v", mandate[0], sig["mandate_id"])
+			}
+		} else if _, named := sig["mandate_id"]; named {
+			t.Fatalf("a task named where none was: %v", sig)
+		}
 		msg, _ := canon.Bytes(payload)
 		pub, _ := base64.StdEncoding.DecodeString(id.PublicKey)
 		s, _ := base64.StdEncoding.DecodeString(sig["signature"].(string))
@@ -533,4 +548,12 @@ func TestAgentModeSignsEachMCPToolCall(t *testing.T) {
 	}
 	check(got[0], "files.read", "0671ddd3a1b2e0bee2c077234676495c73195ae204996ff809c108155edcf66c", int64(7))
 	check(got[2], "files.list", "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a", nil)
+	check(got[3], "files.list", "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a", nil, 12)
+	check(got[4], "files.list", "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a", nil, 13)
+
+	req, _ := http.NewRequest(http.MethodPost, am.URL+"/_mcp", strings.NewReader(`{}`))
+	req.Header.Set(mandateHeader, "-1")
+	if resp, err := http.DefaultClient.Do(req); err != nil || resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("a bad task id was passed on: %v %v", err, resp)
+	}
 }

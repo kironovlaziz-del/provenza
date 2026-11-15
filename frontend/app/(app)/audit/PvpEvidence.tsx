@@ -16,7 +16,7 @@ type Receipt = {
   action?: {
     action_id?: number; agent_id?: number; tool_name?: string; action_type?: string; decision?: string;
     recorded_at?: number; executed_by?: string | null; signed_by?: unknown;
-    release?: { number?: number } | null; requested?: unknown;
+    release?: { number?: number } | null; requested?: unknown; mandate?: { id?: number } | null;
   };
   seal?: { seal_id?: number; leaf_index?: number; size?: number; root?: string } | null;
   checkpoint?: unknown;
@@ -112,6 +112,11 @@ export function PvpEvidence() {
                   <Row label={t("evidence.release")}>
                     {a.release?.number ? t("evidence.release_n", { n: a.release.number }) : t("evidence.no_release")}
                   </Row>
+                  {a.mandate?.id ? (
+                    <Row label={t("evidence.mandate")}>
+                      <a href={`/agents/${a.agent_id}`}>{t("evidence.mandate_n", { n: a.mandate.id })}</a>
+                    </Row>
+                  ) : null}
                   <Row label={t("evidence.seal")}>
                     {receipt.seal
                       ? <>{t("evidence.sealed", { leaf: (receipt.seal.leaf_index ?? 0) + 1, size: receipt.seal.size })}{" "}

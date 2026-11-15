@@ -101,6 +101,11 @@ signatures.
 with agent.chain(chain_id):            # act inside a delegation chain
     open_tickets()
 
+task = agent.current_task()            # the task a person gave this agent, signed
+if task:
+    with agent.task(task["id"]):       # each call names it; one outside it is refused
+        open_tickets()
+
 agent.delegate(other_agent_id, "summarize Q3", ["read"], tools=["db.read"], expires_in=600)
 
 chk = agent.check("files.delete", {"path": p})   # ask for something that is not a decorated tool

@@ -56,6 +56,8 @@ from provenza.errors import (ProvenzaApprovalRequired, ProvenzaConfigError, Prov
 
 F = TypeVar("F", bound=Callable[..., Any])
 _chain: contextvars.ContextVar = contextvars.ContextVar("provenza_chain_id", default=None)
+# the task a person gave that calls are for (docs/proof-of-authority.md)
+_mandate: contextvars.ContextVar = contextvars.ContextVar("provenza_mandate_id", default=None)
 RECORD_RETRIES = (0.2, 1.0)   # seconds before the 2nd and 3rd attempt; the check lives 5 minutes
 
 
@@ -267,6 +269,26 @@ class Agent:
         finally:
             _chain.reset(token)
 
+    @contextlib.contextmanager
+    def task(self, mandate_id: Optional[int]):
+        """Calls inside act for this task a person gave (the id from
+        current_task()): each signed request names it, Provenza refuses a call
+        outside it, and the action's Proof of Authority starts with the person
+        who gave it."""
+        token = _mandate.set(None if mandate_id is None else int(mandate_id))
+        try:
+            yield
+        finally:
+            _mandate.reset(token)
+
+    def current_task(self) -> Optional[Dict[str, Any]]:
+        """The task a person gave this agent, in force: {"id", "task", "tools",
+        "expires_at", ...}, or None."""
+        return self._connected().get(f"/agents/{self.agent_id}/mandates/current").get("mandate")
+
+    async def acurrent_task(self) -> Optional[Dict[str, Any]]:
+        return (await self._connected().aget(f"/agents/{self.agent_id}/mandates/current")).get("mandate")
+
     # ------------------------------------------------------------------ protocol
 
     def _check_body(self, tool: ToolSpec, input: Dict[str, Any], chain_id: Optional[int]) -> Dict[str, Any]:
@@ -286,6 +308,10 @@ class Agent:
         payload = {"type": "action.request", "agent_id": self.agent_id, "chain_id": chain_id,
                    "action_type": tool.action_type, "tool_name": tool.name, "input_sha256": content_hash(input),
                    "tool_version": tool.version, "tool_digest": tool.digest, "nonce": nonce, "issued_at": issued_at}
+        mandate_id = _mandate.get()
+        if mandate_id is not None:
+            # signed only when named, as the server builds it
+            payload["mandate_id"] = body["mandate_id"] = mandate_id
         keys = self.identity.keys
         sig, pq = keys.sign(payload)
         body.update({"nonce": nonce, "issued_at": issued_at, "signature": sig})

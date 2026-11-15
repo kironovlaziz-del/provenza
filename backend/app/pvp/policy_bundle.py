@@ -176,8 +176,12 @@ async def bundle_content(db: AsyncSession, org_id: int) -> Dict[str, Any]:
             "entries": {e.pattern: registry_view(e) for e in await rows(ToolRegistryEntry)
                         if e.status != "pending"},
         },
-        "identity": {k: (getattr(ident[0], k) if ident else v) for k, v in agent_identity.DEFAULTS.items()
-                     if k != "default_attestation_policy_id"},
+        # require_task_mandate came later: left out while off, so a release
+        # signed before it still matches a working copy that never turned it on
+        "identity": {k: val for k, val in ((k, getattr(ident[0], k) if ident else v)
+                                           for k, v in agent_identity.DEFAULTS.items()
+                                           if k != "default_attestation_policy_id")
+                     if not (k == "require_task_mandate" and not val)},
         "provider_policy": provider or "any",
         # "unknown" entries are left out (they fill up from traffic): without one,
         # a blocked parent domain stays blocked on the signed side

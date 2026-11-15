@@ -72,6 +72,8 @@ encrypted volume.
 
 ```ts
 await agent.withChain(chainId, () => openTickets({ status: "open" }));
+const task = await agent.currentTask();           // the task a person gave this agent, signed
+if (task) await agent.withTask(task.id, () => openTickets({ status: "open" }));
 await agent.delegate(otherAgentId, "summarize Q3", ["read"], { tools: ["db.read"], expiresIn: 600 });
 await agent.call("files.delete", { path }, () => fs.rm(path));          // govern any single call
 

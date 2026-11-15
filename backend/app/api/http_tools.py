@@ -65,6 +65,7 @@ class CallIn(BaseModel):
     issued_at: int
     signature: str = Field(max_length=200)
     pq_signature: Optional[str] = Field(default=None, max_length=8000)
+    mandate_id: Optional[int] = Field(default=None, ge=1, le=2**31 - 1)
 
 
 @router.get("/available")
@@ -83,7 +84,8 @@ async def call(data: CallIn, request: Request, db: AsyncSession = Depends(get_db
     try:
         req = PVPActionRequest(agent_id=data.agent_id, chain_id=data.chain_id, action_type="tool_call",
                                tool_name=data.tool_name, input=data.input, nonce=data.nonce,
-                               issued_at=data.issued_at, signature=data.signature, pq_signature=data.pq_signature)
+                               issued_at=data.issued_at, signature=data.signature, pq_signature=data.pq_signature,
+                               mandate_id=data.mandate_id)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)[:500])
     return await HttpToolGateway(db).call(agent, req)

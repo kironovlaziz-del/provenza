@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- `agent.task(mandate_id)`: calls inside name the task a person gave the
+  agent (signed in each request; Provenza refuses a call outside it), and
+  `agent.current_task()` / `acurrent_task()` read the one in force.
 - `PermitMiddleware` reads a form body (`application/x-www-form-urlencoded`)
   into its fields as the input - what an HTTP tool set to send a form was
   called with; `provenza.permit.form_input(body)` for other frameworks. A

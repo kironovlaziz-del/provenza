@@ -120,6 +120,9 @@ class ActionCheck(Base):
     release_number = Column(Integer)
     release_bundle_sha256 = Column(String(64))
     requested = Column(JSONB)
+    # the task a person gave, signed, that the agent named for this call
+    mandate_id = Column(Integer, ForeignKey("task_mandates.id", ondelete="SET NULL"))
+    mandate_sha256 = Column(String(64))
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 

@@ -61,6 +61,8 @@ class FakeProvenza:
                        "action_type": body["action_type"], "tool_name": body["tool_name"],
                        "input_sha256": content_hash(body["input"]), "tool_version": body.get("tool_version"),
                        "tool_digest": body.get("tool_digest"), "nonce": body["nonce"], "issued_at": body["issued_at"]}
+            if body.get("mandate_id") is not None:
+                payload["mandate_id"] = body["mandate_id"]     # signed only when named
             Ed25519PublicKey.from_public_bytes(base64.b64decode(self.public_key)).verify(
                 base64.b64decode(body["signature"]), canonical(payload))   # raises if the SDK signed wrong
             assert body["nonce"] not in self.nonces, "nonce reused"
@@ -89,6 +91,8 @@ class FakeProvenza:
             chk["used"] = True
             self.records.append(body)
             return self._json(200, {"id": len(self.records), "policy_check_result": chk["decision"]})
+        if path == "/agents/42/mandates/current":
+            return self._json(200, {"mandate": {"id": 3, "task": "Reconcile the October invoices", "tools": None}})
         if path.startswith("/agents/actions/") and path.endswith("/decision"):
             action_id = int(path.split("/")[3])
             states = self.decisions.get(action_id) or ["pending_approval"]

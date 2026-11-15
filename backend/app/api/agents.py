@@ -673,6 +673,7 @@ async def check_action_endpoint(
         PVPActionRequest, agent_id=data.agent_id, chain_id=data.chain_id, action_type=data.action_type,
         tool_name=data.tool_name, input=data.input, tool_version=data.tool_version, tool_digest=data.tool_digest,
         nonce=data.nonce, issued_at=data.issued_at, signature=data.signature, pq_signature=data.pq_signature,
+        mandate_id=data.mandate_id,
     )
     # the agent itself (its own key) must sign; a user session acting for an
     # agent - only where the organization relaxed that - cannot

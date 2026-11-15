@@ -235,6 +235,8 @@ class ActionCheckRequest(BaseModel):
     issued_at: Optional[int] = Field(default=None, ge=0)
     signature: Optional[str] = Field(default=None, max_length=6000)
     pq_signature: Optional[str] = Field(default=None, max_length=6000)
+    # the task a person gave that this call is for (signed with the rest)
+    mandate_id: Optional[int] = Field(default=None, ge=1, le=2**31 - 1)
 
     @field_validator("action_capabilities")
     @classmethod

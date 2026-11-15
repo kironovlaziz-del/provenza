@@ -545,6 +545,13 @@ The log is tamper-evident (details in `docs/audit-proofs.md`):
 - **Completeness report of an agent**: every action of one agent over a
   period, shown to be all of them.
   `python tools/provenza_audit.py completeness <file>` checks it.
+- **A task from a person.** On an agent's page, **Task from a person → Give
+  a task**: what the agent is to do, which of its tools it may use for it
+  and for how long. You sign it with your session key (administrators and
+  approvers). The agent names the task on its calls; a call outside it is
+  refused, and the proof of authority then starts with the person who gave
+  the task. **Agent identity → Require a task from a person** refuses
+  calls that name none.
 
 ---
 

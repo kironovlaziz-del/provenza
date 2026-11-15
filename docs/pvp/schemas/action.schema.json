@@ -1,5 +1,28 @@
 {
   "$defs": {
+    "PVPMandateRef": {
+      "additionalProperties": false,
+      "description": "The task a person gave, signed, that the call was made for: its id\nand SHA-256 of its canonical statement.",
+      "properties": {
+        "id": {
+          "maximum": 2147483647,
+          "minimum": 1,
+          "title": "Id",
+          "type": "integer"
+        },
+        "statement_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Statement Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "statement_sha256"
+      ],
+      "title": "PVPMandateRef",
+      "type": "object"
+    },
     "PVPReleaseRef": {
       "additionalProperties": false,
       "description": "The signed policy release a verdict was given under: its number and\nthe SHA-256 of its bundle (docs/proof-of-authority.md).",
@@ -250,6 +273,17 @@
       "pattern": "^[0-9a-f]{64}$",
       "title": "Input Sha256",
       "type": "string"
+    },
+    "mandate": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/PVPMandateRef"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
     },
     "output_sha256": {
       "pattern": "^[0-9a-f]{64}$",

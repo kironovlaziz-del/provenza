@@ -578,6 +578,14 @@ Jurnalni sezdirmasdan o‘zgartirib bo‘lmaydi (batafsil: `docs/audit-proofs.md
 - **Agentning to‘liqlik hisoboti**: bitta agentning davr ichidagi barcha
   amallari va ularning hammasi ekanligi isboti.
   `python tools/provenza_audit.py completeness <fayl>` uni tekshiradi.
+- **Insondan vazifa.** Agent sahifasida **Insondan vazifa → Vazifa berish**:
+  agent nima qilishi kerakligi, buning uchun qaysi vositalaridan
+  foydalanishi mumkinligi va qancha muddatga. Uni seans kalitingiz bilan
+  imzolaysiz (administratorlar va tasdiqlovchilar). Agent chaqiruvlarida
+  vazifani ko‘rsatadi; undan tashqaridagi chaqiruv rad etiladi, vakolat
+  isboti esa vazifa bergan insondan boshlanadi. **Agent identifikatsiyasi →
+  Insondan vazifani talab qilish** vazifa ko‘rsatmagan chaqiruvlarni rad
+  etadi.
 
 ---
 

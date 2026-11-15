@@ -154,6 +154,11 @@ class PVPOrchestrator:
             tool_name=req.tool_name, input_data=req.input,
             tool_version=req.tool_version, tool_digest=req.tool_digest,
         )
+        # the task a person gave (app/services/task_mandates.py): a call outside
+        # it is refused - before an approval for it could be spent
+        mandate, why = await self._mandate(org_id, signed_request or req)
+        if why is not None and decision.result != DENIED:
+            decision = Decision(DENIED, why, "policy_violation", matched_policy_id=decision.matched_policy_id)
         approval = None
         if decision.result == PENDING_APPROVAL:
             # a person already approved exactly this call: it may run, once (app/pvp/approvals.py)
@@ -180,13 +185,29 @@ class PVPOrchestrator:
         policy = await signed_policy.in_force(self.db, org_id)
         if policy is not None and policy.problem is None and policy.bundle_sha256:
             chk.release_number, chk.release_bundle_sha256 = policy.number, policy.bundle_sha256
-        if proof is not None or chk.release_number is not None:
+        # named in the evidence when it exists - also when the call was outside it
+        if mandate is not None:
+            chk.mandate_id, chk.mandate_sha256 = mandate.id, mandate.statement_sha256
+        if proof is not None or chk.release_number is not None or chk.mandate_id is not None:
             await self.db.commit()
         token = None
         if chk.decision == "allowed" and permit:
             token = await permits.issue(self.db, chk)
             await self.db.commit()
         return self.check_out(chk, token)
+
+    async def _mandate(self, org_id: int, req: PVPActionRequest):
+        """(the task the call is for, why it is refused or None)."""
+        from app.services import task_mandates
+        from app.services.agent_identity import org_settings
+
+        if req.mandate_id is None:
+            if (await org_settings(self.db, org_id)).get("require_task_mandate"):
+                return None, "No task from a person: this organization requires one for every call"
+            return None, None
+        row, why = await task_mandates.refusal(self.db, org_id, req.mandate_id, req.agent_id, req.chain_id,
+                                               req.tool_name, req.action_type)
+        return row, (f"Outside the task a person gave: {why}" if why else None)
 
     async def verify_signed_request(self, org_id: int, agent: Agent, req: PVPActionRequest) -> None:
         """The agent's own signed action.request (signature, freshness, nonce) -

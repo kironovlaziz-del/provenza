@@ -1219,7 +1219,13 @@
     "pvp.no_actions_in_period": "No action was recorded in this period.",
     "pvp.period_too_large": "Too many actions in this period (more than {{max_actions}}): choose a shorter one.",
     "pvp.bad_period": "The end of the period is before its start.",
-    "pvp.period_before_seal_chain": "This period was sealed before sealed batches were chained: completeness cannot be shown for it."
+    "pvp.period_before_seal_chain": "This period was sealed before sealed batches were chained: completeness cannot be shown for it.",
+    "mandate.agent_not_active": "Only an active agent can be given a task.",
+    "mandate.bad_task": "Describe the task in 1 to {{max}} characters.",
+    "mandate.bad_hours": "A task is valid for 1 to {{max}} hours.",
+    "mandate.bad_tools": "Not among the agent's allowed tools: {{tools}}.",
+    "mandate.replayed": "This signed task was already given.",
+    "mandate.not_found": "Task not found."
   },
   "discovery": {
     "title": "Network Discovery",
@@ -2103,7 +2109,10 @@
     "require_egress": "Require confined egress",
     "require_egress_hint": "An agent acts only while its latest egress self-check found its host able to reach the egress proxy and nothing else. Lock hosts down with Gateways -> External APIs -> Lock agents down.",
     "egress_age": "A check counts for, hours",
-    "confirm_require_egress": "Require confined egress? {{n}} active agents have no recent \"confined\" egress check: their actions will be refused until they run one from a locked-down host."
+    "confirm_require_egress": "Require confined egress? {{n}} active agents have no recent \"confined\" egress check: their actions will be refused until they run one from a locked-down host.",
+    "require_task": "Require a task from a person",
+    "require_task_hint": "Every call must name a task a person gave the agent, signed with their passkey (agent page -> Task from a person). Calls that name none are refused.",
+    "confirm_require_task": "Require a task from a person? Agents' calls that name no task are refused until someone gives each agent one on its page."
   },
   "gateway": {
     "title": "AI Gateway",
@@ -2674,6 +2683,33 @@
     "unbind": "Release",
     "confirm_unbind": "Release this agent's workload binding? Its current attestation stops counting; the next passing attestation binds it to wherever it runs then."
   },
+  "task": {
+    "title": "Task from a person",
+    "hint": "What a person asked this agent to do, signed with their passkey. Calls that name the task are checked against it, and their proof of authority starts with the person who gave it.",
+    "current": "Current task",
+    "none": "No task in force.",
+    "tools": "Tools for this task",
+    "all_tools": "all of the agent's tools",
+    "until": "until",
+    "give": "Give a task",
+    "replace": "Give a new task",
+    "end": "End the task",
+    "confirm_end": "End this task? The agent's calls that name it are refused from now on.",
+    "what": "What should the agent do?",
+    "what_placeholder": "Reconcile the October invoices with the bank statement",
+    "tools_placeholder": "Empty: all of the agent's tools. Or a few, comma-separated",
+    "valid_for": "Valid for",
+    "hours_one": "{{count}} hour",
+    "hours_other": "{{count}} hours",
+    "sign_note": "You sign the task with this session's key, which your passkey certified. A new task ends the one before.",
+    "sign_and_give": "Sign and give",
+    "give_failed": "The task could not be given",
+    "end_failed": "The task could not be ended",
+    "earlier": "Earlier tasks",
+    "status_active": "in force",
+    "status_ended": "ended",
+    "status_expired": "expired"
+  },
   "ph": {
     "title": "Policy hierarchy",
     "intro": "One policy at three levels: organization → team (and its sub-teams) → agent. A lower level can only tighten what is above it: the smallest limit wins, every level's allow list must allow, all deny and approval lists apply. It applies to the LLM gateway and to agent actions.",
@@ -3011,8 +3047,10 @@
     "release": "Signed policy",
     "release_n": "release #{{n}}",
     "no_release": "none recorded (no signed release in force, or recorded before Proof of Authority)",
+    "mandate": "Task from a person",
+    "mandate_n": "task #{{n}}, signed by the person who gave it",
     "download_authority": "Download proof of authority",
-    "authority_hint": "The proof of authority adds the chain behind the action: the policy release administrators signed with their passkeys, the agent's rights and key in it, the delegation hops, the agent's own signature and the approver's passkey. The verification tool checks every link and says which ones are not proven.",
+    "authority_hint": "The proof of authority adds the chain behind the action: the task a person gave, signed with their passkey, when the call names one; the policy release administrators signed with their passkeys, the agent's rights and key in it, the delegation hops, the agent's own signature and the approver's passkey. The verification tool checks every link and says which ones are not proven.",
     "completeness_title": "Completeness report of an agent",
     "completeness_hint": "Every action of one agent over a period, shown to be all of them: the sealed batches of the period form an unbroken chain in the signed audit log, and each holds exactly the actions given.",
     "agent_id": "Agent ID",

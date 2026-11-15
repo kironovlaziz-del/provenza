@@ -176,7 +176,8 @@ guarantee is spelled out in the [security model](docs/security-model.md).
   checkpoints with RFC 3161 time-stamps; any record provable offline with
   `tools/provenza_audit.py` ([docs](docs/audit-proofs.md)).
 - **Proof of Authority** — for any agent action, one file shows who allowed
-  it, every link signed: the policy release administrators signed with their
+  it, every link signed: the task a person gave the agent, signed with their
+  passkey; the policy release administrators signed with their
   passkeys, the agent's rights and key in it, each delegation hop, the
   agent's signature on the call, the approver's passkey. Checked offline,
   with a completeness report of everything an agent did over a period

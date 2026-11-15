@@ -27,6 +27,7 @@ from app.api import domain_catalog
 from app.api import discovery
 from app.api import devices
 from app.api import agents
+from app.api import task_mandates as task_mandates_api
 from app.api import notification_channels
 from app.api import dashboard
 from app.api import inventory
@@ -171,6 +172,7 @@ app.include_router(discovery.router, prefix=f"{settings.API_V1_STR}/discovery", 
 app.include_router(devices.devices_router, prefix=f"{settings.API_V1_STR}/devices", tags=["discovery"])
 app.include_router(devices.found_router, prefix=f"{settings.API_V1_STR}/agents-found", tags=["discovery"])
 app.include_router(agents.router, prefix=f"{settings.API_V1_STR}/agents", tags=["agent-governance"])
+app.include_router(task_mandates_api.router, prefix=f"{settings.API_V1_STR}/agents", tags=["agent-governance"])
 app.include_router(notification_channels.router, prefix=f"{settings.API_V1_STR}/notification-channels", tags=["notifications"])
 app.include_router(dashboard.router, prefix=f"{settings.API_V1_STR}/dashboard", tags=["dashboard"])
 app.include_router(inventory.router, prefix=f"{settings.API_V1_STR}/inventory", tags=["inventory"])

@@ -5,6 +5,8 @@
 First release. It has the same behaviour and the same bytes as the Python
 SDK 0.1.
 
+- `agent.withTask(id, fn)` / `agent.currentTask()`: act for a task a person
+  gave the agent, named in each signed request.
 - `agent.attest(token)`: workload attestation.
 - `agent.egressSelfcheck()`: is this host confined to the egress proxy?
 - `agent.invoke` / `agent.httpTools()`: HTTP tools called through Provenza.

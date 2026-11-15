@@ -6,6 +6,8 @@
 Proof of Authority - one file that shows, for one agent action, the chain of
 authority behind it, every link signed (docs/proof-of-authority.md):
 
+    a person's passkey ──────certify──► the task they gave the agent, when
+                                         the call names one
     administrators' passkeys ──sign──► the policy release in force
                                          (its bundle lists the agent's rights,
                                           its manifest the agent's key)
@@ -20,7 +22,7 @@ as such (an organization that never signed a release; a keyless agent).
 
 The file holds what the receipt holds (ids, hashes, signatures - never the
 input or output of the call) plus the signed releases and the delegation
-hops.
+hops, and the task a person gave (its text is what they signed).
 """
 
 import time
@@ -90,5 +92,18 @@ async def build(db: AsyncSession, org_id: int, action_id: int) -> Dict[str, Any]
     rel = action.get("release")
     releases = await release_chain(db, org_id, rel["number"], rel["bundle_sha256"]) if rel else []
     chain = await delegation(db, org_id, action["chain_id"]) if action.get("chain_id") else None
-    return {"pvp": "pvp/1", "type": TYPE, "v": V, "org_id": org_id, "action_id": action_id,
-            "issued_at": int(time.time()), "receipt": receipt, "releases": releases, "delegation": chain}
+    out = {"pvp": "pvp/1", "type": TYPE, "v": V, "org_id": org_id, "action_id": action_id,
+           "issued_at": int(time.time()), "receipt": receipt, "releases": releases, "delegation": chain}
+    if action.get("mandate"):
+        out["mandate"] = await mandate(db, org_id, action["mandate"]["id"])
+    return out
+
+
+async def mandate(db: AsyncSession, org_id: int, mandate_id: int) -> Optional[Dict[str, Any]]:
+    """The task a person gave, signed: the statement, the session signature,
+    the passkey certificate and the passkey (app/services/task_mandates.py)."""
+    from app.models.task_mandate import TaskMandate
+    from app.services import task_mandates
+
+    row = await db.get(TaskMandate, mandate_id)
+    return task_mandates.proof(row) if row is not None and row.org_id == org_id else None

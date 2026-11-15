@@ -53,7 +53,9 @@ not share code with one, so what it says does not depend on trusting either.
         under, verified back to the organization's first release; the
         agent's rights and key in that release; each delegation hop signed
         by the delegating agent's key; the agent's own signature on the
-        call; the approver's passkey listed in the signed manifest. A link
+        call; the approver's passkey listed in the signed manifest; and the
+        task a person gave, when the call names one - signed with their
+        passkey-certified session key, for this agent, tool and time. A link
         that is absent (no signed release, a keyless agent) is reported as
         not proven; --require-full makes that a failure
   completeness REPORT.json [--fingerprint SHA256:...]... [--list N] [--require-full]
@@ -489,7 +491,7 @@ def passkey_fingerprint(spki_b64) -> str:
     return "SHA256:" + base64.b64encode(hashlib.sha256(base64.b64decode(spki_b64)).digest()).decode().rstrip("=")
 
 
-def _verify_passkey(passkey, assertion, challenge: bytes):
+def _verify_passkey(passkey, assertion, challenge: bytes, label="approval"):
     """A WebAuthn assertion (docs/pvp/edge.md, section 2) by this passkey
     over this challenge, made with the person verified (PIN or biometric)."""
     from cryptography.exceptions import InvalidSignature
@@ -500,11 +502,11 @@ def _verify_passkey(passkey, assertion, challenge: bytes):
     auth = _b64url_decode(assertion["authenticator_data"])
     client = json.loads(client_raw.decode("utf-8"))
     if client.get("type") != "webauthn.get":
-        raise Fail("approval: the passkey certificate is not a WebAuthn assertion")
+        raise Fail(f"{label}: the passkey certificate is not a WebAuthn assertion")
     if client.get("challenge") != base64.urlsafe_b64encode(challenge).decode().rstrip("="):
-        raise Fail("approval: the passkey did not sign this session certificate")
+        raise Fail(f"{label}: the passkey did not sign this session certificate")
     if len(auth) < 37 or auth[32] & 0x05 != 0x05:
-        raise Fail("approval: the passkey was used without verifying the person (PIN or biometric)")
+        raise Fail(f"{label}: the passkey was used without verifying the person (PIN or biometric)")
     key = serialization.load_der_public_key(base64.b64decode(passkey["public_key"]))
     signed, sig = auth + hashlib.sha256(client_raw).digest(), _b64url_decode(assertion["signature"])
     try:
@@ -515,9 +517,9 @@ def _verify_passkey(passkey, assertion, challenge: bytes):
         elif passkey["alg"] == -257:
             key.verify(sig, signed, padding.PKCS1v15(), hashes.SHA256())
         else:
-            raise Fail(f"approval: unsupported passkey algorithm {passkey['alg']}")
+            raise Fail(f"{label}: unsupported passkey algorithm {passkey['alg']}")
     except (InvalidSignature, TypeError, AttributeError):
-        raise Fail("approval: the passkey's signature on the session certificate does not verify")
+        raise Fail(f"{label}: the passkey's signature on the session certificate does not verify")
 
 
 def check_approval(ap, action, check, passkey_fps=None) -> str:
@@ -546,6 +548,54 @@ def check_approval(ap, action, check, passkey_fps=None) -> str:
     if passkey_fps and fp not in passkey_fps:
         raise Fail(f"approval: signed with passkey {fp}, not one of the passkeys you gave")
     return fp
+
+
+MANDATE_TYPE = "provenza.mandate"
+CHECK_WINDOW = 300          # seconds a check may wait for its record (CHECK_TTL_SECONDS)
+MANDATE_FIELDS = ("type", "v", "org_id", "user_id", "session_id", "agent_id", "task", "tools", "valid_hours", "nonce",
+                  "issued_at")
+
+
+def check_mandate(m, action, org_id=None, root_agent_id=None) -> str:
+    """The task a person gave, that the action names (Proof of Authority):
+    the statement is the one the evidence names, gives the task to this agent
+    (or to the root of its delegation chain), covers the tool and the time,
+    and the person's session key signed it, certified by their passkey.
+    Returns the passkey fingerprint."""
+    ref = action.get("mandate") or {}
+    st, cert = m.get("statement") or {}, (m.get("certificate") or {}).get("statement") or {}
+    if set(st) != set(MANDATE_FIELDS) or st.get("type") != MANDATE_TYPE or st.get("v") != 1:
+        raise Fail("task: not a signed task statement")
+    if m.get("mandate_id") != ref.get("id") or _sha(st) != ref.get("statement_sha256"):
+        raise Fail("task: not the task the action's evidence names")
+    if org_id is not None and st["org_id"] != org_id:
+        raise Fail("task: given in another organization")
+    # a refused call may have named a task outside which it was: only an
+    # allowed one must be inside it
+    allowed = action.get("decision") == "allowed"
+    if allowed and st["agent_id"] not in (action.get("agent_id"), root_agent_id):
+        raise Fail(f"task: given to agent {st['agent_id']}, not to agent {action.get('agent_id')} or the root of "
+                   f"its delegation chain, yet the action was allowed")
+    if allowed and st["tools"] is not None and action.get("action_type") != "model_call" \
+            and action.get("tool_name") not in st["tools"]:
+        raise Fail(f"task: it does not include the tool {action.get('tool_name')}, yet the action was allowed")
+    # checked while the task was in force, recorded at most CHECK_WINDOW later
+    at, until = action.get("recorded_at"), st["issued_at"] + st["valid_hours"] * 3600
+    if allowed and isinstance(at, int) and not st["issued_at"] <= at <= until + CHECK_WINDOW:
+        raise Fail("task: the action was allowed outside the time the task was given for")
+    if allowed and isinstance(at, int) and isinstance(m.get("ended_at"), int) and m["ended_at"] + CHECK_WINDOW < at:
+        raise Fail("task: the action was allowed after the task was ended")
+    if cert.get("type") != CERTIFICATE_TYPE or cert.get("public_key") != m.get("session_public_key"):
+        raise Fail("task: the session certificate is not for the key that signed")
+    for k in ("org_id", "user_id", "session_id"):
+        if st.get(k) != cert.get(k):
+            raise Fail(f"task: signed in another session than the certificate names ({k})")
+    if not cert["not_before"] <= st["issued_at"] <= cert["not_after"]:
+        raise Fail("task: signed outside the session's validity")
+    if not _verify_ed25519(m["session_public_key"], m.get("signature"), canonical(st)):
+        raise Fail("task: the session key's signature does not verify")
+    _verify_passkey(m["passkey"], m["certificate"]["assertion"], hashlib.sha256(canonical(cert)).digest(), "task")
+    return passkey_fingerprint(m["passkey"]["public_key"])
 
 
 RELEASE_TYPE = "provenza.policy.release"
@@ -610,11 +660,14 @@ def check_requested(req, action) -> str:
     for exactly this call, and the agent's key signed it. Returns the key
     fingerprint."""
     p, sig = req.get("payload") or {}, req.get("signed_by") or {}
-    if set(p) != set(REQUEST_FIELDS) or p.get("type") != "action.request":
+    if set(p) - {"mandate_id"} != set(REQUEST_FIELDS) or p.get("type") != "action.request":
         raise Fail("the agent's request: not a signed action.request")
     for k in ("agent_id", "chain_id", "action_type", "tool_name", "input_sha256"):
         if p.get(k) != action.get(k):
             raise Fail(f"the agent's request asks for another call ({k})")
+    named = (action.get("mandate") or {}).get("id")
+    if (named is not None or action.get("decision") == "allowed") and p.get("mandate_id") != named:
+        raise Fail("the agent's request names another task than the action's evidence")
     _verify_pair("the agent's request", sig["public_key"], sig.get("pq_public_key"), sig["signature"],
                  sig.get("pq_signature"), canonical(p))
     return fingerprint(sig["public_key"], sig.get("pq_public_key"))
@@ -859,6 +912,25 @@ def check_authority(doc, trust=None, agent_fp=None, passkey_fps=None):
     elif action.get("executed_by"):
         gaps.append(f"agent: the agent did not sign this call - only its API key identified it to the "
                     f"{action['executed_by']}")
+    # 0. the task a person gave, when the call names one
+    if action.get("mandate"):
+        m = doc.get("mandate")
+        if not m:
+            raise Fail(f"the action names task #{action['mandate']['id']}, but the file does not carry it")
+        root = (doc.get("delegation") or {}).get("root_agent_id")
+        mfp = check_mandate(m, action, doc.get("org_id"), root)
+        st, who, listed = m["statement"], f"user {m['statement']['user_id']}", False
+        if manifest is not None:
+            found = _signer_of_passkey(manifest, mfp)
+            if found is None:
+                gaps.append(f"task: passkey {mfp} is not in the signed manifest (added after the release?) - the "
+                            f"standing of the person who gave the task rests on the server's word")
+            else:
+                who, listed = f"{found[1]} {found[0]}", True
+        scope = "all of its tools" if st["tools"] is None else ", ".join(st["tools"])
+        lines.insert(0, f"task:       task #{m['mandate_id']} given by {who} with passkey {mfp}"
+                        f"{' (listed in the signed manifest)' if listed else ''} to agent {st['agent_id']} for "
+                        f"{st['valid_hours']} h ({scope}): {st['task'][:120]}")
     # 5. the person's approval
     if receipt.get("approval"):
         ap = receipt["approval"]

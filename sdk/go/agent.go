@@ -219,6 +219,44 @@ func chainOf(ctx context.Context) *int64 {
 	return nil
 }
 
+// --- the task a person gave ---------------------------------------------------------
+
+type mandateKey struct{}
+
+// WithTask makes governed calls under ctx act for this task a person gave
+// (the id from CurrentTask): each signed request names it, Provenza refuses a
+// call outside it, and the action's Proof of Authority starts with the person
+// who gave it (docs/proof-of-authority.md).
+func WithTask(ctx context.Context, mandateID int64) context.Context {
+	return context.WithValue(ctx, mandateKey{}, mandateID)
+}
+
+func mandateOf(ctx context.Context) *int64 {
+	if id, ok := ctx.Value(mandateKey{}).(int64); ok {
+		return &id
+	}
+	return nil
+}
+
+// CurrentTask is the task a person gave this agent, in force ({"id", "task",
+// "tools", "expires_at", ...}), or nil.
+func (a *Agent) CurrentTask(ctx context.Context) (map[string]any, error) {
+	c, err := a.connected()
+	if err != nil {
+		return nil, err
+	}
+	id := a.AgentID()
+	if id == nil {
+		return nil, fmt.Errorf("provenza: the agent has no id")
+	}
+	res, err := c.do(ctx, http.MethodGet, fmt.Sprintf("/agents/%d/mandates/current", *id), nil, true)
+	if err != nil {
+		return nil, err
+	}
+	m, _ := res["mandate"].(map[string]any)
+	return m, nil
+}
+
 // --- the protocol -----------------------------------------------------------------
 
 // Check is the server's verdict for one proposed call, bound to it.
@@ -331,7 +369,7 @@ func (a *Agent) check(ctx context.Context, tool string, input map[string]any, o 
 		return nil, err
 	}
 	chain := chainOf(ctx)
-	body, err := a.signedRequest(tool, input, o, chain)
+	body, err := a.signedRequest(tool, input, o, chain, mandateOf(ctx))
 	if err != nil {
 		return nil, err
 	}
@@ -346,7 +384,7 @@ func (a *Agent) check(ctx context.Context, tool string, input map[string]any, o 
 
 // signedRequest is the agent's signed action.request: what /agents/actions/check
 // and the HTTP tool gateway verify.
-func (a *Agent) signedRequest(tool string, input map[string]any, o callOptions, chain *int64) (map[string]any, error) {
+func (a *Agent) signedRequest(tool string, input map[string]any, o callOptions, chain, mandate *int64) (map[string]any, error) {
 	body := map[string]any{"agent_id": a.AgentID(), "chain_id": chain, "action_type": o.actionType,
 		"tool_name": tool, "input": input}
 	if o.version != "" {
@@ -366,10 +404,15 @@ func (a *Agent) signedRequest(tool string, input map[string]any, o callOptions, 
 		return nil, err
 	}
 	body["nonce"], body["issued_at"] = hex.EncodeToString(nonce), time.Now().Unix()
-	sig, pq, err := a.identity.Keys.Sign(map[string]any{
+	payload := map[string]any{
 		"type": "action.request", "agent_id": a.AgentID(), "chain_id": chain, "action_type": o.actionType,
 		"tool_name": tool, "input_sha256": inputHash, "tool_version": nilIfEmpty(o.version),
-		"tool_digest": nilIfEmpty(o.digest), "nonce": body["nonce"], "issued_at": body["issued_at"]})
+		"tool_digest": nilIfEmpty(o.digest), "nonce": body["nonce"], "issued_at": body["issued_at"]}
+	if mandate != nil {
+		// signed only when named, as the server builds it
+		payload["mandate_id"], body["mandate_id"] = *mandate, *mandate
+	}
+	sig, pq, err := a.identity.Keys.Sign(payload)
 	if err != nil {
 		return nil, err
 	}
@@ -394,7 +437,7 @@ func (a *Agent) Invoke(ctx context.Context, tool string, args any) (map[string]a
 	if err != nil {
 		return nil, err
 	}
-	body, err := a.signedRequest(tool, input, options(nil), chainOf(ctx))
+	body, err := a.signedRequest(tool, input, options(nil), chainOf(ctx), mandateOf(ctx))
 	if err != nil {
 		return nil, err
 	}

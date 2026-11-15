@@ -22,7 +22,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
 from app.core.agent_signing import canonical_bytes, content_hash
-from app.pvp.model import PVPAction, PVPReleaseRef, PVPRequested, signature_of
+from app.pvp.model import PVPAction, PVPMandateRef, PVPReleaseRef, PVPRequested, signature_of
 
 
 def _unix(dt: datetime) -> int:
@@ -34,7 +34,8 @@ def _unix(dt: datetime) -> int:
 def _authority(check) -> Dict[str, Any]:
     """What the check it was recorded under adds for Proof of Authority
     (docs/proof-of-authority.md): the signed release the verdict was given
-    under and the agent's own signed request - each only when there is one."""
+    under, the agent's own signed request and the task a person gave - each
+    only when there is one."""
     out: Dict[str, Any] = {}
     if check is None:
         return out
@@ -42,6 +43,8 @@ def _authority(check) -> Dict[str, Any]:
         out["release"] = PVPReleaseRef(number=check.release_number, bundle_sha256=check.release_bundle_sha256)
     if check.requested:
         out["requested"] = PVPRequested.model_validate(check.requested)
+    if getattr(check, "mandate_id", None) and check.mandate_sha256:
+        out["mandate"] = PVPMandateRef(id=check.mandate_id, statement_sha256=check.mandate_sha256)
     return out
 
 

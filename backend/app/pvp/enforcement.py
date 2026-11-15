@@ -126,7 +126,7 @@ async def verify_agent_request(db: AsyncSession, proxy, agent, request, kind: st
         req = PVPActionRequest(agent_id=agent.id, chain_id=p.get("chain_id"), action_type="proxy",
                                tool_name="proxy." + route, input=desc, nonce=p.get("nonce"),
                                issued_at=p.get("issued_at"), signature=sr["signature"],
-                               pq_signature=sr.get("pq_signature"))
+                               pq_signature=sr.get("pq_signature"), mandate_id=p.get("mandate_id"))
     except ValueError:
         raise api_error(status.HTTP_401_UNAUTHORIZED, "enforcement.agent_signature_required")
     if req.signed_payload() != p:

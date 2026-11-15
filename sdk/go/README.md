@@ -68,6 +68,10 @@ to give whoever verifies the agent's signatures.
 
 ```go
 ctx = provenza.WithChain(ctx, chainID)                          // act inside a delegation chain
+if task, _ := agent.CurrentTask(ctx); task != nil {             // the task a person gave this agent, signed
+	id, _ := task["id"].(json.Number).Int64()
+	ctx = provenza.WithTask(ctx, id)                            // each call names it
+}
 agent.Delegate(ctx, otherID, "summarize Q3", []string{"read"}, []string{"db.read"}, 10*time.Minute)
 chk, err := agent.Check(ctx, "files.delete", map[string]any{"path": p})   // ask by hand
 _, err = agent.Record(ctx, chk, map[string]any{"deleted": true}, elapsed)

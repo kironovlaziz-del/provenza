@@ -57,6 +57,7 @@ export class FakeProvenza {
         type: "action.request", agent_id: body.agent_id, chain_id: body.chain_id, action_type: body.action_type,
         tool_name: body.tool_name, input_sha256: contentHash(body.input), tool_version: body.tool_version ?? null,
         tool_digest: body.tool_digest ?? null, nonce: body.nonce, issued_at: body.issued_at,
+        ...(body.mandate_id != null ? { mandate_id: body.mandate_id } : {}),   // signed only when named
       });
       if (this.nonces.has(body.nonce)) throw new Error("nonce reused");
       this.nonces.add(body.nonce);
@@ -64,6 +65,9 @@ export class FakeProvenza {
       const decision = this.verdicts.get(body.tool_name) ?? "allowed";
       this.checks.set(token, { ...body, decision });
       return ok(200, { decision, reason: `policy says ${decision}`, check_id: token, incident_type: null, policy_id: null });
+    }
+    if (path === "/agents/42/mandates/current") {
+      return ok(200, { mandate: { id: 3, task: "Reconcile the October invoices", tools: null } });
     }
     if (path === "/agents/42/attestation/challenge") {
       return ok(200, { agent_id: 42, challenge: "a".repeat(64), kind: "oidc", audience: "provenza" });
