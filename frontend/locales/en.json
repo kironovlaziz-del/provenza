@@ -1226,7 +1226,8 @@
     "mandate.bad_tools": "Not among the agent's allowed tools: {{tools}}.",
     "mandate.replayed": "This signed task was already given.",
     "mandate.not_found": "Task not found.",
-    "demo.not_available": "The demo is not available here."
+    "demo.not_available": "The demo is not available here.",
+    "conflict.try_again": "Someone else changed this at the same moment. Try again."
   },
   "discovery": {
     "title": "Network Discovery",

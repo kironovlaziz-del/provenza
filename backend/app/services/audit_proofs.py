@@ -95,7 +95,16 @@ async def current_key(db: AsyncSession, org_id: int, create: bool = True) -> Opt
     )).scalar_one_or_none()
     if key or not create:
         return key
-    return await new_key(db, org_id)
+    # the first key: a first permit, a first manifest and a first checkpoint can
+    # all ask at once, and an organization must not end up with two "first" keys
+    # (what one of them signed would not verify under the other). Under the
+    # organization's lock, look again.
+    await lock_org(db, org_id)
+    key = (await db.execute(
+        select(AuditSigningKey).where(AuditSigningKey.org_id == org_id, AuditSigningKey.id.not_in(rotating))
+        .order_by(AuditSigningKey.id).limit(1)
+    )).scalar_one_or_none()
+    return key or await new_key(db, org_id)
 
 
 def sign_with(key: AuditSigningKey, payload: Dict[str, Any]) -> Tuple[str, Optional[str]]:

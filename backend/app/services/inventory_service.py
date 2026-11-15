@@ -22,7 +22,7 @@ from typing import List, Optional, Tuple
 
 from fastapi import HTTPException, status
 from sqlalchemy import func, select
-from sqlalchemy.exc import IntegrityError
+from app.core.db_race import insert_or_get
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.agent import Agent
@@ -135,24 +135,26 @@ class InventoryService:
             select(AISystem.source_key).where(AISystem.org_id == org_id, AISystem.source_key.isnot(None))
         )).scalars())
         created: List[dict] = []
-        try:
-            for cand in await self._candidates(org_id):
-                if cand["source_key"] in existing:
-                    continue
-                system = AISystem(org_id=org_id, domain="general", risk_flags=[],
-                                  review_status="unreviewed", **cand)
-                self._classify(system)
-                self.db.add(system)
-                await self.db.flush()
+        for cand in await self._candidates(org_id):
+            if cand["source_key"] in existing:
+                continue
+            system = AISystem(org_id=org_id, domain="general", risk_flags=[],
+                              review_status="unreviewed", **cand)
+            self._classify(system)
+            key = cand["source_key"]
+            # a concurrent sync (the page asks for the list and the summary at
+            # once) may create the same entry first: then it is theirs to report
+            system, mine = await insert_or_get(self.db, system, lambda: self._by_source(org_id, key))
+            existing.add(key)
+            if mine:
                 created.append({"id": system.id, "source_key": system.source_key, "name": system.name})
-                existing.add(cand["source_key"])
-            if created:
-                await self.db.commit()
-        except IntegrityError:
-            # a concurrent sync created the same entries first - nothing lost
-            await self.db.rollback()
-            return []
+        if created:
+            await self.db.commit()
         return created
+
+    async def _by_source(self, org_id: int, source_key: str) -> Optional[AISystem]:
+        return (await self.db.execute(select(AISystem).where(
+            AISystem.org_id == org_id, AISystem.source_key == source_key))).scalar_one_or_none()
 
     # ------------------------------------------------------------------ queries
     async def list(self, org_id: int, *, kind=None, stage=None, tier=None, review_status=None,

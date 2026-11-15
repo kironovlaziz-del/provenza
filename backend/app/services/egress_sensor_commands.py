@@ -37,6 +37,7 @@ from typing import Any, Dict, List, Optional
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.db_race import insert_or_get
 from app.core.agent_signing import (
     canonical_text,
     generate_keypair,
@@ -114,9 +115,11 @@ async def signing_key_for(
         fingerprint=key_fingerprint(public_b64) or "",
         created_by=actor_user_id,
     )
-    db.add(row)
-    await db.flush()
-    log.info("created egress sensor signing key for org %d", org_id)
+    # one key per organization: asked for by two at once, the second takes the first's
+    row, mine = await insert_or_get(
+        db, row, lambda: db.scalar(select(EgressSensorSigningKey).where(EgressSensorSigningKey.org_id == org_id)))
+    if mine:
+        log.info("created egress sensor signing key for org %d", org_id)
     return row
 
 

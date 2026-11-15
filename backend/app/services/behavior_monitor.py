@@ -35,6 +35,7 @@ from fastapi import HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.db_race import insert_or_get
 from app.models.agent import Agent
 from app.models.agent_action import ActionCheck, AgentAction, AgentIncident
 from app.models.behavior import AgentAnomaly, AgentBaseline, BehaviorSettings
@@ -164,8 +165,10 @@ class BehaviorMonitor:
         span = (last - first).total_seconds() / 86400 if first and last else 0.0
 
         if row is None:
-            row = AgentBaseline(org_id=org_id, agent_id=agent_id)
-            self.db.add(row)
+            # two calls of one agent at once both find none: one inserts, the other takes that row
+            row, _ = await insert_or_get(
+                self.db, AgentBaseline(org_id=org_id, agent_id=agent_id),
+                lambda: self.db.scalar(select(AgentBaseline).where(AgentBaseline.agent_id == agent_id)))
         row.computed_at = now
         row.window_days = cfg["baseline_days"]
         row.sample_count = total
