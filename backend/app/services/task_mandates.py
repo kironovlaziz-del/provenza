@@ -21,6 +21,8 @@ task. An agent names the mandate on its calls (`mandate_id` in its signed
 action.request); the check then refuses a call outside it - another agent,
 another tool, after it ended or expired - and the action's evidence names it.
 With the organization's require_task_mandate on, a call that names none is
+refused. A task counts only when the agent named it inside its verified
+signed request: named by anyone holding only the agent's API key, it is
 refused.
 
 One mandate is in force per agent: giving a new one ends the one before.

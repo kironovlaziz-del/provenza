@@ -45,7 +45,10 @@ The agent names the task on its calls, inside its signed request:
 Provenza then checks the call against the task: the agent it was given to
 (or a helper delegated by it, in its chain), the tool, the time, whether it
 was ended. A call outside it is refused, and the action's evidence names the
-task either way. With **Agent identity → Require a task from a person** on,
+task either way. A task counts only when the agent named it inside its own
+signed request: a call that names one without the agent's signature - made
+with the agent's API key alone - is refused, so "done for task N" in the
+evidence is always the agent's signed word. With **Agent identity → Require a task from a person** on,
 a call that names no task is refused.
 
 ## Get one

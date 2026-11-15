@@ -156,7 +156,8 @@ class PVPOrchestrator:
         )
         # the task a person gave (app/services/task_mandates.py): a call outside
         # it is refused - before an approval for it could be spent
-        mandate, why = await self._mandate(org_id, signed_request or req)
+        mandate, why = await self._mandate(org_id, signed_request or req,
+                                           agent_signed=signed_request is not None or signed)
         if why is not None and decision.result != DENIED:
             decision = Decision(DENIED, why, "policy_violation", matched_policy_id=decision.matched_policy_id)
         approval = None
@@ -196,15 +197,22 @@ class PVPOrchestrator:
             await self.db.commit()
         return self.check_out(chk, token)
 
-    async def _mandate(self, org_id: int, req: PVPActionRequest):
-        """(the task the call is for, why it is refused or None)."""
+    async def _mandate(self, org_id: int, req: PVPActionRequest, *, agent_signed: bool):
+        """(the task the call is for, why it is refused or None). A task
+        counts only when the agent itself named it, inside its verified
+        signed request: an API key alone - a gateway asking for the agent, a
+        user session - cannot put a call under a task, so "done for task N"
+        in the evidence is always the agent's own signed word."""
         from app.services import task_mandates
         from app.services.agent_identity import org_settings
 
         if req.mandate_id is None:
             if (await org_settings(self.db, org_id)).get("require_task_mandate"):
-                return None, "No task from a person: this organization requires one for every call"
+                return None, ("No task from a person: this organization requires the agent to name one in its "
+                              "signed request for every call")
             return None, None
+        if not agent_signed:
+            return None, "A task is named only in the agent's own signed request; this call was not signed by it"
         row, why = await task_mandates.refusal(self.db, org_id, req.mandate_id, req.agent_id, req.chain_id,
                                                req.tool_name, req.action_type)
         return row, (f"Outside the task a person gave: {why}" if why else None)
