@@ -230,3 +230,30 @@ class TestIsolationAndSummary:
         body = r.json()
         assert "employment" in [d["id"] for d in body["domains"]]
         assert "social_scoring" in body["flags"]["prohibited"]
+
+
+@pytest.mark.parametrize("path", ["/api/v1/inventory/", "/api/v1/inventory/summary"])
+async def test_a_lost_race_to_discover_does_not_fail_the_page(client, admin_token, monkeypatch, path):
+    """The inventory page asks for the list and the summary at once, and both
+    discover what is new. The one that loses the race (the other created the
+    same entries first) still answers - it used to fail, and the page showed
+    "Could not load the inventory" until it was reloaded."""
+    from sqlalchemy import insert
+
+    from app.models.ai_system import AISystem
+    from app.services.inventory_service import InventoryService
+
+    real = InventoryService._candidates
+
+    async def raced(self, org_id):
+        out = await real(self, org_id)
+        cand = dict(source_key="shadow:raced", kind="shadow", name="Raced", shadow_tool="Raced",
+                    description="x", lifecycle_stage="production")
+        # the other request creates it between our look and our insert
+        await self.db.execute(insert(AISystem).values(org_id=org_id, domain="general", risk_flags=[],
+                                                      review_status="unreviewed", **cand))
+        return out + [cand]
+
+    monkeypatch.setattr(InventoryService, "_candidates", raced)
+    r = await client.get(path, headers=auth_headers(admin_token))
+    assert r.status_code == 200, (path, r.text)

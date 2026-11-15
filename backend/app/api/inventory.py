@@ -25,10 +25,13 @@ router = APIRouter()
 
 
 async def _sync_and_log(db: AsyncSession, user: User) -> list:
-    created = await InventoryService(db).sync(user.org_id)
+    # ids first: a sync that loses a race rolls back, and the user row is then
+    # no longer loaded - reading user.org_id after it would fail the request
+    org_id, user_id = user.org_id, user.id
+    created = await InventoryService(db).sync(org_id)
     audit = AuditService(db)
     for item in created:
-        await audit.log(user.org_id, user.id, "ai_system", item["id"], "discovered",
+        await audit.log(org_id, user_id, "ai_system", item["id"], "discovered",
                         {"source_key": item["source_key"], "name": item["name"]})
     return created
 
@@ -55,8 +58,9 @@ async def inventory_summary(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    org_id = current_user.org_id
     await _sync_and_log(db, current_user)
-    return await InventoryService(db).summary(current_user.org_id)
+    return await InventoryService(db).summary(org_id)
 
 
 @router.post("/sync")
@@ -79,9 +83,10 @@ async def list_systems(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    org_id = current_user.org_id
     await _sync_and_log(db, current_user)
     items, total = await InventoryService(db).list(
-        current_user.org_id, kind=kind, stage=stage, tier=tier, review_status=review_status, q=q,
+        org_id, kind=kind, stage=stage, tier=tier, review_status=review_status, q=q,
         skip=pagination.skip, limit=pagination.limit,
     )
     return Page(items=items, total=total, skip=pagination.skip, limit=pagination.limit)
