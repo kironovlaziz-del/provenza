@@ -1225,7 +1225,8 @@
     "mandate.bad_hours": "Vazifa 1 dan {{max}} soatgacha amal qiladi.",
     "mandate.bad_tools": "Agentning ruxsat etilgan vositalari orasida yo'q: {{tools}}.",
     "mandate.replayed": "Bu imzolangan vazifa allaqachon berilgan.",
-    "mandate.not_found": "Vazifa topilmadi."
+    "mandate.not_found": "Vazifa topilmadi.",
+    "demo.not_available": "Demo bu yerda mavjud emas."
   },
   "discovery": {
     "title": "Tarmoq kashfiyoti",
@@ -3844,6 +3845,7 @@
     "title_b": "Har bir qarorni isbotlash mumkin.",
     "lead": "Provenza xodimlaringiz, AI agentlaringiz va ular ishlatadigan vositalar o'rtasida turadi. U hech kim ruxsat bermagan AI foydalanishni topadi, har bir agentga faqat siz ruxsat berganini qilishga imkon beradi va istalgan kishi tekshira oladigan imzolangan yozuv yuritadi.",
     "cta_sign_in": "Tashkilotingizga kirish",
+    "try_demo": "Demoni sinab ko'rish",
     "cta_see": "Chaqiruv qanday tekshirilishini ko'rish",
     "feed_title": "Qarorlar, real vaqtda",
     "feed_example": "namuna",

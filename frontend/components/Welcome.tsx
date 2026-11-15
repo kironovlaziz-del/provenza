@@ -15,6 +15,8 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useTranslation } from "react-i18next";
+import { getAuthConfig } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
 import { SUPPORTED_LANGUAGES } from "@/lib/i18n";
 
 const REPO = "https://github.com/kironovlaziz-del/provenza";
@@ -182,6 +184,21 @@ function Mark() {
 
 export function Welcome() {
   const { t, i18n } = useTranslation();
+  // "Try the demo": only where a public demo is set up on this server
+  const { enterDemo } = useAuth();
+  const [demo, setDemo] = useState(false);
+  const [entering, setEntering] = useState(false);
+  useEffect(() => {
+    getAuthConfig().then((c) => setDemo(!!c.demo_enabled)).catch(() => undefined);
+  }, []);
+  async function tryDemo() {
+    setEntering(true);
+    try {
+      await enterDemo();            // on to the dashboard
+    } catch {
+      window.location.href = "/login";   // not available right now: the usual way in
+    }
+  }
   const root = useRef<HTMLDivElement>(null);
   const grid = useRef<HTMLCanvasElement>(null);
   useDeepGrid(grid);
@@ -235,7 +252,9 @@ export function Welcome() {
             <h1>{t("welcome.title_a")} <span className="wl-soft">{t("welcome.title_b")}</span></h1>
             <p className="wl-lead">{t("welcome.lead")}</p>
             <div className="wl-row" style={{ marginTop: 6 }}>
-              <Link className="wl-btn wl-btn-white" href="/login">{t("welcome.cta_sign_in")}</Link>
+              {demo
+                ? <button type="button" className="wl-btn wl-btn-white" disabled={entering} onClick={tryDemo}>{t("welcome.try_demo")}</button>
+                : <Link className="wl-btn wl-btn-white" href="/login">{t("welcome.cta_sign_in")}</Link>}
               <a className="wl-btn wl-btn-line" href="#how">{t("welcome.cta_see")}</a>
             </div>
           </div>
@@ -385,7 +404,9 @@ export function Welcome() {
               <p className="wl-sub" style={{ marginTop: 6 }}>{t("welcome.cta_text")}</p>
             </div>
             <div className="wl-row">
-              <Link className="wl-btn wl-btn-white" href="/login">{t("welcome.sign_in")}</Link>
+              {demo
+                ? <button type="button" className="wl-btn wl-btn-white" disabled={entering} onClick={tryDemo}>{t("welcome.try_demo")}</button>
+                : <Link className="wl-btn wl-btn-white" href="/login">{t("welcome.sign_in")}</Link>}
               <a className="wl-btn wl-btn-line" href={`${REPO}/blob/main/docs/quickstart.md`}>{t("welcome.cta_install")}</a>
             </div>
           </div>

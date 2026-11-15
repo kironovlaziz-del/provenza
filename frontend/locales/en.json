@@ -1225,7 +1225,8 @@
     "mandate.bad_hours": "A task is valid for 1 to {{max}} hours.",
     "mandate.bad_tools": "Not among the agent's allowed tools: {{tools}}.",
     "mandate.replayed": "This signed task was already given.",
-    "mandate.not_found": "Task not found."
+    "mandate.not_found": "Task not found.",
+    "demo.not_available": "The demo is not available here."
   },
   "discovery": {
     "title": "Network Discovery",
@@ -3844,6 +3845,7 @@
     "title_b": "Every decision can be proven.",
     "lead": "Provenza sits between your people, your AI agents and the tools they use. It finds AI use nobody approved, lets each agent do only what you allowed, and keeps a signed record anyone can verify.",
     "cta_sign_in": "Sign in to your organization",
+    "try_demo": "Try the demo",
     "cta_see": "See a call being checked",
     "feed_title": "Decisions, as they happen",
     "feed_example": "example",

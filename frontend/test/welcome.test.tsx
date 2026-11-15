@@ -7,6 +7,11 @@ import en from "@/locales/en.json";
 import uz from "@/locales/uz.json";
 import { Welcome, nextCall } from "@/components/Welcome";
 
+const enterDemo = vi.fn(async () => undefined);
+let demoEnabled = false;
+vi.mock("@/lib/auth", () => ({ useAuth: () => ({ enterDemo }) }));
+vi.mock("@/lib/api", () => ({ getAuthConfig: async () => ({ signup_enabled: false, demo_enabled: demoEnabled }) }));
+
 type Tree = { [k: string]: unknown };
 
 function shape(v: unknown): unknown {
@@ -41,5 +46,20 @@ describe("welcome page", () => {
     act(() => screen.getByRole("button", { name: "Refused by policy" }).click());
     expect(screen.getByRole("button", { name: "Refused by policy" }).getAttribute("aria-pressed")).toBe("true");
     expect(screen.getByText("Scenario: refused by policy")).toBeTruthy();
+    // no public demo on this server: nothing offers one
+    expect(screen.queryByRole("button", { name: "Try the demo" })).toBeNull();
+  });
+
+  it("offers the demo in one click where one is set up", async () => {
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(null);
+    demoEnabled = true;
+    render(<Welcome />);
+    const buttons = await screen.findAllByRole("button", { name: "Try the demo" });
+    expect(buttons).toHaveLength(2);
+    // the usual sign-in stays, in the header
+    expect(screen.getAllByRole("link").some((a) => a.getAttribute("href") === "/login")).toBe(true);
+    await act(async () => buttons[0].click());
+    expect(enterDemo).toHaveBeenCalledTimes(1);
+    demoEnabled = false;
   });
 });
