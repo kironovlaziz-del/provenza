@@ -202,6 +202,28 @@ app.include_router(scim_api.admin_router, prefix=f"{settings.API_V1_STR}/scim", 
 app.include_router(sso_api.public_router, prefix=f"{settings.API_V1_STR}/auth/sso", tags=["sso"])
 app.include_router(sso_api.admin_router, prefix=f"{settings.API_V1_STR}/sso", tags=["sso"])
 app.add_exception_handler(scim_api.ScimError, lambda request, exc: scim_api.error_response(exc))
+
+
+async def _lost_race(request, exc):
+    """Two requests made the same thing at the same moment (a second click on
+    Save, two administrators at once) and the database let one in. The other
+    is told so - 409, try again - instead of an unexplained 500. Only for a
+    unique violation: any other integrity error is a fault and stays one."""
+    import logging
+
+    from fastapi.responses import JSONResponse
+
+    orig = getattr(exc, "orig", None)
+    if (getattr(orig, "sqlstate", None) or getattr(orig, "pgcode", None)) != "23505":
+        raise exc
+    logging.getLogger("provenza.race").warning("lost a race on %s %s: %s", request.method, request.url.path,
+                                               str(orig)[:300])
+    return JSONResponse(status_code=409, content={"detail": "conflict.try_again"})
+
+
+from sqlalchemy.exc import IntegrityError as _IntegrityError  # noqa: E402
+
+app.add_exception_handler(_IntegrityError, _lost_race)
 app.include_router(egress_check_api.agent_router, prefix=f"{settings.API_V1_STR}/agents", tags=["egress"])
 app.include_router(egress_check_api.admin_router, prefix=f"{settings.API_V1_STR}/agent-identity", tags=["egress"])
 app.include_router(egress_check_api.lockdown_router, prefix=f"{settings.API_V1_STR}/egress-lockdown", tags=["egress"])

@@ -40,6 +40,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.db_race import insert_or_get
 from app.pvp import enforcement
 from app.core.outbound import validate_url
 from app.models.a2a_gateway import A2APeer, A2ATask
@@ -155,8 +156,9 @@ class A2AGateway:
                 org_id=org_id, pattern=name, kind="tool", status="pending", discovered=True, seen_count=0,
                 display_name=peer.name[:255], source=f"a2a:{peer.slug}", pinned_digest=digest, first_seen_at=_now(),
                 notes=f"A2A agent '{peer.name}', added by a sync; approve its card to let agents reach it")
-            self.db.add(entry)
-            await self.db.flush()
+            # two syncs of one peer at once: the second takes the first's entry
+            entry, _ = await insert_or_get(self.db, entry, lambda: self.db.scalar(select(ToolRegistryEntry).where(
+                ToolRegistryEntry.org_id == org_id, ToolRegistryEntry.pattern == name)))
         elif entry.pinned_digest is None:
             entry.pinned_digest = digest
         return entry

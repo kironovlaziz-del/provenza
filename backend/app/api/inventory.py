@@ -25,8 +25,7 @@ router = APIRouter()
 
 
 async def _sync_and_log(db: AsyncSession, user: User) -> list:
-    # ids first: a sync that loses a race rolls back, and the user row is then
-    # no longer loaded - reading user.org_id after it would fail the request
+    # ids first: nothing below may depend on the user row staying loaded
     org_id, user_id = user.org_id, user.id
     created = await InventoryService(db).sync(org_id)
     audit = AuditService(db)

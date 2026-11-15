@@ -1226,7 +1226,8 @@
     "mandate.bad_tools": "Agentning ruxsat etilgan vositalari orasida yo'q: {{tools}}.",
     "mandate.replayed": "Bu imzolangan vazifa allaqachon berilgan.",
     "mandate.not_found": "Vazifa topilmadi.",
-    "demo.not_available": "Demo bu yerda mavjud emas."
+    "demo.not_available": "Demo bu yerda mavjud emas.",
+    "conflict.try_again": "Buni ayni paytda boshqa kimdir o'zgartirdi. Qayta urinib ko'ring."
   },
   "discovery": {
     "title": "Tarmoq kashfiyoti",

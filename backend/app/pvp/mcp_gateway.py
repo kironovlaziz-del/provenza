@@ -48,6 +48,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.db_race import insert_or_get
 from app.pvp import enforcement
 from app.models.agent import Agent
 from app.models.agent_action import AgentIncident
@@ -134,6 +135,9 @@ class MCPGateway:
                          server_info: Optional[dict]) -> dict:
         """The tools a sync found - by this gateway, or by an egress proxy for a
         server whose credential is sealed to it (POST /egress-proxy/mcp/sync)."""
+        # one sync of a server at a time: two at once (a second click, an egress
+        # proxy reporting while an admin syncs) would both insert the same tools
+        await self.db.execute(select(MCPServer.id).where(MCPServer.id == server.id).with_for_update())
         server.server_info = server_info
         now = _now()
         rows = {t.name: t for t in (await self.db.execute(
@@ -189,8 +193,8 @@ class MCPGateway:
                 source=f"mcp:{server.slug}", pinned_digest=digest, first_seen_at=_now(),
                 notes=f"MCP tool of server '{server.name}', added by a sync; approve to expose it to agents",
             )
-            self.db.add(entry)
-            await self.db.flush()
+            entry, _ = await insert_or_get(self.db, entry, lambda: self.db.scalar(select(ToolRegistryEntry).where(
+                ToolRegistryEntry.org_id == org_id, ToolRegistryEntry.pattern == full)))
         elif entry.pinned_digest is None:
             entry.pinned_digest = digest
         return entry

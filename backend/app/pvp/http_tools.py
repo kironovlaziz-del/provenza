@@ -51,6 +51,7 @@ from fastapi import status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.db_race import insert_or_get
 from app.pvp import enforcement
 from app.core.errors import api_error
 from app.core.outbound import error_detail, guarded_async_client
@@ -194,9 +195,11 @@ class HttpToolGateway:
         entry = (await self.db.execute(select(ToolRegistryEntry).where(
             ToolRegistryEntry.org_id == tool.org_id, ToolRegistryEntry.pattern == tool.name))).scalar_one_or_none()
         if entry is None:
-            entry = ToolRegistryEntry(org_id=tool.org_id, pattern=tool.name, kind="tool", discovered=False,
-                                      seen_count=0, first_seen_at=now)
-            self.db.add(entry)
+            entry, _ = await insert_or_get(
+                self.db, ToolRegistryEntry(org_id=tool.org_id, pattern=tool.name, kind="tool", discovered=False,
+                                           seen_count=0, first_seen_at=now),
+                lambda: self.db.scalar(select(ToolRegistryEntry).where(
+                    ToolRegistryEntry.org_id == tool.org_id, ToolRegistryEntry.pattern == tool.name)))
         entry.display_name = tool.name
         entry.source = f"http:{tool.method} {tool.url}"[:500]
         entry.pinned_digest, entry.status = tool.digest, "approved"

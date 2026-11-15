@@ -15,9 +15,10 @@ import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional, Tuple
 
-from sqlalchemy import delete, or_, select
+from sqlalchemy import delete, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.db_race import insert_or_get
 from app.core.security import hash_api_key
 from app.models.egress_sensor import (
     EgressPolicyRevision,
@@ -90,13 +91,19 @@ async def bump_revision(db: AsyncSession, org_id: int) -> int:
     )
     row = result.scalar_one_or_none()
     if row is None:
-        row = EgressPolicyRevision(org_id=org_id, revision=1)
-        db.add(row)
-        await db.flush()
-        return row.revision
-    row.revision = (row.revision or 0) + 1
-    await db.flush()
-    return row.revision
+        row, mine = await insert_or_get(
+            db, EgressPolicyRevision(org_id=org_id, revision=1),
+            lambda: db.scalar(select(EgressPolicyRevision).where(EgressPolicyRevision.org_id == org_id)))
+        if mine:
+            return row.revision
+    # in the database, not from the value read above: two changes at once must
+    # give two revisions, or a sensor holding the first would never fetch the second
+    revision = (await db.execute(
+        update(EgressPolicyRevision).where(EgressPolicyRevision.org_id == org_id)
+        .values(revision=func.coalesce(EgressPolicyRevision.revision, 0) + 1)
+        .returning(EgressPolicyRevision.revision))).scalar_one()
+    await db.refresh(row)
+    return revision
 
 
 # ---------------------------------------------------------------- settings
@@ -119,9 +126,10 @@ async def settings_for(db: AsyncSession, org_id: int) -> EgressPolicySettings:
     )).scalar_one_or_none()
     if row is not None:
         return row
-    row = EgressPolicySettings(org_id=org_id, **SETTINGS_DEFAULTS)
-    db.add(row)
-    await db.flush()
+    # every sensor polls for its policy: on a new organization several ask at once
+    row, _ = await insert_or_get(
+        db, EgressPolicySettings(org_id=org_id, **SETTINGS_DEFAULTS),
+        lambda: db.scalar(select(EgressPolicySettings).where(EgressPolicySettings.org_id == org_id)))
     return row
 
 

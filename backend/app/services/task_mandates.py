@@ -73,9 +73,12 @@ def statement_sha256(statement: Dict[str, Any]) -> str:
     return hashlib.sha256(canonical_bytes(statement)).hexdigest()
 
 
-async def _agent(db: AsyncSession, org_id: int, agent_id: int) -> Agent:
-    agent = (await db.execute(select(Agent).where(Agent.id == agent_id, Agent.org_id == org_id))
-             ).scalar_one_or_none()
+async def _agent(db: AsyncSession, org_id: int, agent_id: int, lock: bool = False) -> Agent:
+    """lock: giving is one at a time per agent - the same signed statement
+    sent twice at once must not pass the used-once check twice, and two
+    tasks given at once must not both stay in force."""
+    q = select(Agent).where(Agent.id == agent_id, Agent.org_id == org_id)
+    agent = (await db.execute(q.with_for_update() if lock else q)).scalar_one_or_none()
     if agent is None:
         raise api_error(status.HTTP_404_NOT_FOUND, "agent.not_found")
     if agent.status != "active":
@@ -117,7 +120,7 @@ async def statement(db: AsyncSession, user: User, agent_id: int, task: Any, tool
 async def give(db: AsyncSession, user: User, agent_id: int, task: Any, tools: Optional[List[str]], hours: Any,
                signed_statement: Any, signature: Any) -> TaskMandate:
     s = signing_sessions.require_certified(getattr(user, "_signing_session", None))
-    agent = await _agent(db, user.org_id, agent_id)
+    agent = await _agent(db, user.org_id, agent_id, lock=True)
     task, tools, hours = _clean(agent, task, tools, hours)
     nonce = signed_statement.get("nonce") if isinstance(signed_statement, dict) else None
     if not isinstance(nonce, str) or not NONCE.match(nonce):
