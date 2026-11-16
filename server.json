@@ -3,6 +3,22 @@
   "name": "io.github.kironovlaziz-del/provenza",
   "title": "Provenza",
   "description": "AI governance & security gateway for MCP: approved tools, policy-checked calls, signed audit proofs",
+  "icons": [
+    {
+      "src": "https://raw.githubusercontent.com/kironovlaziz-del/provenza/main/docs/brand/provenza-icon-512.png",
+      "mimeType": "image/png",
+      "sizes": [
+        "512x512"
+      ]
+    },
+    {
+      "src": "https://raw.githubusercontent.com/kironovlaziz-del/provenza/main/docs/brand/provenza-icon.svg",
+      "mimeType": "image/svg+xml",
+      "sizes": [
+        "any"
+      ]
+    }
+  ],
   "repository": {
     "url": "https://github.com/kironovlaziz-del/provenza",
     "source": "github",
