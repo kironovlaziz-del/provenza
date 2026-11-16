@@ -281,11 +281,12 @@ and add:
 
 ```json
 {"mcpServers": {"provenza": {
-  "command": "uvx", "args": ["provenza-mcp"],
+  "command": "uvx", "args": ["--from", "provenza", "provenza-mcp"],
   "env": {"PROVENZA_URL": "https://provenza.example.com", "PROVENZA_TOKEN": "pvz_enr_..."}}}}
 ```
 
-On the first start the agent enrolls: its keys are made on that machine,
+From version 0.2.2 `"args": ["provenza"]` is enough. On the first start
+the agent enrolls: its keys are made on that machine,
 and the token can then be removed. The client sees only the tools an
 administrator approved, and every call is checked against the
 organization's policies and recorded. Set `PROVENZA_AGENT_NAME` to run more

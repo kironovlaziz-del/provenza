@@ -8,11 +8,12 @@ a local command (stdio) - Claude Desktop, Claude Code, Cursor, Windsurf,
 Gemini CLI, VS Code, ...
 
     {"mcpServers": {"provenza": {
-        "command": "uvx", "args": ["provenza-mcp"],
+        "command": "uvx", "args": ["--from", "provenza", "provenza-mcp"],
         "env": {"PROVENZA_URL": "https://provenza.example.com",
                 "PROVENZA_TOKEN": "pvz_enr_..."}}}}
 
-On the first start the agent enrolls with the one-time token: its keys are
+From version 0.2.2 `"args": ["provenza"]` starts the same (the MCP
+Registry's install does). On the first start the agent enrolls with the one-time token: its keys are
 made on this machine and only the public key goes to Provenza
 (~/.config/provenza/agents/<name>.json). Afterwards the identity file is
 enough and the token can be removed.

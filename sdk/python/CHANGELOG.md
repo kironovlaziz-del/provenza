@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- `uvx provenza` starts the MCP gateway (`provenza-mcp` under the package's
+  own name), which is what the MCP Registry's install runs. Before this, only
+  `uvx --from provenza provenza-mcp` worked: `uvx provenza-mcp` looks for a
+  package of that name.
 - `agent.task(mandate_id)`: calls inside name the task a person gave the
   agent (signed in each request; Provenza refuses a call outside it), and
   `agent.current_task()` / `acurrent_task()` read the one in force.
