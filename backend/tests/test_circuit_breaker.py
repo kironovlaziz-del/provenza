@@ -11,6 +11,7 @@ import pytest
 
 from tests.conftest import _create_org_with_admin_and_approver, _login, auth_headers
 from tests.delegation_helpers import delegation_body
+from tests.test_behavior_monitor import containment
 
 BRK = "/api/v1/agent-breaker"
 CHECK = "/api/v1/agents/actions/check"
@@ -62,6 +63,7 @@ async def _chain_status(client, token, chain_id):
 class TestTripping:
     @pytest.mark.asyncio
     async def test_denial_storm_halts_the_chain(self, client, admin_token):
+        await containment(client, admin_token, containment_enabled=False)  # the breaker, not containment
         await _settings(client, admin_token, max_denials=3)
         _, child, chain_id = await _chain(client, admin_token)
         for _ in range(3):
@@ -105,6 +107,7 @@ class TestTripping:
 
     @pytest.mark.asyncio
     async def test_below_threshold_nothing_happens(self, client, admin_token):
+        await containment(client, admin_token, containment_enabled=False)
         await _settings(client, admin_token, max_denials=5)
         _, child, chain_id = await _chain(client, admin_token)
         for _ in range(4):

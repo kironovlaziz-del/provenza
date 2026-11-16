@@ -27,6 +27,8 @@ class AgentBaseline(Base):
     denial_rate = Column(Float, nullable=False, default=0)
     mature = Column(Boolean, nullable=False, default=False)
     quarantine_released_at = Column(DateTime(timezone=True))
+    # the release, signed by the person's session key: statement, signature, who
+    quarantine_release = Column(JSONB(none_as_null=True))
 
 
 class AgentAnomaly(Base):
@@ -55,5 +57,12 @@ class BehaviorSettings(Base):
     threshold = Column(Integer, nullable=False, default=60)
     min_samples = Column(Integer, nullable=False, default=50)
     baseline_days = Column(Integer, nullable=False, default=14)
+    # automatic containment (app/services/containment.py): an agent that
+    # reaches past its boundaries this many times within the window is
+    # quarantined; a call to a tripwire tool quarantines it at once
+    containment_enabled = Column(Boolean, nullable=False, default=True, server_default="true")
+    containment_max_boundary = Column(Integer, nullable=False, default=3, server_default="3")
+    containment_window_seconds = Column(Integer, nullable=False, default=600, server_default="600")
+    tripwire_tools = Column(JSONB, nullable=False, default=list, server_default="[]")
     updated_by = Column(Integer, ForeignKey("users.id"))
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

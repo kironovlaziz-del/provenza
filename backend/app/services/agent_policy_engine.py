@@ -46,6 +46,11 @@ class Decision:
     matched_policy_id: Optional[int] = None
     # what the action needed (Tool Registry), recorded with the check
     required_capabilities: List[str] = field(default_factory=list)
+    # the agent reached past a boundary it was given (a tool, model, route or
+    # task it has no right to): what automatic containment counts
+    # (app/services/containment.py). Not a boundary: the agent being stopped,
+    # a chain halted, a tool that changed upstream, a missing approval.
+    boundary: bool = False
 
 
 @dataclass
@@ -184,23 +189,23 @@ def check_action(
     if chain.status != "active":
         return Decision(DENIED, f"Chain is {chain.status}; no further actions are allowed", None)
     if not chain.member:
-        return Decision(DENIED, "Agent is not part of this delegation chain", "not_in_chain")
+        return Decision(DENIED, "Agent is not part of this delegation chain", "not_in_chain", boundary=True)
 
     # 1. tool allowlist
     if ctx.tool_name and ctx.tool_name not in set(agent.allowed_tools or []):
         return Decision(DENIED, f"Tool '{ctx.tool_name}' is not in the agent's allowed tools",
-                        "policy_violation")
+                        "policy_violation", boundary=True)
 
     # 2. model allowlist (only for model-invoking tools and model calls)
     if _invokes_model(ctx):
         model = ctx.input_data.get("model")
         if model and model not in set(agent.allowed_models or []):
             return Decision(DENIED, f"Model '{model}' is not in the agent's allowed models",
-                            "policy_violation")
+                            "policy_violation", boundary=True)
 
     # 3. delegation depth
     if chain.max_depth_reached > agent.max_delegation_depth:
-        return Decision(DENIED, "Delegation depth exceeded", "depth_exceeded")
+        return Decision(DENIED, "Delegation depth exceeded", "depth_exceeded", boundary=True)
 
     # delegation expiry: an action can't run under a delegation that has
     # already expired (the temporal equivalent of capability escalation).
@@ -220,6 +225,7 @@ def check_action(
             DENIED,
             f"Capability escalation detected: {', '.join(escalated)}",
             "capability_escalation",
+            boundary=True,
         )
 
     # 5. custom policies (can only further restrict). A deny wins
@@ -239,6 +245,7 @@ def check_action(
                     + (f": {ctx.violation}" if ctx.violation else ""),
                     "policy_violation",
                     matched_policy_id=policy.get("id"),
+                    boundary=True,
                 )
             if verdict == "approval" and approval is None:
                 # policies of the hierarchy have no id: a marker, not the id, says "found"

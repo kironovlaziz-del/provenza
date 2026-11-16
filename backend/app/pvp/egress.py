@@ -74,12 +74,13 @@ def classify_signed(signed, tool_name: Optional[str], input_data: Dict[str, Any]
 def _verdict(host: str, match, self_hosted: bool) -> Optional[Decision]:
     if match.policy_status == "blocked":
         what = f" ({match.tool_name})" if match.tool_name else ""
-        return Decision(DENIED, f"{host}{what} is blocked in the organization's AI domain catalog", BLOCKED_INCIDENT)
+        return Decision(DENIED, f"{host}{what} is blocked in the organization's AI domain catalog", BLOCKED_INCIDENT,
+                        boundary=True)
     known = match.matched_catalog_id is not None or match.tool_name is not None
     if known and self_hosted:
         what = f" ({match.tool_name})" if match.tool_name else ""
         return Decision(DENIED, f"{host}{what} is a cloud AI service; the organization allows only self-hosted "
-                                "providers", provider_policy.INCIDENT)
+                                "providers", provider_policy.INCIDENT, boundary=True)
     return None
 
 

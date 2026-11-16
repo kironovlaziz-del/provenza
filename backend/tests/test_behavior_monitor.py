@@ -12,6 +12,7 @@ import pytest
 
 from app.models.agent import Agent
 from app.models.agent_action import ActionCheck
+from tests import signer
 from tests.conftest import auth_headers
 from tests.delegation_helpers import delegation_body
 
@@ -60,12 +61,30 @@ async def _settings(client, token, **over):
     assert r.status_code == 200, r.text
 
 
+async def containment(client, token, **over):
+    """Tune automatic containment (app/services/containment.py) for a test
+    that refuses an agent on purpose, more often than containment allows."""
+    await _settings(client, token, **over)
+
+
 async def _check(client, token, agent, tool="db.read", chain_id=None):
     r = await client.post(f"{A}/actions/check",
                           json={"agent_id": agent["id"], "chain_id": chain_id, "tool_name": tool, "input": {}},
                           headers=auth_headers(token))
     assert r.status_code == 200, r.text
     return r.json()
+
+
+async def release(client, token, agent_id):
+    """Release from quarantine as the web interface does: the statement, signed
+    with the session key (app/services/containment.py)."""
+    s = await signer.signer(client, token)
+    base = f"{B}/agents/{agent_id}/release"
+    r = await client.post(base + "/statement", headers=auth_headers(token))
+    if r.status_code != 200:
+        return r
+    st = r.json()["statement"]
+    return await client.post(base, json={"statement": st, "signature": s.sign(st)}, headers=auth_headers(token))
 
 
 async def _overview(client, token):
@@ -174,12 +193,17 @@ class TestRelease:
         await _burst(db_session, a["id"], 12, tool="stripe.charge", denied=True, minutes_ago=10)
         await _check(client, admin_token, a)
         assert await _status(client, admin_token, a["id"]) == "quarantined"
-        r = await client.post(f"{B}/agents/{a['id']}/release", headers=auth_headers(admin_token))
+        # not without the person's signature
+        r = await client.post(f"{B}/agents/{a['id']}/release", json={"statement": {}, "signature": "x"},
+                              headers=auth_headers(admin_token))
+        assert r.status_code in (403, 422), r.text
+        assert await _status(client, admin_token, a["id"]) == "quarantined"
+        r = await release(client, admin_token, a["id"])
         assert r.status_code == 200, r.text
         # the old denials are before the release and do not quarantine it again
         assert (await _check(client, admin_token, a))["decision"] == "allowed"
         assert await _status(client, admin_token, a["id"]) == "active"
-        again = await client.post(f"{B}/agents/{a['id']}/release", headers=auth_headers(admin_token))
+        again = await release(client, admin_token, a["id"])
         assert again.status_code == 409
 
 

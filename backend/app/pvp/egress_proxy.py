@@ -104,12 +104,14 @@ def route_rules(route: Optional[Dict[str, Any]], tool_name: Optional[str],
         return Decision(DENIED, f"egress route '{slug}' does not exist or is disabled", None)
     method, path, size = inp.get("method"), inp.get("path"), inp.get("body_bytes")
     if method not in (route.get("methods") or []):
-        return Decision(DENIED, f"method {method} is not allowed on route '{slug}'", None)
+        return Decision(DENIED, f"method {method} is not allowed on route '{slug}'", None, boundary=True)
     problem = path_problem(path) if isinstance(path, str) else "the path is missing"
     if problem:
-        return Decision(DENIED, f"route '{slug}': {problem}", None)
+        # a traversal segment is reaching past the route as much as a path outside it
+        return Decision(DENIED, f"route '{slug}': {problem}", None,
+                        boundary=isinstance(path, str) and path.startswith("/"))
     if not prefix_allows(path, route.get("path_prefixes")):
-        return Decision(DENIED, f"path {path} is outside route '{slug}'", None)
+        return Decision(DENIED, f"path {path} is outside route '{slug}'", None, boundary=True)
     limit = route.get("max_body_bytes")
     if isinstance(size, bool) or not isinstance(size, int) or size < 0 or size > limit:
         return Decision(DENIED, f"the body is larger than route '{slug}' allows ({limit} bytes)", None)

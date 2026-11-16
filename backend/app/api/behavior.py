@@ -2,7 +2,8 @@
 # Licensed under the Apache License, Version 2.0.
 # Part of Provenza — https://github.com/kironovlaziz-del/provenza
 
-"""Behaviour monitor (ASI10): settings, overview, baseline refresh, release."""
+"""Behaviour monitor (ASI10) and automatic containment: settings, overview,
+baseline refresh, the signed release from quarantine."""
 
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -10,7 +11,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_current_user, require_role
 from app.core.database import get_db
 from app.models.user import User, UserRole
-from app.schemas.behavior import BehaviorSettingsIn
+from app.schemas.behavior import BehaviorSettingsIn, SignedReleaseIn
+from app.services import containment
 from app.services.audit_service import AuditService
 from app.services.behavior_monitor import BOUNDS, WEIGHTS, BehaviorMonitor
 
@@ -59,12 +61,22 @@ async def refresh_baseline(
     return result
 
 
-@router.post("/agents/{agent_id}/release")
-async def release_agent(
+@router.post("/agents/{agent_id}/release/statement")
+async def release_statement(
     agent_id: int,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_role(UserRole.admin)),
 ):
-    await BehaviorMonitor(db).release(current_user.org_id, agent_id)
-    await AuditService(db).log(current_user.org_id, current_user.id, "agent", agent_id, "quarantine_released", {})
-    return {"agent_id": agent_id, "status": "active"}
+    """What the person's session key signs to release the agent from quarantine."""
+    return {"statement": await containment.release_statement(db, current_user, agent_id)}
+
+
+@router.post("/agents/{agent_id}/release")
+async def release_agent(
+    agent_id: int,
+    data: SignedReleaseIn,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role(UserRole.admin)),
+):
+    """Release the agent, signed: the statement names the quarantine it ends."""
+    return await containment.release(db, current_user, agent_id, data.statement, data.signature)

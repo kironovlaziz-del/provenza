@@ -20,7 +20,9 @@ against it:
 mode "monitor" (default) records anomalies; mode "enforce" quarantines the
 agent when the score reaches the threshold: status -> "quarantined" (the
 policy engine refuses all its actions), chains it roots are tripped, and a
-rogue_agent_quarantined incident is raised. Only an admin releases it; the
+rogue_agent_quarantined incident is raised. Automatic containment
+(app/services/containment.py) quarantines the same way, in any mode. A
+person releases the agent with a signed statement (containment.release); the
 signal windows then restart from the release time.
 
 A baseline is "mature" only after min_samples attempts spread over >= 3
@@ -31,7 +33,6 @@ import math
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 
-from fastapi import HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -43,7 +44,11 @@ from app.models.delegation import DelegationChain
 
 MODES = ("off", "monitor", "enforce")
 DEFAULTS = {"mode": "monitor", "threshold": 60, "min_samples": 50, "baseline_days": 14}
-BOUNDS = {"threshold": (15, 200), "min_samples": (20, 100000), "baseline_days": (3, 90)}
+# automatic containment (app/services/containment.py)
+CONTAINMENT = {"containment_enabled": True, "containment_max_boundary": 3, "containment_window_seconds": 600,
+               "tripwire_tools": []}
+BOUNDS = {"threshold": (15, 200), "min_samples": (20, 100000), "baseline_days": (3, 90),
+          "containment_max_boundary": (1, 100), "containment_window_seconds": (60, 86400)}
 WEIGHTS = {"rate_spike": 50, "denial_spike": 40, "new_tool": 30, "off_hours": 15}
 
 BASELINE_TTL = timedelta(hours=1)
@@ -85,21 +90,30 @@ class BehaviorMonitor:
     async def settings(self, org_id: int) -> dict:
         row = await self._settings_row(org_id)
         if not row:
-            return {**DEFAULTS, "source": "default"}
-        return {"mode": row.mode, "threshold": row.threshold, "min_samples": row.min_samples,
-                "baseline_days": row.baseline_days, "source": "org"}
+            return {**DEFAULTS, **CONTAINMENT, "tripwire_tools": [], "source": "default"}
+        return {**{k: getattr(row, k) for k in (*DEFAULTS, *CONTAINMENT)},
+                "tripwire_tools": list(row.tripwire_tools or []), "source": "org"}
 
     async def save_settings(self, org_id: int, values: dict, user_id: int) -> tuple:
+        """values: the monitor's settings; the containment ones only when given
+        (a client that knows only the monitor's leaves them as they are)."""
+        from app.services.containment import clean_tripwires
+
         row = await self._settings_row(org_id)
-        before = None if row is None else {k: getattr(row, k) for k in DEFAULTS}
+        keys = (*DEFAULTS, *CONTAINMENT)
+        before = None if row is None else {k: getattr(row, k) for k in keys}
         if row is None:
-            row = BehaviorSettings(org_id=org_id)
+            row = BehaviorSettings(org_id=org_id, **{k: v for k, v in CONTAINMENT.items() if k != "tripwire_tools"},
+                                   tripwire_tools=[])
             self.db.add(row)
         for k in DEFAULTS:
             setattr(row, k, values[k])
+        for k in CONTAINMENT:
+            if values.get(k) is not None:
+                setattr(row, k, clean_tripwires(values[k]) if k == "tripwire_tools" else values[k])
         row.updated_by = user_id
         await self.db.commit()
-        return before, {k: values[k] for k in DEFAULTS}
+        return before, {k: getattr(row, k) for k in keys}
 
     # ------------------------------------------------------------------ event sources
     # Every attempt = a /actions/check, plus legacy records made without one.
@@ -259,24 +273,7 @@ class BehaviorMonitor:
             details={**result, "tripped_chains": [c.id for c in chains]},
         ))
 
-    # ------------------------------------------------------------------ operator actions
-    async def release(self, org_id: int, agent_id: int) -> None:
-        agent = (await self.db.execute(
-            select(Agent).where(Agent.id == agent_id, Agent.org_id == org_id)
-        )).scalar_one_or_none()
-        if not agent:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found")
-        if agent.status != "quarantined":
-            raise HTTPException(status_code=status.HTTP_409_CONFLICT,
-                                detail=f"Agent is {agent.status}, not quarantined")
-        from app.services import kill_switch
-
-        await kill_switch.check_reactivation(self.db, agent)
-        agent.status = "active"
-        bl = await self.baseline(org_id, agent_id)
-        bl.quarantine_released_at = datetime.now(timezone.utc)
-        await self.db.commit()
-
+    # ------------------------------------------------------------------ overview
     async def overview(self, org_id: int) -> dict:
         agents = (await self.db.execute(
             select(Agent).where(Agent.org_id == org_id).order_by(Agent.name)
@@ -290,12 +287,27 @@ class BehaviorMonitor:
             .where(AgentAnomaly.org_id == org_id)
             .order_by(AgentAnomaly.detected_at.desc()).limit(50)
         )).all()
+        # why each quarantined agent was stopped: its latest quarantine incident
+        held = [a.id for a in agents if a.status == "quarantined"]
+        why: dict = {}
+        if held:
+            for inc in (await self.db.execute(
+                    select(AgentIncident).where(AgentIncident.org_id == org_id, AgentIncident.agent_id.in_(held),
+                                                AgentIncident.incident_type == QUARANTINE_INCIDENT)
+                    .order_by(AgentIncident.id.desc()))).scalars():
+                if inc.agent_id not in why:
+                    d = inc.details or {}
+                    c = d.get("contained") or {}
+                    why[inc.agent_id] = {"incident_id": inc.id, "at": inc.created_at,
+                                         "reason": c.get("reason") or "behavior", "tool": c.get("tool"),
+                                         "count": c.get("count"), "refusals": (c.get("refusals") or [])[:5],
+                                         "score": d.get("score"), "signals": sorted((d.get("signals") or {}))}
         rows = []
         for a in agents:
             b = baselines.get(a.id)
             top = sorted((b.tools or {}).items(), key=lambda kv: -kv[1])[:5] if b else []
             rows.append({
-                "agent_id": a.id, "name": a.name, "status": a.status,
+                "agent_id": a.id, "name": a.name, "status": a.status, "quarantine": why.get(a.id),
                 "baseline": None if not b else {
                     "mature": b.mature, "samples": b.sample_count, "span_days": b.span_days,
                     "p95_per_5min": b.p95_per_5min, "denial_rate": b.denial_rate,

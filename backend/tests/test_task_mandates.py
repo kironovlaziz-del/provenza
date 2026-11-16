@@ -31,6 +31,7 @@ from app.pvp import signed_policy
 from tests import signer
 from tests.conftest import auth_headers
 from tests.delegation_helpers import action_record_body, delegation_body
+from tests.test_behavior_monitor import containment
 from tests.test_mcp_gateway import _call, _ready, fake  # noqa: F401  (fake: the fixture)
 from tests.test_policy_release import _release
 from tests.test_pvp_receipts import _agent, tool
@@ -204,6 +205,7 @@ async def test_only_a_signer_gives_a_task(client, admin_token, db_session, org_a
 
 @pytest.mark.asyncio
 async def test_calls_are_checked_against_the_task(client, admin_token, db_session):
+    await containment(client, admin_token, containment_max_boundary=20)   # each refusal in turn
     agent = await _agent(client, admin_token, tools=("db.read", "db.write"))
     other = await _agent(client, admin_token)
     r, st, _ = await _give(client, admin_token, agent["id"], tools=["db.read"])
@@ -241,6 +243,16 @@ async def test_calls_are_checked_against_the_task(client, admin_token, db_sessio
     assert (await _check(client, admin_token, agent, r.json()["id"]))["decision"] == "allowed"
     # required: the task is the agent's signed word, never an API key holder's claim
     assert (await _check(client, admin_token, agent, r.json()["id"], signed=False))["decision"] == "denied"
+    # reaching past the task counts toward containment; a task the person ended,
+    # or one the agent was never given, does not
+    from app.models.agent_action import ActionCheck
+
+    rows = (await db_session.execute(select(ActionCheck.reason, ActionCheck.decision, ActionCheck.boundary)
+                                     .where(ActionCheck.agent_id == agent["id"]))).all()
+    for reason, decision, boundary in rows:
+        assert boundary == (decision == "denied" and "was ended" not in reason
+                            and "requires the agent to name one" not in reason), (reason, boundary)
+    assert sum(b for _, _, b in rows) == 4
 
 
 @pytest.mark.asyncio

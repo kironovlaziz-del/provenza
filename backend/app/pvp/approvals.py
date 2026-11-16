@@ -29,6 +29,8 @@ a passkey slipped into the database approves nothing.
 So an approval cannot be stretched to other arguments, another chain or a
 second run, and a later denial (a suspended agent, a tripped breaker, a
 quarantine) still wins: only "pending approval" can turn into "allowed".
+An approval decided before the agent's last release from quarantine
+(app/services/containment.py) is not redeemed at all.
 When the executor refuses the call after the check (rate limit, disabled
 connection, a tool changed upstream), the approval is released for the
 next repeat.
@@ -62,9 +64,17 @@ async def take(db: AsyncSession, org_id: int, *, agent_id: int, chain_id: Option
     from app.pvp import signed_policy
 
     signed = await signed_policy.in_force(db, org_id)
+    # an approval given before the agent was last released from quarantine
+    # was given to the agent as it was then: it releases nothing now
+    from app.services.containment import released_at
+
+    since = now - timedelta(minutes=REDEEM_MINUTES)
+    released = await released_at(db, agent_id)
+    if released is not None and released > since:
+        since = released
     passed: list = []
     while True:
-        row = await _next(db, org_id, now, passed, agent_id=agent_id, chain_id=chain_id, action_type=action_type,
+        row = await _next(db, org_id, since, passed, agent_id=agent_id, chain_id=chain_id, action_type=action_type,
                           tool_name=tool_name, input_sha256=input_sha256)
         if row is None:
             return None
@@ -84,7 +94,7 @@ def listed(manifest: dict, proof: dict) -> bool:
     return bool(key) and key.get("public_key") == (proof.get("passkey") or {}).get("public_key")
 
 
-async def _next(db: AsyncSession, org_id: int, now: datetime, passed: list, *, agent_id: int,
+async def _next(db: AsyncSession, org_id: int, since: datetime, passed: list, *, agent_id: int,
                 chain_id: Optional[int], action_type: str, tool_name: str,
                 input_sha256: str) -> Optional[AgentActionApproval]:
     return (await db.execute(
@@ -93,7 +103,7 @@ async def _next(db: AsyncSession, org_id: int, now: datetime, passed: list, *, a
         .where(AgentActionApproval.org_id == org_id,
                AgentActionApproval.decision == "approved",
                AgentActionApproval.redeemed_at.is_(None),
-               AgentActionApproval.decided_at >= now - timedelta(minutes=REDEEM_MINUTES),
+               AgentActionApproval.decided_at >= since,
                AgentActionApproval.input_sha256 == input_sha256,
                AgentActionApproval.signed.is_not(None),
                AgentActionApproval.id.not_in(passed or [0]),

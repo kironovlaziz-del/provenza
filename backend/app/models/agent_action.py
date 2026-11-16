@@ -123,7 +123,14 @@ class ActionCheck(Base):
     # the task a person gave, signed, that the agent named for this call
     mandate_id = Column(Integer, ForeignKey("task_mandates.id", ondelete="SET NULL"))
     mandate_sha256 = Column(String(64))
+    # the agent reached past a boundary it was given (Decision.boundary):
+    # what automatic containment counts (app/services/containment.py)
+    boundary = Column(Boolean, nullable=False, default=False, server_default="false")
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (
+        Index("ix_agent_action_checks_boundary", "agent_id", "created_at", postgresql_where=text("boundary")),
+    )
 
 
 class PermitSigningKey(Base):

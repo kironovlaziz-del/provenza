@@ -12,8 +12,8 @@ stop exactly.
 
 Agents are stopped by suspending them, so every place an agent acts refuses
 it already: agent keys, the policy engine, the gateways and delegation.
-Agents already suspended or quarantined are left out - they were not stopped
-by this decision. With *End their delegation chains* (default) the active
+Agents already suspended or quarantined ([automatic containment](containment.md))
+are left out - they were not stopped by this decision. With *End their delegation chains* (default) the active
 and tripped chains the stopped agents root are terminated.
 
 ## Engaging

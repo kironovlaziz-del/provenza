@@ -1227,7 +1227,10 @@
     "mandate.replayed": "This signed task was already given.",
     "mandate.not_found": "Task not found.",
     "demo.not_available": "The demo is not available here.",
-    "conflict.try_again": "Someone else changed this at the same moment. Try again."
+    "conflict.try_again": "Someone else changed this at the same moment. Try again.",
+    "agent.quarantined_release_signed": "This agent is quarantined. Release it on the Behavior Monitor page - the release is signed.",
+    "containment.not_quarantined": "The agent is {{status}}, not quarantined.",
+    "containment.bad_tripwires": "Up to {{max}} tripwire tools, each up to 100 characters."
   },
   "discovery": {
     "title": "Network Discovery",
@@ -2003,7 +2006,7 @@
   },
   "behavior": {
     "title": "Behavior Monitor",
-    "hint": "Each agent is compared with its own recent behaviour: new tools, bursts of activity, runs of denials, unusual hours (OWASP ASI10). In enforce mode a strongly deviating agent is quarantined until an admin releases it.",
+    "hint": "Each agent is compared with its own recent behaviour: new tools, bursts of activity, runs of denials, unusual hours (OWASP ASI10). In enforce mode a strongly deviating agent is quarantined until an admin releases it. Automatic containment quarantines an agent that keeps reaching past its boundaries.",
     "load_failed": "Could not load the behaviour monitor.",
     "failed": "Could not save.",
     "saved": "Saved",
@@ -2011,7 +2014,7 @@
     "quarantine_empty": "No agent is quarantined.",
     "release": "Release",
     "released": "Agent released",
-    "confirm_release": "Release this agent? Its actions will be evaluated normally again.",
+    "confirm_release": "Release this agent? Its actions will be evaluated normally again. You sign the release with your passkey session.",
     "anomalies_title": "Recent anomalies",
     "anomalies_empty": "No deviations detected.",
     "col_time": "Time",
@@ -2051,7 +2054,17 @@
     "samples": "attempts",
     "days": "days",
     "denials": "denials",
-    "refresh": "Recompute"
+    "refresh": "Recompute",
+    "containment_title": "Automatic containment",
+    "containment_hint": "An agent refused again and again for reaching past what it was given (a tool, model, route or task it has no right to) is quarantined at once, in any mode: every later call is refused, the chains it started are halted and the calls it left waiting for approval are closed.",
+    "containment_enabled": "Quarantine an agent that keeps reaching past its boundaries",
+    "field_containment_max_boundary": "Refusals before quarantine",
+    "field_containment_window": "Within, minutes",
+    "field_tripwires": "Tripwire tools",
+    "help_tripwires": "Tools no agent has a reason to call, comma separated, * allowed. One call quarantines the agent.",
+    "why_boundary": "{{count}} refusals past its boundaries",
+    "why_tripwire": "called the tripwire tool {{tool}}",
+    "why_behavior": "behaviour score {{score}}"
   },
   "identity": {
     "title": "Agent Identity",

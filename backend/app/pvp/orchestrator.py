@@ -148,6 +148,10 @@ class PVPOrchestrator:
         # (an LLM call is not a tool of the baseline: no "new tool" for it)
         await BehaviorMonitor(self.db).evaluate(org_id, req.agent_id,
                                                 None if req.action_type == "model_call" else req.tool_name)
+        # automatic containment: a call to a tripwire tool stops the agent
+        # before its verdict, so this very call is refused (app/services/containment.py)
+        from app.services import containment
+        await containment.tripwire(self.db, org_id, req.agent_id, req.tool_name)
         audit = AgentAudit(self.db)
         decision = await audit.check(
             org_id=org_id, agent_id=req.agent_id, chain_id=req.chain_id, action_type=req.action_type,
@@ -156,10 +160,11 @@ class PVPOrchestrator:
         )
         # the task a person gave (app/services/task_mandates.py): a call outside
         # it is refused - before an approval for it could be spent
-        mandate, why = await self._mandate(org_id, signed_request or req,
-                                           agent_signed=signed_request is not None or signed)
+        mandate, why, past = await self._mandate(org_id, signed_request or req,
+                                                 agent_signed=signed_request is not None or signed)
         if why is not None and decision.result != DENIED:
-            decision = Decision(DENIED, why, "policy_violation", matched_policy_id=decision.matched_policy_id)
+            decision = Decision(DENIED, why, "policy_violation", matched_policy_id=decision.matched_policy_id,
+                                boundary=past)
         approval = None
         if decision.result == PENDING_APPROVAL:
             # a person already approved exactly this call: it may run, once (app/pvp/approvals.py)
@@ -179,6 +184,8 @@ class PVPOrchestrator:
         )
         if approval is not None:
             await approvals.bind(self.db, approval.id, chk.id)
+        # ... and one more refusal past its boundaries can be the one too many
+        await containment.after_check(self.db, org_id, chk)
         proof = signed_request if signed_request is not None else (req if signed else None)
         if proof is not None:
             chk.agent_signed = True
@@ -198,7 +205,8 @@ class PVPOrchestrator:
         return self.check_out(chk, token)
 
     async def _mandate(self, org_id: int, req: PVPActionRequest, *, agent_signed: bool):
-        """(the task the call is for, why it is refused or None). A task
+        """(the task the call is for, why it is refused or None, whether the
+        call reached past the task - app/services/containment.py). A task
         counts only when the agent itself named it, inside its verified
         signed request: an API key alone - a gateway asking for the agent, a
         user session - cannot put a call under a task, so "done for task N"
@@ -209,13 +217,18 @@ class PVPOrchestrator:
         if req.mandate_id is None:
             if (await org_settings(self.db, org_id)).get("require_task_mandate"):
                 return None, ("No task from a person: this organization requires the agent to name one in its "
-                              "signed request for every call")
-            return None, None
+                              "signed request for every call"), False
+            return None, None, False
         if not agent_signed:
-            return None, "A task is named only in the agent's own signed request; this call was not signed by it"
+            return None, ("A task is named only in the agent's own signed request; this call was not signed "
+                          "by it"), True
         row, why = await task_mandates.refusal(self.db, org_id, req.mandate_id, req.agent_id, req.chain_id,
                                                req.tool_name, req.action_type)
-        return row, (f"Outside the task a person gave: {why}" if why else None)
+        if why is None:
+            return row, None, False
+        # a task that ended or ran out is the person's doing, not the agent reaching past it
+        lapsed = row is not None and (row.status != "active" or not task_mandates.in_force(row))
+        return row, f"Outside the task a person gave: {why}", not lapsed
 
     async def verify_signed_request(self, org_id: int, agent: Agent, req: PVPActionRequest) -> None:
         """The agent's own signed action.request (signature, freshness, nonce) -

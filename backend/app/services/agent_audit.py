@@ -38,7 +38,7 @@ def stricter(live: Decision, signed: Decision, number: int) -> Decision:
     reason says where it comes from."""
     if RANK.get(signed.result, 2) > RANK.get(live.result, 2):
         out = Decision(signed.result, f"signed policy (release #{number}): {signed.reason}", signed.incident_type,
-                       matched_policy_id=signed.matched_policy_id)
+                       matched_policy_id=signed.matched_policy_id, boundary=signed.boundary)
     else:
         out = live
     out.required_capabilities = sorted(set(getattr(live, "required_capabilities", None) or [])
@@ -393,6 +393,7 @@ class AgentAudit:
         """Persist a verdict as a single-use, short-lived check bound to
         exactly this action. The returned token is what the agent must
         present to /actions/record."""
+        now = datetime.now(timezone.utc)
         chk = ActionCheck(
             token=secrets.token_urlsafe(32),
             org_id=org_id,
@@ -406,7 +407,11 @@ class AgentAudit:
             reason=decision.reason,
             incident_type=decision.incident_type,
             policy_id=decision.matched_policy_id,
-            expires_at=datetime.now(timezone.utc) + timedelta(seconds=CHECK_TTL_SECONDS),
+            boundary=bool(getattr(decision, "boundary", False)),
+            expires_at=now + timedelta(seconds=CHECK_TTL_SECONDS),
+            # the clock the windows over checks are measured with (containment,
+            # the circuit breaker), not the start of the database transaction
+            created_at=now,
         )
         self.db.add(chk)
         await self.db.commit()
