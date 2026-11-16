@@ -113,6 +113,21 @@ async def completeness(agent_id: int, since: int, until: int, db: AsyncSession =
     return await completeness_report.build(db, user.org_id, agent_id, since, until)
 
 
+@router.get("/incidents/{incident_id}/bundle")
+async def incident_bundle(incident_id: int, since: Optional[int] = None, until: Optional[int] = None,
+                          db: AsyncSession = Depends(get_db),
+                          user: User = Depends(require_role(UserRole.admin, UserRole.approver))):
+    """Everything needed to investigate an agent incident in one file
+    (docs/incident-bundle.md): the agent's actions in the window shown to be
+    all of them, the audit records about it, its own signed requests, the
+    signed tasks, approvals and release - checked offline by
+    tools/provenza_audit.py incident. Window (Unix seconds): by default an
+    hour before the incident to a quarter of an hour after it."""
+    from app.pvp import incident_bundle as bundle
+
+    return await bundle.build(db, user.org_id, incident_id, since, until)
+
+
 @router.get("/receipts/{action_id}/trace")
 async def receipt_trace(action_id: int, request: Request, db: AsyncSession = Depends(get_db),
                         user: User = Depends(get_current_user)):

@@ -268,10 +268,18 @@ class BehaviorMonitor:
             chain.breaker_details = {"exceeded": ["root_agent_quarantined"], "counts": {}, "thresholds": {},
                                      "window_seconds": 0, "settings_source": "behavior_monitor",
                                      "tripped_at": now.isoformat()}
-        self.db.add(AgentIncident(
+        incident = AgentIncident(
             org_id=org_id, agent_id=agent.id, incident_type=QUARANTINE_INCIDENT, severity="critical",
             details={**result, "tripped_chains": [c.id for c in chains]},
-        ))
+        )
+        self.db.add(incident)
+        await self.db.flush()
+        # signed in the audit log, so why the agent was stopped is not only the
+        # database's word (the incident bundle, app/pvp/incident_bundle.py)
+        from app.services.audit_service import AuditService
+
+        await AuditService(self.db).log(org_id, None, "agent", agent.id, "quarantined",
+                                        {"incident_id": incident.id, **incident.details})
 
     # ------------------------------------------------------------------ overview
     async def overview(self, org_id: int) -> dict:

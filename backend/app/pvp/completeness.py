@@ -62,11 +62,12 @@ async def build(db: AsyncSession, org_id: int, agent_id: int, since: int, until:
         raise api_error(status.HTTP_404_NOT_FOUND, "agent.not_found")
     await _seal_everything(db, org_id)
     start = datetime.fromtimestamp(since, timezone.utc)
-    end = datetime.fromtimestamp(until, timezone.utc)
+    # whole seconds, as an action's evidence states its time: `until` takes in all of its last second
+    end = datetime.fromtimestamp(until + 1, timezone.utc)
     # the seals holding any of the organization's actions of the period
     lo_hi = (await db.execute(select(func.min(AgentAction.seal_id), func.max(AgentAction.seal_id)).where(
         AgentAction.org_id == org_id, AgentAction.seal_id.is_not(None),
-        and_(AgentAction.created_at >= start, AgentAction.created_at <= end)))).first()
+        and_(AgentAction.created_at >= start, AgentAction.created_at < end)))).first()
     if lo_hi is None or lo_hi[0] is None:
         raise api_error(status.HTTP_409_CONFLICT, "pvp.no_actions_in_period")
     # one seal on each side as well: its actions, recorded before and after

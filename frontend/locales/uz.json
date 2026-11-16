@@ -1230,7 +1230,10 @@
     "conflict.try_again": "Buni ayni paytda boshqa kimdir o'zgartirdi. Qayta urinib ko'ring.",
     "agent.quarantined_release_signed": "Bu agent karantinda. Uni Xulq-atvor monitori sahifasida bo'shating - bo'shatish imzolanadi.",
     "containment.not_quarantined": "Agent {{status}} holatida, karantinda emas.",
-    "containment.bad_tripwires": "Ko'pi bilan {{max}} ta tuzoq vosita, har biri 100 belgigacha."
+    "containment.bad_tripwires": "Ko'pi bilan {{max}} ta tuzoq vosita, har biri 100 belgigacha.",
+    "incident.not_found": "Hodisa topilmadi.",
+    "incident.no_agent": "Bu hodisada agent ko'rsatilmagan.",
+    "incident.bad_window": "Oyna boshlanganidan keyin tugashi va ko'pi bilan {{max_days}} kunni qamrashi kerak."
   },
   "discovery": {
     "title": "Tarmoq kashfiyoti",
@@ -1629,7 +1632,10 @@
       "ai_provider_not_self_hosted": "Bulutli AI xizmati (faqat o'z serverlarimiz)",
       "attestation_workload_changed": "Agent kaliti boshqa ish yuklamasi tomonidan ishlatilgan",
       "egress_unconfined": "Agent xosti egress proksi bilan cheklanmagan"
-    }
+    },
+    "bundle": "Tergov fayli",
+    "bundle_hint": "Shu hodisa atrofidagi agent harakatlari (ularning hammasi ekani isbotlangan), agentning o'zi imzolagan so'rovlari, audit yozuvlari va odamlar imzolagan narsalar bitta faylda - tools/provenza_audit.py incident bilan oflayn tekshiriladi.",
+    "bundle_failed": "Tergov faylini tuzib bo'lmadi."
   },
   "inventory": {
     "roles": {

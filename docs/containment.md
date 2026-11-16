@@ -49,8 +49,10 @@ behaviour monitor's mode:
   recorded as `expired`); an approval already given and not used yet is not
   redeemed after the release either;
 - a critical `rogue_agent_quarantined` incident names the refusals that led
-  to it (the last ten: tool, reason, time), and the audit log records
-  `agent` / `contained`.
+  to it (the last ten: tool, reason, time), and so does the agent's
+  `agent` / `quarantined` record in the signed audit log - so the reason is
+  not only the database's word. The [incident bundle](incident-bundle.md)
+  carries it with the agent's own signed requests for those calls.
 
 A **tripwire tool** is a name no agent has a reason to call - a decoy such
 as `secrets.dump` or `admin.delete_*`. One call quarantines the agent, and

@@ -250,6 +250,11 @@ export const getAuthority = async (actionId: number) =>
 export const getCompleteness = async (agentId: number, since: number, until: number) =>
   (await api.get<Record<string, unknown>>("/pvp/completeness", { params: { agent_id: agentId, since, until } })).data;
 
+/** Everything to investigate an agent incident in one file, checked offline by
+ *  tools/provenza_audit.py incident (docs/incident-bundle.md). */
+export const getIncidentBundle = async (incidentId: number) =>
+  (await api.get<Record<string, unknown>>(`/pvp/incidents/${incidentId}/bundle`)).data;
+
 /** Save a JSON document as a file (receipts and TRACE exports are for auditors). */
 export function downloadJson(name: string, value: unknown) {
   const blob = new Blob([JSON.stringify(value, null, 2)], { type: "application/json" });

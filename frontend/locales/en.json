@@ -1230,7 +1230,10 @@
     "conflict.try_again": "Someone else changed this at the same moment. Try again.",
     "agent.quarantined_release_signed": "This agent is quarantined. Release it on the Behavior Monitor page - the release is signed.",
     "containment.not_quarantined": "The agent is {{status}}, not quarantined.",
-    "containment.bad_tripwires": "Up to {{max}} tripwire tools, each up to 100 characters."
+    "containment.bad_tripwires": "Up to {{max}} tripwire tools, each up to 100 characters.",
+    "incident.not_found": "Incident not found.",
+    "incident.no_agent": "This incident names no agent.",
+    "incident.bad_window": "The window must end after it starts and span at most {{max_days}} days."
   },
   "discovery": {
     "title": "Network Discovery",
@@ -1629,7 +1632,10 @@
       "ai_provider_not_self_hosted": "Cloud AI service (self-hosted only)",
       "attestation_workload_changed": "Agent key used by another workload",
       "egress_unconfined": "Agent host not confined to the egress proxy"
-    }
+    },
+    "bundle": "Investigation file",
+    "bundle_hint": "One file with the agent's actions around this incident (shown to be all of them), its own signed requests, the audit records and what people signed - checked offline with tools/provenza_audit.py incident.",
+    "bundle_failed": "Could not build the investigation file."
   },
   "inventory": {
     "roles": {

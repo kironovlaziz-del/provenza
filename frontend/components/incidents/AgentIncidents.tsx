@@ -17,6 +17,9 @@ import {
 } from "@/lib/agent_api";
 import type { Agent, AgentIncidentT, EscalationSummaryRow } from "@/lib/agent_types";
 import { useAuth } from "@/lib/auth";
+import { errorMessage } from "@/lib/errors";
+import { downloadJson, getIncidentBundle } from "@/lib/gateways_api";
+import { OVERSIGHT_ROLES } from "@/lib/types";
 
 const SEVERITIES = ["critical", "high", "medium", "low"];
 
@@ -54,6 +57,9 @@ export function AgentIncidents() {
   const { t, i18n } = useTranslation();
   const { user } = useAuth();
   const canTriage = user?.role === "admin" || user?.role === "approver";
+  // the investigation file: for those who read the evidence (docs/incident-bundle.md)
+  const canInvestigate = canTriage || OVERSIGHT_ROLES.includes(user?.role ?? "");
+  const [bundleError, setBundleError] = useState<string | null>(null);
 
   const [types, setTypes] = useState<AgentIncidentTypeCount[]>([]);
   const [type, setType] = useState("");
@@ -87,6 +93,18 @@ export function AgentIncidents() {
   const agentName = useMemo(() => new Map(agents.map((a) => [a.id, a.name])), [agents]);
   const name = (id?: number | null) => (id ? agentName.get(id) ?? `#${id}` : "—");
   const typeLabel = (k: string) => t(`agent_incidents.types.${k}`, { defaultValue: humanize(k) });
+
+  async function investigate(inc: AgentIncidentT) {
+    setBusyId(inc.id);
+    setBundleError(null);
+    try {
+      downloadJson(`incident-${inc.id}.json`, await getIncidentBundle(inc.id));
+    } catch (err) {
+      setBundleError(errorMessage(err, t, t("agent_incidents.bundle_failed")));
+    } finally {
+      setBusyId(null);
+    }
+  }
 
   async function setResolved(inc: AgentIncidentT, resolved: boolean) {
     setBusyId(inc.id);
@@ -145,6 +163,7 @@ export function AgentIncidents() {
             </label>
           </div>
         </div>
+        {bundleError && <p className="error-text">{bundleError}</p>}
         <div className="scroll-box">
           <table>
             <thead>
@@ -155,7 +174,7 @@ export function AgentIncidents() {
                 <th>{t("agent_incidents.details")}</th>
                 <th>{t("agent_incidents.chain")}</th>
                 <th>{t("agent_incidents.when")}</th>
-                {canTriage && <th></th>}
+                {canInvestigate && <th></th>}
               </tr>
             </thead>
             <tbody>
@@ -171,12 +190,20 @@ export function AgentIncidents() {
                   <td><DetailSummary inc={inc} /></td>
                   <td className="hint-text">{inc.chain_id ? `#${inc.chain_id}` : "—"}</td>
                   <td className="u-mono u-nowrap">{new Date(inc.created_at).toLocaleString(i18n.language)}</td>
-                  {canTriage && (
+                  {canInvestigate && (
                     <td className="u-nowrap">
-                      <button className={`btn btn-sm${inc.resolved ? "" : " btn-primary"}`} disabled={busyId === inc.id}
-                              onClick={() => setResolved(inc, !inc.resolved)}>
-                        {inc.resolved ? t("incidents.btn_reopen") : t("incidents.btn_resolve")}
-                      </button>
+                      {inc.agent_id && (
+                        <button className="btn btn-sm" disabled={busyId === inc.id} title={t("agent_incidents.bundle_hint")}
+                                onClick={() => investigate(inc)} style={{ marginRight: 6 }}>
+                          {t("agent_incidents.bundle")}
+                        </button>
+                      )}
+                      {canTriage && (
+                        <button className={`btn btn-sm${inc.resolved ? "" : " btn-primary"}`} disabled={busyId === inc.id}
+                                onClick={() => setResolved(inc, !inc.resolved)}>
+                          {inc.resolved ? t("incidents.btn_reopen") : t("incidents.btn_resolve")}
+                        </button>
+                      )}
                     </td>
                   )}
                 </tr>

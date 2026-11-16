@@ -24,7 +24,8 @@ upstream, a task that ended or ran out, a call that waits for a person.
 reached -> the agent is quarantined at once, whatever the behaviour
 monitor's mode (app/services/behavior_monitor.py): status "quarantined"
 (every later call is refused), the chains it roots are tripped, a critical
-rogue_agent_quarantined incident names the refusals that led to it, and the
+rogue_agent_quarantined incident names the refusals that led to it (and so
+does the agent's "quarantined" record in the signed audit log), and the
 calls it left waiting for a person are closed - an approval given after this
 releases nothing. Counting restarts at the release, which a person signs
 with their session key (release_statement / release).
@@ -136,8 +137,6 @@ async def _contain(db: AsyncSession, org_id: int, agent: Agent, why: Dict[str, A
 
     closed = await _close_pending(db, org_id, agent.id)
     await BehaviorMonitor(db)._quarantine(org_id, agent, {"contained": why, "closed_approvals": closed})
-    await AuditService(db).log(org_id, None, "agent", agent.id, "contained",
-                               {"reason": why["reason"], "closed_approvals": closed})
     await db.commit()
 
 
