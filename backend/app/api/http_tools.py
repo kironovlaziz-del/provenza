@@ -218,6 +218,13 @@ def _definition_ok(tool: HttpTool) -> None:
                             problems="; ".join(problems[:5]))
     if (tool.body_encoding or "json") == "form" and tool.method not in ("POST", "PUT", "PATCH"):
         raise api_error(status.HTTP_422_UNPROCESSABLE_ENTITY, "http_tool.form_needs_body")
+    # what the agent's model reads holds no text a person cannot see (app/pvp/hidden_text.py)
+    from app.pvp import hidden_text
+
+    found = hidden_text.scan({"name": tool.name, "description": tool.description, "input_schema": tool.input_schema})
+    if hidden_text.level(found) == "refuse":
+        raise api_error(status.HTTP_422_UNPROCESSABLE_ENTITY, "tool.hidden_text",
+                        kinds=", ".join(sorted({f["kind"] for f in found})))
 
 
 def _placeholders_declared(url: str, schema: Optional[dict]) -> None:

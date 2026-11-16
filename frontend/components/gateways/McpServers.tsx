@@ -8,7 +8,9 @@ import React, { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useDialog } from "@/components/Dialog";
 import { Form } from "@/components/Form";
+import { HiddenFindings, HiddenPill, RevealedDefinition } from "@/components/gateways/HiddenText";
 import { SealedCredential, sealNew } from "@/components/gateways/SealedCredential";
+import { approveConfirming } from "@/lib/hidden_text";
 import { errorMessage } from "@/lib/errors";
 import {
   apiUrl,
@@ -36,6 +38,8 @@ function when(v: string | null, lang: string, never: string) {
 
 function Tools({ server, onChange }: { server: McpServer; onChange: () => void }) {
   const { t } = useTranslation();
+  const { dialog, confirm } = useDialog();
+  const [review, setReview] = useState<number | null>(null);
   const [tools, setTools] = useState<McpTool[] | null>(null);
   const [busy, setBusy] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -46,7 +50,14 @@ function Tools({ server, onChange }: { server: McpServer; onChange: () => void }
     setBusy(tool.id);
     setError(null);
     try {
-      await fn(server.id, tool.id);
+      if (fn === approveMcpTool) {
+        // invisible characters: the approver confirms having seen them (lib/hidden_text.ts)
+        const done = await approveConfirming((c) => approveMcpTool(server.id, tool.id, c),
+                                             () => confirm(t("hidden.confirm_approve", { name: tool.exposed_name })));
+        if (!done) return;
+      } else {
+        await fn(server.id, tool.id);
+      }
       await load();
       onChange();
     } catch (e) {
@@ -59,6 +70,7 @@ function Tools({ server, onChange }: { server: McpServer; onChange: () => void }
   if (!tools) return <div className="hint-text">{error ?? t("common.loading")}</div>;
   return (
     <div className="u-mt-8">
+      {dialog}
       {error && <p className="error-text">{error}</p>}
       <table>
         <thead>
@@ -72,12 +84,16 @@ function Tools({ server, onChange }: { server: McpServer; onChange: () => void }
         <tbody>
           {tools.length === 0 && <tr className="empty-row"><td colSpan={4}>{t("gw.mcp.no_tools")}</td></tr>}
           {tools.map((tool) => (
-            <tr key={tool.id} style={tool.removed_at ? { opacity: 0.5 } : undefined}>
+            <React.Fragment key={tool.id}>
+            <tr style={tool.removed_at ? { opacity: 0.5 } : undefined}>
               <td>
-                <span className="u-mono">{tool.exposed_name}</span>
+                <span className="u-mono">{tool.exposed_name}</span> <HiddenPill level={tool.hidden_level} />
                 {(tool.title || tool.description) && (
                   <div className="hint-text">{tool.title ?? tool.description?.slice(0, 160)}</div>
                 )}
+                <button type="button" className="link-button hint-text" style={{ display: "block" }} onClick={() => setReview(review === tool.id ? null : tool.id)}>
+                  {review === tool.id ? t("hidden.hide_definition") : t("hidden.show_definition")}
+                </button>
               </td>
               <td>
                 <span className={`pill ${TOOL_PILL[tool.status] ?? "pill-neutral"}`}>{t(`gw.tool_status.${tool.status}`, tool.status)}</span>
@@ -88,7 +104,9 @@ function Tools({ server, onChange }: { server: McpServer; onChange: () => void }
               <td className="u-nowrap">
                 <div className="u-btn-row">
                   {tool.status !== "approved" && !tool.removed_at && (
-                    <button className="btn btn-sm btn-primary" disabled={busy === tool.id} onClick={() => act(tool, approveMcpTool)}>
+                    <button className="btn btn-sm btn-primary" disabled={busy === tool.id || tool.hidden_level === "refuse"}
+                            title={tool.hidden_level === "refuse" ? t("hidden.level_refuse_hint") : undefined}
+                            onClick={() => act(tool, approveMcpTool)}>
                       {tool.status === "drifted" ? t("gw.approve_change") : t("gw.approve")}
                     </button>
                   )}
@@ -100,6 +118,15 @@ function Tools({ server, onChange }: { server: McpServer; onChange: () => void }
                 </div>
               </td>
             </tr>
+            {(review === tool.id || tool.hidden_level !== "clean") && (
+              <tr>
+                <td colSpan={4}>
+                  <HiddenFindings findings={tool.hidden} level={tool.hidden_level} />
+                  {review === tool.id && <RevealedDefinition value={tool.definition} />}
+                </td>
+              </tr>
+            )}
+            </React.Fragment>
           ))}
         </tbody>
       </table>

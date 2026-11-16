@@ -185,7 +185,10 @@ class A2AGateway:
         )).first()
         if row is None or tool_name(slug) not in set(own_rights(agent).tools):
             return None
-        return row[0]
+        from app.pvp.hidden_text import servable
+
+        # a card with text a person cannot see is not served, even if approved before the check existed
+        return row[0] if servable(row[0].card or {}) else None
 
     async def _live_digest(self, peer: A2APeer) -> str:
         cached = _live.get(peer.id)

@@ -77,8 +77,8 @@ export async function updateToolEntry(
   return data;
 }
 
-export async function approveToolEntry(id: number) {
-  const { data } = await api.post<ToolEntry>(`/tool-registry/${id}/approve`);
+export async function approveToolEntry(id: number, confirmHidden = false) {
+  const { data } = await api.post<ToolEntry>(`/tool-registry/${id}/approve`, { confirm_hidden: confirmHidden });
   return data;
 }
 

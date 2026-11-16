@@ -1233,7 +1233,9 @@
     "containment.bad_tripwires": "Ko'pi bilan {{max}} ta tuzoq vosita, har biri 100 belgigacha.",
     "incident.not_found": "Hodisa topilmadi.",
     "incident.no_agent": "Bu hodisada agent ko'rsatilmagan.",
-    "incident.bad_window": "Oyna boshlanganidan keyin tugashi va ko'pi bilan {{max_days}} kunni qamrashi kerak."
+    "incident.bad_window": "Oyna boshlanganidan keyin tugashi va ko'pi bilan {{max_days}} kunni qamrashi kerak.",
+    "tool.hidden_text": "Rad etildi: ta'rifda odam ko'ra olmaydigan matn bor ({{kinds}}).",
+    "tool.hidden_text_confirm": "Ta'rifda ko'rinmas belgilar bor ({{kinds}}); tasdiqlash uchun ularni ko'rganingizni tasdiqlang."
   },
   "discovery": {
     "title": "Tarmoq kashfiyoti",
@@ -4015,5 +4017,22 @@
     "cta_install": "Serveringizga o'rnatish",
     "footer_source": "Manba kodi",
     "footer_security": "Xavfsizlik modeli"
+  },
+  "hidden": {
+    "level_refuse": "Yashirin matn",
+    "level_confirm": "Ko'rinmas belgilar",
+    "level_refuse_hint": "Ta'rifda odam ko'ra olmaydigan, lekin agent modeli o'qiydigan matn bor. Uni tasdiqlab bo'lmaydi va agentlarga ko'rsatilmaydi; server egasi uni olib tashlashi kerak.",
+    "level_confirm_hint": "Ta'rifda ko'rinmas belgilar bor. Tasdiqlashdan oldin ta'rifni ko'rib chiqing: tasdiqlash ularni ko'rganingizni bildiradi.",
+    "kind_tag_text": "Yashirin matnni yozadigan teg belgilari",
+    "kind_bidi": "Yo'nalish boshqaruvchilari (matn boshqa tartibda ko'rinadi)",
+    "kind_control": "Boshqaruv belgilari",
+    "kind_variation_data": "Ma'lumot tashiydigan variatsiya selektorlari",
+    "kind_invisible": "Nol kenglikdagi yoki boshqa ko'rinmas belgilar",
+    "kind_private_use": "Shaxsiy foydalanish belgilari",
+    "kind_padding": "Matnni ko'rinishdan chiqarib yuboradigan uzun bo'sh joy",
+    "spells": "yozilgan",
+    "show_definition": "To'liq ta'rif",
+    "hide_definition": "Ta'rifni yashirish",
+    "confirm_approve": "{{name}} ichida ko'rinmas belgilar bor (to'liq ta'rifga qarang). Baribir tasdiqlansinmi? Agentlarning modellari ularni o'qiydi."
   }
 }

@@ -18,6 +18,7 @@
 - [Agent signatures](agent-signing.md): signing delegations and actions, verifying without trusting the server
 - [Workload attestation](attestation.md): binding an agent to a Kubernetes or CI workload
 - [Agent Manifest](agent-manifest.md): a signed, offline-checkable record of an agent (AgenTrust Agent Manifest v0.2)
+- [Hidden text in tool definitions](hidden-text.md): what a person approves is what the agent's model reads
 - [Egress lockdown](egress-lockdown.md): leaving an agent one way out
 - [Kill switch](kill-switch.md): stopping an agent, a team, all agents or all AI traffic
 - [Automatic containment](containment.md): an agent that keeps reaching past its boundaries is quarantined on its own

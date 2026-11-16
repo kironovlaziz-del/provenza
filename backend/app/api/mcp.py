@@ -38,6 +38,7 @@ from app.api.deps import require_role
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.errors import api_error
+from app.pvp import hidden_text
 from app.core.outbound import validate_url
 from app.models.mcp import MCPServer, MCPTool
 from app.models.tool_registry import ToolRegistryEntry
@@ -334,6 +335,16 @@ class MCPToolOut(BaseModel):
     pinned_digest: Optional[str]
     served: bool              # shown to agents: approved and the synced definition is the pinned one
     removed_at: Optional[datetime]
+    # all of it, as the agent's model reads it - and what hides in it (app/pvp/hidden_text.py)
+    definition: Dict[str, Any] = {}
+    hidden: List[Dict[str, Any]] = []
+    hidden_level: str = "clean"
+
+
+class ApproveToolIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    # the approver saw the invisible characters the definition holds (hidden_level "confirm")
+    confirm_hidden: bool = False
 
 
 def _server_out(s: MCPServer) -> MCPServerOut:
@@ -461,29 +472,37 @@ async def list_server_tools(server_id: int, db: AsyncSession = Depends(get_db), 
     rows = (await db.execute(
         select(MCPTool, ToolRegistryEntry).outerjoin(ToolRegistryEntry, ToolRegistryEntry.id == MCPTool.registry_entry_id)
         .where(MCPTool.server_id == server.id).order_by(MCPTool.name))).all()
+    hidden = {t.id: hidden_text.scan(t.definition or {}) for t, _ in rows}
     return [MCPToolOut(
         id=t.id, name=t.name, exposed_name=t.exposed_name, title=(t.definition or {}).get("title"),
         description=(t.definition or {}).get("description"), digest=t.digest, registry_entry_id=t.registry_entry_id,
         status=e.status if e else "unregistered", pinned_digest=e.pinned_digest if e else None,
         served=bool(e and e.status == "approved" and e.pinned_digest == t.digest and t.removed_at is None
-                    and server.enabled),
-        removed_at=t.removed_at) for t, e in rows]
+                    and server.enabled and hidden_text.level(hidden[t.id]) != "refuse"),
+        removed_at=t.removed_at, definition=t.definition or {}, hidden=hidden[t.id],
+        hidden_level=hidden_text.level(hidden[t.id])) for t, e in rows]
 
 
 @admin_router.post("/{server_id}/tools/{tool_id}/approve")
-async def approve_tool(server_id: int, tool_id: int, db: AsyncSession = Depends(get_db),
-                       user: User = Depends(_admin)):
+async def approve_tool(server_id: int, tool_id: int, data: Optional[ApproveToolIn] = None,
+                       db: AsyncSession = Depends(get_db), user: User = Depends(_admin)):
     """Approve exactly the definition seen at the last sync (its digest
-    becomes the pin). What an approver reads is what agents will be shown."""
+    becomes the pin). What an approver reads is what agents will be shown -
+    so a definition with text a person cannot see is refused, and one with
+    invisible characters needs confirm_hidden (app/pvp/hidden_text.py)."""
     org_id, user_id = user.org_id, user.id
     server = await _get_server(db, org_id, server_id)
     tool = await _get_tool(db, server, tool_id)
     if tool.removed_at is not None:
         raise api_error(status.HTTP_409_CONFLICT, "mcp.tool_removed")
+    found = hidden_text.scan(tool.definition or {})
+    hidden_text.require_approvable(found, bool(data and data.confirm_hidden))
     exposed_name, digest = tool.exposed_name, tool.digest
     entry = await MCPGateway(db).approve(org_id, tool, user_id)
-    await AuditService(db).log(org_id, user_id, "tool_registry", entry.id, "approved",
-                               {"pattern": exposed_name, "pinned_digest": digest, "via": "mcp_gateway"})
+    meta = {"pattern": exposed_name, "pinned_digest": digest, "via": "mcp_gateway"}
+    if found:
+        meta["hidden_text"] = hidden_text.summary(found)
+    await AuditService(db).log(org_id, user_id, "tool_registry", entry.id, "approved", meta)
     return {"approved": exposed_name, "pinned_digest": digest}
 
 

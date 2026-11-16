@@ -8,7 +8,9 @@ import React, { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useDialog } from "@/components/Dialog";
 import { Form } from "@/components/Form";
+import { HiddenFindings, HiddenPill, RevealedDefinition } from "@/components/gateways/HiddenText";
 import { SealedCredential, sealNew } from "@/components/gateways/SealedCredential";
+import { approveConfirming } from "@/lib/hidden_text";
 import { errorMessage } from "@/lib/errors";
 import {
   A2aPeer,
@@ -150,6 +152,14 @@ export function A2aPeers() {
                     {p.protocol_version && (
                       <div className="hint-text">A2A {p.protocol_version}{Array.isArray(card.skills) ? ` · ${t("gw.a2a.skills", { n: card.skills.length })}` : ""}</div>
                     )}
+                    <HiddenPill level={p.hidden_level} />
+                    {p.card && (
+                      <details>
+                        <summary className="hint-text">{t("hidden.show_definition")}</summary>
+                        <RevealedDefinition value={p.card} />
+                      </details>
+                    )}
+                    <HiddenFindings findings={p.hidden} level={p.hidden_level} />
                   </td>
                   <td>
                     <span className={`pill ${PEER_PILL[p.status] ?? "pill-neutral"}`}>{t(`gw.tool_status.${p.status}`, p.status)}</span>
@@ -170,7 +180,11 @@ export function A2aPeers() {
                         </span>
                       )}
                       {(p.status === "pending" || p.status === "drifted") && (
-                        <button className="btn btn-sm btn-primary" disabled={busy === p.id} onClick={() => act(p.id, () => approveA2aPeer(p.id))}>
+                        <button className="btn btn-sm btn-primary" disabled={busy === p.id || p.hidden_level === "refuse"}
+                                title={p.hidden_level === "refuse" ? t("hidden.level_refuse_hint") : undefined}
+                                onClick={() => act(p.id, () => approveConfirming(
+                                  (c) => approveA2aPeer(p.id, c),
+                                  () => confirm(t("hidden.confirm_approve", { name: p.tool_name })))) }>
                           {p.status === "drifted" ? t("gw.approve_change") : t("gw.approve")}
                         </button>
                       )}
