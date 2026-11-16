@@ -193,7 +193,10 @@ class AgentApprovalService:
         if await self._recent_approvals(org_id, user.id) >= FATIGUE_THRESHOLD:
             flags.append("fatigue")
         blocked_reason, self_approval = None, False
-        if agent.owner_user_id is not None and agent.owner_user_id == user.id:
+        if agent.status == "quarantined":
+            # app/services/containment.py: nothing is approved for a stopped agent
+            blocked_reason = "The agent is quarantined; release it first."
+        elif agent.owner_user_id is not None and agent.owner_user_id == user.id:
             if await self._other_reviewers(org_id, user.id) > 0:
                 blocked_reason = "You own this agent; another admin or approver must decide."
             else:

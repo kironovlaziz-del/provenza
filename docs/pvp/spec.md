@@ -208,7 +208,9 @@ this call: the new check is `allowed`, its reason names the approval and the
 held action, and the approval records the check it was spent on. A repeat
 after that, other arguments or another chain are held again. A denial that
 applies at the time of the repeat (a suspended agent, a tripped breaker, a
-quarantine) still wins: only `pending_approval` can turn into `allowed`. If
+quarantine) still wins: only `pending_approval` can turn into `allowed`, and
+an approval decided before the agent's last release from quarantine
+([containment.md](../containment.md)) is not spent at all. If
 the executor refuses the call after the check (a rate limit, a disabled
 connection, a changed tool), the approval is released for the next repeat.
 This works the same for `/agents/actions/check` and every gateway. The

@@ -192,7 +192,9 @@ async def test_quarantine_release_waits_for_the_stop(client, admin_token, db_ses
     await db_session.commit()
     ev = (await _stop(client, admin_token, "all_agents")).json()
     assert ev["agents"] == []  # already stopped by the behaviour monitor: not this stop's to give back
-    r = await client.post(f"/api/v1/agent-behavior/agents/{a['id']}/release", headers=auth_headers(admin_token))
+    from tests.test_behavior_monitor import release
+
+    r = await release(client, admin_token, a["id"])
     assert r.status_code == 409 and _code(r) == "kill_switch.holds_agent"
     await _lift(client, admin_token, ev["id"])
     assert await _status(client, admin_token, a["id"]) == "quarantined"

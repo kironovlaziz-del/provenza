@@ -16,6 +16,7 @@ import {
   type BehaviorSettings,
 } from "@/lib/behavior_api";
 import { confirmDialog } from "@/components/Dialog";
+import { splitNames } from "@/lib/tool_names";
 
 const MODES: BehaviorMode[] = ["off", "monitor", "enforce"];
 
@@ -26,6 +27,7 @@ export default function AgentBehaviorPage() {
 
   const [data, setData] = useState<BehaviorOverview | null>(null);
   const [form, setForm] = useState<BehaviorSettings | null>(null);
+  const [tripwires, setTripwires] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -35,6 +37,7 @@ export default function AgentBehaviorPage() {
       .then((d) => {
         setData(d);
         setForm({ ...d.settings });
+        setTripwires((d.settings.tripwire_tools || []).join(", "));
       })
       .catch((e) => setError(behaviorError(e, t("behavior.load_failed", "Could not load the behaviour monitor."))));
   }, [t]);
@@ -67,7 +70,7 @@ export default function AgentBehaviorPage() {
       );
       if (!ok) return;
     }
-    run(() => saveBehaviorSettings(form), t("behavior.saved", "Saved"));
+    run(() => saveBehaviorSettings({ ...form, tripwire_tools: splitNames(tripwires) }), t("behavior.saved", "Saved"));
   }
 
   if (!data || !form) {
@@ -85,7 +88,18 @@ export default function AgentBehaviorPage() {
   const outOfBounds =
     form.threshold < b.threshold[0] || form.threshold > b.threshold[1] ||
     form.min_samples < b.min_samples[0] || form.min_samples > b.min_samples[1] ||
-    form.baseline_days < b.baseline_days[0] || form.baseline_days > b.baseline_days[1];
+    form.baseline_days < b.baseline_days[0] || form.baseline_days > b.baseline_days[1] ||
+    form.containment_max_boundary < b.containment_max_boundary[0] ||
+    form.containment_max_boundary > b.containment_max_boundary[1] ||
+    form.containment_window_seconds < b.containment_window_seconds[0] ||
+    form.containment_window_seconds > b.containment_window_seconds[1];
+  const why = (a: (typeof quarantined)[number]) => {
+    const q = a.quarantine;
+    if (!q) return null;
+    if (q.reason === "tripwire") return t("behavior.why_tripwire", { tool: q.tool });
+    if (q.reason === "boundary_refusals") return t("behavior.why_boundary", { count: q.count ?? 0 });
+    return t("behavior.why_behavior", { score: q.score ?? 0 });
+  };
 
   return (
     <>
@@ -108,14 +122,24 @@ export default function AgentBehaviorPage() {
               <p className="hint-text" style={{ margin: 0 }}>{t("behavior.quarantine_empty", "No agent is quarantined.")}</p>
             ) : (
               quarantined.map((a) => (
-                <div key={a.agent_id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 0" }}>
-                  <strong>{a.name}</strong>
+                <div key={a.agent_id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 0", gap: 12 }}>
+                  <div>
+                    <strong>{a.name}</strong>
+                    {a.quarantine && (
+                      <div className="hint-text" style={{ fontSize: 12 }}>
+                        {why(a)}{a.quarantine.at ? ` · ${fmt(a.quarantine.at)}` : ""}
+                        {a.quarantine.refusals.slice(0, 3).map((r) => (
+                          <div key={r.check_id} className="mono" style={{ fontSize: 11 }}>{r.tool ?? "—"}: {r.reason}</div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                   {isAdmin && (
                     <button
                       className="btn btn-sm btn-primary"
                       disabled={busy}
                       onClick={async () => {
-                        if (await confirmDialog(t("behavior.confirm_release", "Release this agent? Its actions will be evaluated normally again.")))
+                        if (await confirmDialog(t("behavior.confirm_release", "Release this agent? Its actions will be evaluated normally again. You sign the release with your passkey session.")))
                           run(() => releaseAgent(a.agent_id), t("behavior.released", "Agent released"));
                       }}
                     >
@@ -209,6 +233,39 @@ export default function AgentBehaviorPage() {
                   </div>
                 </div>
               ))}
+            </div>
+            <h3 style={{ fontSize: 14, margin: "18px 0 6px" }}>{t("behavior.containment_title")}</h3>
+            <p className="hint-text" style={{ fontSize: 12, marginTop: 0 }}>{t("behavior.containment_hint")}</p>
+            <label style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 10 }}>
+              <input
+                type="checkbox"
+                checked={form.containment_enabled}
+                disabled={!isAdmin}
+                onChange={(e) => setForm({ ...form, containment_enabled: e.target.checked })}
+                style={{ width: "auto" }}
+              />
+              <span>{t("behavior.containment_enabled")}</span>
+            </label>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12 }}>
+              <div className="field" style={{ margin: 0 }}>
+                <label htmlFor="bh-cmax">{t("behavior.field_containment_max_boundary")}</label>
+                <input id="bh-cmax" type="number" min={b.containment_max_boundary[0]} max={b.containment_max_boundary[1]}
+                  disabled={!isAdmin || !form.containment_enabled} value={form.containment_max_boundary}
+                  onChange={(e) => setForm({ ...form, containment_max_boundary: Number(e.target.value) })} />
+              </div>
+              <div className="field" style={{ margin: 0 }}>
+                <label htmlFor="bh-cwin">{t("behavior.field_containment_window")}</label>
+                <input id="bh-cwin" type="number" min={1} max={1440}
+                  disabled={!isAdmin || !form.containment_enabled}
+                  value={Math.round(form.containment_window_seconds / 60)}
+                  onChange={(e) => setForm({ ...form, containment_window_seconds: Number(e.target.value) * 60 })} />
+              </div>
+            </div>
+            <div className="field" style={{ margin: "12px 0 0" }}>
+              <label htmlFor="bh-trip">{t("behavior.field_tripwires")}</label>
+              <input id="bh-trip" className="mono" value={tripwires} disabled={!isAdmin || !form.containment_enabled}
+                placeholder="secrets.*, admin.delete_*" onChange={(e) => setTripwires(e.target.value)} />
+              <div className="hint-text" style={{ fontSize: 12 }}>{t("behavior.help_tripwires")}</div>
             </div>
             <div className="hint-text" style={{ fontSize: 12, marginTop: 10 }}>
               {t("behavior.weights", "Signal weights")}:{" "}

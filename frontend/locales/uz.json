@@ -1227,7 +1227,10 @@
     "mandate.replayed": "Bu imzolangan vazifa allaqachon berilgan.",
     "mandate.not_found": "Vazifa topilmadi.",
     "demo.not_available": "Demo bu yerda mavjud emas.",
-    "conflict.try_again": "Buni ayni paytda boshqa kimdir o'zgartirdi. Qayta urinib ko'ring."
+    "conflict.try_again": "Buni ayni paytda boshqa kimdir o'zgartirdi. Qayta urinib ko'ring.",
+    "agent.quarantined_release_signed": "Bu agent karantinda. Uni Xulq-atvor monitori sahifasida bo'shating - bo'shatish imzolanadi.",
+    "containment.not_quarantined": "Agent {{status}} holatida, karantinda emas.",
+    "containment.bad_tripwires": "Ko'pi bilan {{max}} ta tuzoq vosita, har biri 100 belgigacha."
   },
   "discovery": {
     "title": "Tarmoq kashfiyoti",
@@ -2003,7 +2006,7 @@
   },
   "behavior": {
     "title": "Xulq-atvor monitori",
-    "hint": "Har bir agent o'zining yaqindagi xulq-atvori bilan solishtiriladi: yangi vositalar, faollikning keskin oshishi, ketma-ket rad etishlar, g'ayrioddiy soatlar (OWASP ASI10). Majburiy rejimda keskin og'ishgan agent administrator bo'shatmaguncha karantinga olinadi.",
+    "hint": "Har bir agent o'zining yaqindagi xulq-atvori bilan solishtiriladi: yangi vositalar, faollikning keskin oshishi, ketma-ket rad etishlar, g'ayrioddiy soatlar (OWASP ASI10). Majburiy rejimda keskin og'ishgan agent administrator bo'shatmaguncha karantinga olinadi. Avtomatik cheklash o'z chegarasidan chiqishga urinaveradigan agentni karantinga oladi.",
     "load_failed": "Xulq-atvor monitorini yuklab bo'lmadi.",
     "failed": "Saqlab bo'lmadi.",
     "saved": "Saqlandi",
@@ -2011,7 +2014,7 @@
     "quarantine_empty": "Karantinda agent yo'q.",
     "release": "Bo'shatish",
     "released": "Agent bo'shatildi",
-    "confirm_release": "Bu agent bo'shatilsinmi? Uning harakatlari yana odatdagidek baholanadi.",
+    "confirm_release": "Bu agent bo'shatilsinmi? Uning harakatlari yana odatdagidek baholanadi. Bo'shatishni passkey sessiyangiz bilan imzolaysiz.",
     "anomalies_title": "So'nggi anomaliyalar",
     "anomalies_empty": "Og'ishlar aniqlanmadi.",
     "col_time": "Vaqt",
@@ -2051,7 +2054,17 @@
     "samples": "urinish",
     "days": "kun",
     "denials": "rad etishlar",
-    "refresh": "Qayta hisoblash"
+    "refresh": "Qayta hisoblash",
+    "containment_title": "Avtomatik cheklash",
+    "containment_hint": "O'ziga berilgan chegaradan (huquqi bo'lmagan vosita, model, marshrut yoki vazifa) qayta-qayta chiqishga uringani uchun rad etilgan agent har qanday rejimda darhol karantinga olinadi: keyingi barcha chaqiruvlari rad etiladi, u boshlagan zanjirlar to'xtatiladi va tasdiq kutayotgan chaqiruvlari yopiladi.",
+    "containment_enabled": "Chegaradan chiqishga urinaveradigan agentni karantinga olish",
+    "field_containment_max_boundary": "Karantingacha rad etishlar soni",
+    "field_containment_window": "Davomida, daqiqa",
+    "field_tripwires": "Tuzoq vositalar",
+    "help_tripwires": "Hech bir agent chaqirishiga sabab bo'lmagan vositalar, vergul bilan, * mumkin. Bitta chaqiruv agentni karantinga oladi.",
+    "why_boundary": "chegaradan chiqishga {{count}} ta urinish rad etildi",
+    "why_tripwire": "{{tool}} tuzoq vositasini chaqirdi",
+    "why_behavior": "xulq bahosi {{score}}"
   },
   "identity": {
     "title": "Agent identifikatsiyasi",

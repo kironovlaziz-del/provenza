@@ -227,6 +227,9 @@ class AgentRegistry:
         if agent.status == "retired" and changes.get("status", "retired") != "retired":
             # retired is final - its key stays dead; enroll a new agent instead
             raise api_error(status.HTTP_409_CONFLICT, "agent.retired_final")
+        if agent.status == "quarantined" and changes.get("status", "quarantined") not in ("quarantined", "retired"):
+            # out of quarantine only by a person's signed release (app/services/containment.py)
+            raise api_error(status.HTTP_409_CONFLICT, "agent.quarantined_release_signed")
         if changes.get("status") == "active" and agent.status != "active" and not agent.pq_public_key:
             from app.services.teams import role_requires_hybrid
 

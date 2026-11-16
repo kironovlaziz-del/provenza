@@ -16,9 +16,10 @@ from pathlib import Path
 import pytest
 from sqlalchemy import select
 
-from app.models.agent_action import AgentAction, AgentIncident
+from app.models.agent_action import ActionCheck, AgentAction, AgentIncident
 from app.pvp.egress_proxy import descriptor, path_problem
 from tests.conftest import _create_org_with_admin_and_approver, _login, auth_headers
+from tests.test_behavior_monitor import containment
 
 E = "/api/v1/egress"
 P = "/api/v1/egress-proxy"
@@ -120,7 +121,8 @@ async def test_the_whole_way(client, admin_token, db_session):
 
 
 @pytest.mark.asyncio
-async def test_the_route_decides_what_reaches_the_upstream(client, admin_token):
+async def test_the_route_decides_what_reaches_the_upstream(client, admin_token, db_session):
+    await containment(client, admin_token, containment_max_boundary=20)   # every rule in turn
     _, _, agent = await _setup(client, admin_token, max_body_bytes=100)
     for desc, why in [(charge(method="DELETE"), "method"), (charge(path="/v1/refunds"), "outside"),
                       (charge(path="/v1/charges/../../admin"), "segment"), (charge(body_bytes=101), "larger"),
@@ -130,6 +132,10 @@ async def test_the_route_decides_what_reaches_the_upstream(client, admin_token):
     # tool name and route must agree; the descriptor has exactly its fields
     assert (await _check(client, agent, charge(), tool_name="proxy.other"))["decision"] == "denied"
     assert (await _check(client, agent, {**charge(), "extra": 1}))["decision"] == "denied"
+    # reaching past the route counts toward containment; a malformed request or a missing route does not
+    rows = (await db_session.execute(select(ActionCheck.reason, ActionCheck.boundary).where(
+        ActionCheck.agent_id == agent["id"]).order_by(ActionCheck.id))).all()
+    assert [b for _, b in rows] == [True, True, True, False, False, False, False], rows
 
 
 @pytest.mark.asyncio
