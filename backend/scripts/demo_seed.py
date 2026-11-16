@@ -37,8 +37,6 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 ORG_NAME = "Provenza Bank (demo)"
-# what this script named the organization before: still its own, so it may delete it
-EARLIER_NAMES = ("Acme Bank (Provenza demo)",)
 MIN_PASSWORD = 12
 ADMIN_EMAIL = ""   # demo-setup@<the viewer's domain>: used by this script only, with a random password
 
@@ -65,7 +63,7 @@ async def recreate_org(slug: str, viewer_email: str, viewer_password: str, delet
     async with AsyncSessionLocal() as db:
         org = (await db.execute(select(Organization).where(Organization.slug == slug))).scalar_one_or_none()
         old_id = org.id if org else None
-        if org is not None and org.name != ORG_NAME and org.name not in EARLIER_NAMES:
+        if org is not None and org.name != ORG_NAME:
             sys.exit(f"organization '{slug}' exists and is not a demo organization ({org.name!r}) - "
                      "choose another slug (--slug)")
         for email in (viewer_email, ADMIN_EMAIL):
