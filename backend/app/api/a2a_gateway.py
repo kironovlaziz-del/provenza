@@ -43,6 +43,7 @@ from app.models.user import User, UserRole
 from app.pvp import a2a_gateway as gw_module
 from app.pvp import a2a_wire as w
 from app.pvp import guard as pvp_guard
+from app.pvp import hidden_text
 from app.pvp.a2a_gateway import A2AGateway, CHAIN_META, tool_name
 from app.pvp.upstream_http import UpstreamError
 from app.services.agent_identity import authenticate_agent_request
@@ -241,19 +242,30 @@ class A2APeerOut(BaseModel):
     last_synced_at: Optional[datetime]
     last_error: Optional[str]
     created_at: datetime
+    # what hides in the card (app/pvp/hidden_text.py)
+    hidden: List[Dict[str, Any]] = []
+    hidden_level: str = "clean"
+
+
+class ApprovePeerIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    confirm_hidden: bool = False
 
 
 async def _out(db: AsyncSession, p: A2APeer) -> A2APeerOut:
     e = (await db.execute(select(ToolRegistryEntry).where(ToolRegistryEntry.id == p.registry_entry_id))
          ).scalar_one_or_none() if p.registry_entry_id else None
+    found = hidden_text.scan(p.card or {})
     return A2APeerOut(
+        hidden=found, hidden_level=hidden_text.level(found),
         id=p.id, slug=p.slug, tool_name=tool_name(p.slug), name=p.name, card_url=p.card_url,
         auth_header=p.auth_header, has_secret=p.credential_source != "none",
         credential_source=p.credential_source, enabled=p.enabled,
         timeout_seconds=p.timeout_seconds, card=p.card, card_digest=p.card_digest, endpoint_url=p.endpoint_url,
         protocol_version=p.protocol_version, status=e.status if e else "unsynced",
         pinned_digest=e.pinned_digest if e else None,
-        served=bool(e and e.status == "approved" and e.pinned_digest == p.card_digest and p.enabled),
+        served=bool(e and e.status == "approved" and e.pinned_digest == p.card_digest and p.enabled
+                    and hidden_text.level(found) != "refuse"),
         last_synced_at=p.last_synced_at, last_error=p.last_error, created_at=p.created_at)
 
 
@@ -347,16 +359,23 @@ async def sync_peer(peer_id: int, db: AsyncSession = Depends(get_db), user: User
 
 
 @admin_router.post("/{peer_id}/approve")
-async def approve_peer(peer_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(_admin)):
-    """Approve exactly the card seen at the last sync (its digest becomes the pin)."""
+async def approve_peer(peer_id: int, data: Optional[ApprovePeerIn] = None, db: AsyncSession = Depends(get_db),
+                       user: User = Depends(_admin)):
+    """Approve exactly the card seen at the last sync (its digest becomes the
+    pin) - not one with text a person cannot see, and one with invisible
+    characters only with confirm_hidden (app/pvp/hidden_text.py)."""
     org_id, user_id = user.org_id, user.id
     peer = await _get(db, org_id, peer_id)
     if not peer.card_digest:
         raise api_error(status.HTTP_409_CONFLICT, "a2a.not_synced")
+    found = hidden_text.scan(peer.card or {})
+    hidden_text.require_approvable(found, bool(data and data.confirm_hidden))
     name, digest = tool_name(peer.slug), peer.card_digest
     entry = await A2AGateway(db).approve(org_id, peer, user_id)
-    await AuditService(db).log(org_id, user_id, "tool_registry", entry.id, "approved",
-                               {"pattern": name, "pinned_digest": digest, "via": "a2a_gateway"})
+    meta = {"pattern": name, "pinned_digest": digest, "via": "a2a_gateway"}
+    if found:
+        meta["hidden_text"] = hidden_text.summary(found)
+    await AuditService(db).log(org_id, user_id, "tool_registry", entry.id, "approved", meta)
     return {"approved": name, "pinned_digest": digest}
 
 

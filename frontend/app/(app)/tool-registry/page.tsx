@@ -22,6 +22,7 @@ import {
   type ToolKind,
 } from "@/lib/tool_registry_api";
 import { confirmDialog } from "@/components/Dialog";
+import { approveConfirming } from "@/lib/hidden_text";
 
 const MODES: SupplyChainMode[] = ["off", "monitor", "enforce"];
 const STATUS_CLASS: Record<string, string> = {
@@ -73,8 +74,8 @@ export default function ToolRegistryPage() {
     setError(null);
     setNotice(null);
     try {
-      await action();
-      if (ok) setNotice(ok);
+      const done = await action();
+      if (ok && done !== false) setNotice(ok);   // false: the person declined (approveConfirming)
       load();
     } catch (err) {
       setError(registryError(err, t("registry.failed", "Could not save.")));
@@ -356,7 +357,9 @@ export default function ToolRegistryPage() {
                     {isAdmin && (
                       <td style={{ whiteSpace: "nowrap" }}>
                         {e.status !== "approved" && (
-                          <button className="btn btn-sm btn-primary" disabled={busy} onClick={() => run(() => approveToolEntry(e.id), t("registry.saved", "Saved"))}>
+                          <button className="btn btn-sm btn-primary" disabled={busy} onClick={() => run(() => approveConfirming(
+                            (c) => approveToolEntry(e.id, c),
+                            () => confirmDialog(t("hidden.confirm_approve", { name: e.pattern }))), t("registry.saved", "Saved"))}>
                             {e.status === "drifted" ? t("registry.reapprove", "Re-approve") : t("registry.approve", "Approve")}
                           </button>
                         )}{" "}

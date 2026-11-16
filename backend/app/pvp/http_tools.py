@@ -217,8 +217,11 @@ class HttpToolGateway:
         rows = (await self.db.execute(select(HttpTool).where(HttpTool.org_id == agent.org_id,
                                                              HttpTool.enabled.is_(True))
                                       .order_by(HttpTool.name))).scalars()
-        return [{"name": t.name, "description": t.description or "", "method": t.method,
-                 "input_schema": t.input_schema or {"type": "object"}} for t in rows if t.name in allowed]
+        from app.pvp.hidden_text import servable
+
+        out = [{"name": t.name, "description": t.description or "", "method": t.method,
+                "input_schema": t.input_schema or {"type": "object"}} for t in rows if t.name in allowed]
+        return [d for d in out if servable(d)]   # saved before the hidden-text check existed
 
     async def _judge(self, agent: Agent, req: PVPActionRequest, executor: str):
         """The check and everything this gateway refuses before sending. A

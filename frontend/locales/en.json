@@ -1233,7 +1233,9 @@
     "containment.bad_tripwires": "Up to {{max}} tripwire tools, each up to 100 characters.",
     "incident.not_found": "Incident not found.",
     "incident.no_agent": "This incident names no agent.",
-    "incident.bad_window": "The window must end after it starts and span at most {{max_days}} days."
+    "incident.bad_window": "The window must end after it starts and span at most {{max_days}} days.",
+    "tool.hidden_text": "Refused: the definition holds text a person cannot see ({{kinds}}).",
+    "tool.hidden_text_confirm": "The definition holds invisible characters ({{kinds}}); confirm you saw them to approve it."
   },
   "discovery": {
     "title": "Network Discovery",
@@ -4015,5 +4017,22 @@
     "cta_install": "Install on your server",
     "footer_source": "Source code",
     "footer_security": "Security model"
+  },
+  "hidden": {
+    "level_refuse": "Hidden text",
+    "level_confirm": "Invisible characters",
+    "level_refuse_hint": "The definition holds text a person cannot see but the agent's model reads. It cannot be approved and is not shown to agents; the server's owner must remove it.",
+    "level_confirm_hint": "The definition holds invisible characters. Look at the definition before approving: approving confirms you saw them.",
+    "kind_tag_text": "Tag characters spelling hidden text",
+    "kind_bidi": "Bidirectional controls (text shown in another order)",
+    "kind_control": "Control characters",
+    "kind_variation_data": "Variation selectors carrying data",
+    "kind_invisible": "Zero-width or other invisible characters",
+    "kind_private_use": "Private-use characters",
+    "kind_padding": "Long blank run pushing text out of view",
+    "spells": "spells",
+    "show_definition": "Full definition",
+    "hide_definition": "Hide definition",
+    "confirm_approve": "{{name}} holds invisible characters (see the full definition). Approve it anyway? Agents' models will read them."
   }
 }

@@ -1,6 +1,7 @@
 // Gateways besides the LLM one (lib/gateway_api.ts): MCP servers, A2A peers
 // and the egress proxy. Backend: app/api/mcp.py, a2a_gateway.py, egress_proxy.py.
 import { api } from "./api";
+import type { HiddenFinding, HiddenLevel } from "./hidden_text";
 import { passkeyAssertion, type Challenge } from "./signing";
 
 // ---------------------------------------------------------------- MCP
@@ -49,6 +50,10 @@ export interface McpTool {
   pinned_digest: string | null;
   served: boolean;
   removed_at: string | null;
+  /** all of it, as the agent's model reads it */
+  definition: Record<string, unknown>;
+  hidden: HiddenFinding[];
+  hidden_level: HiddenLevel;
 }
 
 export interface McpSyncReport {
@@ -68,8 +73,8 @@ export const deleteMcpServer = async (id: number) => {
 };
 export const syncMcpServer = async (id: number) => (await api.post<McpSyncReport>(`/mcp-servers/${id}/sync`)).data;
 export const listMcpTools = async (id: number) => (await api.get<McpTool[]>(`/mcp-servers/${id}/tools`)).data;
-export const approveMcpTool = async (serverId: number, toolId: number) =>
-  (await api.post(`/mcp-servers/${serverId}/tools/${toolId}/approve`)).data;
+export const approveMcpTool = async (serverId: number, toolId: number, confirmHidden = false) =>
+  (await api.post(`/mcp-servers/${serverId}/tools/${toolId}/approve`, { confirm_hidden: confirmHidden })).data;
 export const blockMcpTool = async (serverId: number, toolId: number) =>
   (await api.post(`/mcp-servers/${serverId}/tools/${toolId}/block`)).data;
 
@@ -93,6 +98,8 @@ export interface A2aPeer {
   status: string;
   pinned_digest: string | null;
   served: boolean;
+  hidden: HiddenFinding[];
+  hidden_level: HiddenLevel;
   last_synced_at: string | null;
   last_error: string | null;
   created_at: string;
@@ -118,7 +125,8 @@ export const deleteA2aPeer = async (id: number) => {
 export const syncA2aPeer = async (id: number) =>
   (await api.post<{ version: string; endpoint: string; card_digest: string; changed: boolean; status: string; skills: number }>(
     `/a2a-peers/${id}/sync`)).data;
-export const approveA2aPeer = async (id: number) => (await api.post(`/a2a-peers/${id}/approve`)).data;
+export const approveA2aPeer = async (id: number, confirmHidden = false) =>
+  (await api.post(`/a2a-peers/${id}/approve`, { confirm_hidden: confirmHidden })).data;
 export const blockA2aPeer = async (id: number) => (await api.post(`/a2a-peers/${id}/block`)).data;
 
 // ---------------------------------------------------------------- egress proxy

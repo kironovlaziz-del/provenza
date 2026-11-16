@@ -7,6 +7,7 @@
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends
+from pydantic import BaseModel, ConfigDict
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, require_role
@@ -99,12 +100,47 @@ async def _set_status(db, user, entry_id, new_status, action):
     return await service.get(user.org_id, entry_id)
 
 
+class ApproveEntryIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    # the approver saw the invisible characters the pinned definition holds
+    confirm_hidden: bool = False
+
+
+async def _pinned_definitions(db: AsyncSession, org_id: int, entry_id: int) -> list:
+    """What an agent's model would read once the entry is approved: the MCP
+    tool definitions and A2A cards that hash to its pin."""
+    from sqlalchemy import select
+
+    from app.models.a2a_gateway import A2APeer
+    from app.models.mcp import MCPTool
+    from app.models.tool_registry import ToolRegistryEntry
+
+    entry = (await db.execute(select(ToolRegistryEntry).where(
+        ToolRegistryEntry.id == entry_id, ToolRegistryEntry.org_id == org_id))).scalar_one_or_none()
+    if entry is None or not entry.pinned_digest:
+        return []
+    tools = (await db.execute(select(MCPTool.definition).where(
+        MCPTool.org_id == org_id, MCPTool.registry_entry_id == entry_id,
+        MCPTool.digest == entry.pinned_digest))).scalars().all()
+    cards = (await db.execute(select(A2APeer.card).where(
+        A2APeer.org_id == org_id, A2APeer.registry_entry_id == entry_id,
+        A2APeer.card_digest == entry.pinned_digest))).scalars().all()
+    return [d for d in (*tools, *cards) if d]
+
+
 @router.post("/{entry_id}/approve", response_model=ToolEntryOut)
 async def approve_entry(
     entry_id: int,
+    data: Optional[ApproveEntryIn] = None,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_role(UserRole.admin)),
 ):
+    """Approving here is approving the pinned definition: the same hidden-text
+    rules as on the MCP and A2A pages (app/pvp/hidden_text.py)."""
+    from app.pvp import hidden_text
+
+    found = [f for d in await _pinned_definitions(db, current_user.org_id, entry_id) for f in hidden_text.scan(d)]
+    hidden_text.require_approvable(found, bool(data and data.confirm_hidden))
     return await _set_status(db, current_user, entry_id, "approved", "approved")
 
 

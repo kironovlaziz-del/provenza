@@ -20,7 +20,10 @@ What it guarantees, and how:
   reads            definition that was approved: a tool is shown while its
                    synced definition hashes to the Tool Registry pin. A
                    description changed upstream ("tool poisoning") is never
-                   shown - the tool disappears until it is re-approved.
+                   shown - the tool disappears until it is re-approved. Text
+                   a person cannot see (Unicode tag characters, bidi
+                   controls, variation-selector data) is neither approved
+                   nor served (app/pvp/hidden_text.py).
   what is called   before every call the live definition is fetched (cached
                    LIVE_TTL_SECONDS) and hashed by the gateway itself - not
                    reported by the agent - so a tool that changed after
@@ -55,6 +58,7 @@ from app.models.agent_action import AgentIncident
 from app.models.mcp import MCPServer, MCPTool
 from app.models.tool_registry import ToolRegistryEntry
 from app.pvp import mcp_client
+from app.pvp import hidden_text
 from app.pvp.guard import structure_findings
 from app.pvp.model import ALLOWED, PENDING_APPROVAL, PVPActionRequest
 from app.pvp.orchestrator import PVPOrchestrator
@@ -236,7 +240,9 @@ class MCPGateway:
                     ToolRegistryEntry.pinned_digest == MCPTool.digest))
         if name is not None:
             q = q.where(MCPTool.exposed_name == name)
-        return [(t, s) for t, s, _ in (await self.db.execute(q.order_by(MCPTool.exposed_name))).all()]
+        # a definition with text a person cannot see is never served (app/pvp/hidden_text.py)
+        return [(t, s) for t, s, _ in (await self.db.execute(q.order_by(MCPTool.exposed_name))).all()
+                if hidden_text.servable(t.definition or {})]
 
     async def list_tools(self, agent: Agent) -> List[dict]:
         allowed = set(own_rights(agent).tools)
