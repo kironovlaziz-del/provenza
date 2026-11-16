@@ -34,5 +34,6 @@
 
 - [Identity provider](identity-provider.md): single sign-on (OIDC), SCIM provisioning and offboarding
 - [Tamper-evident audit log](audit-proofs.md): hash chain, signed checkpoints, RFC 3161 time-stamps, offline proofs
+- [Incident bundle](incident-bundle.md): one file to investigate an agent incident - what the agent did, asked for and was refused, and who vouches for each line
 - [Proof of Authority](proof-of-authority.md): who allowed an agent action, every link signed, checked offline; completeness of an agent's actions
 - [Security model](security-model.md): what is guaranteed, and what is not

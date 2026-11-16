@@ -63,6 +63,17 @@ not share code with one, so what it says does not depend on trusting either.
         seals, each one's record in the signed log and its root the Merkle
         root of exactly the actions given - so the agent's actions listed
         are all Provenza recorded for it between the first and the last
+  incident BUNDLE.json [--fingerprint SHA256:...]... [--agent-fingerprint SHA256:...]
+                       [--passkey SHA256:...]... [--list N] [--require-full]
+        an incident bundle (GET /pvp/incidents/{id}/bundle;
+        docs/incident-bundle.md): the agent's actions in the window shown to
+        be all of them (as completeness), the audit records about it in the
+        signed log, the agent's own signature on each call it asked for, the
+        tasks, approvals and release people signed with their passkeys, and
+        the delegation hops - then one timeline, each line saying who vouches
+        for it. What only the server says (the incident itself, unless its
+        quarantine record is in the log; checks the agent did not sign) is
+        named as such; --require-full makes any such gap a failure
   trace EXPORT.json [--fingerprint SHA256:...]...
         a TRACE v0.2 Trust Record export (GET /pvp/receipts/{id}/trace or
         /pvp/chains/{id}/trace): the JWT is signed EdDSA by the key in
@@ -1280,6 +1291,198 @@ def cmd_trace(args) -> int:
     return 0
 
 
+# ---------------------------------------------------------------------------
+# Incident bundle (docs/incident-bundle.md)
+# ---------------------------------------------------------------------------
+
+AGENT_RELEASE_TYPE = "provenza.agent.release"
+# audit records about what governs every agent (app/pvp/incident_bundle.py CONTEXT)
+INCIDENT_CONTEXT = ("kill_switch", "behavior_monitor", "policy_release", "agent_identity", "tool_registry")
+
+
+def _audit_time(payload):
+    import datetime as _dt
+    t = _dt.datetime.strptime(payload["created_at"], "%Y-%m-%dT%H:%M:%S.%fZ")
+    return t.replace(tzinfo=_dt.timezone.utc).timestamp()
+
+
+def _signed_by_person(m, label, passkey_fps):
+    fp = _session_signed(m, label)
+    if passkey_fps and fp not in passkey_fps:
+        raise Fail(f"{label}: signed with passkey {fp}, not one of the passkeys you gave")
+    return fp
+
+
+def check_incident(doc, trust=None, agent_fp=None, passkey_fps=None):
+    """An incident bundle. Returns (summary lines, timeline events, gaps);
+    an event is (unix time, who vouches for it, text)."""
+    if doc.get("pvp") != "pvp/1" or doc.get("type") != "incident":
+        raise Fail("not an incident bundle (pvp/1)")
+    org, agent, inc = doc["org_id"], doc["agent"], doc["incident"]
+    aid = agent["id"]
+    since, until = doc["window"]["since"], doc["window"]["until"]
+    if inc.get("agent_id") != aid:
+        raise Fail("the incident is not about the agent the bundle describes")
+    trust = trust if trust is not None else Trust()
+    lines, events, gaps = [], [], []
+    keys = set()
+
+    # every action recorded in the window, shown to be all of them
+    comp = doc.get("completeness")
+    if comp:
+        if comp.get("org_id") != org or comp.get("agent_id") != aid:
+            raise Fail("the completeness report is about another agent or organization")
+        members, mine, first, last, fps = check_completeness(comp, trust)
+        keys |= fps
+        inside = [m for m in mine if since <= m["recorded_at"] <= until]
+        for m in inside:
+            events.append((m["recorded_at"], "signed log",
+                           f"action #{m['action_id']} {m.get('tool_name')} {m.get('decision')}"))
+        lines.append(f"actions: {len(inside)} recorded in the window, and no other (seals {first}..{last})")
+        span = (min(x["recorded_at"] for x in members), max(x["recorded_at"] for x in members))
+        if span[0] > since and not _first_is_genesis(comp):
+            gaps.append(f"the seals start at {_when(span[0])}, after the window's start - an earlier seal may "
+                        f"hold actions of the window")
+    else:
+        gaps.append(f"no proof that the actions are all of them: {doc.get('completeness_gap') or 'not given'}")
+
+    # the audit records about the agent, each in the signed log
+    task_ids = {t.get("mandate_id") for t in doc.get("tasks") or []}
+    quarantine = None
+    for p in doc.get("audit") or []:
+        payload, cp, fp = check_proof(p, trust)
+        keys.add(fp)
+        if payload["org_id"] != org:
+            raise Fail("an audit record of another organization")
+        et, eid, meta = payload.get("entity_type"), payload.get("entity_id"), payload.get("metadata") or {}
+        if not ((et == "agent" and eid == aid) or et in INCIDENT_CONTEXT or (et == "task_mandate" and eid in task_ids)):
+            raise Fail(f"audit record {payload['seq']} ({et} {eid}) is not about this agent")
+        who = f" by user {payload['actor_user_id']}" if payload.get("actor_user_id") else ""
+        text = f"{et} {payload.get('action')}{who}"
+        if et == "agent" and payload.get("action") == "quarantined":
+            c = meta.get("contained") or {}
+            text += f" - {c.get('reason') or 'behaviour score ' + str(meta.get('score'))}"
+            if meta.get("incident_id") == inc["id"]:
+                quarantine = meta
+        events.append((_audit_time(payload), "signed log", text))
+    if doc.get("audit_truncated"):
+        gaps.append("more audit records fell in the window than the bundle carries")
+
+    # the incident: in the signed log when it is a quarantine, otherwise the server's word
+    if quarantine is not None:
+        lines.append(f"incident #{inc['id']} ({inc['incident_type']}): its record is in the signed audit log")
+    else:
+        gaps.append(f"incident #{inc['id']} ({inc['incident_type']}) itself rests on the server's word")
+    events.append((inc["at"], "signed log" if quarantine is not None else "server",
+                   f"INCIDENT #{inc['id']} {inc['incident_type']} ({inc.get('severity')})"))
+    for o in doc.get("other_incidents") or []:
+        events.append((o["at"], "server", f"incident #{o['id']} {o['incident_type']} ({o.get('severity')})"))
+
+    # the checks: those the agent asked for itself carry its signed request
+    checks = doc.get("checks") or []
+    signed_checks, by_id = 0, {}
+    for c in checks:
+        by_id[c["check_id"]] = c
+        flag = " [past its boundaries]" if c.get("boundary") else ""
+        text = f"check #{c['check_id']} {c.get('tool_name')} {c.get('decision')}{flag}: {c.get('reason')}"
+        if c.get("requested"):
+            fp = check_requested(c["requested"], {**c, "agent_id": aid, "mandate": {"id": c.get("mandate_id")}})
+            if agent_fp and fp != agent_fp:
+                raise Fail(f"check #{c['check_id']}: the request is signed by {fp}, not the agent key you gave")
+            keys.add(fp)
+            signed_checks += 1
+            events.append((c["at"], "agent's key", text))
+        else:
+            events.append((c["at"], "server", text))
+    boundary = [c for c in checks if c.get("boundary")]
+    lines.append(f"checks: {len(checks)} in the window, {signed_checks} asked for in the agent's own signed "
+                 f"request; {len(boundary)} refused for reaching past its boundaries"
+                 + (f" ({', '.join(sorted({str(c.get('tool_name')) for c in boundary}))})" if boundary else ""))
+    if len(checks) > signed_checks:
+        gaps.append(f"{len(checks) - signed_checks} check(s) the agent did not sign rest on the server's word")
+    if doc.get("checks_truncated"):
+        gaps.append("more checks fell in the window than the bundle carries")
+    if quarantine is not None:
+        led = [r.get("check_id") for r in (quarantine.get("contained") or {}).get("refusals") or []]
+        if led:
+            own = [i for i in led if (by_id.get(i) or {}).get("requested")]
+            lines.append(f"the quarantine names {len(led)} refusal(s) that led to it; the agent signed the "
+                         f"request of {len(own)} of them")
+
+    # what people signed: tasks, decisions on held calls, the release
+    for m in doc.get("tasks") or []:
+        st = m.get("statement") or {}
+        check_mandate(m, {"mandate": {"id": m.get("mandate_id"), "statement_sha256": _sha(st)},
+                          "decision": "denied"}, org)
+        _signed_by_person(m, "task", passkey_fps)
+        to = "" if st.get("agent_id") == aid else f" (given to agent {st.get('agent_id')})"
+        events.append((st["issued_at"], "person's passkey",
+                       f"task #{m['mandate_id']} given by user {st['user_id']}{to}: {str(st.get('task'))[:80]}"))
+        end = task_end(m)
+        if end:
+            events.append((end[0], "person's passkey", f"task #{m['mandate_id']} ended by user {end[1]}"))
+    for a in doc.get("approvals") or []:
+        if not a.get("signed"):
+            events.append((a["decided_at"], "server", f"held call #{a['action_id']}: {a['decision']}"))
+            continue
+        st = a["signed"].get("statement") or {}
+        if st.get("type") != APPROVAL_TYPE or st.get("action_id") != a["action_id"] \
+                or st.get("decision") != a["decision"] \
+                or any(st.get(k) != a["action"].get(k) for k in APPROVAL_FIELDS) or st.get("agent_id") != aid:
+            raise Fail(f"approval {a['approval_id']}: the signed decision is about another call")
+        _signed_by_person(a["signed"], "approval", passkey_fps)
+        events.append((st["issued_at"], "person's passkey",
+                       f"held call #{a['action_id']} {a['action'].get('tool_name')}: {a['decision']} by user "
+                       f"{st['user_id']}"))
+    rel = doc.get("release")
+    if rel:
+        st = rel.get("statement") or {}
+        if st.get("type") != AGENT_RELEASE_TYPE or st.get("agent_id") != aid or st.get("org_id") != org:
+            raise Fail("release: not a signed release of this agent")
+        _signed_by_person(rel, "release", passkey_fps)
+        events.append((st["issued_at"], "person's passkey",
+                       f"released from quarantine (incident #{st.get('incident_id')}) by user {st['user_id']}"))
+
+    # the delegation hops, each signed by the agent that delegated
+    for d in doc.get("delegation") or []:
+        for h in d.get("hops") or []:
+            fp = check_hop(h)
+            if fp and agent_fp and h["from_agent_id"] == aid and fp != agent_fp:
+                raise Fail(f"delegation hop {h['hop_id']}: signed by {fp}, not the agent key you gave")
+        state = d.get("status")
+        if d.get("breaker_tripped_at"):
+            events.append((d["breaker_tripped_at"], "server", f"chain #{d['chain_id']} halted ({state})"))
+    events.sort(key=lambda e: (e[0] or 0))
+    return lines, events, gaps, keys
+
+
+def cmd_incident(args) -> int:
+    doc = _load(args.file)
+    trust = Trust(args.fingerprint)
+    lines, events, gaps, _ = check_incident(doc, trust, args.agent_fingerprint, args.passkey)
+    inc, agent, w = doc["incident"], doc["agent"], doc["window"]
+    print(f"{'VERIFIED' if not gaps else 'VERIFIED, WITH GAPS'}  incident #{inc['id']} ({inc['incident_type']}, "
+          f"{inc.get('severity')}) of agent {agent['id']} \"{agent.get('name')}\"")
+    print(f"          window {_when(w['since'])} - {_when(w['until'])}")
+    for line in lines:
+        print("          " + line)
+    print("timeline (who vouches for each line):")
+    shown = events if args.list <= 0 else events[: args.list]
+    for t, who, text in shown:
+        print(f"  {_when(t) if t else '?':<24} {who:<17} {text}")
+    if len(shown) < len(events):
+        print(f"  ... and {len(events) - len(shown)} more (--list 0 shows all)")
+    for g in gaps:
+        print("not proven: " + g)
+    if not args.agent_fingerprint and agent.get("key_fingerprint"):
+        print(f"note: no --agent-fingerprint given - the file says the agent's key is {agent['key_fingerprint']}")
+    if not args.passkey:
+        print("note: no --passkey given - what people signed verifies, but not that those passkeys are the ones "
+              "you trust")
+    _note(trust)
+    return 1 if gaps and args.require_full else 0
+
+
 def _load(path):
     try:
         with open(path, encoding="utf-8") as f:
@@ -1430,6 +1633,15 @@ def main(argv=None) -> int:
     co.add_argument("--list", type=int, default=20, help="how many of the agent's actions to list (default 20)")
     co.add_argument("--require-full", action="store_true",
                     help="fail (exit 1) when the seals do not cover the whole period asked for")
+    ic = sub.add_parser("incident")
+    ic.add_argument("file")
+    ic.add_argument("--fingerprint", action="append", default=[])
+    ic.add_argument("--agent-fingerprint")
+    ic.add_argument("--passkey", action="append", default=[],
+                    help="fingerprint of a passkey you trust to give tasks, decide and release; repeatable")
+    ic.add_argument("--list", type=int, default=100, help="how many timeline lines to print (0: all)")
+    ic.add_argument("--require-full", action="store_true",
+                    help="fail (exit 1) when anything rests on the server's word, not only when a link is broken")
     t = sub.add_parser("trace")
     t.add_argument("file")
     t.add_argument("--fingerprint", action="append", default=[])
@@ -1437,7 +1649,8 @@ def main(argv=None) -> int:
     try:
         return {"verify": cmd_verify, "checkpoint": cmd_checkpoint, "consistency": cmd_consistency,
                 "receipt": cmd_receipt, "trace": cmd_trace, "release": cmd_release,
-                "authority": cmd_authority, "completeness": cmd_completeness}[args.cmd](args)
+                "authority": cmd_authority, "completeness": cmd_completeness,
+                "incident": cmd_incident}[args.cmd](args)
     except TrustFail as e:
         for line in e.lines:  # the trust chain first: it, not the signature, is the usual culprit
             print(line)
