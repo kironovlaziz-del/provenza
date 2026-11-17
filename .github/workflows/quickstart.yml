@@ -42,6 +42,11 @@ jobs:
             sudo podman system reset --force
           fi
           sudo podman info --format 'podman {{.Version.Version}}, network {{.Host.NetworkBackend}}'
+          # GitHub's image: AppArmor's container profile denies signals inside a
+          # container, which install.sh refuses (docs/self-hosting.md#troubleshooting).
+          # This machine is thrown away after the run, so take the documented way out.
+          sudo mkdir -p /etc/containers/containers.conf.d
+          printf '[containers]\napparmor_profile = "unconfined"\n' | sudo tee /etc/containers/containers.conf.d/apparmor.conf
 
       - name: The stand-in for DeepWiki
         run: |

@@ -91,6 +91,15 @@ build_images() {  # build_images [extra podman build args]
 }
 
 # Pull the third-party images named in the templates, so no unit pulls at start.
+# Can a process in a container signal another in the same container? On some
+# hosts AppArmor's container profile denies it (containers-default older than
+# the kernel's signal mediation): pg_ctl cannot stop the server it started
+# during PostgreSQL's first start, and tini cannot pass on a stop.
+signals_ok() {
+  podman run --rm --network none --entrypoint sh "$(image_ref backend)" -c 'sleep 30 & p=$!; kill "$p" || exit 1; wait "$p"; exit 0' \
+    >/dev/null 2>&1
+}
+
 pull_images() {
   local img
   for img in $(sed -n 's/^Image=//p' "$DEPLOY_DIR"/quadlet/*.container | grep -v '^@' | sort -u); do
