@@ -141,3 +141,43 @@ git_as_owner() {
     runuser -u "$owner" -- git -C "$ROOT_DIR" "$@"
   fi
 }
+
+# Is this commit the published release? A release (.github/workflows/release.yml)
+# publishes release.json - its tag, commit and tree - signed by the release
+# workflow. A checkout whose tag points at another commit than that record
+# is not the released code: say so loudly. Warns, never stops (docs/releases.md).
+release_check() {  # release_check <commit>
+  local commit tag repo tmp rec
+  commit=$(git_as_owner rev-parse --verify --quiet "$1^{commit}" 2>/dev/null) || {
+    printf '    (not a git checkout: the release record is not checked)\n'; return 0; }
+  tag=$(git_as_owner tag --points-at "$commit" --list 'v[0-9]*' 2>/dev/null | sort -V | tail -n1)
+  if [ -z "$tag" ]; then
+    printf '    (%s is not a tagged release, so there is no published record to check it against)\n' \
+      "$(git_as_owner rev-parse --short "$commit")"
+    return 0
+  fi
+  repo=$(git_as_owner remote get-url origin 2>/dev/null \
+         | sed -nE 's#^(https://github\.com/|git@github\.com:)([^/]+/[^/]+)$#\2#p' | sed 's/\.git$//')
+  if [ -z "$repo" ]; then warn "$tag: the repository is not on GitHub - its release record is not checked"; return 0; fi
+  command -v curl >/dev/null || { warn "$tag: curl is missing - the release record is not checked"; return 0; }
+  tmp=$(mktemp -d)
+  if ! curl -fsSL --max-time 20 -o "$tmp/release.json" "https://github.com/$repo/releases/download/$tag/release.json" 2>/dev/null; then
+    warn "$tag: no published release record (release.json) was found - this code is not checked against one"
+    rm -rf "$tmp"; return 0
+  fi
+  rec=$(sed -nE 's/^ *"commit": *"([0-9a-f]{40})".*/\1/p' "$tmp/release.json" | head -n1)
+  if [ "$rec" != "$commit" ]; then
+    warn "THIS IS NOT THE RELEASED CODE: $tag here is commit $commit, the published release $tag is ${rec:-unreadable}."
+    warn "Find out where this checkout came from before going on (docs/releases.md)."
+    rm -rf "$tmp"; return 0
+  fi
+  if command -v gh >/dev/null && gh attestation verify "$tmp/release.json" --repo "$repo" >/dev/null 2>&1; then
+    ok "$tag is the published release, and its record is signed by the release workflow"
+  else
+    ok "$tag is the published release (commit ${commit:0:12})"
+    printf '    its signature: gh release download %s -p release.json -R %s && gh attestation verify release.json -R %s\n' \
+      "$tag" "$repo" "$repo"
+  fi
+  rm -rf "$tmp"
+  return 0
+}

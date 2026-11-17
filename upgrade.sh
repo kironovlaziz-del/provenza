@@ -84,6 +84,7 @@ if [ "$target" = "$prev" ]; then ok "already at $(git_as_owner describe --tags -
 git_as_owner merge-base --is-ancestor "$prev" "$target" || warn "$(git_as_owner describe --tags --always "$target") is not ahead of the running version (a downgrade?)"
 echo "    $(git_as_owner describe --tags --always "$prev") -> $(git_as_owner describe --tags --always "$target")"
 git_as_owner --no-pager log --oneline --no-decorate "$prev..$target" | head -n 15 | sed 's/^/      /'
+release_check "$target"   # the published, signed release record (docs/releases.md)
 confirm "Upgrade now?" || exit 1
 
 if [ -n "$VERSION" ]; then git_as_owner checkout --quiet --detach "$target"; else git_as_owner merge --quiet --ff-only "$target"; fi

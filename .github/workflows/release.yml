@@ -1,0 +1,110 @@
+name: Release
+
+# A release of Provenza: push a tag "v<version>" (e.g. v0.4.0). The workflow
+# publishes, on the GitHub release of that tag:
+#
+#   provenza-<tag>.tar.gz        the source of the tag (git archive)
+#   provenza-<tag>.spdx.json     SBOM, SPDX (the dependencies the source pins:
+#   provenza-<tag>.cdx.json      SBOM, CycloneDX  Python, npm and Go modules)
+#   release.json                 the record install.sh and upgrade.sh check a
+#                                checkout against: tag, commit, tree, hashes
+#   SHA256SUMS                   the hash of each of the above
+#
+# and signs each of them with a build provenance attestation (Sigstore,
+# keyless - no key is stored anywhere): it says this workflow, in this
+# repository, at this commit, made exactly this file. Check it with
+#   gh attestation verify release.json --repo kironovlaziz-del/provenza
+# (docs/releases.md). A release that does not exist yet is created as a
+# draft, so its notes are written by a person before it is published.
+
+on:
+  push:
+    tags: ["v[0-9]*"]
+
+permissions: {}
+
+jobs:
+  release:
+    name: Source, SBOM, signed record
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write        # the release and its files
+      id-token: write        # Sigstore signing identity of this workflow
+      attestations: write    # store the attestations with the repository
+    env:
+      TAG: ${{ github.ref_name }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: The tag is on main
+        run: |
+          git fetch --quiet origin main
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main || {
+            echo "tag $TAG ($GITHUB_SHA) is not on main" >&2; exit 1; }
+
+      - name: Source archive
+        run: |
+          mkdir -p out
+          git archive --format=tar.gz --prefix="provenza-$TAG/" -o "out/provenza-$TAG.tar.gz" "$GITHUB_SHA"
+
+      - name: SBOM (SPDX)
+        uses: anchore/sbom-action@v0
+        with:
+          path: .
+          format: spdx-json
+          output-file: out/provenza-${{ github.ref_name }}.spdx.json
+          upload-artifact: false
+          upload-release-assets: false
+
+      - name: SBOM (CycloneDX)
+        uses: anchore/sbom-action@v0
+        with:
+          path: .
+          format: cyclonedx-json
+          output-file: out/provenza-${{ github.ref_name }}.cdx.json
+          upload-artifact: false
+          upload-release-assets: false
+
+      - name: Release record
+        run: |
+          python3 - <<'PY'
+          import hashlib, json, os, subprocess
+          tag, sha, repo = os.environ["TAG"], os.environ["GITHUB_SHA"], os.environ["GITHUB_REPOSITORY"]
+          tree = subprocess.check_output(["git", "rev-parse", f"{sha}^{{tree}}"], text=True).strip()
+          files = {}
+          for name in sorted(os.listdir("out")):
+              with open(os.path.join("out", name), "rb") as f:
+                  files[name] = hashlib.sha256(f.read()).hexdigest()
+          record = {"type": "provenza.release", "v": 1, "version": tag, "repository": repo,
+                    "commit": sha, "tree": tree, "files": files}
+          with open("out/release.json", "w") as f:
+              json.dump(record, f, indent=2)
+              f.write("\n")
+          PY
+          cd out && sha256sum -- * > SHA256SUMS && cat SHA256SUMS
+
+      - name: Sign (build provenance)
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: |
+            out/provenza-${{ github.ref_name }}.tar.gz
+            out/provenza-${{ github.ref_name }}.spdx.json
+            out/provenza-${{ github.ref_name }}.cdx.json
+            out/release.json
+            out/SHA256SUMS
+
+      - name: Sign (SBOM of the source archive)
+        uses: actions/attest-sbom@v2
+        with:
+          subject-path: out/provenza-${{ github.ref_name }}.tar.gz
+          sbom-path: out/provenza-${{ github.ref_name }}.spdx.json
+
+      - name: Publish on the release
+        run: |
+          gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" --draft --verify-tag \
+            --title "Provenza $TAG" --notes "Release notes to be written. Verify: docs/releases.md"
+          gh release upload "$TAG" out/* --clobber
