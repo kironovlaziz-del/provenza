@@ -6,6 +6,11 @@ Releases go to npm from GitHub Actions
 attestation that links the package to the commit and workflow that built
 it.
 
+The workflow only **stages** a version (`npm stage publish`). It goes live
+when a maintainer approves it on npmjs.com with their npm two-factor
+authentication, so a compromised workflow or GitHub account cannot release a
+version on its own.
+
 ## One-time setup (an npm account owner)
 
 1. Publish the first version by hand, because npm attaches a trusted
@@ -27,9 +32,11 @@ it.
    | Repository | `provenza` |
    | Workflow filename | `release-sdk-js.yml` |
    | Environment | `npm` |
+   | Allow npm publish | unchecked (only staged publishing) |
+   | Allow npm dist-tag | unchecked |
 
-3. In the same settings, choose to require two-factor authentication and
-   disallow tokens, so that only the workflow can publish.
+3. In **Publishing access**, choose "Require two-factor authentication and
+   disallow bypass 2fa tokens".
 4. On GitHub, open **Settings → Environments** and create `npm`, with
    yourself as a required reviewer.
 
@@ -45,5 +52,8 @@ it.
    ```
 
 3. The workflow checks that the tag equals the version, runs the tests,
-   waits for the `npm` environment approval, then publishes with
+   waits for the `npm` environment approval, then stages the version with
    provenance.
+4. On npmjs.com, open **provenza → Staged Packages**, check the version and
+   approve it with your two-factor authentication (or run
+   `npm stage approve provenza@<version>`). Only then does it go live.
