@@ -6,6 +6,8 @@ this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-17
+
 ### Added
 - **The quickstart, tested end to end**: on every change a fresh machine runs `install.sh`, then a browser goes through [docs/quickstart.md](docs/quickstart.md) - sign in, approve two MCP tools, register the agent, run the connect command from the page, call a tool, refuse it with one line of policy, verify the receipt offline (`.github/workflows/quickstart.yml`, `e2e/quickstart.py`).
 - **Signed releases with an SBOM** ([docs/releases.md](docs/releases.md)): a tag `vX.Y.Z` publishes the source archive, an SBOM in SPDX and CycloneDX, a release record (`release.json`: tag, commit, tree, hashes) and `SHA256SUMS`, each signed with a keyless build provenance attestation (`gh attestation verify`). `install.sh` and `upgrade.sh` check a tagged release against its record and warn loudly when the tag in the checkout is not the published commit.
@@ -1055,5 +1057,6 @@ this project adheres to [Semantic Versioning](https://semver.org/).
 - `_detect_gpu` fallback when torch is installed but built for CPU only.
 - Various N+1 query fixes via cached model loading (`lru_cache`).
 
-[Unreleased]: https://github.com/kironovlaziz-del/provenza/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/kironovlaziz-del/provenza/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/kironovlaziz-del/provenza/releases/tag/v0.4.0
 [0.3.0]: https://github.com/kironovlaziz-del/provenza/releases/tag/v0.3.0
