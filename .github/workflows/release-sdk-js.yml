@@ -1,11 +1,14 @@
 name: Release JS SDK
 
-# Publishes sdk/js to npm when a tag "sdk-js-v<version>" is pushed, e.g.
+# Stages sdk/js on npm when a tag "sdk-js-v<version>" is pushed, e.g.
 # sdk-js-v0.2.0. The tag must equal package.json's version.
 #
 # No npm token is stored anywhere: npm trusts this workflow through OIDC
-# (trusted publishing) and attaches a provenance attestation. One-time setup:
-# sdk/js/RELEASING.md.
+# (trusted publishing) and attaches a provenance attestation. The workflow
+# only stages the version (npm stage publish); it goes live when a
+# maintainer approves it on npmjs.com with their npm two-factor
+# authentication, so neither this workflow nor a GitHub account alone can
+# release a version. One-time setup and each release: sdk/js/RELEASING.md.
 
 on:
   push:
@@ -15,7 +18,7 @@ permissions: {}
 
 jobs:
   publish:
-    name: Test and publish to npm
+    name: Test and stage on npm
     runs-on: ubuntu-latest   # trusted publishing needs a GitHub-hosted runner
     timeout-minutes: 15
     environment:
@@ -31,11 +34,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Node 24 (ships npm >= 11.5.1, which trusted publishing needs)
+      - name: Set up Node 24
         uses: actions/setup-node@v4
         with:
           node-version: "24"
           registry-url: "https://registry.npmjs.org"
+
+      - name: npm 11.15.0 (staged publishing needs it)
+        run: npm install -g npm@11.15.0 && npm --version
 
       - name: The tag names the version being released
         env:
@@ -52,5 +58,5 @@ jobs:
           npm ci
           npm test
 
-      - name: Publish
-        run: npm publish --provenance --access public
+      - name: Stage for a maintainer's approval
+        run: npm stage publish --provenance --access public
