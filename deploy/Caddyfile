@@ -3,6 +3,12 @@
 {
 	servers {
 		protocols h1 h2 h3
+		# An agent's signed request travels in its headers: with a post-quantum
+		# hybrid key (Ed25519 + ML-DSA-65) they reach ~16 KiB, Caddy's default
+		# limit since 2.11.6 (Go's 1 MB before). Above it HTTP/2 refuses the
+		# request before it is sent ("request header list larger than peer's
+		# advertised limit").
+		max_header_size 64KiB
 	}
 }
 

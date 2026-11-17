@@ -242,6 +242,13 @@ step "Building the images (the first build takes a few minutes)"
 build_images || die "the build failed - see the output above"
 pull_images || die "could not pull the PostgreSQL, Redis, Caddy or monitoring images"
 ok "images ready: $(image_ref backend), $(image_ref web)"
+signals_ok || die "processes in a container here cannot signal each other (\"Permission denied\"): AppArmor's
+  container profile is older than this kernel's signal rules. PostgreSQL cannot finish its first start
+  and no service can be stopped cleanly. Update Podman's profile (apt install --only-upgrade
+  golang-github-containers-common podman), or allow it for Podman on this host:
+    printf '[containers]\\napparmor_profile = \"unconfined\"\\n' > /etc/containers/containers.conf.d/apparmor.conf
+  then run ./install.sh again (docs/self-hosting.md#troubleshooting)"
+ok "containers can stop their own processes"
 
 step "Installing the systemd units"
 ./scripts/units.sh install | sed 's/^/  /'

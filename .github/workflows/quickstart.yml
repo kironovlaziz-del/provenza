@@ -1,0 +1,120 @@
+name: Quickstart
+
+# docs/quickstart.md, end to end, on a fresh machine: install.sh exactly as a
+# person runs it (Podman, systemd, Caddy, HTTPS on localhost), then
+# e2e/quickstart.py goes through the remaining steps in a browser - sign in,
+# add the MCP server and approve two tools, register the agent, run the
+# connect command shown on the page, call a tool through agent mode, refuse it
+# with one line of policy, download the receipt and verify it offline.
+# DeepWiki is replaced by e2e/fake_deepwiki.py (the same tools), so the test
+# does not depend on a service on the internet.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: quickstart-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quickstart:
+    name: Install, then the quickstart in a browser
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    env:
+      PROVENZA_ADMIN_PASSWORD: quickstart-e2e-${{ github.run_id }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Podman with netavark (what install.sh requires)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq podman netavark aardvark-dns >/dev/null
+          if [ "$(sudo podman info --format '{{.Host.NetworkBackend}}')" != netavark ]; then
+            sudo mkdir -p /etc/containers/containers.conf.d
+            printf '[network]\nnetwork_backend = "netavark"\n' | sudo tee /etc/containers/containers.conf.d/netavark.conf
+            sudo podman system reset --force
+          fi
+          sudo podman info --format 'podman {{.Version.Version}}, network {{.Host.NetworkBackend}}'
+          # GitHub's image: AppArmor's container profile denies signals inside a
+          # container, which install.sh refuses (docs/self-hosting.md#troubleshooting).
+          # This machine is thrown away after the run, so take the documented way out.
+          sudo mkdir -p /etc/containers/containers.conf.d
+          printf '[containers]\napparmor_profile = "unconfined"\n' | sudo tee /etc/containers/containers.conf.d/apparmor.conf
+
+      - name: The stand-in for DeepWiki
+        run: |
+          nohup python3 e2e/fake_deepwiki.py --port 8765 --log "$RUNNER_TEMP/fake-calls.jsonl" >/dev/null 2>&1 &
+          echo "HOST_IP=$(hostname -I | awk '{print $1}')" >> "$GITHUB_ENV"
+
+      - name: 1. Install
+        run: |
+          sudo --preserve-env=PROVENZA_ADMIN_PASSWORD ./install.sh --yes --domain localhost \
+            --org "Example" --admin-email admin@example.com --admin-name "Jane Admin" \
+            --no-backup --no-sensor --no-edge --force
+
+      - name: Let the server reach the stand-in, and trust its local HTTPS
+        run: |
+          # The stand-in runs on this machine: a private address, refused unless listed.
+          echo "OUTBOUND_PRIVATE_ALLOWLIST=$HOST_IP" | sudo tee -a deploy/.env >/dev/null
+          sudo systemctl restart provenza-backend.service provenza-worker.service
+          for i in $(seq 1 60); do curl -ksf https://localhost/api/v1/auth/config >/dev/null && break; sleep 5; done
+          # Caddy's own CA signs https://localhost: trust it, as a person would on a trial install
+          sudo podman exec caddy cat /data/caddy/pki/authorities/local/root.crt \
+            | sudo tee /usr/local/share/ca-certificates/provenza-localhost.crt >/dev/null
+          sudo update-ca-certificates >/dev/null
+          curl -sf https://localhost/api/v1/auth/config
+
+      - name: Browser and the offline checker
+        run: |
+          python3 -m pip install --quiet "playwright==1.63.0" "cryptography>=48"
+          python3 -m playwright install --with-deps chromium >/dev/null
+
+      - name: 2-7. The quickstart in a browser
+        run: |
+          python3 e2e/quickstart.py --url https://localhost --org example --email admin@example.com \
+            --mcp-url "http://$HOST_IP:8765/mcp" --fake-log "$RUNNER_TEMP/fake-calls.jsonl" \
+            --out "$RUNNER_TEMP/quickstart"
+
+      - name: Logs
+        if: failure()
+        run: |
+          d="$RUNNER_TEMP/quickstart"; mkdir -p "$d"
+          for u in provenza-postgres provenza-redis provenza-migrate provenza-backend provenza-worker provenza-frontend provenza-caddy; do
+            sudo journalctl -u "$u.service" --no-pager -n 300 > "$d/$u.log" 2>&1 || true
+          done
+          {
+            cat /etc/os-release
+            sudo podman version
+            for b in /usr/libexec/podman/netavark /usr/lib/podman/netavark /usr/libexec/podman/aardvark-dns /usr/lib/podman/aardvark-dns; do
+              [ -x "$b" ] && "$b" --version
+            done
+            sudo podman ps -a
+            sudo podman network ls
+            sudo podman network inspect provenza_data provenza_web
+            echo "--- postgres: state, health, processes, its own output"
+            sudo podman inspect postgres --format '{{json .State}}' || true
+            sudo podman logs --tail 80 postgres || true
+            sudo podman top postgres || true
+            sudo podman exec postgres sh -c 'id; ls -la /var/lib/postgresql/data | head; cat /proc/1/status | grep -i -E "state|nonewprivs"' || true
+            sudo podman exec postgres pg_isready -h 127.0.0.1 || true
+            echo "--- name resolution on the data network"
+            sudo podman run --rm --network provenza_data --entrypoint getent localhost/provenza/backend:local hosts postgres \
+              || echo "postgres does not resolve on provenza_data"
+            sudo nft list ruleset 2>/dev/null | head -200 || sudo iptables-save | head -200
+          } > "$d/diagnostics.txt" 2>&1
+          cp ~/.local/state/provenza/agent-*.log "$d/" 2>/dev/null || true
+          tail -n 60 "$d/diagnostics.txt"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: quickstart
+          path: ${{ runner.temp }}/quickstart
+          if-no-files-found: ignore

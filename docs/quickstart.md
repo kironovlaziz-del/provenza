@@ -15,6 +15,10 @@ without trusting the server.
 | 6 | Refuse it with one line of policy | 1 min |
 | 7 | Prove it offline | 2 min |
 
+This guide is run end to end on every change: a fresh machine runs
+`install.sh`, then a browser goes through steps 2 to 7
+([workflow](../.github/workflows/quickstart.yml), [script](../e2e/quickstart.py)).
+
 ## Before you start
 
 - **A server:** Linux with systemd (Ubuntu 24.04+, Debian 13+, RHEL/Rocky/Alma

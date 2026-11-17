@@ -50,13 +50,41 @@ while True:
 PY
 }
 
+# PostgreSQL opens its port before it accepts connections (first start,
+# recovery after an unclean stop): wait until a connection is accepted.
+wait_for_postgres() {
+  wait_for "${POSTGRES_HOST:-postgres}" "${POSTGRES_PORT:-5432}" postgres
+  python - <<'PY' || die "postgres at ${POSTGRES_HOST:-postgres}:${POSTGRES_PORT:-5432} does not accept connections"
+import asyncio, sys, time
+import asyncpg
+from app.core.config import settings   # the same user, password and database the app uses
+
+async def once():
+    c = await asyncpg.connect(host=settings.POSTGRES_HOST, port=int(settings.POSTGRES_PORT),
+                              user=settings.POSTGRES_USER, password=settings.POSTGRES_PASSWORD,
+                              database=settings.POSTGRES_DB, timeout=5)
+    await c.close()
+
+deadline = time.time() + 120
+while True:
+    try:
+        asyncio.run(once())
+        break
+    except (asyncpg.exceptions.CannotConnectNowError, ConnectionError, OSError, asyncio.TimeoutError) as e:
+        if time.time() > deadline:
+            print(f"[provenza] {e}", file=sys.stderr)
+            sys.exit(1)
+        time.sleep(2)
+PY
+}
+
 role="${1:-api}"
 [ "$#" -gt 0 ] && shift
 
 case "$role" in
   api|worker|beat|migrate|create-admin|edge-keys)
     check_secrets
-    wait_for "${POSTGRES_HOST:-postgres}" "${POSTGRES_PORT:-5432}" postgres
+    wait_for_postgres
     ;;
 esac
 case "$role" in
