@@ -25,12 +25,12 @@
     "subfolder": "sdk/python"
   },
   "websiteUrl": "https://stickstock.lol",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "packages": [
     {
       "registryType": "pypi",
       "identifier": "provenza",
-      "version": "0.2.1",
+      "version": "0.2.2",
       "runtimeHint": "uvx",
       "transport": {
         "type": "stdio"

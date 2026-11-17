@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.1.0 (unreleased)
+## 0.1.0 (2026-11-17)
 
 First release. It has the same behaviour and the same bytes as the Python
 SDK 0.1.

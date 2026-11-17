@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.2.2 (2026-11-17)
+
 - `uvx provenza` starts the MCP gateway (`provenza-mcp` under the package's
   own name), which is what the MCP Registry's install runs. Before this, only
   `uvx --from provenza provenza-mcp` worked: `uvx provenza-mcp` looks for a
