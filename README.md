@@ -28,6 +28,7 @@
 <p align="center">
   <a href="#-try-the-live-demo"><b>👀 Live demo</b></a> &nbsp;·&nbsp;
   <a href="docs/quickstart.md"><b>⏱ Quickstart</b></a> &nbsp;·&nbsp;
+  <a href="https://youtu.be/me8UsPf4Ndw"><b>▶ Video tutorial</b></a> &nbsp;·&nbsp;
   <a href="#-deploy-on-your-server"><b>🚀 Deploy</b></a> &nbsp;·&nbsp;
   <a href="#-what-makes-it-different"><b>✨ Why it's different</b></a> &nbsp;·&nbsp;
   <a href="#-features"><b>🧩 Features</b></a> &nbsp;·&nbsp;
@@ -80,6 +81,8 @@ new version does not come up. Full guide: [docs/self-hosting.md](docs/self-hosti
 
 **First time?** The [quickstart](docs/quickstart.md) goes from this install to Claude Code
 calling a tool through Provenza: checked, refused by one line of policy, and proven offline.
+Prefer to watch first? The same seven steps as a
+[4-minute video tutorial](https://youtu.be/me8UsPf4Ndw).
 
 **Connect an agent** from the interface: Agents → New agent → **Connect an AI client**
 gives one command for the machine where Gemini CLI, Claude Code, Cursor or any
