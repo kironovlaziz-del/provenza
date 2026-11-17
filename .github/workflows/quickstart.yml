@@ -93,6 +93,12 @@ jobs:
             sudo podman ps -a
             sudo podman network ls
             sudo podman network inspect provenza_data provenza_web
+            echo "--- postgres: state, health, processes, its own output"
+            sudo podman inspect postgres --format '{{json .State}}' || true
+            sudo podman logs --tail 80 postgres || true
+            sudo podman top postgres || true
+            sudo podman exec postgres sh -c 'id; ls -la /var/lib/postgresql/data | head; cat /proc/1/status | grep -i -E "state|nonewprivs"' || true
+            sudo podman exec postgres pg_isready -h 127.0.0.1 || true
             echo "--- name resolution on the data network"
             sudo podman run --rm --network provenza_data --entrypoint getent localhost/provenza/backend:local hosts postgres \
               || echo "postgres does not resolve on provenza_data"
