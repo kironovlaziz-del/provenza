@@ -156,6 +156,7 @@ this project adheres to [Semantic Versioning](https://semver.org/).
   (`provenza-demo.timer`); only one the demo made is ever deleted.
 
 ### Security
+- Next.js 16.4.6 (from 16.4.3): GHSA-mfr8-8qww-v76h, an information disclosure through `'use cache'` with `unstable_cache()`. Provenza uses neither, so it was not exposed.
 
 - **A plain user no longer reads the audit trail or the incidents.**
   `GET /audit-logs` and `GET /incidents` (list and one) were open to every
@@ -170,7 +171,6 @@ this project adheres to [Semantic Versioning](https://semver.org/).
 - Sign-in: an unknown organization or e-mail now takes as long as a wrong password (one bcrypt check against a dummy hash), so the response time no longer tells which accounts exist.
 
 ### Fixed
-- The endpoint agent's offline queue could send batches out of order after a restart, mostly on Windows: its clock is coarse, and the sequence number in a batch's name started over with the agent. Names now only ever grow, also across restarts.
 - `upgrade.sh` stopped with "Broken pipe" right after listing what is new when more than 15 commits came in: the list was cut with `head`, which under `pipefail` ended the script. Nothing had been changed yet.
 - Agents with a post-quantum hybrid key (the default) were refused by Caddy 2.11.6 and later: their signed request travels in headers of about 16 KiB, and Caddy lowered its header limit to 16 KiB (from 1 MB). Agent mode answered `502 provenza_proxy_unreachable`. The Caddyfile now allows 64 KiB of headers. An installation that pulled a newer Caddy image was affected after its next restart. Found by the end-to-end quickstart test.
 - Installing on a host whose AppArmor container profile denies signals inside a container (seen on GitHub's Ubuntu 24.04 machines): PostgreSQL's first start could not stop its temporary server and the installation failed. `install.sh` now checks this before starting anything and says how to fix it ([troubleshooting](docs/self-hosting.md#troubleshooting)). Services also wait until PostgreSQL accepts connections, not just until its port is open, so a first start or a recovery no longer fails the migrations. Found by the end-to-end quickstart test.
