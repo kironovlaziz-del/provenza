@@ -11,6 +11,11 @@ Network=provenza-data.network
 Volume=provenza-pg-data.volume:/var/lib/postgresql/data
 # POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB only - not the whole .env
 EnvironmentFile=@DEPLOY@/.runtime/postgres.env
+# As the image's own postgres user (uid 70) from the start: its entrypoint
+# then runs PostgreSQL directly instead of switching user with gosu, which
+# spins at 100% CPU and never starts the database on some Ubuntu 24.04
+# kernels (AppArmor). Nothing in the container runs as root.
+User=postgres
 NoNewPrivileges=true
 PodmanArgs=--shm-size=256m --memory=@POSTGRES_MEMORY@
 HealthCmd=pg_isready -U @PG_USER@ -d @PG_DB@
