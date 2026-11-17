@@ -80,11 +80,26 @@ jobs:
       - name: Logs
         if: failure()
         run: |
-          mkdir -p "$RUNNER_TEMP/quickstart"
-          for u in provenza-backend provenza-worker provenza-migrate provenza-frontend provenza-caddy; do
-            sudo journalctl -u "$u.service" --no-pager -n 300 > "$RUNNER_TEMP/quickstart/$u.log" 2>&1 || true
+          d="$RUNNER_TEMP/quickstart"; mkdir -p "$d"
+          for u in provenza-postgres provenza-redis provenza-migrate provenza-backend provenza-worker provenza-frontend provenza-caddy; do
+            sudo journalctl -u "$u.service" --no-pager -n 300 > "$d/$u.log" 2>&1 || true
           done
-          cp ~/.local/state/provenza/agent-*.log "$RUNNER_TEMP/quickstart/" 2>/dev/null || true
+          {
+            cat /etc/os-release
+            sudo podman version
+            for b in /usr/libexec/podman/netavark /usr/lib/podman/netavark /usr/libexec/podman/aardvark-dns /usr/lib/podman/aardvark-dns; do
+              [ -x "$b" ] && "$b" --version
+            done
+            sudo podman ps -a
+            sudo podman network ls
+            sudo podman network inspect provenza_data provenza_web
+            echo "--- name resolution on the data network"
+            sudo podman run --rm --network provenza_data --entrypoint getent localhost/provenza/backend:local hosts postgres \
+              || echo "postgres does not resolve on provenza_data"
+            sudo nft list ruleset 2>/dev/null | head -200 || sudo iptables-save | head -200
+          } > "$d/diagnostics.txt" 2>&1
+          cp ~/.local/state/provenza/agent-*.log "$d/" 2>/dev/null || true
+          tail -n 60 "$d/diagnostics.txt"
 
       - uses: actions/upload-artifact@v4
         if: always()
