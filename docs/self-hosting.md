@@ -246,7 +246,7 @@ sudo ./upgrade.sh --version v1.4.0   # or a specific release
 
 The script:
 
-1. **Shows what is new and asks for confirmation.**
+1. **Shows what is new and asks for confirmation.** For a release it also checks that the tag is the published release - the same commit as the release record, signed by the release workflow - and says loudly if it is not ([releases](releases.md)). `install.sh` does the same for the code it installs.
 2. **Builds the new images** while the current version keeps serving.
 3. **Stops outside access, then makes a backup.** Nothing can change data during the backup. This is the only downtime, usually under a minute.
 4. **Starts the new version.** Its database migrations run first.

@@ -124,6 +124,9 @@ cd "$DEPLOY"
 
 printf '\n%sProvenza installer%s\n\n' "$B" "$N"
 
+step "Checking the code"
+release_check HEAD   # the published, signed release record (docs/releases.md)
+
 # ---------------------------------------------------------------- 1. host
 
 step "Checking this server"
