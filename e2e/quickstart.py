@@ -33,6 +33,7 @@ import re
 import subprocess
 import sys
 import time
+import urllib.error
 import urllib.request
 from pathlib import Path
 
@@ -138,6 +139,15 @@ def mcp_call(tool: str, arguments: dict) -> str:
         return resp.read().decode()
 
 
+def agent_mode_logs() -> None:
+    """What agent mode said: its user service, or the log of the background process."""
+    for cmd in (["systemctl", "--user", "--no-pager", "status", "provenza-agent-*"],
+                ["journalctl", "--user", "--no-pager", "-n", "80", "-u", "provenza-agent-*"],
+                ["sh", "-c", "tail -n 80 ~/.local/state/provenza/agent-*.log"]):
+        out = subprocess.run(cmd, capture_output=True, text=True)
+        print("   $", " ".join(cmd), "\n" + (out.stdout + out.stderr)[-6000:])
+
+
 def fake_calls(r: Run) -> list:
     return [json.loads(x)["tool"] for x in Path(r.a.fake_log).read_text().splitlines() if x.strip()]
 
@@ -156,16 +166,22 @@ def connect_and_call(r: Run, cmd: str) -> int:
     agent_id = int(re.search(r"#(\d+)", done.inner_text()).group(1))
     r.shot("connected")
 
-    answer = ""
+    answer, last = "", None
     for _ in range(30):   # agent mode starting in the background
         try:
             answer = mcp_call("deepwiki.ask_wiki_question",
                               {"repoName": "kironovlaziz-del/provenza", "question": "How is a delegation verified?"})
             break
-        except OSError:
+        except urllib.error.HTTPError as e:   # agent mode answered, with an error: no point waiting
+            last = f"HTTP {e.code}: {e.read().decode(errors='replace')[:2000]}"
+            break
+        except OSError as e:
+            last = repr(e)
             time.sleep(2)
-    print("   ", answer[:300])
-    assert "fake-deepwiki answered ask_wiki_question" in answer, "the first call did not come back"
+    print("   ", answer[:300] or last)
+    if "fake-deepwiki answered ask_wiki_question" not in answer:
+        agent_mode_logs()
+    assert "fake-deepwiki answered ask_wiki_question" in answer, f"the first call did not come back: {last or answer[:500]}"
     assert fake_calls(r) == ["ask_wiki_question"]
 
     r.go(f"/agents/{agent_id}")
