@@ -14,11 +14,17 @@ import (
 // per batch, so they survive a network outage and a restart of the agent
 // or the machine. Files are named by time, so the oldest is sent first; the
 // queue is bounded by size and drops its oldest batches when full.
+//
+// A name's time only ever grows, also across restarts: a coarse clock
+// (Windows ticks are far longer than a nanosecond) gives two batches the
+// same time, and the sequence number restarts with the agent - a batch
+// queued after a restart could otherwise sort before an older one.
 type diskQueue struct {
 	dir      string
 	maxBytes int64
 	mu       sync.Mutex
 	seq      uint64
+	last     int64 // the time in the newest name, in nanoseconds
 }
 
 const queueSuffix = ".batch.json"
@@ -28,7 +34,14 @@ func openQueue(stateDir string, maxMB int) (*diskQueue, error) {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return nil, err
 	}
-	return &diskQueue{dir: dir, maxBytes: int64(maxMB) << 20}, nil
+	q := &diskQueue{dir: dir, maxBytes: int64(maxMB) << 20}
+	for _, it := range q.listLocked() { // what an earlier run left: continue after it
+		var ts int64
+		if _, err := fmt.Sscanf(it.name, "%020d-", &ts); err == nil && ts > q.last {
+			q.last = ts
+		}
+	}
+	return q, nil
 }
 
 // push stores one batch; the write is atomic (temporary file, then rename).
@@ -36,7 +49,12 @@ func (q *diskQueue) push(data []byte) error {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 	q.seq++
-	name := fmt.Sprintf("%020d-%06d%s", time.Now().UnixNano(), q.seq%1000000, queueSuffix)
+	ts := time.Now().UnixNano()
+	if ts <= q.last {
+		ts = q.last + 1
+	}
+	q.last = ts
+	name := fmt.Sprintf("%020d-%06d%s", ts, q.seq%1000000, queueSuffix)
 	tmp, err := os.CreateTemp(q.dir, ".tmp-*")
 	if err != nil {
 		return err

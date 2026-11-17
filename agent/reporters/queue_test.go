@@ -2,6 +2,7 @@ package reporters
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -9,6 +10,7 @@ import (
 	"path/filepath"
 	"sync"
 	"testing"
+	"time"
 
 	"shadow-ai-agent/config"
 )
@@ -144,5 +146,38 @@ func TestStopFlushes(t *testing.T) {
 	r.Stop()
 	if len(g.received) != 1 || g.received[0] != "last" {
 		t.Fatalf("received %v", g.received)
+	}
+}
+
+// A batch queued after a restart sorts after what the earlier run left, even
+// when the clock has not moved past it (a coarse Windows clock, a clock step back).
+func TestQueueOrderSurvivesRestartAndCoarseClock(t *testing.T) {
+	state := t.TempDir()
+	q, err := openQueue(state, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	future := time.Now().Add(time.Hour).UnixNano()
+	left := fmt.Sprintf("%020d-%06d%s", future, 7, queueSuffix)
+	if err := os.WriteFile(filepath.Join(q.dir, left), []byte(`{"events":[]}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	q2, err := openQueue(state, 1) // the restart
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 3; i++ {
+		if err := q2.push([]byte(`{"events":[]}`)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	items := q2.listLocked()
+	if len(items) != 4 || items[0].name != left {
+		t.Fatalf("the batch left by the earlier run is not first: %v", items)
+	}
+	for i := 1; i < len(items); i++ {
+		if items[i].name <= items[i-1].name {
+			t.Fatalf("names do not grow: %v", items)
+		}
 	}
 }
