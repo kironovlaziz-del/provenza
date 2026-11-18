@@ -9,6 +9,7 @@ import React, {
 } from "react";
 import { useRouter } from "next/navigation";
 import { clearToken, demoLogin, getMe, getToken, login as loginRequest, loginMfa, logoutRequest, setToken, ssoExchange } from "./api";
+import { useSessionRenewal } from "./session_renewal";
 import { certifySession, getSession, revocation, type SessionState } from "./signing";
 import type { User } from "./types";
 
@@ -95,6 +96,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     loadUser();
   }, [loadUser]);
+
+  // the sign-in stays alive while its person works (30 minutes idle ends it, 8 hours in any case)
+  useSessionRenewal(!!user);
 
   const enter = useCallback(
     async (accessToken: string) => {

@@ -3207,7 +3207,7 @@
       "ok": "All {{agents}} active agents passed the egress self-check: confined.",
       "attention": "Confined: {{confined}} · open: {{open}} · not checked in the last 30 days: {{unchecked}}.",
       "missing": "No agent has run the egress self-check: an agent with its own API key may call services directly.",
-      "fix": "Gateways → External APIs → Lock agents down gives the network rules; then run the egress self-check on the agent's host."
+      "fix": "Agents connected with Connect check themselves at start-up and once a day; others run the egress self-check (provenza-proxy egress-check, or the SDK). To close an open host: Gateways → External APIs → Lock agents down gives the network rules."
     },
     "sensors": {
       "title": "eBPF sensor (Linux)",

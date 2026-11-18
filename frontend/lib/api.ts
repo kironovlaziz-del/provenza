@@ -105,6 +105,13 @@ api.interceptors.response.use(
         return api.request(cfg);
       }
     }
+    // sent with a token the console has renewed since (the old one is revoked): once more with the new one
+    const sent = String(error?.config?.headers?.Authorization ?? "");
+    const current = getToken();
+    if (error?.response?.status === 401 && current && sent && sent !== `Bearer ${current}` && !error.config._renewed) {
+      error.config._renewed = true;
+      return api.request(error.config);
+    }
     if (
       typeof window !== "undefined" &&
       error?.response?.status === 401 &&

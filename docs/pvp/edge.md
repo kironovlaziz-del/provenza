@@ -67,8 +67,14 @@ creates a session key:
    session only.
 2. The administrator confirms the passkey once (device PIN). The passkey
    signs a **session certificate**: the session key's public key, the
-   administrator, the session id, `not_before` and `not_after` (the session
-   lifetime: the sign-in token's, `ACCESS_TOKEN_EXPIRE_MINUTES`).
+   administrator, the session id, `not_before` and `not_after` (the latest
+   the sign-in can last, `SESSION_MAX_HOURS` after it began, 8 by default).
+   The sign-in itself ends sooner when left idle for
+   `ACCESS_TOKEN_EXPIRE_MINUTES` (30 by default; the console renews its token
+   while the person works), and Provenza takes a session signature only from
+   a session that is still live - the certificate's span is the upper bound,
+   not a promise. A certificate made before sessions were renewed covered one
+   token; once it runs out, the console asks for the passkey again.
 3. During the session every signature (§3) is made with the session key,
    without further prompts. Enforcement points accept a session signature
    only with a certificate signed by a passkey that is in the manifest.

@@ -191,7 +191,8 @@ docs/        documentation
 | `ENCRYPTION_KEY_NEW` | a second Fernet key, for key rotation |
 | `POSTGRES_*` | host, port, user, password, database |
 | `REDIS_HOST` / `REDIS_PORT` / `REDIS_PASSWORD` | Celery broker and backend |
-| `ACCESS_TOKEN_EXPIRE_MINUTES` | session token lifetime, default 30 |
+| `ACCESS_TOKEN_EXPIRE_MINUTES` | a sign-in ends after this many minutes without activity (the console renews its token while in use), default 30 |
+| `SESSION_MAX_HOURS` | a sign-in ends this many hours after it began, however active, default 8 |
 | `ENVIRONMENT` / `DEBUG` | `production` turns off `/docs` and refuses default secrets |
 | `CORS_ORIGINS` | comma-separated origins allowed to call the API; the first one's host is the passkey relying party |
 | `WEBAUTHN_RP_ID` | passkey relying party (a host name such as `provenza.example.com`), when it is not the host of the first `CORS_ORIGINS` entry. Changing it makes existing passkeys unusable |
