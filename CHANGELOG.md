@@ -7,6 +7,7 @@ this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- **The egress self-check runs by itself** for an agent connected with **Agents → Connect an AI client**: `provenza-proxy connect` checks the machine once the client is connected and prints the verdict (`confined` or `open`), agent mode checks again when it starts and once a day, and `provenza-proxy egress-check` checks on demand. Protection coverage shows whether each agent can only go through Provenza without anyone running the check by hand.
 - **Protection coverage**, next to the setup checklist (Settings, and the dashboard when something stopped working): whether each part of the protection works now, not only whether it was set up - the signed policy (in force, a release waiting for signatures, changes not signed yet), the egress proxy (online, following a signed release), agents signing their own calls, agents shown confined by the egress self-check in the last 30 days, the eBPF sensor (online, enforcing, without errors), and the endpoint agent and browser extension (machines and browsers reporting). Each part is working, needs attention or not set up, with the facts it was judged on and how to fix it (`GET /api/v1/system/setup`, `coverage`).
 
 ## [0.4.0] - 2026-11-17

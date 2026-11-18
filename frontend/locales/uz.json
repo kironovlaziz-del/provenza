@@ -3193,7 +3193,7 @@
       "ok": "Barcha {{agents}} ta faol agent egress tekshiruvidan o'tdi: yopiq.",
       "attention": "Yopiq: {{confined}} · ochiq: {{open}} · so'nggi 30 kunda tekshirilmagan: {{unchecked}}.",
       "missing": "Hech bir agent egress tekshiruvini o'tkazmagan: o'z API kaliti bor agent xizmatlarga to'g'ridan-to'g'ri murojaat qilishi mumkin.",
-      "fix": "Gateways → External APIs → Lock agents down tarmoq qoidalarini beradi; so'ng agent xostida egress tekshiruvini ishga tushiring."
+      "fix": "Connect orqali ulangan agentlar o'zini ishga tushganda va kuniga bir marta tekshiradi; boshqalar egress tekshiruvini ishga tushiradi (provenza-proxy egress-check yoki SDK). Ochiq xostni yopish uchun: Gateways → External APIs → Lock agents down tarmoq qoidalarini beradi."
     },
     "sensors": {
       "title": "eBPF sensor (Linux)",
