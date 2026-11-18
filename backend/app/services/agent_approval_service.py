@@ -239,7 +239,7 @@ class AgentApprovalService:
                 "expires_at": self.expires_at(action),
                 # an approval is signed with the session key: the session
                 # must be confirmed with the passkey first
-                "session_certified": bool(getattr(getattr(user, "_signing_session", None), "certificate", None)),
+                "session_certified": signing_sessions.certified(getattr(user, "_signing_session", None)),
             },
         }
 

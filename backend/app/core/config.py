@@ -144,7 +144,11 @@ class Settings(BaseSettings):
     # JWT - must be overridden in production
     SECRET_KEY: str = "your-secret-key-change-in-production"
     ALGORITHM: str = "HS256"
+    # A sign-in ends after ACCESS_TOKEN_EXPIRE_MINUTES without activity (the
+    # console renews its token while the person works: POST /auth/session/renew)
+    # and SESSION_MAX_HOURS after it began, whatever the activity.
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    SESSION_MAX_HOURS: int = 8
 
     # Removed features (MLOps training/deployments and RAG). Nothing in the
     # application reads these any more. They stay so that an existing .env

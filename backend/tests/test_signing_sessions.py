@@ -362,3 +362,110 @@ class TestPasskeys:
         second = await _login(client, org_and_users, "approver")
         assert (await _state(client, second))["status"] == "blocked"
         assert ORIGIN.startswith("http://localhost")
+
+
+# ---------------------------------------------------------------------- renewal
+
+def _claims(token):
+    import jwt
+
+    from app.core.config import settings
+    return jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM], options={"verify_sub": False})
+
+
+class TestRenewal:
+    @pytest.mark.asyncio
+    async def test_a_sign_in_in_use_is_renewed_and_the_old_token_ends(self, client, admin_token, db_session):
+        from app.core.config import settings
+
+        before = _claims(admin_token)
+        r = await client.post(f"{S}/renew", headers=auth_headers(admin_token))
+        assert r.status_code == 200, r.text
+        new = r.json()["access_token"]
+        after = _claims(new)
+        # the same sign-in: its session and start; a token of its own
+        assert after["sid"] == before["sid"] and after["auth_time"] == before["auth_time"]
+        assert after["jti"] != before["jti"]
+        assert abs(after["exp"] - (time.time() + settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60)) < 5
+        assert r.json()["ends_at"] == before["auth_time"] + settings.SESSION_MAX_HOURS * 3600
+        # the session lasts as long as the token
+        row = await db_session.get(SigningSession, before["sid"])
+        await db_session.refresh(row)
+        assert abs(row.expires_at.timestamp() - after["exp"]) < 2
+        assert (await _state(client, new))["status"] == "active"
+        assert (await client.get(S, headers=auth_headers(admin_token))).status_code == 401
+
+    @pytest.mark.asyncio
+    async def test_never_past_the_maximum(self, client, admin_token, db_session, monkeypatch):
+        from app.core.config import settings
+
+        sid = _claims(admin_token)["sid"]
+        row = await db_session.get(SigningSession, sid)
+        # signed in 8 hours and 10 minutes ago: 50 seconds left at most
+        monkeypatch.setattr(settings, "SESSION_MAX_HOURS", 8)
+        from datetime import datetime, timedelta, timezone
+        row.created_at = datetime.now(timezone.utc) - timedelta(hours=8) + timedelta(seconds=50)
+        await db_session.commit()
+        r = await client.post(f"{S}/renew", headers=auth_headers(admin_token))
+        assert r.status_code == 409 and r.json()["detail"] == "auth.session_max"
+        # with 20 minutes left, the token ends with the sign-in
+        row.created_at = datetime.now(timezone.utc) - timedelta(hours=8) + timedelta(minutes=20)
+        await db_session.commit()
+        r = await client.post(f"{S}/renew", headers=auth_headers(admin_token))
+        assert r.status_code == 200, r.text
+        assert abs(r.json()["expires_at"] - (row.created_at.timestamp() + 8 * 3600)) < 2
+
+    @pytest.mark.asyncio
+    async def test_a_blocked_or_ended_sign_in_is_not_renewed(self, client, admin_token, org_and_users):
+        second = await _login(client, org_and_users)                    # waits for the first
+        r = await client.post(f"{S}/renew", headers=auth_headers(second))
+        assert r.status_code == 403 and r.json()["detail"] == "auth.session_blocked"
+        await client.post("/api/v1/auth/logout", headers=auth_headers(admin_token))
+        assert (await client.post(f"{S}/renew", headers=auth_headers(admin_token))).status_code == 401
+
+    @pytest.mark.asyncio
+    async def test_people_who_do_not_sign_are_renewed_too(self, client, org_and_users, db_session):
+        from app.core.security import get_password_hash
+        from app.models.user import User
+
+        u = User(org_id=org_and_users["org"].id, email="reader2@example.com", name="Reader",
+                 hashed_password=get_password_hash(org_and_users["password"]), role="user", status="active")
+        db_session.add(u)
+        await db_session.commit()
+        org_and_users["reader"] = u
+        t = await _login(client, org_and_users, "reader")
+        r = await client.post(f"{S}/renew", headers=auth_headers(t))
+        assert r.status_code == 200, r.text
+        assert "sid" not in _claims(r.json()["access_token"])
+        assert (await client.get("/api/v1/users/me", headers=auth_headers(r.json()["access_token"]))).status_code == 200
+
+    @pytest.mark.asyncio
+    async def test_the_passkey_certifies_the_key_for_the_whole_sign_in(self, client, admin_token, org_and_users,
+                                                                     db_session):
+        from app.core.config import settings
+
+        dev = SoftAuthenticator()
+        assert (await _register(client, admin_token, org_and_users, dev)).status_code == 200
+        _, pub = _session_key()
+        ch = await _challenge(client, admin_token, "session.certificate", {"public_key": pub})
+        sid = _claims(admin_token)["sid"]
+        row = await db_session.get(SigningSession, sid)
+        assert ch["statement"]["not_after"] == int(row.created_at.timestamp()) + settings.SESSION_MAX_HOURS * 3600
+        body = {"public_key": pub, "statement": ch["statement"], "assertion": dev.get(ch["challenge"])}
+        assert (await client.post(f"{S}/certificate", json=body, headers=auth_headers(admin_token))).status_code == 204
+        # renewed: still certified, no second PIN
+        new = (await client.post(f"{S}/renew", headers=auth_headers(admin_token))).json()["access_token"]
+        assert (await _state(client, new))["certified"] is True
+
+        # a certificate from before renewals covered only the first token: once it runs out the
+        # session asks for the passkey again, and may be certified anew
+        await db_session.refresh(row)
+        cert = dict(row.certificate)
+        cert["statement"] = {**cert["statement"], "not_after": int(time.time()) - 1}
+        row.certificate = cert
+        await db_session.commit()
+        assert (await _state(client, new))["certified"] is False
+        ch = await _challenge(client, new, "session.certificate", {"public_key": pub})
+        body = {"public_key": pub, "statement": ch["statement"], "assertion": dev.get(ch["challenge"])}
+        assert (await client.post(f"{S}/certificate", json=body, headers=auth_headers(new))).status_code == 204
+        assert (await _state(client, new))["certified"] is True

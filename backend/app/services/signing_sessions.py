@@ -20,10 +20,18 @@ Sessions
   someone who knows the password and holds no passkey can neither get in
   nor push the owner out.
 
+Session lifetime
+  A token lives ACCESS_TOKEN_EXPIRE_MINUTES; while the person works, the
+  console renews it (renew()), extending the session with it, never past
+  SESSION_MAX_HOURS from the sign-in. Left idle, the token and the session
+  expire.
+
 Session keys
   The browser generates an Ed25519 key for the session (non-extractable),
-  and the passkey certifies its public key for the session's lifetime - one
-  PIN prompt per sign-in. Signing out ends the session; the key is deleted
+  and the passkey certifies its public key until the session's latest
+  possible end (SESSION_MAX_HOURS after the sign-in) - one PIN prompt per
+  sign-in. The session itself may end sooner (idle, signed out, ended): the
+  key signs only while it is live. Signing out ends the session; the key is deleted
   in the browser, and its revocation, signed by the key, is kept.
 
 Statements
@@ -104,6 +112,20 @@ def _client(request: Optional[Request]) -> Dict[str, Optional[str]]:
     return {"ip": _client_ip(request)[:64], "user_agent": (request.headers.get("user-agent") or "")[:300] or None}
 
 
+def deadline(s: SigningSession) -> datetime:
+    """The latest a session may last, however active its person is."""
+    return _aware(s.created_at) + timedelta(hours=settings.SESSION_MAX_HOURS)
+
+
+def certified(s: Optional[SigningSession]) -> bool:
+    """The session's key holds a passkey certificate that has not run out
+    (one made before sessions were renewed covered only the first token)."""
+    if s is None or s.certificate is None or not s.public_key:
+        return False
+    not_after = ((s.certificate or {}).get("statement") or {}).get("not_after")
+    return isinstance(not_after, int) and not isinstance(not_after, bool) and not_after > time.time()
+
+
 def _live(user_id: int, *states: str):
     return (SigningSession.user_id == user_id, SigningSession.status.in_(states),
             SigningSession.expires_at > _now())
@@ -152,8 +174,9 @@ async def issue_token(db: AsyncSession, user: User, request: Optional[Request],
     """The access token of a sign-in: with a signing session for a signer."""
     from app.core.security import create_access_token
 
-    lifetime = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-    data = {"sub": str(user.id), **(claims or {})}
+    lifetime = min(timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES), timedelta(hours=settings.SESSION_MAX_HOURS))
+    # auth_time: when the sign-in began - renewals keep it, and end at SESSION_MAX_HOURS from it
+    data = {"sub": str(user.id), **(claims or {}), "auth_time": int(time.time())}
     if signs(user):
         data["sid"] = await open_session(db, user, request, lifetime)
     return create_access_token(data=data, expires_delta=lifetime)
@@ -174,6 +197,39 @@ async def check(db: AsyncSession, user: User, payload: Dict[str, Any]) -> Option
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="auth.session_ended",
                             headers={"WWW-Authenticate": "Bearer"})
     return s
+
+
+async def renew(db: AsyncSession, user: User, s: Optional[SigningSession], payload: Dict[str, Any]) -> Dict[str, Any]:
+    """A new token for a sign-in still in use: ACCESS_TOKEN_EXPIRE_MINUTES
+    from now, never past SESSION_MAX_HOURS from its start. A signer's session
+    is extended with it. The old token is revoked. 409 auth.session_max when
+    the sign-in has reached its end."""
+    from app.core import sessions
+    from app.core.security import create_access_token
+
+    now = time.time()
+    started = payload.get("auth_time", payload.get("iat"))
+    if isinstance(started, bool) or not isinstance(started, (int, float)):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="auth.invalid_token",
+                            headers={"WWW-Authenticate": "Bearer"})
+    end = started + settings.SESSION_MAX_HOURS * 3600
+    if s is not None:
+        if s.status != "active":
+            raise api_error(status.HTTP_403_FORBIDDEN, "auth.session_blocked")
+        end = min(end, deadline(s).timestamp())
+    exp = min(now + settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60, end)
+    if exp - now < 60:
+        raise api_error(status.HTTP_409_CONFLICT, "auth.session_max")
+    # the same claims (sid, idp_mfa, ...) and sign-in time; a new iat, exp and jti
+    claims = {k: v for k, v in payload.items() if k not in ("exp", "iat", "jti")}
+    claims["auth_time"] = int(started)
+    if s is not None:
+        s.expires_at = datetime.fromtimestamp(exp, tz=timezone.utc)
+        await db.commit()
+    token = create_access_token(data=claims, expires_delta=timedelta(seconds=exp - now))
+    sessions.revoke(payload.get("jti"), payload.get("exp"))
+    return {"access_token": token, "token_type": "bearer", "expires_at": int(exp),
+            "ends_at": int(end)}
 
 
 def blocked_path_allowed(path: str) -> bool:
@@ -211,7 +267,7 @@ async def state(db: AsyncSession, user: User, s: Optional[SigningSession]) -> Di
         elsewhere = [view(x) for x in (await db.execute(select(SigningSession).where(
             *_live(user.id, "active"), SigningSession.id != s.id).order_by(SigningSession.created_at))).scalars()]
     return {"signing": True, "session_id": s.id, "status": s.status, "expires_at": s.expires_at,
-            "certified": s.certificate is not None, "public_key": s.public_key, "has_passkey": has_passkey,
+            "certified": certified(s), "public_key": s.public_key, "has_passkey": has_passkey,
             "waiting": waiting, "active_elsewhere": elsewhere}
 
 
@@ -234,7 +290,7 @@ def build_statement(kind: str, user: User, s: Optional[SigningSession], params: 
         except ValueError:
             raise api_error(status.HTTP_422_UNPROCESSABLE_ENTITY, "session.bad_public_key")
         st.update(public_key=key, not_before=int(_aware(s.created_at).timestamp()),
-                  not_after=int(_aware(s.expires_at).timestamp()))
+                  not_after=int(deadline(s).timestamp()))
     elif kind == "session.admit":
         target = params.get("blocked_session_id")
         if not isinstance(target, str) or len(target) != 32:
@@ -329,7 +385,7 @@ async def certify(db: AsyncSession, user: User, s: SigningSession, params: Dict[
                   statement: Dict[str, Any], assertion: Dict[str, Any]) -> None:
     if s.status != "active":
         raise api_error(status.HTTP_403_FORBIDDEN, "auth.session_blocked")
-    if s.certificate is not None:
+    if certified(s):
         raise api_error(status.HTTP_409_CONFLICT, "session.already_certified")
     key = await confirm(db, user, s, "session.certificate", params, statement, assertion)
     s.public_key, s.certificate, s.certified_at = statement["public_key"], _evidence(statement, key, assertion), _now()
@@ -449,7 +505,7 @@ def require_certified(s: Optional[SigningSession]) -> SigningSession:
         raise api_error(status.HTTP_403_FORBIDDEN, "session.not_signing")
     if s.status != "active":
         raise api_error(status.HTTP_403_FORBIDDEN, "auth.session_blocked")
-    if s.certificate is None or not s.public_key:
+    if not certified(s):
         raise api_error(status.HTTP_403_FORBIDDEN, "session.not_certified")
     return s
 

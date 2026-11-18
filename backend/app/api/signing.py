@@ -8,6 +8,7 @@ Passkeys and signing sessions (app/services/signing_sessions.py).
   /auth/session                state of this sign-in: active or blocked, the
                                sessions waiting for it / open elsewhere
   /auth/session/challenge      a statement for the passkey to confirm
+  /auth/session/renew          a new token while the sign-in is in use
   /auth/session/certificate    the passkey certifies this session's key
   /auth/session/admit|refuse   the open session lets a blocked one in / ends it
   /auth/session/takeover       a blocked session ends the others (passkey only)
@@ -96,6 +97,13 @@ async def statement_challenge(data: ChallengeIn, request: Request, db: AsyncSess
         raise api_error(status.HTTP_403_FORBIDDEN, "auth.session_blocked")
     _limit(request, user, "passkey_challenge")
     return await ss.challenge(db, user, s, data.purpose, data.params)
+
+
+@session_router.post("/renew")
+async def renew(request: Request, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    """The console asks while its person works; an idle one lets the token run out."""
+    _limit(request, user, "session_renew")
+    return await ss.renew(db, user, _session(user), getattr(user, "_token_payload", {}))
 
 
 @session_router.post("/certificate", status_code=status.HTTP_204_NO_CONTENT)
