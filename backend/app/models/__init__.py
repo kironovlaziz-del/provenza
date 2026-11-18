@@ -51,6 +51,7 @@ from app.models.enrollment import AgentEnrollment
 from app.models.team import RoleTemplate, Team
 from app.models.attestation import AgentAttestation, AttestationPolicy
 from app.models.policy_layer import PolicyLayer
+from app.models.policy_pack import PolicyPack, PolicyPackApplication
 from app.models.kill_switch import KillSwitchEvent
 from app.models.pvp_guard import PVPGuardLog
 from app.models.mcp import MCPServer, MCPTool

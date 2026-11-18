@@ -81,6 +81,48 @@ loosened applies after the quorum signs the next release. *Effective
 policy* and the editor show the working copy; the *Signed policy* panel on
 this page lists what is not signed yet.
 
+## Rule packs
+
+The **Rule packs** tab on this page holds ready-made sets of rules for a
+level, built-in and your own, applied with one click after seeing what they
+change.
+
+* **Profiles** replace the whole policy of the level they are applied to:
+  `org-strict`, `org-balanced`, `team-support`, `team-engineering`,
+  `team-finance`, `team-research-readonly`, `agent-new-or-external` and
+  `lockdown-allow-nothing` (an empty allow list: no tool at all until undone).
+  The level gets the pack's text, comments included.
+* **Guards** only add restrictions to what the level already has:
+  `guard-destructive`, `guard-money`, `guard-exfiltration`, `guard-secrets`,
+  `guard-production`, `guard-identity`, `guard-code-exec`,
+  `guard-mass-messaging`, `guard-pii-export`, `guard-models`. A guard adds
+  entries to `tools.deny` and `tools.require_approval`, lowers a limit the
+  level has higher or not at all, and sets `models.allow` /
+  `providers.allow` only on a level without its own list. It never allows a
+  tool (`tools.allow` is refused in a guard). What the level already has, or
+  has stricter, is left as it is and named in the preview.
+* **Preview first** — applying shows each field before and after; the apply
+  sends the revision the preview was made from, so a level saved by someone
+  in between is not overwritten (`policy.stale`).
+* **Undo** — every application is listed under *Applied*. Undoing a guard
+  takes out exactly the entries and limits it added; anything added by hand,
+  before or since, stays, and a limit changed by hand since keeps its value.
+  Undoing a profile puts back the policy the level had before it; if the
+  level was edited after the profile, the undo says so and asks to confirm,
+  since those edits go with it.
+* **Like an edit** — applying and undoing save the level exactly as the
+  editor does: a new revision, an audit log entry (`policy_layer_*`) that
+  names the pack (`pack`, `pack_ref`, `pack_application` or
+  `pack_application_undone`). Under a [signed policy](#signed-policy) a
+  pack that tightens applies at once; an undo, which loosens, applies after
+  the next signed release.
+* **Your own packs** — *New pack*, *Copy* of any pack, or *Upload YAML*;
+  *Download* gives the YAML of any pack. A pack is written like a level's
+  YAML. Deleting a pack leaves the levels it was applied to as they are.
+  Up to 200 per organization.
+* Guards work on tool names, limits and model lists - what a level of the
+  hierarchy holds; they do not look at a tool's arguments.
+
 ## API
 
 | | |
@@ -91,3 +133,10 @@ this page lists what is not signed yet.
 | `POST /policy-layers/preview` | a draft and the effective policy it gives |
 | `GET /policy-layers/effective?agent_id=` / `?team_id=` | the combined policy with sources |
 | `GET /policy-layers/schema` | the fields and how they combine |
+| `GET /policy-packs` | the built-in packs and the organization's own |
+| `POST /policy-packs`, `PUT` / `DELETE /policy-packs/{id}` | an own pack `{name, description, kind: profile\|guard, level, yaml}` (admin) |
+| `POST /policy-packs/preview` `{pack, scope, target_id}` | what applying would change (admin); `pack` is `builtin:<slug>` or `own:<id>` |
+| `POST /policy-packs/apply` `{pack, scope, target_id, revision}` | apply it (admin) |
+| `GET /policy-packs/applications` | what was applied where, and what was undone |
+| `POST /policy-packs/applications/{id}/preview-undo` | what undoing would change (admin) |
+| `POST /policy-packs/applications/{id}/undo` `{revision, confirm_edited}` | undo it (admin) |
