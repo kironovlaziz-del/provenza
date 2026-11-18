@@ -50,6 +50,9 @@ func main() {
 	if len(os.Args) > 1 && os.Args[1] == "agent-start" {
 		os.Exit(runAgentStart(os.Args[2:]))
 	}
+	if len(os.Args) > 1 && os.Args[1] == "egress-check" {
+		os.Exit(runEgressCheck(os.Args[2:]))
+	}
 	path := flag.String("config", "/etc/provenza/proxy.json", "configuration file (JSON)")
 	genkey := flag.Bool("genkey", false, "print a new signing key (for signing_key_file; the encryption key "+
 		"sealed credentials are opened with is derived from it) and exit; its fingerprint goes to stderr")
@@ -151,6 +154,7 @@ func runAgent(identity, listen, upstream string, log *slog.Logger) error {
 			"a unix socket keeps it to its owner", "addr", listen)
 	}
 	log.Info("provenza agent mode listening", "addr", listen, "agent", id.AgentID, "proxy", upstream)
+	go selfcheckLoop(ctx, id, upstream, log)
 	if err := srv.Serve(ln); !errors.Is(err, http.ErrServerClosed) {
 		return err
 	}
@@ -170,6 +174,7 @@ func runConnect(args []string) int {
 		"else Provenza's own gateways (the identity's server)")
 	port := fs.Int("port", 8480, "agent mode's port on 127.0.0.1")
 	remove := fs.Bool("remove", false, "take the client's entry and agent mode out again")
+	noCheck := fs.Bool("no-egress-check", false, "do not run the egress self-check once connected")
 	noService := fs.Bool("no-service", false, "do not run agent mode as a service of this user (systemd --user; at sign-in on Windows)")
 	fs.Usage = func() {
 		fmt.Fprintf(fs.Output(), "usage: provenza-proxy connect <%s> [flags]\n", strings.Join(connect.Names(), "|"))
@@ -232,7 +237,84 @@ func runConnect(args []string) int {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
+	if !*remove && !*noCheck {
+		printSelfcheck(id, *proxy) // never fails the connection: it only tells
+	}
 	return 0
+}
+
+// runEgressCheck: `provenza-proxy egress-check`, the egress self-check of
+// this host for the agent (internal/egress/selfcheck.go); exit 0 confined,
+// 3 open, 1 when it could not run.
+func runEgressCheck(args []string) int {
+	fs := flag.NewFlagSet("egress-check", flag.ContinueOnError)
+	home, _ := os.UserHomeDir()
+	defIdentity := os.Getenv("PROVENZA_IDENTITY")
+	if defIdentity == "" {
+		defIdentity = filepath.Join(home, ".config", "provenza", "provenza-agent.json")
+	}
+	identity := fs.String("identity", defIdentity, "the agent's identity file")
+	proxy := fs.String("proxy", "auto", "agent mode's upstream; a local egress proxy is also tried for its relay to Provenza")
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+	id, err := egress.LoadAgentIdentity(*identity)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "the agent's identity (%s): %v\n", *identity, err)
+		return 1
+	}
+	if *proxy == "auto" {
+		*proxy = autoUpstream(id.Server)
+	}
+	switch printSelfcheck(id, *proxy) {
+	case "confined":
+		return 0
+	case "open":
+		return 3
+	}
+	return 1
+}
+
+func printSelfcheck(id *egress.AgentIdentity, upstream string) string {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	verdict, err := id.Selfcheck(ctx, egress.SelfcheckAPIs(id, upstream), 3*time.Second, nil)
+	switch {
+	case err != nil:
+		fmt.Fprintf(os.Stderr, "Egress self-check did not run: %v\n  (agent mode tries again when it starts and once a day)\n", err)
+	case verdict == "confined":
+		fmt.Println("Egress self-check: confined - this machine reaches the internet only through Provenza.")
+	default:
+		fmt.Println("Egress self-check: open - this machine can also reach services directly, so Provenza sees")
+		fmt.Println("  only what goes through it. To close it: docs/egress-lockdown.md; Settings -> Protection coverage shows it.")
+	}
+	return verdict
+}
+
+// selfcheckLoop: agent mode checks its host once it is up and once a day, so
+// Protection coverage stays current without anyone running it by hand.
+func selfcheckLoop(ctx context.Context, id *egress.AgentIdentity, upstream string, log *slog.Logger) {
+	wait := 30 * time.Second
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(wait):
+		}
+		wait = egress.SelfcheckInterval
+		check, cancel := context.WithTimeout(ctx, time.Minute)
+		verdict, err := id.Selfcheck(check, egress.SelfcheckAPIs(id, upstream), 3*time.Second, nil)
+		cancel()
+		switch {
+		case err != nil:
+			log.Warn("egress self-check did not run", "err", err)
+		case verdict == "confined":
+			log.Info("egress self-check: confined", "agent", id.AgentID)
+		default:
+			log.Warn("egress self-check: open - this host can reach services directly, not only through Provenza",
+				"agent", id.AgentID, "verdict", verdict)
+		}
+	}
 }
 
 // runAgentStart: `provenza-proxy agent-start`, what the sign-in entry of

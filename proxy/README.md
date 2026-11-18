@@ -290,6 +290,16 @@ The client reaches the MCP servers of **Gateways → MCP tools**; each call is c
 against the agent's rights. `--remove` takes the entry and the service out again. A signed
 policy names each agent's key: after the agent gets a new key, sign a release.
 
+Once connected, `connect` runs the **egress self-check** of this machine
+([docs/egress-lockdown.md](../docs/egress-lockdown.md#2-verify)) and prints
+Provenza's verdict - `confined` (it reaches the internet only through Provenza) or
+`open` - without failing the connection either way (`--no-egress-check` skips it).
+Agent mode runs it again 30 seconds after it starts and then once a day, so
+**Settings → Protection coverage** stays current; `provenza-proxy egress-check`
+runs it on demand (exit 0 confined, 3 open, 1 when it could not run). It reaches
+Provenza at the identity's server, or through the relay of a local egress proxy
+(`relay_provenza`) when only that proxy is reachable.
+
 ## When Provenza is unreachable
 
 With `policy.mode` `enforce` ([docs/pvp/edge.md](../docs/pvp/edge.md),
