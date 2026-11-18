@@ -10,7 +10,7 @@ import React, { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
-import { evidence, needsDashboard, type CoverageItem, type CoverageSummary } from "@/lib/coverage";
+import { evidence, fixKey, needsDashboard, type CoverageItem, type CoverageSummary } from "@/lib/coverage";
 
 interface Item {
   key: string;
@@ -130,7 +130,7 @@ function Coverage({ items, summary }: { items: CoverageItem[]; summary: Coverage
                     {i.optional && <span className="hint-text"> · {t("setup.optional")}</span>}
                     <div className="hint-text">{t(`coverage.${why.key}`, why.values)}</div>
                     {i.state !== "ok" && (
-                      <div className="hint-text"><strong>{t("coverage.fix_label")}:</strong> {t(`coverage.${i.key}.fix`)}</div>
+                      <div className="hint-text"><strong>{t("coverage.fix_label")}:</strong> {t(`coverage.${fixKey(i)}`)}</div>
                     )}
                   </td>
                   <td className="u-nowrap" style={{ textAlign: "right" }}>

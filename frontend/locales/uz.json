@@ -3214,7 +3214,10 @@
       "ok": "{{total}} tadan {{online}} tasi onlayn va bloklayapti.",
       "attention": "{{total}} tadan {{online}} tasi onlayn · bloklayapti: {{enforcing}} · xatolar bilan: {{problems}}.",
       "missing": "Sensor yo'q. Ixtiyoriy: agentlar ishlaydigan Linux xostlari uchun.",
-      "fix": "Gateways → Runtime → Register sensor xost uchun buyruqni beradi (Linux 5.15+)."
+      "fix": "Gateways → Runtime → Register sensor xost uchun buyruqni beradi (Linux 5.15+).",
+      "fix_offline": "Sensor xabar berishni to'xtatdi: uning xostida sudo systemctl status provenzasensor va journalctl -u provenzasensor ni tekshiring.",
+      "fix_errors": "Gateways → Runtime → Sensors: sensor tafsilotlarini oching va Errors ro'yxatini o'qing.",
+      "fix_enforce": "Hech bir ishchi yuklama Enforce rejimida emas, shuning uchun sensor faqat kuzatadi. Gateways → Runtime → Workloads: yuklamani Observe rejimida kuzatgach, Mode ni Enforce ga o'tkazing. Faqat kuzatish kerak bo'lsa, shunday qoldiring."
     },
     "endpoint_agents": {
       "title": "Kompyuterlardagi endpoint agent",

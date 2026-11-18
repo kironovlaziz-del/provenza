@@ -36,6 +36,19 @@ export function evidence(item: CoverageItem): { key: string; values: Record<stri
   }
 }
 
+/** The i18n key (under "coverage.") of how to fix it: a sensor that is set up but
+ * offline, reporting errors or only observing needs another step than one never
+ * registered. */
+export function fixKey(item: CoverageItem): string {
+  const f = item.facts;
+  if (item.key === "sensors" && item.state === "attention") {
+    if (Number(f.online) < Number(f.total)) return "sensors.fix_offline";
+    if (Number(f.problems) > 0) return "sensors.fix_errors";
+    return "sensors.fix_enforce";
+  }
+  return `${item.key}.fix`;
+}
+
 /** The dashboard shows coverage when something that was set up stopped working. */
 export function needsDashboard(summary: CoverageSummary | undefined): boolean {
   return !!summary && summary.attention > 0;
