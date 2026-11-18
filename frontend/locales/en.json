@@ -3214,7 +3214,10 @@
       "ok": "{{online}} of {{total}} online and enforcing.",
       "attention": "{{online}} of {{total}} online · enforcing: {{enforcing}} · with errors: {{problems}}.",
       "missing": "No sensor. Optional: for Linux hosts that run agents.",
-      "fix": "Gateways → Runtime → Register sensor gives the command for the host (Linux 5.15+)."
+      "fix": "Gateways → Runtime → Register sensor gives the command for the host (Linux 5.15+).",
+      "fix_offline": "A sensor stopped reporting: on its host check sudo systemctl status provenzasensor and journalctl -u provenzasensor.",
+      "fix_errors": "Gateways → Runtime → Sensors: open the sensor's details and read its Errors.",
+      "fix_enforce": "No workload is in Enforce mode, so the sensor only watches. Gateways → Runtime → Workloads: after watching a workload in Observe, set its Mode to Enforce. If watching is all you want, leave it as it is."
     },
     "endpoint_agents": {
       "title": "Endpoint agent on computers",

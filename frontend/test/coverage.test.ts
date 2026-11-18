@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import en from "@/locales/en.json";
 import uz from "@/locales/uz.json";
-import { evidence, needsDashboard, type CoverageItem } from "@/lib/coverage";
+import { evidence, fixKey, needsDashboard, type CoverageItem } from "@/lib/coverage";
 
 const item = (key: string, state: CoverageItem["state"], facts: CoverageItem["facts"] = {}): CoverageItem =>
   ({ key, state, href: "/", optional: false, facts });
@@ -24,6 +24,22 @@ describe("evidence", () => {
     expect(evidence(item("browsers", "ok")).key).toBe("browsers.ok");
     expect(evidence(item("sensors", "missing")).key).toBe("sensors.missing");
   });
+});
+
+describe("fixKey", () => {
+  it("tells a sensor that only watches, has errors or went offline from one never registered", () => {
+    expect(fixKey(item("sensors", "missing"))).toBe("sensors.fix");
+    expect(fixKey(item("sensors", "attention", { total: 1, online: 1, enforcing: 0, problems: 0 }))).toBe("sensors.fix_enforce");
+    expect(fixKey(item("sensors", "attention", { total: 1, online: 1, enforcing: 1, problems: 1 }))).toBe("sensors.fix_errors");
+    expect(fixKey(item("sensors", "attention", { total: 2, online: 1, enforcing: 1, problems: 0 }))).toBe("sensors.fix_offline");
+    expect(fixKey(item("proxy", "attention", { total: 1, online: 0, policy: true }))).toBe("proxy.fix");
+  });
+  for (const [name, loc] of [["en", en], ["uz", uz]] as const) {
+    it(`has the sensor hints in ${name}`, () => {
+      const s = (loc as unknown as { coverage: { sensors: Record<string, string> } }).coverage.sensors;
+      for (const k of ["fix", "fix_offline", "fix_errors", "fix_enforce"]) expect(s[k], `${name} ${k}`).toBeTruthy();
+    });
+  }
 });
 
 describe("needsDashboard", () => {
