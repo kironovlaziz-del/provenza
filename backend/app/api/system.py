@@ -69,4 +69,7 @@ async def setup_checklist(db: AsyncSession = Depends(get_db),
         {"key": "sso", "done": await count(OidcSettings, OidcSettings.enabled.is_(True)) > 0,
          "href": "/users", "optional": True},
     ]
-    return {"items": items, "complete": all(i["done"] for i in items if not i.get("optional"))}
+    from app.services.coverage import coverage
+
+    return {"items": items, "complete": all(i["done"] for i in items if not i.get("optional")),
+            "coverage": await coverage(db, current_user)}

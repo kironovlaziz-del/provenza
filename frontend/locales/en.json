@@ -3155,6 +3155,68 @@
     "sso": "Sign in with your identity provider",
     "sso_hint": "Single sign-on (OpenID Connect): people use their company account; leavers lose access with it."
   },
+  "coverage": {
+    "title": "Protection coverage",
+    "hint": "Whether each part of the protection works now, not only whether it was set up.",
+    "state_ok": "Working",
+    "state_attention": "Needs attention",
+    "state_missing": "Not set up",
+    "needs": "to fix",
+    "fix_label": "How to fix",
+    "signed_policy": {
+      "title": "Signed policy",
+      "ok": "Release #{{number}} is in force, signed with passkeys.",
+      "attention_problem": "The release in force has a problem or has expired: the proxy and sensors may refuse everything.",
+      "attention_draft": "Release #{{draft}} is waiting for signatures.",
+      "attention_unsigned_one": "{{count}} change to the policy is not signed yet: the proxy and sensors still follow release #{{number}}.",
+      "attention_unsigned_other": "{{count}} changes to the policy are not signed yet: the proxy and sensors still follow release #{{number}}.",
+      "missing": "No signed release yet: the egress proxy refuses every request until administrators sign one.",
+      "fix": "Policy hierarchy → Signed policy → Prepare the release → Sign with passkey (add a passkey under My profile first)."
+    },
+    "proxy": {
+      "title": "Egress proxy",
+      "ok": "{{online}} of {{total}} online, following the signed policy.",
+      "attention_policy": "Online, but it refuses every request until a policy release is signed.",
+      "attention_offline": "{{online}} of {{total}} online: the others have not been heard from in the last 10 minutes.",
+      "missing": "No proxy: agents reach external APIs with their own keys, and Provenza does not see it.",
+      "fix": "install.sh sets it up on the Provenza server (provenza edge setup on an older installation); for other hosts: Gateways → External APIs → Proxies."
+    },
+    "agents_signing": {
+      "title": "Agents sign their own calls",
+      "ok": "All {{agents}} active agents hold their own keys.",
+      "attention": "{{signing}} of {{agents}} active agents hold their own keys; the others act with an API key alone.",
+      "missing": "No active agent yet.",
+      "fix": "Agents → Connect an AI client: the command makes the agent's keys on its own machine; they never leave it."
+    },
+    "agents_confined": {
+      "title": "Agents can only go through Provenza",
+      "ok": "All {{agents}} active agents passed the egress self-check: confined.",
+      "attention": "Confined: {{confined}} · open: {{open}} · not checked in the last 30 days: {{unchecked}}.",
+      "missing": "No agent has run the egress self-check: an agent with its own API key may call services directly.",
+      "fix": "Gateways → External APIs → Lock agents down gives the network rules; then run the egress self-check on the agent's host."
+    },
+    "sensors": {
+      "title": "eBPF sensor (Linux)",
+      "ok": "{{online}} of {{total}} online and enforcing.",
+      "attention": "{{online}} of {{total}} online · enforcing: {{enforcing}} · with errors: {{problems}}.",
+      "missing": "No sensor. Optional: for Linux hosts that run agents.",
+      "fix": "Gateways → Runtime → Register sensor gives the command for the host (Linux 5.15+)."
+    },
+    "endpoint_agents": {
+      "title": "Endpoint agent on computers",
+      "ok": "{{reporting}} of {{devices}} computers reported in the last 2 hours.",
+      "attention": "No computer has reported in the last 2 hours ({{devices}} known).",
+      "missing": "Not installed. Optional: finds local models and AI agents on Windows, macOS and Linux.",
+      "fix": "Settings → Ingestion Sources → Endpoint agent: one command per system, or Intune, Group Policy or Jamf for the fleet."
+    },
+    "browsers": {
+      "title": "Browser extension",
+      "ok": "{{reporting}} of {{devices}} browsers reported this week.",
+      "attention": "No browser has reported this week ({{devices}} known).",
+      "missing": "Not installed. Optional: sees AI websites in Chrome and Edge and closes the blocked ones.",
+      "fix": "Settings → Ingestion Sources → Download extension."
+    }
+  },
   "provider_policy": {
     "title": "AI provider policy",
     "hint": "Where prompts may go. With \"Self-hosted only\", Provenza connects only to model servers on your own network: a connection to a cloud AI service is refused before anything is sent, and agents may not call cloud AI services directly.",
