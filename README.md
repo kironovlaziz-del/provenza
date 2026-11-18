@@ -91,10 +91,19 @@ OpenAI-compatible client runs. The agent's keys are made there and never leave i
 **Govern egress on another Linux host:** Runtime → **Register sensor** gives a
 one-line command that downloads the sensor from your Provenza (no Go, no git there).
 
-**Just looking?** On your own computer, not a server (demo password, development
-secrets): `docker compose -f docker-compose.dev.yml up --build` - or `podman compose`
-with Podman - then http://localhost:3000 with organization `demo`, `admin@demo.com` /
-`demo12345` ([development guide](docs/development.md)).
+**Just looking?** On your own computer, not a server, from the published images
+(about a minute, nothing to build):
+
+```bash
+curl -fsSLO https://raw.githubusercontent.com/kironovlaziz-del/provenza/main/docker-compose.try.yml
+docker compose -f docker-compose.try.yml up -d        # or: podman compose
+```
+
+Then http://localhost:8080 with organization `provenza`, `admin@example.com` /
+`provenza-try-local`. Its ports listen only on this computer and that password is
+public. **[A governed refund agent](examples/governed-refund-agent/)** runs against
+it: a refund over $100 waits for a person, a prompt injection that asks for the
+customer list is refused. To work on Provenza itself: [development guide](docs/development.md).
 
 ## ✨ What makes it different
 
