@@ -18,6 +18,8 @@ import {
   type FieldValue, type LayerT, type OverviewT, type PolicyDocument, type PreviewT, type Scope,
 } from "@/lib/policy_layers_api";
 import { confirmDialog } from "@/components/Dialog";
+import { RulePacks } from "@/components/RulePacks";
+import { Tabs } from "@/components/Tabs";
 
 type Sel = { scope: Scope; id: number | null; label: string };
 type FormState = {
@@ -108,6 +110,7 @@ export default function PolicyHierarchyPage() {
   const isAdmin = user?.role === "admin";
   const [ov, setOv] = useState<OverviewT | null>(null);
   const [agents, setAgents] = useState<Agent[]>([]);
+  const [view, setView] = useState<"levels" | "packs">("levels");
   const [sel, setSel] = useState<Sel>({ scope: "org", id: null, label: "" });
   const [layer, setLayer] = useState<LayerT | null>(null);
   const [tab, setTab] = useState<"form" | "yaml">("form");
@@ -126,6 +129,7 @@ export default function PolicyHierarchyPage() {
   }, [t]);
   useEffect(() => {
     loadOverview();
+    if (new URLSearchParams(window.location.search).get("tab") === "packs") setView("packs");
     listAgents().then((res) => {
       const list = res as Agent[];
       setAgents(list);
@@ -245,10 +249,13 @@ export default function PolicyHierarchyPage() {
       <div className="content agent-page">
         <p className="hint-text u-mb-16">{t("ph.intro")}</p>
         <SignedPolicyPanel />
-        {error && <p className="error-text ag-banner">{error}</p>}
-        {notice && <p className="hint-text ag-banner">{notice}</p>}
+        <Tabs current={view} onChange={(k) => setView(k as "levels" | "packs")}
+          tabs={[{ key: "levels", label: t("ph.tab_levels") }, { key: "packs", label: t("ph.tab_packs") }]} />
+        {view === "packs" && <RulePacks overview={ov} agents={agents} onChanged={() => { loadOverview(); load(sel); }} />}
+        {view === "levels" && error && <p className="error-text ag-banner">{error}</p>}
+        {view === "levels" && notice && <p className="hint-text ag-banner">{notice}</p>}
 
-        <div className="ph-layout">
+        {view === "levels" && <div className="ph-layout">
           {/* ---------------- levels ---------------- */}
           <aside className="panel ph-tree">
             <div className="panel-header"><h2>{t("ph.levels")}</h2></div>
@@ -374,7 +381,7 @@ export default function PolicyHierarchyPage() {
               )}
             </section>
           </div>
-        </div>
+        </div>}
       </div>
     </>
   );

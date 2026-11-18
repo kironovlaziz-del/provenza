@@ -39,6 +39,7 @@ from app.api import connect_script as connect_script_api
 from app.api import teams as teams_api
 from app.api import attestation as attestation_api
 from app.api import policy_layers as policy_layers_api
+from app.api import policy_packs as policy_packs_api
 from app.api import kill_switch as kill_switch_api
 from app.api import agent_identity
 from app.api import gateway
@@ -185,6 +186,7 @@ app.include_router(connect_script_api.router, prefix=f"{settings.API_V1_STR}/age
 app.include_router(teams_api.router, prefix=f"{settings.API_V1_STR}/teams", tags=["agent-governance"])
 app.include_router(attestation_api.router, prefix=f"{settings.API_V1_STR}/attestation", tags=["agent-governance"])
 app.include_router(policy_layers_api.router, prefix=f"{settings.API_V1_STR}/policy-layers", tags=["policies"])
+app.include_router(policy_packs_api.router, prefix=f"{settings.API_V1_STR}/policy-packs", tags=["policies"])
 app.include_router(kill_switch_api.router, prefix=f"{settings.API_V1_STR}/kill-switch", tags=["agent-governance"])
 app.include_router(gateway.router, prefix=f"{settings.API_V1_STR}/gateway", tags=["gateway"])
 app.include_router(retention.router, prefix=f"{settings.API_V1_STR}/retention", tags=["retention"])
