@@ -6,6 +6,9 @@ this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- **Protection coverage**, next to the setup checklist (Settings, and the dashboard when something stopped working): whether each part of the protection works now, not only whether it was set up - the signed policy (in force, a release waiting for signatures, changes not signed yet), the egress proxy (online, following a signed release), agents signing their own calls, agents shown confined by the egress self-check in the last 30 days, the eBPF sensor (online, enforcing, without errors), and the endpoint agent and browser extension (machines and browsers reporting). Each part is working, needs attention or not set up, with the facts it was judged on and how to fix it (`GET /api/v1/system/setup`, `coverage`).
+
 ## [0.4.0] - 2026-11-17
 
 ### Added

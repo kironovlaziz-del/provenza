@@ -3155,6 +3155,68 @@
     "sso": "Identifikatsiya provayderi orqali kirish",
     "sso_hint": "Yagona kirish (OpenID Connect): xodimlar kompaniya hisobidan foydalanadi; ishdan ketganlar kirish huquqini u bilan birga yo'qotadi."
   },
+  "coverage": {
+    "title": "Himoya qamrovi",
+    "hint": "Himoyaning har bir qismi hozir ishlayaptimi, faqat sozlanganmi emas.",
+    "state_ok": "Ishlayapti",
+    "state_attention": "E'tibor talab qiladi",
+    "state_missing": "Sozlanmagan",
+    "needs": "tuzatish kerak",
+    "fix_label": "Qanday tuzatish",
+    "signed_policy": {
+      "title": "Imzolangan siyosat",
+      "ok": "#{{number}}-reliz kuchda, passkey bilan imzolangan.",
+      "attention_problem": "Kuchdagi relizda muammo bor yoki muddati tugagan: proksi va sensorlar hammasini rad etishi mumkin.",
+      "attention_draft": "#{{draft}}-reliz imzolarni kutmoqda.",
+      "attention_unsigned_one": "Siyosatdagi {{count}} ta o'zgarish hali imzolanmagan: proksi va sensorlar hali #{{number}}-relizga amal qiladi.",
+      "attention_unsigned_other": "Siyosatdagi {{count}} ta o'zgarish hali imzolanmagan: proksi va sensorlar hali #{{number}}-relizga amal qiladi.",
+      "missing": "Hali imzolangan reliz yo'q: administratorlar imzolamaguncha egress proksi har bir so'rovni rad etadi.",
+      "fix": "Policy hierarchy → Signed policy → Prepare the release → Sign with passkey (avval Mening profilimda passkey qo'shing)."
+    },
+    "proxy": {
+      "title": "Egress proksi",
+      "ok": "{{total}} tadan {{online}} tasi onlayn, imzolangan siyosatga amal qiladi.",
+      "attention_policy": "Onlayn, lekin siyosat relizi imzolanmaguncha har bir so'rovni rad etadi.",
+      "attention_offline": "{{total}} tadan {{online}} tasi onlayn: qolganlaridan so'nggi 10 daqiqada xabar yo'q.",
+      "missing": "Proksi yo'q: agentlar tashqi API'larga o'z kalitlari bilan ulanadi va Provenza buni ko'rmaydi.",
+      "fix": "install.sh uni Provenza serverida sozlaydi (eski o'rnatishda provenza edge setup); boshqa xostlar uchun: Gateways → External APIs → Proxies."
+    },
+    "agents_signing": {
+      "title": "Agentlar o'z chaqiruvlarini imzolaydi",
+      "ok": "Barcha {{agents}} ta faol agentning o'z kalitlari bor.",
+      "attention": "{{agents}} ta faol agentdan {{signing}} tasining o'z kalitlari bor; qolganlari faqat API kaliti bilan ishlaydi.",
+      "missing": "Hali faol agent yo'q.",
+      "fix": "Agents → Connect an AI client: buyruq agent kalitlarini uning o'z mashinasida yaratadi; ular u yerdan chiqmaydi."
+    },
+    "agents_confined": {
+      "title": "Agentlar faqat Provenza orqali o'ta oladi",
+      "ok": "Barcha {{agents}} ta faol agent egress tekshiruvidan o'tdi: yopiq.",
+      "attention": "Yopiq: {{confined}} · ochiq: {{open}} · so'nggi 30 kunda tekshirilmagan: {{unchecked}}.",
+      "missing": "Hech bir agent egress tekshiruvini o'tkazmagan: o'z API kaliti bor agent xizmatlarga to'g'ridan-to'g'ri murojaat qilishi mumkin.",
+      "fix": "Gateways → External APIs → Lock agents down tarmoq qoidalarini beradi; so'ng agent xostida egress tekshiruvini ishga tushiring."
+    },
+    "sensors": {
+      "title": "eBPF sensor (Linux)",
+      "ok": "{{total}} tadan {{online}} tasi onlayn va bloklayapti.",
+      "attention": "{{total}} tadan {{online}} tasi onlayn · bloklayapti: {{enforcing}} · xatolar bilan: {{problems}}.",
+      "missing": "Sensor yo'q. Ixtiyoriy: agentlar ishlaydigan Linux xostlari uchun.",
+      "fix": "Gateways → Runtime → Register sensor xost uchun buyruqni beradi (Linux 5.15+)."
+    },
+    "endpoint_agents": {
+      "title": "Kompyuterlardagi endpoint agent",
+      "ok": "{{devices}} ta kompyuterdan {{reporting}} tasi so'nggi 2 soatda xabar berdi.",
+      "attention": "So'nggi 2 soatda hech bir kompyuter xabar bermadi ({{devices}} ta ma'lum).",
+      "missing": "O'rnatilmagan. Ixtiyoriy: Windows, macOS va Linux'da lokal modellar va AI agentlarni topadi.",
+      "fix": "Settings → Ingestion Sources → Endpoint agent: har bir tizim uchun bitta buyruq yoki butun park uchun Intune, Group Policy yoki Jamf."
+    },
+    "browsers": {
+      "title": "Brauzer kengaytmasi",
+      "ok": "{{devices}} ta brauzerdan {{reporting}} tasi shu hafta xabar berdi.",
+      "attention": "Shu hafta hech bir brauzer xabar bermadi ({{devices}} ta ma'lum).",
+      "missing": "O'rnatilmagan. Ixtiyoriy: Chrome va Edge'da AI saytlarini ko'radi va taqiqlanganlarini yopadi.",
+      "fix": "Settings → Ingestion Sources → Download extension."
+    }
+  },
   "provider_policy": {
     "title": "AI provayderlar siyosati",
     "hint": "Promptlar qayerga yuborilishi mumkin. \"Faqat o'z serverlarimiz\" rejimida Provenza faqat o'z tarmog'ingizdagi model serverlariga ulanadi: bulutli AI xizmatiga ulanish hech narsa yuborilmasdan rad etiladi, agentlar esa bulutli AI xizmatlarini to'g'ridan-to'g'ri chaqira olmaydi.",

@@ -163,6 +163,11 @@ production setup:
    client runs (Gemini CLI, Claude Code, Cursor, any OpenAI-compatible client).
    An agent written with the SDK (`pip install provenza`, or the JS or Go SDK)
    enrolls with the same token.
+6. Check **Settings → Protection coverage**: for each part of the protection
+   (signed policy, egress proxy, agents' own keys, agents confined, sensor,
+   endpoint agent, browser extension) it says whether it works now, needs
+   attention or is not set up, and how to fix it. The dashboard shows it
+   whenever something that was set up stops working.
 
 ## HTTPS
 
