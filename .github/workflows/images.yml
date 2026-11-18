@@ -1,0 +1,145 @@
+name: Images
+
+# Container images of a release, for trying Provenza on a computer without
+# building anything (docker-compose.try.yml):
+#
+#   ghcr.io/kironovlaziz-del/provenza-backend:<tag>   API, workers, migrations (deploy/backend.Dockerfile)
+#   ghcr.io/kironovlaziz-del/provenza-web:<tag>       the console (deploy/frontend.Dockerfile)
+#
+# each for linux/amd64 and linux/arm64 (Apple silicon, ARM servers), built on
+# a runner of that architecture, and "latest" for the newest release. Each image
+# carries a build provenance attestation (Sigstore, keyless) pushed with it:
+#
+#   gh attestation verify oci://ghcr.io/kironovlaziz-del/provenza-backend:v0.4.1 --repo kironovlaziz-del/provenza
+#
+# A server installed with install.sh builds its own images and does not use these.
+# Run by hand (Actions -> Images -> Run workflow) to publish main as ":main".
+
+on:
+  push:
+    tags: ["v[0-9]*"]
+  workflow_dispatch:
+
+permissions: {}
+
+env:
+  OWNER: ghcr.io/kironovlaziz-del
+
+jobs:
+  build:
+    name: ${{ matrix.image }} (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: true
+      matrix:
+        image: [backend, web]
+        arch: [amd64, arm64]
+        include:
+          - image: backend
+            dockerfile: deploy/backend.Dockerfile
+          - image: web
+            dockerfile: deploy/frontend.Dockerfile
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - name: Build and push by digest
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          platforms: linux/${{ matrix.arch }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ github.ref_name }}
+          outputs: type=image,name=${{ env.OWNER }}/provenza-${{ matrix.image }},push-by-digest=true,name-canonical=true,push=true
+          provenance: false
+
+      - name: Keep the digest
+        run: |
+          mkdir -p digests
+          echo "${{ steps.build.outputs.digest }}" > "digests/${{ matrix.image }}-${{ matrix.arch }}"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: digest-${{ matrix.image }}-${{ matrix.arch }}
+          path: digests/*
+          retention-days: 1
+
+  publish:
+    name: ${{ matrix.image }} (tags, signature)
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: write
+      id-token: write       # Sigstore signing identity of this workflow
+      attestations: write
+    strategy:
+      matrix:
+        image: [backend, web]
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: digest-${{ matrix.image }}-*
+          merge-multiple: true
+          path: digests
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - name: Tags
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.OWNER }}/provenza-${{ matrix.image }}
+          flavor: latest=false
+          tags: |
+            type=ref,event=tag
+            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') && !contains(github.ref_name, '-') }}
+            type=ref,event=branch
+
+      - name: One image for both architectures
+        id: index
+        env:
+          IMAGE: ${{ env.OWNER }}/provenza-${{ matrix.image }}
+          TAGS: ${{ steps.meta.outputs.tags }}
+        run: |
+          set -eu
+          args=()
+          while read -r t; do [ -n "$t" ] && args+=(-t "$t"); done <<< "$TAGS"
+          for f in digests/*; do args+=("$IMAGE@$(cat "$f")"); done
+          docker buildx imagetools create "${args[@]}"
+          first=$(echo "$TAGS" | head -n1)
+          docker buildx imagetools inspect "$first"
+          echo "digest=$(docker buildx imagetools inspect "$first" --format '{{json .Manifest}}' | jq -r .digest)" >> "$GITHUB_OUTPUT"
+
+      - name: Sign (build provenance)
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-name: ${{ env.OWNER }}/provenza-${{ matrix.image }}
+          subject-digest: ${{ steps.index.outputs.digest }}
+          push-to-registry: true

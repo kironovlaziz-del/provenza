@@ -1,0 +1,185 @@
+# Try Provenza on your own computer, from the published images: nothing to build.
+#
+#   docker compose -f docker-compose.try.yml up -d        (or: podman compose ...)
+#
+# About a minute later: http://localhost:8080
+#   organization  provenza
+#   e-mail        admin@example.com
+#   password      provenza-try-local
+#
+# FOR YOUR OWN COMPUTER ONLY. Its ports listen on 127.0.0.1 and the
+# administrator's password above is public. The keys and the database and
+# Redis passwords are random, made on the first start and kept in the
+# "secrets" volume. A server is installed with install.sh (docs/self-hosting.md).
+#
+# Stop: docker compose -f docker-compose.try.yml down      (add -v to delete the data too)
+# Another version: PROVENZA_VERSION=v0.4.1 docker compose -f docker-compose.try.yml up -d
+
+name: provenza-try
+
+x-backend: &backend
+  image: ghcr.io/kironovlaziz-del/provenza-backend:${PROVENZA_VERSION:-latest}
+  # the image's entrypoint, with this install's secrets loaded first
+  entrypoint: ["sh", "-c", "set -a; . /run/provenza/env; set +a; exec tini -- provenza-entrypoint \"$$@\"", "provenza"]
+  environment:
+    POSTGRES_HOST: postgres
+    POSTGRES_PORT: "5432"
+    POSTGRES_USER: provenza
+    POSTGRES_DB: provenza
+    REDIS_HOST: redis
+    REDIS_PORT: "6379"
+    API_WORKERS: "1"
+    CELERY_CONCURRENCY: "1"
+  volumes:
+    - secrets:/run/provenza:ro
+  restart: unless-stopped
+
+services:
+  secrets:
+    image: ghcr.io/kironovlaziz-del/provenza-backend:${PROVENZA_VERSION:-latest}
+    user: "0"
+    entrypoint:
+      - python
+      - -c
+      - |
+        import os, secrets
+        from cryptography.fernet import Fernet
+        os.umask(0o022)
+        if not os.path.exists("/run/provenza/env"):
+            pg, rd = secrets.token_hex(24), secrets.token_hex(24)
+            for name, value in (("postgres_password", pg), ("redis_password", rd)):
+                with open(f"/run/provenza/{name}", "w") as f:
+                    f.write(value)
+            with open("/run/provenza/env.new", "w") as f:
+                f.write(f"SECRET_KEY='{secrets.token_urlsafe(48)}'\n"
+                        f"ENCRYPTION_KEY='{Fernet.generate_key().decode()}'\n"
+                        f"POSTGRES_PASSWORD='{pg}'\nREDIS_PASSWORD='{rd}'\n")
+            os.rename("/run/provenza/env.new", "/run/provenza/env")
+            print("[provenza] made this install's keys and passwords")
+    volumes:
+      - secrets:/run/provenza
+
+  postgres:
+    image: docker.io/library/postgres:16-alpine
+    environment:
+      POSTGRES_USER: provenza
+      POSTGRES_DB: provenza
+      POSTGRES_PASSWORD_FILE: /run/provenza/postgres_password
+    volumes:
+      - secrets:/run/provenza:ro
+      - postgres:/var/lib/postgresql/data
+    depends_on:
+      secrets:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U provenza -d provenza"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+    restart: unless-stopped
+
+  redis:
+    image: docker.io/library/redis:7-alpine
+    command: ["sh", "-c", "exec redis-server --requirepass \"$$(cat /run/provenza/redis_password)\""]
+    volumes:
+      - secrets:/run/provenza:ro
+    depends_on:
+      secrets:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$$(cat /run/provenza/redis_password)\" --no-auth-warning ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+    restart: unless-stopped
+
+  migrate:
+    <<: *backend
+    command: ["migrate"]
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  admin:
+    <<: *backend
+    command: ["create-admin", "--org", "Provenza", "--slug", "provenza", "--email", "admin@example.com",
+              "--name", "Admin"]
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_USER: provenza
+      POSTGRES_DB: provenza
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      PROVENZA_ADMIN_PASSWORD: provenza-try-local
+    restart: "no"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  api:
+    <<: *backend
+    command: ["api"]
+    depends_on:
+      admin:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+
+  worker:
+    <<: *backend
+    command: ["worker"]
+    depends_on:
+      admin:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+
+  beat:
+    <<: *backend
+    command: ["beat"]
+    depends_on:
+      admin:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+
+  web:
+    image: ghcr.io/kironovlaziz-del/provenza-web:${PROVENZA_VERSION:-latest}
+    restart: unless-stopped
+
+  # one address for the console and the API, as on a server
+  proxy:
+    image: docker.io/library/caddy:2-alpine
+    environment:
+      CADDYFILE: |
+        {
+        	admin off
+        	auto_https off
+        	servers {
+        		max_header_size 64KiB
+        	}
+        }
+        :8080 {
+        	@api path /api/* /health /egress-beacon/*
+        	handle @api {
+        		reverse_proxy api:8000 {
+        			flush_interval -1
+        		}
+        	}
+        	handle {
+        		reverse_proxy web:3000
+        	}
+        }
+    command: ["sh", "-c", "printf '%s' \"$$CADDYFILE\" > /tmp/Caddyfile && exec caddy run --config /tmp/Caddyfile --adapter caddyfile"]
+    ports:
+      - "127.0.0.1:8080:8080"
+    depends_on:
+      - api
+      - web
+    restart: unless-stopped
+
+volumes:
+  secrets:
+  postgres:

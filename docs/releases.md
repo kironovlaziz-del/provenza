@@ -53,9 +53,34 @@ These are warnings: the scripts go on, and `upgrade.sh` still asks before
 upgrading. They catch a moved tag or a substituted mirror; the signature
 check (`gh attestation verify`) is what proves the record itself.
 
+## Container images
+
+A release tag also publishes the images of the backend and the console, for
+`linux/amd64` and `linux/arm64`, each built on a runner of that architecture
+(`.github/workflows/images.yml`):
+
+```
+ghcr.io/kironovlaziz-del/provenza-backend:v0.4.1    (and :latest for the newest release)
+ghcr.io/kironovlaziz-del/provenza-web:v0.4.1
+```
+
+They are what [`docker-compose.try.yml`](../docker-compose.try.yml) runs, for
+trying Provenza on a computer. A server installed with `install.sh` builds its
+own images from the checked checkout and does not use them. Each image carries
+a build provenance attestation pushed with it:
+
+```bash
+gh attestation verify oci://ghcr.io/kironovlaziz-del/provenza-backend:v0.4.1 -R kironovlaziz-del/provenza
+```
+
+**Actions → Images → Run workflow** publishes `main` as `:main`.
+
 ## Making a release
 
 1. Versions and `CHANGELOG.md` on `main` (the SDKs are released with their own tags, `sdk-python-v…`, `sdk-js-v…`).
 2. `git tag v0.4.0 && git push origin v0.4.0` - the tag must be on `main`.
 3. The workflow creates the release as a **draft** with the files above.
    Write the notes, then publish it.
+4. The images are published at the same time. The first time, make the two
+   packages public: GitHub → the package → **Package settings → Change
+   visibility → Public**.
