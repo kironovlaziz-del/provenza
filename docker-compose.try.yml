@@ -2,7 +2,8 @@
 #
 #   docker compose -f docker-compose.try.yml up -d        (or: podman compose ...)
 #
-# About a minute later: http://localhost:8080
+# About a minute later: http://localhost:8080 (this name: passkeys are made for it,
+# so not 127.0.0.1; through an SSH tunnel to a server, forward it to this port)
 #   organization  provenza
 #   e-mail        admin@example.com
 #   password      provenza-try-local
@@ -14,6 +15,7 @@
 #
 # Stop: docker compose -f docker-compose.try.yml down      (add -v to delete the data too)
 # Another version: PROVENZA_VERSION=v0.4.1 docker compose -f docker-compose.try.yml up -d
+# Windows (PowerShell): curl.exe instead of curl, and $env:PROVENZA_VERSION="v0.4.1" first.
 
 name: provenza-try
 
@@ -30,6 +32,8 @@ x-backend: &backend
     REDIS_PORT: "6379"
     API_WORKERS: "1"
     CELERY_CONCURRENCY: "1"
+    # the console's address: passkeys are accepted from it only
+    CORS_ORIGINS: http://localhost:8080
   volumes:
     - secrets:/run/provenza:ro
   restart: unless-stopped
@@ -112,6 +116,7 @@ services:
       POSTGRES_DB: provenza
       REDIS_HOST: redis
       REDIS_PORT: "6379"
+      CORS_ORIGINS: http://localhost:8080
       PROVENZA_ADMIN_PASSWORD: provenza-try-local
     restart: "no"
     depends_on:

@@ -232,6 +232,20 @@ jobs:
       - name: docker-compose.try.yml is valid
         run: docker compose -f docker-compose.try.yml config -q
 
+      - name: The try stack takes passkeys from the address it publishes
+        run: |
+          docker compose -f docker-compose.try.yml config --format json > "$RUNNER_TEMP/try.json"
+          python3 - "$RUNNER_TEMP/try.json" <<'PY'
+          import json, sys
+          services = json.load(open(sys.argv[1]))["services"]
+          port = services["proxy"]["ports"][0]["published"]
+          console = f"http://localhost:{port}"
+          for name in ("api", "worker", "beat", "admin"):
+              origins = services[name]["environment"].get("CORS_ORIGINS", "")
+              assert origins.split(",")[0] == console, f"{name}: CORS_ORIGINS {origins!r}, the console is {console}"
+          print("passkeys from", console)
+          PY
+
   sdk-js:
     name: JS SDK (node ${{ matrix.node-version }})
     runs-on: ubuntu-latest
