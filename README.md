@@ -99,6 +99,8 @@ curl -fsSLO https://raw.githubusercontent.com/kironovlaziz-del/provenza/main/doc
 docker compose -f docker-compose.try.yml up -d        # or: podman compose
 ```
 
+(On Windows, in PowerShell: `curl.exe` instead of `curl`.)
+
 Then http://localhost:8080 with organization `provenza`, `admin@example.com` /
 `provenza-try-local`. Its ports listen only on this computer and that password is
 public. **[A governed refund agent](examples/governed-refund-agent/)** runs against

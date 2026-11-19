@@ -49,6 +49,12 @@ curl -fsSLO https://raw.githubusercontent.com/kironovlaziz-del/provenza/main/doc
 docker compose -f docker-compose.try.yml up -d
 ```
 
+On Windows, in PowerShell, `curl` is another command: use `curl.exe`. Docker
+Desktop needs a processor with virtualization and SLAT (`systeminfo`, the last
+lines: "Second Level Address Translation: Yes"). Without it, run the two steps
+above and the example on a Linux server and reach both through SSH:
+`ssh -L 8080:127.0.0.1:8080 -L 8501:127.0.0.1:8501 you@server`.
+
 **2. Set the agent up** (approves the tools, enrolls the agent, writes its policy):
 
 ```bash
@@ -77,11 +83,16 @@ streamlit run app.py
 A careful model may ignore the injected instruction by itself. Provenza does
 not rely on that.
 
-**4. Approve the big refund.** Open http://localhost:8080 and sign in:
-organization `provenza`, `admin@example.com`, `provenza-try-local`.
-Add a passkey in **My profile** (your device's PIN or fingerprint), confirm
-the sign-in with it, then open **Approvals**. The app continues as soon as
-you approve.
+**4. Approve the big refund.** Open http://localhost:8080 (this name, not
+127.0.0.1: the passkey is made for it) and sign in: organization `provenza`,
+`admin@example.com`, `provenza-try-local`. Add a passkey in **My profile**,
+confirm the sign-in with it, then open **Approvals**. The app continues as
+soon as you approve.
+
+The passkey is unlocked with your device's PIN, fingerprint or face. On
+Windows, set a PIN first (Settings → Accounts → Sign-in options → PIN
+(Windows Hello)); without one, Windows asks for a USB security key. A phone
+works too: choose it in the browser's window and scan the QR code.
 
 ## Try to get around it
 
