@@ -17,6 +17,8 @@
   <a href="https://opensource.org/licenses/Apache-2.0"><img src="https://img.shields.io/badge/License-Apache_2.0-blue.svg" alt="License"></a>
   <a href="https://github.com/kironovlaziz-del/provenza/actions/workflows/ci.yml"><img src="https://github.com/kironovlaziz-del/provenza/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="https://github.com/kironovlaziz-del/provenza/actions/workflows/quickstart.yml"><img src="https://github.com/kironovlaziz-del/provenza/actions/workflows/quickstart.yml/badge.svg" alt="Quickstart"></a>
+  <a href="https://www.bestpractices.dev/projects/16963"><img src="https://www.bestpractices.dev/projects/16963/badge" alt="OpenSSF Best Practices"></a>
+  <a href="https://scorecard.dev/viewer/?uri=github.com/kironovlaziz-del/provenza"><img src="https://api.scorecard.dev/projects/github.com/kironovlaziz-del/provenza/badge" alt="OpenSSF Scorecard"></a>
   <a href="CODE_OF_CONDUCT.md"><img src="https://img.shields.io/badge/Contributor%20Covenant-2.1-4baaaa.svg" alt="Contributor Covenant"></a>
   <a href="CONTRIBUTING.md"><img src="https://img.shields.io/badge/PRs-welcome-brightgreen.svg" alt="PRs Welcome"></a>
   <a href="https://pypi.org/project/provenza/"><img src="https://img.shields.io/pypi/v/provenza?label=PyPI&color=blue" alt="PyPI"></a>
