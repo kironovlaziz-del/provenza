@@ -3833,7 +3833,19 @@
     "stopped_open": "Open the kill switch",
     "no_access_title": "You don't have access to this page",
     "no_access": "Your role does not include this page. If you need it for your work, ask an administrator.",
-    "no_access_home": "Go to my start page"
+    "no_access_home": "Go to my start page",
+    "simple": {
+      "agents": "AI agents",
+      "audit": "Audit log",
+      "shadow_ai": "Shadow AI",
+      "waiting_zero": "Nothing is waiting for a decision",
+      "waiting_one": "{{count}} item is waiting for a decision",
+      "waiting_other": "{{count}} items are waiting for a decision",
+      "protection_ok": "Protected",
+      "protection_attention": "Needs attention",
+      "protection_setup": "Setup unfinished",
+      "protection_hint": "Protection coverage: {{ok}} working, {{attention}} need attention, {{missing}} not set up. Details in Settings."
+    }
   },
   "inbox": {
     "title": "Inbox",
@@ -4177,5 +4189,13 @@
     "undone_at": "undone {{when}}",
     "applied_title": "Applied",
     "nothing_applied": "No pack has been applied yet."
+  },
+  "console_mode": {
+    "simple_title": "Simple mode",
+    "simple_hint": "The console shows what you need most: AI agents, rules, the audit log and Shadow AI. Every other page is in the full console. Your data and rules are the same in both; this browser remembers the choice.",
+    "full_title": "Full console",
+    "full_hint": "Every page of Provenza. Simple mode shows only the essentials. Your data and rules are the same in both; this browser remembers the choice.",
+    "to_full": "Open the full console",
+    "to_simple": "Back to simple mode"
   }
 }

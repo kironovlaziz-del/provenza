@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useTranslation } from "react-i18next";
 import { loginUrl, useAuth } from "@/lib/auth";
+import { useConsoleMode } from "@/lib/console_mode";
 import { canOpen, homeFor } from "@/lib/navigation";
 import { DialogHost } from "@/components/Dialog";
 import { ReleaseBanner } from "@/components/ReleaseBanner";
@@ -17,6 +18,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const { t } = useTranslation();
+  const [mode] = useConsoleMode();
 
   useEffect(() => {
     if (!loading && !user) {
@@ -59,7 +61,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               <div className="panel-body">
                 <h2 style={{ marginTop: 0, fontSize: 16 }}>{t("nav.no_access_title")}</h2>
                 <p className="hint-text">{t("nav.no_access")}</p>
-                <Link href={homeFor(user.role)} className="btn btn-primary">{t("nav.no_access_home")}</Link>
+                <Link href={homeFor(user.role, mode)} className="btn btn-primary">{t("nav.no_access_home")}</Link>
               </div>
             </div>
           </div>

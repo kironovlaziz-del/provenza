@@ -1435,7 +1435,7 @@ tbody tr.clickable:hover {
 :root:not([data-theme="light"]) tr:hover td { background-color: rgba(255, 255, 255, 0.02); }
 :root:not([data-theme="light"]) code,
 :root:not([data-theme="light"]) pre { background-color: #16171c; color: #c9d1d9; border-color: var(--border); }
-:root:not([data-theme="light"]) a:not(.sidebar-link):not(.btn):not(.sidebar-icon-link):not(.appbar-tab):not(.appbar-icon):not(.appbar-stop):not(.appbar-brand):not(.appbar-menu-link):not(.hub-card) { color: #6aa9ff; }
+:root:not([data-theme="light"]) a:not(.sidebar-link):not(.btn):not(.sidebar-icon-link):not(.appbar-tab):not(.appbar-icon):not(.appbar-stop):not(.appbar-protect):not(.appbar-brand):not(.appbar-menu-link):not(.hub-card) { color: #6aa9ff; }
 :root:not([data-theme="light"]) ::-webkit-scrollbar { width: 10px; height: 10px; }
 :root:not([data-theme="light"]) ::-webkit-scrollbar-thumb { background: #3a3d47; border-radius: 5px; border: 2px solid transparent; background-clip: content-box; }
 :root:not([data-theme="light"]) ::-webkit-scrollbar-track { background: transparent; }
@@ -1849,6 +1849,15 @@ button.section-tab {
 .appbar-icon { display: inline-grid; place-items: center; width: 34px; height: 34px; border-radius: 8px;
   color: var(--text-inverse-muted); background: none; border: 0; cursor: pointer; text-decoration: none; }
 .appbar-icon:hover, .appbar-icon.active { color: var(--text-inverse); background: var(--bg-sidebar-hover); }
+/* simple mode: what waits for a decision, and whether the protection works */
+.appbar-bell { position: relative; }
+.appbar-bell .appbar-badge { position: absolute; top: 1px; right: -2px; padding: 0 5px; line-height: 16px; }
+.appbar-protect { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 8px;
+  border: 1px solid #3a3f52; color: var(--text-inverse-muted); text-decoration: none; font-size: 13px; font-weight: 500;
+  white-space: nowrap; }
+.appbar-protect:hover { background: var(--bg-sidebar-hover); color: var(--text-inverse); }
+.appbar-protect-ok { border-color: #245a3d; color: #7fd8a6; }
+.appbar-protect-attention { border-color: #6b5214; color: #f2c063; }
 .appbar-user { position: relative; }
 .appbar-menu { position: absolute; right: 0; top: 40px; width: 260px; background: var(--bg-panel); color: var(--text-primary);
   border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 12px 32px rgba(0,0,0,.25); padding: 6px; z-index: 30; }
@@ -1892,7 +1901,7 @@ button.section-tab {
   .appbar-tabs-narrow { display: flex; overflow-x: auto; padding: 0 10px 8px; height: 44px; align-items: center;
     scrollbar-width: none; }
   .appbar-tabs-narrow::-webkit-scrollbar { display: none; }
-  .appbar-stop-text { display: none; }
+  .appbar-stop-text, .appbar-protect-text { display: none; }
   .appbar-row { padding: 0 8px 0 12px; gap: 2px; }
   .appbar-brand { margin-right: 4px; }
 }
@@ -1932,6 +1941,11 @@ a.btn, a.btn:hover { text-decoration: none; }
 
 /* ---------------------------------------------------------------- hubs (Settings, Help) */
 .hub-group { margin: 8px 0 24px; }
+.console-mode { margin-bottom: 20px; }
+.console-mode-body { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.console-mode-text { flex: 1; min-width: 220px; display: flex; flex-direction: column; gap: 3px; }
+.console-mode-text b { font-weight: 600; }
+.console-mode-text small { color: var(--text-muted); font-size: 12.5px; line-height: 1.4; }
 .hub-group h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .05em; color: var(--text-muted); margin: 0 0 10px; font-weight: 600; }
 .hub-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 10px; }
 .hub-card { display: flex; align-items: center; gap: 12px; padding: 14px 16px; background: var(--bg-panel);

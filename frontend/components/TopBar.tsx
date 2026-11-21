@@ -1,16 +1,23 @@
 "use client";
 
-// The console's one bar: the four tabs (Inbox, AI, Rules, Evidence), search
+// The console's one bar: the mode's tabs - simple mode: AI agents, Rules,
+// Audit log, Shadow AI; full console: Inbox, AI, Rules, Evidence - search
 // (also Ctrl+K), Stop all for admins, Help, Settings and the user's menu.
-// Under it, while anything is stopped, a red line says so on every page.
+// Simple mode adds what waits for a decision (approvals and open incidents,
+// to the Inbox) and, for admins, whether the protection works (to Settings).
+// Under the bar, while anything is stopped, a red line says so on every page.
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "@/lib/auth";
-import { pageMatches, sectionOf, visibleSections, type NavSection } from "@/lib/navigation";
+import { homeFor, isReviewer, pageMatches, sectionOf, visibleSections, type NavSection } from "@/lib/navigation";
+import { api, listIncidentsPage } from "@/lib/api";
+import { listAgentIncidents } from "@/lib/agent_api";
 import { listPendingApprovals } from "@/lib/approvals_api";
+import { useConsoleMode } from "@/lib/console_mode";
+import { protectionState, type CoverageSummary } from "@/lib/coverage";
 import { killOverview, type KillOverviewT } from "@/lib/kill_switch_api";
 import { Icon } from "./Icon";
 import { LanguageSwitcher } from "./LanguageSwitcher";
@@ -39,14 +46,16 @@ function searchHits(sections: NavSection[], q: string, t: (k: string) => string)
       || page.href.includes(q));
 }
 
-function SearchDialog({ sections, onClose }: { sections: NavSection[]; onClose: () => void }) {
+/** sections: the mode's, listed before anything is typed; all: every page this
+ *  role may open (the full console's), searched in either mode. */
+function SearchDialog({ sections, all, onClose }: { sections: NavSection[]; all: NavSection[]; onClose: () => void }) {
   const { t } = useTranslation();
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [index, setIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const q = query.trim().toLowerCase();
-  const hits = q ? searchHits(sections, q, t) : sections.flatMap((s) => s.pages.slice(0, 1).map((p) => ({ page: p, section: s })));
+  const hits = q ? searchHits(all, q, t) : sections.flatMap((s) => s.pages.slice(0, 1).map((p) => ({ page: p, section: s })));
 
   useEffect(() => { inputRef.current?.focus(); }, []);
   useEffect(() => { setIndex(0); }, [query]);
@@ -99,14 +108,19 @@ export function TopBar() {
   const [theme, setTheme] = useState<"dark" | "light">("dark");
   const [pending, setPending] = useState(0);
   const [stops, setStops] = useState<KillOverviewT | null>(null);
+  // simple mode: open incidents (platform and agent) and the protection coverage
+  const [incidents, setIncidents] = useState(0);
+  const [coverage, setCoverage] = useState<CoverageSummary | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
+  const [mode] = useConsoleMode();
+  const simple = mode === "simple";
 
   const role = user?.role;
-  const sections = visibleSections(role, !!user?.is_operator);
+  const sections = visibleSections(role, !!user?.is_operator, mode);
   const tabs = sections.filter((s) => !s.utility);
   const utilities = sections.filter((s) => s.utility);
-  const active = sectionOf(pathname, role, !!user?.is_operator)?.key;
-  const reviewer = role === "admin" || role === "approver" || role === "auditor" || role === "compliance";
+  const active = sectionOf(pathname, role, !!user?.is_operator, mode)?.key;
+  const reviewer = isReviewer(role);
 
   useEffect(() => {
     const th = loadTheme();
@@ -119,7 +133,18 @@ export function TopBar() {
     if (!reviewer) return;
     listPendingApprovals().then((l) => setPending(l.length)).catch(() => {});
     killOverview().then(setStops).catch(() => {});
-  }, [reviewer]);
+    if (!simple) return;
+    // the same incidents the Inbox lists as open: the platform's not resolved, the agents' unresolved
+    Promise.allSettled([
+      listIncidentsPage(0, 100).then((p) => p.items.filter((i) => i.status !== "resolved").length),
+      listAgentIncidents({ unresolved_only: true, limit: 1 }).then((p) => p.total),
+    ]).then((r) => setIncidents(r.reduce((n, x) => n + (x.status === "fulfilled" ? x.value : 0), 0)));
+    if (role === "admin") {
+      api.get<{ coverage?: { summary: CoverageSummary } }>("/system/setup")
+        .then(({ data }) => setCoverage(data.coverage?.summary ?? null))
+        .catch(() => setCoverage(null));
+    }
+  }, [reviewer, simple, role]);
   useEffect(() => {
     refresh();
     const id = window.setInterval(refresh, 60_000);
@@ -155,12 +180,14 @@ export function TopBar() {
   }
 
   const stopCount = stops?.active?.length ?? 0;
+  const waiting = pending + incidents;
+  const protection = coverage ? protectionState(coverage) : null;
 
   return (
     <>
       <header className="appbar">
         <div className="appbar-row">
-          <Link href={reviewer ? "/inbox" : "/inventory"} className="appbar-brand" aria-label="Provenza">
+          <Link href={homeFor(role, mode)} className="appbar-brand" aria-label="Provenza">
             <Logo />
           </Link>
           <nav className="appbar-tabs" aria-label={t("nav.main")}>
@@ -180,10 +207,25 @@ export function TopBar() {
             <span className="appbar-search-text">{t("nav.search_placeholder")}</span>
             <kbd>Ctrl K</kbd>
           </button>
+          {simple && protection && (
+            <Link href="/settings" className={`appbar-protect appbar-protect-${protection}`}
+              aria-label={t(`nav.simple.protection_${protection}`)}
+              title={t("nav.simple.protection_hint", { ok: coverage?.ok, attention: coverage?.attention, missing: coverage?.missing })}>
+              <Icon name={protection === "ok" ? "shield_ok" : "shield"} size={15} />
+              <span className="appbar-protect-text">{t(`nav.simple.protection_${protection}`)}</span>
+            </Link>
+          )}
           {role === "admin" && (
             <Link href="/kill-switch" className="appbar-stop" title={t("nav.stop_all_hint")}>
               <Icon name="stop" size={15} />
               <span className="appbar-stop-text">{t("nav.stop_all")}</span>
+            </Link>
+          )}
+          {simple && reviewer && (
+            <Link href="/inbox" className={`appbar-icon appbar-bell${pageMatches("/inbox", pathname) ? " active" : ""}`}
+              title={t("nav.simple.waiting", { count: waiting })} aria-label={t("nav.simple.waiting", { count: waiting })}>
+              <Icon name="bell" size={17} />
+              {waiting > 0 && <span className="appbar-badge" aria-hidden="true">{waiting > 99 ? "99+" : waiting}</span>}
             </Link>
           )}
           {utilities.map((s) => (
@@ -237,7 +279,10 @@ export function TopBar() {
           {!pageMatches("/kill-switch", pathname) && <Link href="/kill-switch">{t("nav.stopped_open")}</Link>}
         </div>
       )}
-      {searching && <SearchDialog sections={sections} onClose={() => setSearching(false)} />}
+      {searching && (
+        <SearchDialog sections={sections} all={visibleSections(role, !!user?.is_operator)}
+          onClose={() => setSearching(false)} />
+      )}
     </>
   );
 }

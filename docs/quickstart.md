@@ -65,13 +65,18 @@ The browser then asks for a passkey, and a banner stays until you add one. You
 can skip it for now. Add it later under **My profile → Passkeys**: you need it
 to sign a policy release or to lift a kill switch.
 
+The console opens in **simple mode**: four tabs - **AI agents**, **Rules**,
+**Audit log**, **Shadow AI** - with Settings and Help beside them. The steps
+below use it. Every other page is in the full console (**Settings → Open the
+full console**).
+
 ## 3. Give agents a tool
 
 Agents get nothing by default. Here you give them a public, read-only MCP
 server: [DeepWiki](https://docs.devin.ai/work-with-devin/deepwiki-mcp), which
 answers questions about GitHub repositories and needs no key.
 
-**Settings → Gateways → MCP tools → Add MCP server**:
+**Rules → Gateways → MCP tools → Add MCP server**:
 
 | | |
 |---|---|
@@ -91,7 +96,7 @@ you approve the new one.
 
 ## 4. Create the agent
 
-**AI → Agents → Register agent**:
+**AI agents → Register agent**:
 
 - **Allowed tools:** `deepwiki.read_wiki_structure, deepwiki.ask_wiki_question`.
   Use exact names, as the MCP tools list shows them after **Sync**: an
@@ -134,7 +139,7 @@ Start Claude Code again, so it picks up the new MCP server. `/mcp` lists
 Claude Code asks permission to use `deepwiki.ask_wiki_question`. Allow it, and the
 answer comes back.
 
-In Provenza, open the agent (**Open the agent**, or **AI → Agents →
+In Provenza, open the agent (**Open the agent**, or **AI agents →
 claude-code@…**). Under **Recent actions**
 the call is listed: `deepwiki.ask_wiki_question`, **allowed**. Provenza checked it
 against the agent's rights and the policy before it reached DeepWiki, and

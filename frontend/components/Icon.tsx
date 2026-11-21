@@ -17,6 +17,9 @@ const ICONS: Record<string, string> = {
   stop: "M7.9 2h8.2L22 7.9v8.2L16.1 22H7.9L2 16.1V7.9zM9 9h6v6H9z",
   user: "M12 2a4 4 0 1 1 0 8 4 4 0 0 1 0-8zM4 22v-2a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v2",
   menu: "M3 6h18M3 12h18M3 18h18",
+  bell: "M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 0 1-3.4 0",
+  shield: "M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z",
+  shield_ok: "M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10zM9 12l2 2 4-4",
 };
 
 export function Icon({ name, size = 16 }: { name: string; size?: number }) {

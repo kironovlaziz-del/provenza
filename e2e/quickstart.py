@@ -75,7 +75,8 @@ def sign_in(r: Run) -> None:
     p.fill("#email", r.a.email)
     p.fill("#password", r.a.password)
     p.click("button[type=submit]")
-    expect(p.get_by_role("navigation", name="Main").get_by_role("link", name="Inbox")).to_be_visible(timeout=30_000)
+    # the console opens in simple mode (docs/quickstart.md): its first tab is the agents
+    expect(p.get_by_role("navigation", name="Main").get_by_role("link", name="AI agents")).to_be_visible(timeout=30_000)
     # the passkey is skipped: a banner offers it, nothing waits for it
     expect(p.get_by_text("Add a passkey")).to_be_visible()
     r.shot("signed-in")

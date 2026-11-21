@@ -6,6 +6,9 @@ this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- **Simple mode, the console's new default**: four tabs - **AI agents**, **Rules** (the policy hierarchy with its levels, rule packs and signed policy, and the **Gateways** agents reach models, tools and APIs through), **Audit log** and **Shadow AI** - with Settings (you, people, notifications) and Help beside them. The top bar keeps **Stop all** and adds a bell with what waits for a decision (approvals and open incidents, opening the Inbox) and, for administrators, whether the protection works (**Protected**, **Needs attention** or **Setup unfinished**, from the protection coverage). **Settings → Open the full console** shows every page as before, and **Back to simple mode** returns; the browser remembers the choice. Every page keeps its address and opens in either mode; nothing changes on the server.
+
 ### Security
 - **The MCP gateway no longer sends an exception's text back to the caller.** A malformed signed-request header (`X-Provenza-Action`) is still refused with a reason, but the reason is now one of Provenza's own fixed texts (the header is not base64url JSON, the fields it may hold, which field is invalid); any other error is reported as `malformed` and stays on the server.
 - **Container images take the base image's security fixes** (`apt-get upgrade` when the image is built), and the web UI now runs on **Node.js 24** (the active LTS) instead of Node.js 20.
