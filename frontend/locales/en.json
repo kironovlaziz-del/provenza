@@ -4223,5 +4223,12 @@
     "rights_none": "The agent gets no tools.",
     "expires": "The command works once, until {{time}}.",
     "first": "Connect your first agent"
+  },
+  "shadow_sources": {
+    "title": "What works",
+    "hint": "Where Shadow AI sightings come from, and whether each source reports now.",
+    "logs_title": "DNS and proxy logs",
+    "logs_state": "imported by hand",
+    "logs_hint": "Export the log from your DNS resolver or web proxy and import it here: the AI services in it become sightings."
   }
 }

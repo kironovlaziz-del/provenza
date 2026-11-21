@@ -4223,5 +4223,12 @@
     "rights_none": "Agent hech qanday vosita olmaydi.",
     "expires": "Buyruq bir marta, {{time}} gacha ishlaydi.",
     "first": "Birinchi agentingizni ulang"
+  },
+  "shadow_sources": {
+    "title": "Nima ishlayapti",
+    "hint": "Shadow AI topilmalari qayerdan keladi va har bir manba hozir hisobot beryaptimi.",
+    "logs_title": "DNS va proksi jurnallari",
+    "logs_state": "qo'lda import qilinadi",
+    "logs_hint": "Jurnalni DNS rezolver yoki veb-proksingizdan eksport qilib, shu yerda import qiling: undagi AI xizmatlari topilmalarga aylanadi."
   }
 }
