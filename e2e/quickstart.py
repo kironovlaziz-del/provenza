@@ -112,15 +112,19 @@ def give_tools(r: Run) -> None:
 
 def create_agent(r: Run) -> str:
     step("4. Create the agent and issue the enrollment token")
-    r.go("/agents/new")
+    r.go("/agents/connect")
     p = r.page
-    p.locator("xpath=//label[normalize-space()='Allowed tools']/following-sibling::input[1]").fill(", ".join(ALLOWED))
+    # the approved tools are offered; the one left unapproved is not
+    for name in ALLOWED:
+        p.get_by_role("checkbox", name=name).check()
+    expect(p.get_by_role("checkbox", name=LEFT_OUT)).to_have_count(0)
+    p.get_by_text("More options", exact=True).click()
     hybrid = p.get_by_label(re.compile("Post-quantum hybrid"))
     if r.a.no_hybrid:
         hybrid.uncheck()
     else:
         expect(hybrid).to_be_checked()
-    p.get_by_role("button", name="Issue enrollment token").click()
+    p.get_by_role("button", name="Next: connect").click()
     expect(p.get_by_text("Connect an AI client")).to_be_visible(timeout=20_000)
     p.select_option("#connect-client", r.a.client)
     p.select_option("#connect-system", "linux")

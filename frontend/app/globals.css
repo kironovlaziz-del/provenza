@@ -2010,3 +2010,22 @@ tr.sub-row > td { background: var(--bg-app); }
 .scroll-box thead th { position: sticky; top: 0; z-index: 1; background: var(--bg-panel); }
 /* long secondary text (a browser string) in a list row: two lines, the rest on the detail page */
 .clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+
+/* ---------------------------------------------------------------- connect an agent (wizard) */
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden;
+  clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+.wizard-steps { list-style: none; display: flex; gap: 8px; flex-wrap: wrap; margin: 0 0 16px; padding: 0; }
+.wizard-steps li { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px 6px 6px; border-radius: 20px;
+  border: 1px solid var(--border); color: var(--text-muted); font-size: 13px; font-weight: 500; }
+.wizard-steps li.on { border-color: var(--accent); color: var(--text-primary); }
+.wizard-steps li.done { color: var(--text-primary); }
+.wizard-step-n { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%;
+  background: var(--bg-app); border: 1px solid var(--border); font-size: 12px; }
+.wizard-steps li.on .wizard-step-n { background: var(--accent); border-color: var(--accent); color: #fff; }
+.wizard-tools { border: 0; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 8px; }
+.wizard-tool { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--border);
+  border-radius: 8px; background: var(--bg-panel); cursor: pointer; font-weight: 400; min-width: 0; }
+.wizard-tool:hover { border-color: var(--accent); }
+.wizard-tool input { width: auto; margin: 0; }
+.wizard-tool .mono { flex: 1; min-width: 0; overflow-wrap: anywhere; font-size: 12.5px; }
+.wizard-more > summary { cursor: pointer; color: var(--accent); font-size: 13px; }

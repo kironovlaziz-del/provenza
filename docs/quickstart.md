@@ -96,17 +96,18 @@ you approve the new one.
 
 ## 4. Create the agent
 
-**AI agents → Register agent**:
+**AI agents → Connect an agent**:
 
-- **Allowed tools:** `deepwiki.read_wiki_structure, deepwiki.ask_wiki_question`.
-  Use exact names, as the MCP tools list shows them after **Sync**: an
-  agent's rights list tools, not patterns. A name that matches no tool, or a
-  tool not approved yet, is pointed out under the field.
-- **Signing key:** keep *Enrollment token* and *Post-quantum hybrid*.
+- Tick `deepwiki.read_wiki_structure` and `deepwiki.ask_wiki_question`. The
+  list offers the approved tools only: `deepwiki.read_wiki_contents` is named
+  as awaiting approval and cannot be given. An agent's rights list tools, not
+  patterns, and its page changes them later.
 - Leave the name empty: the agent is named after the client and the machine,
   for example `claude-code@laptop`.
+- **More options** keeps *Post-quantum hybrid* on. Teams, roles, models and a
+  key you register yourself are on the full registration form linked there.
 
-Press **Issue enrollment token**. The page shows **Connect an AI client**.
+Press **Next: connect**. The page shows **Connect an AI client**.
 
 ## 5. Connect Claude Code and make the first call
 
