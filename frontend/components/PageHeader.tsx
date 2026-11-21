@@ -5,10 +5,12 @@ import { usePathname } from "next/navigation";
 import React, { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "@/lib/auth";
+import { useConsoleMode } from "@/lib/console_mode";
 import { pageMatches, sectionOf } from "@/lib/navigation";
 
 /** The page title, its actions, and - when the page's section has several
- *  pages the user may open - those pages as tabs (lib/navigation.ts). Pages
+ *  pages the user may open - those pages as tabs (lib/navigation.ts, in the
+ *  console's mode: a page simple mode does not show has no tabs). Pages
  *  for occasional use sit behind "More"; the one open now shows as a tab. */
 export function PageHeader({
   title,
@@ -20,7 +22,8 @@ export function PageHeader({
   const { t } = useTranslation();
   const pathname = usePathname();
   const { user } = useAuth();
-  const section = sectionOf(pathname, user?.role, !!user?.is_operator);
+  const [mode] = useConsoleMode();
+  const section = sectionOf(pathname, user?.role, !!user?.is_operator, mode);
   const [showMore, setShowMore] = useState(false);
   const pages = section?.pages ?? [];
   // a hub (Settings, Help) lists its pages on its first page: the others link back to it

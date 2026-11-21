@@ -17,7 +17,8 @@ import { SetupChecklist } from "@/components/SetupChecklist";
 import { AgentActionApprovals } from "@/components/approvals/AgentActionApprovals";
 import { useAuth } from "@/lib/auth";
 import { apiErrorMessage } from "@/lib/inventory_api";
-import { homeFor } from "@/lib/navigation";
+import { useConsoleMode } from "@/lib/console_mode";
+import { homeFor, isReviewer } from "@/lib/navigation";
 import {
   fetchDashboardStats, listIncidentsPage, listShadowSightings, updateShadowSighting, type DashboardStats,
 } from "@/lib/api";
@@ -38,6 +39,8 @@ export default function InboxPage() {
   const router = useRouter();
   const role = user?.role;
   const decider = role === "admin" || role === "approver";
+  const reviewer = isReviewer(role);
+  const [mode] = useConsoleMode();
 
   const [filter, setFilter] = useState<Filter>("all");
   const [approvals, setApprovals] = useState<number | null>(null);
@@ -50,10 +53,11 @@ export default function InboxPage() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [busy, setBusy] = useState<number | null>(null);
 
-  // a plain user decides nothing: their start page is the AI list
+  // a plain user decides nothing: on to their start page (the agents in simple
+  // mode, the AI list in the full console)
   useEffect(() => {
-    if (role && homeFor(role) !== "/inbox") router.replace(homeFor(role));
-  }, [role, router]);
+    if (role && !reviewer) router.replace(homeFor(role, mode));
+  }, [role, reviewer, mode, router]);
 
   const refresh = useCallback(() => {
     // each list on its own: one that fails does not hide the others
@@ -69,8 +73,8 @@ export default function InboxPage() {
   }, [t]);
 
   useEffect(() => {
-    if (role && homeFor(role) === "/inbox") refresh();
-  }, [role, refresh]);
+    if (reviewer) refresh();
+  }, [reviewer, refresh]);
 
   async function dismiss(s: ShadowSighting) {
     setBusy(s.id);
@@ -95,7 +99,7 @@ export default function InboxPage() {
     { key: "new_ai", label: t("inbox.new_ai"), n: newAiCount },
   ];
 
-  if (role && homeFor(role) !== "/inbox") return null; // on its way to the AI list
+  if (role && !reviewer) return null; // on its way to the start page
 
   return (
     <>

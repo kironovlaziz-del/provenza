@@ -3833,7 +3833,19 @@
     "stopped_open": "Favqulodda to'xtatishni ochish",
     "no_access_title": "Bu sahifaga kirish huquqingiz yo'q",
     "no_access": "Rolingiz bu sahifani o'z ichiga olmaydi. Agar u ishingiz uchun kerak bo'lsa, administratordan so'rang.",
-    "no_access_home": "Bosh sahifamga o'tish"
+    "no_access_home": "Bosh sahifamga o'tish",
+    "simple": {
+      "agents": "AI agentlar",
+      "audit": "Audit jurnali",
+      "shadow_ai": "Shadow AI",
+      "waiting_zero": "Qaror kutayotgan narsa yo'q",
+      "waiting_one": "{{count}} ta narsa qaror kutmoqda",
+      "waiting_other": "{{count}} ta narsa qaror kutmoqda",
+      "protection_ok": "Himoyalangan",
+      "protection_attention": "E'tibor talab qiladi",
+      "protection_setup": "Sozlash tugallanmagan",
+      "protection_hint": "Himoya qamrovi: {{ok}} ta ishlayapti, {{attention}} ta e'tibor talab qiladi, {{missing}} ta sozlanmagan. Tafsilotlar Sozlamalarda."
+    }
   },
   "inbox": {
     "title": "Kiruvchi",
@@ -4177,5 +4189,13 @@
     "undone_at": "bekor qilingan {{when}}",
     "applied_title": "Qo'llangan",
     "nothing_applied": "Hali hech qanday paket qo'llanmagan."
+  },
+  "console_mode": {
+    "simple_title": "Oddiy rejim",
+    "simple_hint": "Konsol eng keraklisini ko'rsatadi: AI agentlar, qoidalar, audit jurnali va Shadow AI. Qolgan barcha sahifalar to'liq konsolda. Ma'lumotlaringiz va qoidalaringiz ikkalasida bir xil; tanlov shu brauzerda saqlanadi.",
+    "full_title": "To'liq konsol",
+    "full_hint": "Provenzaning barcha sahifalari. Oddiy rejim faqat eng keraklilarini ko'rsatadi. Ma'lumotlaringiz va qoidalaringiz ikkalasida bir xil; tanlov shu brauzerda saqlanadi.",
+    "to_full": "To'liq konsolni ochish",
+    "to_simple": "Oddiy rejimga qaytish"
   }
 }

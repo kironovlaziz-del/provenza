@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import en from "@/locales/en.json";
 import uz from "@/locales/uz.json";
-import { evidence, fixKey, needsDashboard, type CoverageItem } from "@/lib/coverage";
+import { evidence, fixKey, needsDashboard, protectionState, type CoverageItem } from "@/lib/coverage";
 
 const item = (key: string, state: CoverageItem["state"], facts: CoverageItem["facts"] = {}): CoverageItem =>
   ({ key, state, href: "/", optional: false, facts });
@@ -67,4 +67,17 @@ describe("the sentences", () => {
       }
     });
   }
+});
+
+describe("protection state (top bar, simple mode)", () => {
+  const sum = (ok: number, attention: number, missing: number, needs_action: number) => ({ ok, attention, missing, needs_action });
+  it("needs attention when something that was set up stopped working", () => {
+    expect(protectionState(sum(3, 1, 2, 1))).toBe("attention");
+  });
+  it("is unfinished while a required part is not set up", () => {
+    expect(protectionState(sum(3, 0, 2, 1))).toBe("setup");
+  });
+  it("is protected when only optional parts are missing", () => {
+    expect(protectionState(sum(3, 0, 2, 0))).toBe("ok");
+  });
 });

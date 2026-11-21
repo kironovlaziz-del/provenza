@@ -13,6 +13,13 @@
 //
 // more: a page for occasional use. It is not a tab of its own but sits behind
 // the section's "More" link, and search still finds it.
+//
+// Simple mode (lib/console_mode.ts, the default) shows SIMPLE_SECTIONS instead:
+// four tabs - AI agents, Rules, Audit log, Shadow AI - then Settings and Help.
+// Its pages are pages of SECTIONS with the same role rules; every other page
+// still opens by its address (canOpen does not depend on the mode).
+
+import type { ConsoleMode } from "./console_mode";
 
 export type Role = "admin" | "approver" | "user" | "auditor" | "compliance" | string | undefined;
 
@@ -119,6 +126,40 @@ export const SECTIONS: NavSection[] = [
   },
 ];
 
+/** A page of SECTIONS (its role rules), under another label or hub group. */
+function pick(href: string, extra: Partial<NavPage> = {}): NavPage {
+  const page = SECTIONS.flatMap((s) => s.pages).find((p) => p.href === href);
+  if (!page) throw new Error(`navigation: ${href} is not a page of the console`);
+  return { ...page, more: false, group: undefined, ...extra };
+}
+
+export const SIMPLE_SECTIONS: NavSection[] = [
+  { key: "agents", labelKey: "nav.simple.agents", icon: "registry", pages: [pick("/agents")] },
+  {
+    key: "rules", labelKey: "nav.rules", icon: "policies", pages: [
+      // levels, rule packs and the signed policy
+      pick("/policy-hierarchy"),
+      // what agents reach through Provenza: AI models, MCP and HTTP tools, other agents, external APIs
+      pick("/gateway"),
+    ],
+  },
+  { key: "audit", labelKey: "nav.simple.audit", icon: "audit", pages: [pick("/audit")] },
+  { key: "shadow", labelKey: "nav.simple.shadow_ai", icon: "search", pages: [pick("/shadow-ai")] },
+  {
+    key: "settings", labelKey: "nav.settings", icon: "settings", hub: true, utility: true, pages: [
+      pick("/settings"),
+      pick("/profile", { group: "you" }),
+      pick("/users", { group: "people" }),
+      pick("/notifications", { group: "people" }),
+    ],
+  },
+  { key: "help", labelKey: "nav.help", icon: "help", hub: true, utility: true, pages: [pick("/help")] },
+];
+
+export function sectionsFor(mode: ConsoleMode = "full"): NavSection[] {
+  return mode === "simple" ? SIMPLE_SECTIONS : SECTIONS;
+}
+
 export const NAV: NavGroup[] = [{ key: "main", labelKey: "nav.main", sections: SECTIONS }];
 
 export function canSee(page: NavPage, role: Role, operator = false): boolean {
@@ -136,8 +177,8 @@ export function pageMatches(href: string, pathname: string | null | undefined): 
 /** The sections this role sees, each with its visible pages only (its "more"
  *  pages after its main ones). A section is shown when one of its main pages
  *  is visible. */
-export function visibleSections(role: Role, operator = false): NavSection[] {
-  return SECTIONS
+export function visibleSections(role: Role, operator = false, mode: ConsoleMode = "full"): NavSection[] {
+  return sectionsFor(mode)
     .map((s) => {
       const pages = s.pages.filter((p) => canSee(p, role, operator));
       return { ...s, pages: [...pages.filter((p) => !p.more), ...pages.filter((p) => p.more)] };
@@ -149,19 +190,30 @@ export function visibleNav(role: Role, operator = false): NavGroup[] {
   return [{ ...NAV[0], sections: visibleSections(role, operator) }];
 }
 
+/** The section of this address in the mode's navigation; none for a page the
+ *  mode does not show (it still opens, without section tabs). */
 export function sectionOf(
   pathname: string | null | undefined,
   role: Role,
   operator = false,
+  mode: ConsoleMode = "full",
 ): NavSection | undefined {
   // the help articles live under /help/<slug>
-  return visibleSections(role, operator).find((s) => s.pages.some((p) => pageMatches(p.href, pathname)));
+  return visibleSections(role, operator, mode).find((s) => s.pages.some((p) => pageMatches(p.href, pathname)));
 }
 
-/** Where a sign-in lands: the Inbox for whoever decides (admins, approvers,
- *  auditors, compliance), the AI list for everybody else. */
-export function homeFor(role: Role): string {
+/** Where a sign-in lands. Simple mode: the agents, for everyone. Full console:
+ *  the Inbox for whoever decides (admins, approvers, auditors, compliance), the
+ *  AI list for everybody else. */
+export function homeFor(role: Role, mode: ConsoleMode = "full"): string {
+  if (mode === "simple") return "/agents";
   return role === "user" || !role ? "/inventory" : "/inbox";
+}
+
+/** Decides or oversees (admins, approvers, auditors, compliance): the Inbox,
+ *  the waiting count and the stop line are theirs. */
+export function isReviewer(role: Role): boolean {
+  return role === "admin" || role === "approver" || OVERSIGHT.includes(role as string);
 }
 
 /** Addresses that only send the visitor on (to a page of the navigation). */

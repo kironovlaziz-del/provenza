@@ -53,3 +53,14 @@ export function fixKey(item: CoverageItem): string {
 export function needsDashboard(summary: CoverageSummary | undefined): boolean {
   return !!summary && summary.attention > 0;
 }
+
+/** The top bar's one word on the protection (simple mode): something that was
+ * set up stopped working; a required part is not set up yet; or every required
+ * part works. Optional parts that were never set up do not count. */
+export type ProtectionState = "attention" | "setup" | "ok";
+
+export function protectionState(summary: CoverageSummary): ProtectionState {
+  if (summary.attention > 0) return "attention";
+  if (summary.needs_action > 0) return "setup";
+  return "ok";
+}
