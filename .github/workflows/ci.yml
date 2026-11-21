@@ -56,10 +56,10 @@ jobs:
       REDIS_PASSWORD: ""
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.12"
           cache: pip
@@ -83,14 +83,14 @@ jobs:
             -c "CREATE DATABASE ai_control_tower_test OWNER ai_user;"
 
       - name: Set up Node (cross-language SDK tests)
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "22"
           cache: npm
           cache-dependency-path: sdk/js/package-lock.json
 
       - name: Set up Go (tests/test_sdk_go.py builds the Go SDK)
-        uses: actions/setup-go@v7
+        uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           go-version-file: sdk/go/go.mod
           cache: false   # standard library only: no go.sum, nothing to cache
@@ -111,7 +111,7 @@ jobs:
 
       - name: Upload coverage XML
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: backend-coverage
           path: backend/coverage.xml
@@ -123,7 +123,7 @@ jobs:
     timeout-minutes: 5
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       # Each script with the shell it is written for: its shebang, and bash
       # for deploy/scripts/lib.sh, which is sourced, not run.
@@ -153,10 +153,10 @@ jobs:
     timeout-minutes: 10
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.12"
 
@@ -167,13 +167,38 @@ jobs:
           pip-audit -r backend/requirements.txt
 
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "22"
 
       - name: Frontend (npm audit, production dependencies)
         working-directory: frontend
         run: npm audit --omit=dev --package-lock-only --audit-level=high
+
+      # The Go programs we ship (sensor, egress proxy, endpoint agent, Go SDK),
+      # with the toolchain the images build them with (deploy/backend.Dockerfile:
+      # golang:1.27, the latest patch). A vulnerability the code reaches fails the
+      # job when a fix exists; one with no fix yet, or only imported, is a warning.
+      - name: Set up Go (the images' toolchain)
+        uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        with:
+          go-version: "1.27"
+          check-latest: true
+          cache: false
+
+      - name: Go (govulncheck)
+        env:
+          GOTOOLCHAIN: local   # scan with the toolchain above, not the go.mod minimum
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@v1.10.0
+          status=0
+          for mod in sensor proxy agent sdk/go; do
+            echo "::group::$mod"
+            (cd "$mod" && "$(go env GOPATH)/bin/govulncheck" -format json ./...) \
+              | python3 .github/scripts/govulncheck_gate.py "$mod" || status=1
+            echo "::endgroup::"
+          done
+          exit $status
 
   sdk-python:
     name: Python SDK (pytest, wheel)
@@ -188,10 +213,10 @@ jobs:
         working-directory: sdk/python
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: ${{ matrix.python-version }}
 
@@ -212,10 +237,10 @@ jobs:
     timeout-minutes: 10
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.12"
 
@@ -259,10 +284,10 @@ jobs:
         working-directory: sdk/js
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: ${{ matrix.node-version }}
           cache: npm
@@ -287,10 +312,10 @@ jobs:
         working-directory: sdk/go
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Set up Go
-        uses: actions/setup-go@v7
+        uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           go-version-file: sdk/go/go.mod   # 1.27: crypto/mldsa
           cache: false   # standard library only: no go.sum, nothing to cache
@@ -314,10 +339,10 @@ jobs:
         working-directory: proxy
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Set up Go
-        uses: actions/setup-go@v7
+        uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           go-version-file: proxy/go.mod
           cache: false   # standard library only
@@ -330,6 +355,14 @@ jobs:
 
       - name: Test (race detector)
         run: go test -race -count=1 ./...
+
+      # The seeds run with the tests above; this explores a little past them on
+      # every PR (go test -fuzz runs one target at a time).
+      - name: Fuzz (15 s per target)
+        run: |
+          go test -run '^$' -fuzz '^FuzzText$' -fuzztime 15s ./internal/canon
+          go test -run '^$' -fuzz '^FuzzParseSignedRequest$' -fuzztime 15s ./internal/trust
+          go test -run '^$' -fuzz '^FuzzParseDocument$' -fuzztime 15s ./internal/trust
 
       - name: Static build
         run: CGO_ENABLED=0 go build -trimpath -o provenza-proxy .
@@ -356,10 +389,10 @@ jobs:
         shell: bash
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Set up Go
-        uses: actions/setup-go@v7
+        uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           go-version-file: proxy/go.mod
           cache: false   # standard library only
@@ -395,10 +428,10 @@ jobs:
         working-directory: agent
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Set up Go
-        uses: actions/setup-go@v7
+        uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           go-version-file: agent/go.mod
           cache-dependency-path: agent/go.sum
@@ -441,10 +474,10 @@ jobs:
         shell: bash
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Set up Go
-        uses: actions/setup-go@v7
+        uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           go-version-file: agent/go.mod
           cache-dependency-path: agent/go.sum
@@ -470,10 +503,10 @@ jobs:
         working-directory: sdk/python
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.12"
 
@@ -495,12 +528,12 @@ jobs:
         working-directory: frontend
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: "20"
+          node-version: "24"
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
@@ -525,10 +558,10 @@ jobs:
         working-directory: backend
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.12"
           cache: pip
@@ -557,7 +590,7 @@ jobs:
     timeout-minutes: 5
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Shell scripts parse
         run: |
@@ -588,10 +621,10 @@ jobs:
         working-directory: sensor
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Set up Go
-        uses: actions/setup-go@v7
+        uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           go-version-file: sensor/go.mod
           cache-dependency-path: sensor/go.sum
@@ -609,6 +642,14 @@ jobs:
 
       - name: Test (race detector)
         run: go test -race -count=1 ./...
+
+      # The seeds run with the tests above; this explores a little past them on
+      # every PR (go test -fuzz runs one target at a time).
+      - name: Fuzz (15 s per target)
+        run: |
+          go test -run '^$' -fuzz '^FuzzText$' -fuzztime 15s ./internal/canon
+          go test -run '^$' -fuzz '^FuzzParseSignedRequest$' -fuzztime 15s ./internal/trust
+          go test -run '^$' -fuzz '^FuzzParseDocument$' -fuzztime 15s ./internal/trust
 
       - name: Rebuild the kernel program
         run: make bpf

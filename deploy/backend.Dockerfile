@@ -68,7 +68,9 @@ FROM python:${PYTHON_VERSION}-slim AS runtime
 LABEL org.opencontainers.image.title="Provenza backend" \
       org.opencontainers.image.source="https://github.com/kironovlaziz-del/provenza" \
       org.opencontainers.image.licenses="Apache-2.0"
+# apt-get upgrade: security fixes for the base image's Debian packages, published after the image was built
 RUN apt-get update \
+ && apt-get upgrade -y \
  && apt-get install -y --no-install-recommends libpq5 tini \
  && rm -rf /var/lib/apt/lists/* \
  && groupadd --system --gid 10001 provenza \
