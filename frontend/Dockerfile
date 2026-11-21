@@ -1,7 +1,7 @@
 # ---- Provenza — frontend (Next.js 16) ----
 # Multi-stage: install+build, then a lean runtime image.
 
-FROM node:20-slim AS builder
+FROM node:24-slim AS builder
 WORKDIR /app
 
 # NEXT_PUBLIC_* vars are inlined at build time, so pass the API URL as a build arg
@@ -15,9 +15,11 @@ COPY . .
 RUN npm run build
 
 # ---- runtime ----
-FROM node:20-slim AS runner
+FROM node:24-slim AS runner
 WORKDIR /app
 ENV NODE_ENV=production
+# security fixes for the base image's Debian packages, published after the image was built
+RUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/*
 
 # copy only what's needed to run `next start`
 COPY --from=builder /app/package.json /app/package-lock.json ./

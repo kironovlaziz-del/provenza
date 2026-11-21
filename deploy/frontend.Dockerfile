@@ -3,7 +3,7 @@
 # /api/v1 through the reverse proxy, so one image works for any domain.
 # Build context: repository root (see deploy/docker-compose.yml).
 
-ARG NODE_VERSION=20
+ARG NODE_VERSION=24
 
 FROM node:${NODE_VERSION}-slim AS build
 WORKDIR /app
@@ -20,7 +20,8 @@ FROM node:${NODE_VERSION}-slim AS runtime
 LABEL org.opencontainers.image.title="Provenza web" \
       org.opencontainers.image.source="https://github.com/kironovlaziz-del/provenza" \
       org.opencontainers.image.licenses="Apache-2.0"
-RUN apt-get update && apt-get install -y --no-install-recommends tini && rm -rf /var/lib/apt/lists/*
+# apt-get upgrade: security fixes for the base image's Debian packages, published after the image was built
+RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends tini && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 PORT=3000 HOSTNAME=0.0.0.0
 COPY --from=build --chown=node:node /app/package.json ./package.json

@@ -54,6 +54,8 @@ httpx==0.28.1
 
 # Discovery: LDAP/Active Directory connect handlers (pure Python, no C deps)
 ldap3==2.9.1
+# ldap3's ASN.1 library, pinned so the build cannot resolve an older release with known DoS issues
+pyasn1==0.6.5
 
 # Metrics
 prometheus-client==0.21.0

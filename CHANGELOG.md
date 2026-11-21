@@ -6,6 +6,16 @@ this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Security
+- **The MCP gateway no longer sends an exception's text back to the caller.** A malformed signed-request header (`X-Provenza-Action`) is still refused with a reason, but the reason is now one of Provenza's own fixed texts (the header is not base64url JSON, the fields it may hold, which field is invalid); any other error is reported as `malformed` and stays on the server.
+- **Container images take the base image's security fixes** (`apt-get upgrade` when the image is built), and the web UI now runs on **Node.js 24** (the active LTS) instead of Node.js 20.
+- `pyasn1` (used by `ldap3` for directory discovery) is pinned to 0.6.5, a release without the known denial-of-service issues.
+
+### Changed
+- **Supply chain of the build** ([OpenSSF Scorecard](https://scorecard.dev/viewer/?uri=github.com/kironovlaziz-del/provenza)): every GitHub Action is pinned to a full commit SHA, on releases that run on Node.js 24; Dependabot keeps the pins current and now also updates the sensor's and the endpoint agent's Go modules.
+- **CI checks the Go programs for known vulnerabilities** (`govulncheck`, with the Go toolchain the images are built with): a vulnerability the code reaches fails the check when a fixed version exists; one without a fix yet, or in code that is imported but not called, is shown as a warning.
+- **Fuzz tests** for what the egress proxy and the eBPF sensor read from outside - the canonical JSON every signature is taken over, the agent's signed request header and the release documents - run their seeds with the tests and explore for 15 seconds per target on every change.
+
 ## [0.5.0] - 2026-11-19
 
 ### Added

@@ -8,7 +8,7 @@ ENV PYTHONUNBUFFERED=1 \
 WORKDIR /app
 
 # system deps: postgres client (pg_isready / psql for entrypoint wait), build tools for some wheels
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends \
         postgresql-client gcc libpq-dev curl \
     && rm -rf /var/lib/apt/lists/*
 

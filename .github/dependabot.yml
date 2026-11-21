@@ -28,6 +28,19 @@ updates:
       i18next:
         patterns: ["i18next", "react-i18next"]
 
+  # Go modules with third-party dependencies (proxy and sdk/go use the
+  # standard library only)
+  - package-ecosystem: gomod
+    directories:
+      - /sensor
+      - /agent
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 2
+    labels:
+      - dependencies
+
   - package-ecosystem: github-actions
     directory: /
     schedule:

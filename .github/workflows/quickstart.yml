@@ -30,7 +30,7 @@ jobs:
     env:
       PROVENZA_ADMIN_PASSWORD: quickstart-e2e-${{ github.run_id }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Podman with netavark (what install.sh requires)
         run: |
@@ -112,7 +112,7 @@ jobs:
           cp ~/.local/state/provenza/agent-*.log "$d/" 2>/dev/null || true
           tail -n 60 "$d/diagnostics.txt"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: quickstart

@@ -208,9 +208,14 @@ async def mcp_endpoint(request: Request, db: AsyncSession = Depends(get_db), use
         try:
             signed = _signed_request(request.headers[ACTION_HEADER], agent, name, arguments, chain_id)
             await PVPOrchestrator(db).verify_signed_request(agent.org_id, agent, signed)
-        except (ValueError, TypeError) as exc:
+        except _MalformedSignedRequest as exc:
+            # our own description of what is wrong with the header
             return _error(rid, SIGNED_REQUEST_REFUSED, "Refused by Provenza: the agent's signed request is malformed",
-                          str(exc)[:200])
+                          exc.reason)
+        except (ValueError, TypeError):
+            # anything else stays on the server: an exception's text is not sent to the caller
+            return _error(rid, SIGNED_REQUEST_REFUSED, "Refused by Provenza: the agent's signed request is malformed",
+                          "malformed")
         except HTTPException as exc:
             return _error(rid, SIGNED_REQUEST_REFUSED, "Refused by Provenza: the agent's signed request",
                           exc.detail if isinstance(exc.detail, (str, dict)) else None)
@@ -224,20 +229,32 @@ async def mcp_endpoint(request: Request, db: AsyncSession = Depends(get_db), use
                       exc.detail if isinstance(exc.detail, (str, dict)) else None)
 
 
+class _MalformedSignedRequest(ValueError):
+    """A signed-request header that cannot be read; reason is a fixed text of ours, safe to send back."""
+
+    def __init__(self, reason: str):
+        super().__init__(reason)
+        self.reason = reason
+
+
 def _signed_request(header: str, agent, name: str, arguments: dict, chain_id) -> PVPActionRequest:
     """The action.request the agent signed for this tools/call: the call as it
     arrived, with the nonce, time and signatures from the header."""
     raw = header.strip()
-    data = json.loads(base64.urlsafe_b64decode(raw + "=" * (-len(raw) % 4)).decode("utf-8"))
+    try:
+        data = json.loads(base64.urlsafe_b64decode(raw + "=" * (-len(raw) % 4)).decode("utf-8"))
+    except (ValueError, TypeError):            # base64, UTF-8 and JSON errors are all ValueErrors
+        raise _MalformedSignedRequest("the header is not base64url-encoded JSON") from None
     if not isinstance(data, dict) or set(data) - {"nonce", "issued_at", "signature", "pq_signature", "mandate_id"}:
-        raise ValueError("expected nonce, issued_at, signature, pq_signature and, optionally, mandate_id")
+        raise _MalformedSignedRequest("expected nonce, issued_at, signature, pq_signature and, optionally, mandate_id")
     try:
         return PVPActionRequest(agent_id=agent.id, chain_id=chain_id, action_type="tool_call", tool_name=name,
                                 input=arguments, nonce=data.get("nonce"), issued_at=data.get("issued_at"),
                                 signature=data.get("signature"), pq_signature=data.get("pq_signature"),
                                 mandate_id=data.get("mandate_id"))
     except ValidationError as exc:
-        raise ValueError(exc.errors()[0].get("msg", "invalid")) from None
+        field = ".".join(str(x) for x in (exc.errors()[0].get("loc") or ())) or "the header"
+        raise _MalformedSignedRequest(f"invalid {field}"[:100]) from None
 
 
 # ==================================================================== admin
