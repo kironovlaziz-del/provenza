@@ -1,5 +1,9 @@
 "use client";
 
+// The organization's agents. Admins connect one with Connect an agent (two
+// steps, /agents/connect); the full console also offers the full registration
+// form and the delegation chains.
+
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { useTranslation } from "react-i18next";
@@ -8,6 +12,7 @@ import { LoadError } from "@/components/LoadError";
 import { apiErrorMessage } from "@/lib/inventory_api";
 import { listAgents, killAgent, updateAgent } from "@/lib/agent_api";
 import { useAuth } from "@/lib/auth";
+import { useConsoleMode } from "@/lib/console_mode";
 import { translateApiError } from "@/lib/errors";
 import type { Agent } from "@/lib/agent_types";
 import { confirmDialog, promptDialog } from "@/components/Dialog";
@@ -34,6 +39,8 @@ export default function AgentsPage() {
   const [error, setError] = useState<string | null>(null);
   const { user } = useAuth();
   const isAdmin = user?.role === "admin";
+  const [mode] = useConsoleMode();
+  const simple = mode === "simple";
 
   function refresh() {
     setLoading(true);
@@ -80,19 +87,22 @@ export default function AgentsPage() {
     <>
       <PageHeader
         title={t("agents.title")}
-        actions={
-          <Link href="/agents/new" className="btn btn-primary btn-sm">
-            {t("agents.register")}
-          </Link>
-        }
+        actions={isAdmin ? (
+          <>
+            {!simple && <Link href="/agents/new" className="btn btn-sm">{t("agents.register")}</Link>}
+            <Link href="/agents/connect" className="btn btn-primary btn-sm">{t("wizard.title")}</Link>
+          </>
+        ) : undefined}
       />
       <div className="content">
           <LoadError message={loadError} onRetry={refresh} />
         <p className="hint-text u-mb-16">{t("agents.hint")}</p>
 
-        <div style={{ display: "flex", gap: 10, marginBottom: 18, flexWrap: "wrap" }}>
-          <Link href="/agent-chains" className="btn btn-sm">{t("agents.view_chains")}</Link>
-        </div>
+        {!simple && (
+          <div style={{ display: "flex", gap: 10, marginBottom: 18, flexWrap: "wrap" }}>
+            <Link href="/agent-chains" className="btn btn-sm">{t("agents.view_chains")}</Link>
+          </div>
+        )}
 
         {error && <p className="error-text u-mb-16">{error}</p>}
         <div className="panel">
@@ -111,7 +121,10 @@ export default function AgentsPage() {
             <tbody>
               {loading && <tr className="empty-row"><td colSpan={6}>{t("common.loading")}</td></tr>}
               {!loading && agents.length === 0 && (
-                <tr className="empty-row"><td colSpan={6}>{t("agents.empty")}</td></tr>
+                <tr className="empty-row"><td colSpan={6}>
+                  {t("agents.empty")}
+                  {isAdmin && <> <Link href="/agents/connect">{t("wizard.first")} →</Link></>}
+                </td></tr>
               )}
               {agents.map((a) => (
                 <tr key={a.id}>
