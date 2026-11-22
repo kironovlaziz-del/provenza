@@ -12,10 +12,11 @@ not share code with one, so what it says does not depend on trusting either.
         a record's proof (Audit Log -> Proof, or GET /audit-logs/{id}/proof):
         the record hashes to record_hash, the inclusion path leads from it
         to the checkpoint's Merkle root, and the checkpoint is signed
-  checkpoint CHECKPOINT.json [--fingerprint SHA256:...]... [--tsa-ca TSA.pem]
+  checkpoint CHECKPOINT.json [--fingerprint SHA256:...]... [--tsa-ca TSA.pem] [PUBLICATION]
         one signed checkpoint (GET /audit-logs/checkpoints, or the
         "checkpoint" part of a proof)
   consistency CONSISTENCY.json [--pinned CHECKPOINT.json] [--fingerprint SHA256:...]... [--tsa-ca TSA.pem]
+              [PUBLICATION]
         GET /audit-logs/consistency?from_size=N: the newer checkpoint
         extends the older one - nothing in the first N records was changed
         or removed. With --pinned, the older checkpoint must also be the one
@@ -24,6 +25,19 @@ not share code with one, so what it says does not depend on trusting either.
   --tsa-ca: the checkpoints' RFC 3161 time-stamps ("timestamps") must
         verify against this TSA certificate or CA (rfc3161.py, next to this
         file): a third party saw exactly that state of the log at that time
+
+  PUBLICATION: [--require-rekor] [--publishing-key SHA256:...]... [--rekor-key REKOR.pem]...
+        the Rekor entries a checkpoint carries ("publications") are checked
+        always: each is a hashedrekord of exactly that checkpoint's
+        statement, signed by the organization's publishing key, and its
+        signed entry timestamp verifies with the log's key - the Sigstore
+        log's is built in, --rekor-key adds another instance's. An entry
+        that does not verify fails the check; one from a log you gave no key
+        for is named as not checked. --require-rekor: at least one must
+        verify (for consistency: on the older checkpoint) - the state of the
+        log was public at that time. --publishing-key pins the publishing
+        key (fingerprint on the Audit Log page). An S3 copy is named; fetch
+        the object and run `checkpoint` on it
 
   receipt RECEIPT.json [--fingerprint SHA256:...]... [--agent-fingerprint SHA256:...]
                        [--approver-passkey SHA256:...]...
@@ -1560,6 +1574,161 @@ def _print_stamps(cp, toks):
               f"the log had these {cp['tree_size']} records then")
 
 
+# ---------------------------------------------------------------------------
+# Publication outside the server (Sigstore Rekor)
+# ---------------------------------------------------------------------------
+
+# The public Rekor's key, as Sigstore distributes it (github.com/sigstore/root-signing,
+# targets/rekor.pub; valid from 2021-01-12). Its log ID is the SHA-256 of its DER encoding.
+SIGSTORE_REKOR_KEY = """-----BEGIN PUBLIC KEY-----
+MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE2G2Y+2tabdTV5BcGiBIx0a9fAFwr
+kBbmLSGtks4L3qX6yYY0zufBnhC8Ur/iy55GhWP/9A/bY2LhC30M9+RYtw==
+-----END PUBLIC KEY-----
+"""
+SIGSTORE_REKOR_LOG_ID = "c0d23d6ad406973f9559f3ba2d1ca01f84147d8ffc5b8445c224f98b9591801d"
+
+
+def _p256(pem, label):
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric import ec
+
+    try:
+        key = serialization.load_pem_public_key(pem.encode() if isinstance(pem, str) else pem)
+    except (ValueError, TypeError) as e:
+        raise Fail(f"{label}: not a public key ({e})")
+    if not isinstance(key, ec.EllipticCurvePublicKey) or not isinstance(key.curve, ec.SECP256R1):
+        raise Fail(f"{label}: an ECDSA P-256 key is expected")
+    return key
+
+
+def _spki(key) -> bytes:
+    from cryptography.hazmat.primitives import serialization
+
+    return key.public_bytes(serialization.Encoding.DER, serialization.PublicFormat.SubjectPublicKeyInfo)
+
+
+def _ecdsa_ok(key, sig: bytes, msg: bytes) -> bool:
+    from cryptography.exceptions import InvalidSignature
+    from cryptography.hazmat.primitives import hashes
+    from cryptography.hazmat.primitives.asymmetric import ec
+
+    try:
+        key.verify(sig, msg, ec.ECDSA(hashes.SHA256()))
+        return True
+    except InvalidSignature:
+        return False
+
+
+def rekor_logs(paths=()):
+    """{log ID: (name, key)}: the Sigstore log, built in, and each --rekor-key."""
+    key = _p256(SIGSTORE_REKOR_KEY, "built-in Sigstore key")
+    logs = {hashlib.sha256(_spki(key)).hexdigest(): ("Sigstore Rekor", key)}
+    for path in paths:
+        try:
+            with open(path, encoding="utf-8") as f:
+                key = _p256(f.read(), f"--rekor-key {path}")
+        except OSError as e:
+            print(f"cannot read {path}: {e}", file=sys.stderr)
+            raise SystemExit(2)
+        log_id = hashlib.sha256(_spki(key)).hexdigest()
+        logs.setdefault(log_id, (f"Rekor log {log_id[:16]}", key))
+    return logs
+
+
+def rekor_set_payload(entry) -> bytes:
+    """What a Rekor v1 signed entry timestamp signs: body, integrated time,
+    log ID and index as canonical JSON."""
+    return canonical({"body": entry["body"], "integratedTime": entry["integratedTime"],
+                      "logID": entry["logID"], "logIndex": entry["logIndex"]})
+
+
+def check_rekor_set(entry, logs, label="Rekor entry"):
+    """The entry's signed entry timestamp verifies with the key of the log it
+    names. Returns the log's name, or None when that log is not one you gave."""
+    log_id = entry.get("logID")
+    if not isinstance(log_id, str) or log_id not in logs:
+        return None
+    name, key = logs[log_id]
+    if not isinstance(entry.get("integratedTime"), int) or not isinstance(entry.get("logIndex"), int) \
+            or entry["integratedTime"] <= 0 or entry["logIndex"] < 0:
+        raise Fail(f"{label}: no integrated time or index")
+    try:
+        sig = base64.b64decode(entry["verification"]["signedEntryTimestamp"], validate=True)
+    except (KeyError, TypeError, ValueError):
+        raise Fail(f"{label}: no signed entry timestamp")
+    if not _ecdsa_ok(key, sig, rekor_set_payload(entry)):
+        raise Fail(f"{label}: the signed entry timestamp does not verify with the key of {name}")
+    return name
+
+
+def check_rekor_publication(cp, pub, logs, publishing_pins=()):
+    """A Rekor publication of this checkpoint: the entry is a hashedrekord of
+    the checkpoint's own statement, signed by the publishing key, and the
+    log vouches for it. Returns (verified, line)."""
+    label = f"Rekor entry of checkpoint {cp.get('tree_size')}"
+    try:
+        entry = pub["receipt"]["entry"]
+        body = json.loads(base64.b64decode(entry["body"], validate=True))
+        spec = body["spec"]
+        digest = spec["data"]["hash"]
+        sig = base64.b64decode(spec["signature"]["content"], validate=True)
+        pub_pem = base64.b64decode(spec["signature"]["publicKey"]["content"], validate=True)
+    except (KeyError, TypeError, ValueError) as e:
+        raise Fail(f"{label}: malformed ({type(e).__name__}: {e})")
+    if body.get("kind") != "hashedrekord" or body.get("apiVersion") != "0.0.1":
+        raise Fail(f"{label}: not a hashedrekord 0.0.1 entry")
+    statement = cp["statement"].encode("utf-8")
+    if digest.get("algorithm") != "sha256" or digest.get("value") != hashlib.sha256(statement).hexdigest():
+        raise Fail(f"{label}: the entry is for another statement, not this checkpoint")
+    key = _p256(pub_pem, f"{label}: publishing key")
+    pfp = "SHA256:" + base64.b64encode(hashlib.sha256(_spki(key)).digest()).decode().rstrip("=")
+    if not _ecdsa_ok(key, sig, statement):
+        raise Fail(f"{label}: the publishing key's signature over the statement does not verify")
+    if publishing_pins and pfp not in publishing_pins:
+        raise Fail(f"{label}: published with key {pfp}, expected {' or '.join(publishing_pins)}")
+    if pub.get("log_index") is not None and pub["log_index"] != entry.get("logIndex"):
+        raise Fail(f"{label}: the listed index differs from the entry's")
+    name = check_rekor_set(entry, logs, label)
+    if name is None:
+        return False, (f"not checked  a Rekor entry in log {str(entry.get('logID'))[:16]}..., which is not "
+                       "the Sigstore log: pass that log's key with --rekor-key")
+    when = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(entry["integratedTime"]))
+    where = (f"https://search.sigstore.dev/?logIndex={entry['logIndex']}" if entry["logID"] == SIGSTORE_REKOR_LOG_ID
+             else f"index {entry['logIndex']}")
+    return True, (f"published in {name} at {when} ({where}) with publishing key {pfp}: "
+                  f"the log had these {cp['tree_size']} records then")
+
+
+def check_publications(cp, logs, publishing_pins=()):
+    """Every Rekor publication the checkpoint carries verifies (or is named
+    as unchecked); S3 copies are named. Returns (lines to print, how many
+    Rekor entries verified)."""
+    lines, verified = [], 0
+    for pub in cp.get("publications") or []:
+        target = pub.get("target")
+        if target == "rekor":
+            ok, line = check_rekor_publication(cp, pub, logs, publishing_pins)
+            verified += ok
+            lines.append(line)
+        elif target == "s3":
+            lines.append(f"stored in {pub.get('location')} (S3, Object Lock): not checked here - fetch that "
+                         "object and run `checkpoint` on it")
+        else:
+            lines.append(f"not checked  a publication to {target!r}, which this tool does not know")
+    return lines, verified
+
+
+def _require_rekor(cp, lines, verified):
+    if not verified:
+        raise Fail(f"checkpoint {cp.get('tree_size')} carries no Rekor entry that verifies"
+                   + (" (" + "; ".join(lines) + ")" if lines else ""))
+
+
+def _print_publications(lines):
+    for line in lines:
+        print("          " + line)
+
+
 def cmd_checkpoint(args) -> int:
     cp = _load(args.file)
     trust = Trust(args.fingerprint)
@@ -1567,9 +1736,13 @@ def cmd_checkpoint(args) -> int:
         _require_trust(signer_of(cp), {}, trust, "the checkpoint")
     fp = check_checkpoint(cp)
     toks = check_timestamps(cp, args.tsa_ca) if args.tsa_ca else []
+    pubs, verified = check_publications(cp, rekor_logs(args.rekor_key), args.publishing_key)
+    if args.require_rekor:
+        _require_rekor(cp, pubs, verified)
     print(f"VERIFIED  checkpoint of organization {cp['org_id']}: {cp['tree_size']} records, root {cp['root_hash']}")
     print(f"          signed by {fp} ({cp['algorithm']})")
     _print_stamps(cp, toks)
+    _print_publications(pubs)
     _note(trust)
     return 0
 
@@ -1582,10 +1755,25 @@ def cmd_consistency(args) -> int:
     # the auditor's own copy, when it has its tokens: the server's need not be trusted for them
     stamped = pinned if pinned is not None and pinned.get("timestamps") else old
     toks_old = check_timestamps(stamped, args.tsa_ca) if args.tsa_ca else []
+    # the older end must have been published (that is what fixes the history);
+    # the newer one may not be yet - its publications are checked when present
+    # (and the auditor's own copy's, when it carries any)
+    logs = rekor_logs(args.rekor_key)
+    pubs_old, verified = check_publications(old, logs, args.publishing_key)
+    if pinned is not None and pinned.get("publications"):
+        mine, n = check_publications(pinned, logs, args.publishing_key)
+        pubs_old, verified = pubs_old + [x for x in mine if x not in pubs_old], verified + n
+    if args.require_rekor:
+        _require_rekor(old, pubs_old, verified)
+    pubs_new, _ = check_publications(new, logs, args.publishing_key)
     print(f"VERIFIED  the log of organization {new['org_id']} at {new['tree_size']} records extends "
           f"the one at {old['tree_size']}: nothing in the first {old['tree_size']} was changed or removed")
     print(f"          signed by {fp}" + (f" (key changed from {fp_old})" if fp != fp_old else ""))
     _print_stamps(old, toks_old)
+    _print_publications(pubs_old)
+    if pubs_new:
+        print(f"          the newer checkpoint ({new['tree_size']} records):")
+        _print_publications(pubs_new)
     _print_chain(fp, doc, trust, new["org_id"])
     _note(trust)
     return 0
@@ -1601,11 +1789,23 @@ def main(argv=None) -> int:
     c.add_argument("file")
     c.add_argument("--fingerprint", action="append", default=[])
     c.add_argument("--tsa-ca")
+    c.add_argument("--rekor-key", action="append", default=[],
+                   help="PEM of another Rekor log's key whose entries you accept (the Sigstore log's is built in)")
+    c.add_argument("--publishing-key", action="append", default=[],
+                   help="fingerprint of the organization's publishing key (Audit Log page); repeatable")
+    c.add_argument("--require-rekor", action="store_true",
+                   help="fail (exit 1) unless the checkpoint carries a Rekor entry that verifies")
     s = sub.add_parser("consistency")
     s.add_argument("file")
     s.add_argument("--pinned")
     s.add_argument("--fingerprint", action="append", default=[])
     s.add_argument("--tsa-ca")
+    s.add_argument("--rekor-key", action="append", default=[],
+                   help="PEM of another Rekor log's key whose entries you accept (the Sigstore log's is built in)")
+    s.add_argument("--publishing-key", action="append", default=[],
+                   help="fingerprint of the organization's publishing key (Audit Log page); repeatable")
+    s.add_argument("--require-rekor", action="store_true",
+                   help="fail (exit 1) unless the older checkpoint carries a Rekor entry that verifies")
     r = sub.add_parser("receipt")
     r.add_argument("file")
     r.add_argument("--fingerprint", action="append", default=[])

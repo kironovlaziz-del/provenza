@@ -160,6 +160,9 @@ python tools/provenza_audit.py checkpoint checkpoint.json --fingerprint SHA256:.
 # today's log extends the checkpoint you saved last month
 python tools/provenza_audit.py consistency consistency.json --pinned saved-checkpoint.json
 
+# ... and that checkpoint was published in Sigstore Rekor (see Publication)
+python tools/provenza_audit.py consistency consistency.json --pinned saved-checkpoint.json --require-rekor
+
 # a signed policy release (GET /policy-releases/{id}): the quorum's passkeys signed exactly it
 python tools/provenza_audit.py release release.json --passkey SHA256:...
 
@@ -306,6 +309,31 @@ that ignores it, is refused rather than trusted.
   (`PUT /audit-logs/publication/s3`).
 - Locked objects are billed until their lock ends: one small JSON file per
   publication, at most one per interval.
+
+**Checking a publication offline.** `tools/provenza_audit.py` checks the
+Rekor entries a checkpoint carries without contacting Rekor or the server:
+the entry is a `hashedrekord` of exactly that checkpoint's statement, the
+publishing key signed that statement, and the entry's signed entry timestamp
+verifies with the log's key - the key Sigstore distributes is built into the
+tool, a key of another Rekor instance is given with `--rekor-key`. An entry
+that does not verify fails the check; one from a log the tool has no key for
+is named as not checked.
+
+```sh
+# the checkpoint was public in Rekor at the time it names
+python tools/provenza_audit.py checkpoint checkpoint.json --require-rekor \
+    --publishing-key SHA256:<from the Audit Log page>
+
+# today's log extends the checkpoint published then
+python tools/provenza_audit.py consistency consistency.json --pinned saved-checkpoint.json --require-rekor
+```
+
+`--require-rekor` fails unless at least one entry verifies (for
+`consistency`, on the older checkpoint: the newer one may not be published
+yet). `--publishing-key` pins the organization's publishing key; with it, a
+history published under another key is refused, and the key's entries in
+Rekor list every checkpoint the organization published. The S3 copy is the
+checkpoint itself: download the object and run `checkpoint` on it.
 
 **What it adds.** A rewritten history can no longer be shown to extend a
 checkpoint published before the rewrite, and the published copy - with

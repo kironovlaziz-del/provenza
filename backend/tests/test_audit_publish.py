@@ -417,3 +417,132 @@ async def test_an_s3_failure_is_noted_and_retried(client, admin_token, s3, db_se
     s3.mode = "ok"
     assert (await client.post(f"{A}/publication/run", headers=auth_headers(admin_token))).json()["result"] == {"s3": "published"}
 
+
+
+# ----------------------------------------------------------------------------- offline verification
+
+ROOT = Path(__file__).resolve().parents[2]
+
+
+def _tool():
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("provenza_audit_tool_publish", ROOT / "tools" / "provenza_audit.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def test_the_offline_verifier_pins_the_same_sigstore_key():
+    tool = _tool()
+    assert tool.SIGSTORE_REKOR_KEY == audit_publish.SIGSTORE_REKOR_PUBLIC_KEY
+    assert tool.SIGSTORE_REKOR_LOG_ID == audit_publish.SIGSTORE_REKOR_LOG_ID
+    assert list(tool.rekor_logs()) == [audit_publish.SIGSTORE_REKOR_LOG_ID]
+
+
+def test_the_offline_verifier_checks_a_real_rekor_entry():
+    tool = _tool()
+    logs = tool.rekor_logs()
+    assert tool.check_rekor_set(VECTOR["entry"], logs) == "Sigstore Rekor"
+    for change in ({"logIndex": VECTOR["entry"]["logIndex"] + 1}, {"integratedTime": VECTOR["entry"]["integratedTime"] + 1},
+                   {"body": base64.b64encode(b"{}").decode()}):
+        with pytest.raises(tool.Fail, match="signed entry timestamp does not verify"):
+            tool.check_rekor_set({**VECTOR["entry"], **change}, logs)
+    assert tool.check_rekor_set({**VECTOR["entry"], "logID": "ab" * 32}, logs) is None   # a log it has no key for
+
+
+@pytest.mark.asyncio
+async def test_the_offline_verifier_checks_the_publications(client, admin_token, rekor, tmp_path, capsys):
+    assert (await _use(client, admin_token, rekor)).status_code == 200
+    first = (await client.post(f"{A}/checkpoints", headers=auth_headers(admin_token))).json()
+    r = await client.post(f"{A}/publication/run", headers=auth_headers(admin_token))
+    assert r.json()["result"] == {"rekor": "published"}
+    fp = r.json()["publishing_key"]["fingerprint"]
+    cp = next(c for c in (await client.get(f"{A}/checkpoints", headers=auth_headers(admin_token))).json()
+              if c["tree_size"] == first["tree_size"])
+    (tmp_path / "cp.json").write_text(json.dumps(cp))
+    (tmp_path / "log.pem").write_text(rekor.pem)
+    tool, path = _tool(), str(tmp_path / "cp.json")
+    with_key = ["--rekor-key", str(tmp_path / "log.pem")]
+
+    # not the Sigstore log, and no key given for it: named, not checked - and not enough when one is required
+    assert tool.main(["checkpoint", path]) == 0
+    assert "not checked  a Rekor entry" in capsys.readouterr().out
+    assert tool.main(["checkpoint", path, "--require-rekor"]) == 1
+    assert "no Rekor entry that verifies" in capsys.readouterr().out
+
+    assert tool.main(["checkpoint", path, "--require-rekor", "--publishing-key", fp, *with_key]) == 0
+    out = capsys.readouterr().out
+    assert f"published in Rekor log {rekor.log_id[:16]}" in out and fp in out
+    assert f"the log had these {cp['tree_size']} records then" in out
+    assert tool.main(["checkpoint", path, "--publishing-key", "SHA256:" + "A" * 43, *with_key]) == 1
+    assert "expected SHA256:AAAA" in capsys.readouterr().out
+
+    def broken(change, name):
+        doc = json.loads(json.dumps(cp))
+        change(doc["publications"][0]["receipt"]["entry"], doc)
+        (tmp_path / name).write_text(json.dumps(doc))
+        return tool.main(["checkpoint", str(tmp_path / name), *with_key])
+
+    # Rekor's signature covers the index and the time
+    assert broken(lambda e, d: e.update(integratedTime=e["integratedTime"] + 3600), "later.json") == 1
+    assert "signed entry timestamp does not verify" in capsys.readouterr().out
+    # an entry for another statement, moved onto this checkpoint
+    def other(e, d):
+        body = json.loads(base64.b64decode(e["body"]))
+        body["spec"]["data"]["hash"]["value"] = hashlib.sha256(b"another").hexdigest()
+        e["body"] = base64.b64encode(json.dumps(body).encode()).decode()
+    assert broken(other, "other.json") == 1
+    assert "for another statement" in capsys.readouterr().out
+    # a signature the publishing key did not make
+    def resigned(e, d):
+        body = json.loads(base64.b64decode(e["body"]))
+        body["spec"]["signature"]["content"] = base64.b64encode(
+            ec.generate_private_key(ec.SECP256R1()).sign(cp["statement"].encode(), ec.ECDSA(hashes.SHA256()))).decode()
+        e["body"] = base64.b64encode(json.dumps(body).encode()).decode()
+    assert broken(resigned, "resigned.json") == 1
+    assert "publishing key's signature over the statement does not verify" in capsys.readouterr().out
+    # and a checkpoint that is not the published one
+    assert broken(lambda e, d: d.update(publications=[]), "bare.json") == 0
+    capsys.readouterr()
+    assert tool.main(["checkpoint", str(tmp_path / "bare.json"), "--require-rekor", *with_key]) == 1
+
+    # later: the log grew; the older end was published, the newer one not yet
+    assert (await _use(client, admin_token, rekor)).status_code == 200
+    await client.post(f"{A}/checkpoints", headers=auth_headers(admin_token))
+    doc = (await client.get(f"{A}/consistency", params={"from_size": cp["tree_size"]},
+                            headers=auth_headers(admin_token))).json()
+    assert doc["old"]["publications"] and not doc["new"]["publications"]
+    (tmp_path / "cons.json").write_text(json.dumps(doc))
+    assert tool.main(["consistency", str(tmp_path / "cons.json"), "--pinned", path, "--require-rekor",
+                      "--publishing-key", fp, *with_key]) == 0
+    out = capsys.readouterr().out
+    assert "extends" in out and "published in Rekor log" in out
+    # the auditor's own copy carries the receipt even when the server's answer leaves it out
+    doc["old"]["publications"] = []
+    (tmp_path / "cons2.json").write_text(json.dumps(doc))
+    assert tool.main(["consistency", str(tmp_path / "cons2.json"), "--pinned", path, "--require-rekor", *with_key]) == 0
+    capsys.readouterr()
+    assert tool.main(["consistency", str(tmp_path / "cons2.json"), "--pinned", str(tmp_path / "bare.json"),
+                      "--require-rekor", *with_key]) == 1
+
+
+@pytest.mark.asyncio
+async def test_the_offline_verifier_names_the_s3_copy(client, admin_token, rekor, s3, tmp_path, capsys):
+    assert (await _use(client, admin_token, rekor)).status_code == 200
+    assert (await _use_s3(client, admin_token, s3)).status_code == 200
+    first = (await client.post(f"{A}/checkpoints", headers=auth_headers(admin_token))).json()
+    assert (await client.post(f"{A}/publication/run", headers=auth_headers(admin_token))).json()["result"] == \
+        {"rekor": "published", "s3": "published"}
+    cp = next(c for c in (await client.get(f"{A}/checkpoints", headers=auth_headers(admin_token))).json()
+              if c["tree_size"] == first["tree_size"])
+    (tmp_path / "cp.json").write_text(json.dumps(cp))
+    (tmp_path / "log.pem").write_text(rekor.pem)
+    tool = _tool()
+    assert tool.main(["checkpoint", str(tmp_path / "cp.json"), "--require-rekor",
+                      "--rekor-key", str(tmp_path / "log.pem")]) == 0
+    assert "(S3, Object Lock): not checked here" in capsys.readouterr().out
+    # the object in the bucket is the checkpoint, verified as is
+    key = f"/audit-bucket/audit/org-{cp['org_id']}/checkpoint-{cp['tree_size']:012d}.json"
+    (tmp_path / "s3.json").write_bytes(s3.objects[key]["body"])
+    assert tool.main(["checkpoint", str(tmp_path / "s3.json")]) == 0
