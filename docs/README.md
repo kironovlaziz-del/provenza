@@ -1,5 +1,7 @@
 # Provenza documentation
 
+- **[What Provenza does](features.md)**: every feature in one place, with the live demo
+
 ## Running it
 
 - [Quickstart](quickstart.md): install, connect Claude Code, see a tool call checked, refused and proven offline

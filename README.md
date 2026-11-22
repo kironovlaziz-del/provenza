@@ -1,236 +1,92 @@
 <p align="center">
-  <img src="docs/hero-graph.svg" width="720" alt="Provenza — live delegation graph with in-browser signature verification">
-</p>
-
-<p align="center">
-  <img src="provenza-logo-full.png" width="330" alt="Provenza">
+  <img src="provenza-logo-full.png" width="300" alt="Provenza">
 </p>
 
 <p align="center">
   <b>Provenance for every AI action.</b><br>
-  <sub>See and govern the AI in your company — with provable accountability.</sub><br>
-  From an employee pasting into ChatGPT to autonomous agents acting on their own —<br>
-  watch it, control it, and <b>prove</b> every decision was authorized. Self-hosted, no external SaaS.
+  Find the AI in your company, decide what each agent may do,<br>
+  and prove what it did - to anyone, offline.
 </p>
 
 <p align="center">
   <a href="https://opensource.org/licenses/Apache-2.0"><img src="https://img.shields.io/badge/License-Apache_2.0-blue.svg" alt="License"></a>
   <a href="https://github.com/kironovlaziz-del/provenza/actions/workflows/ci.yml"><img src="https://github.com/kironovlaziz-del/provenza/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <a href="https://github.com/kironovlaziz-del/provenza/actions/workflows/quickstart.yml"><img src="https://github.com/kironovlaziz-del/provenza/actions/workflows/quickstart.yml/badge.svg" alt="Quickstart"></a>
   <a href="https://www.bestpractices.dev/projects/16963"><img src="https://www.bestpractices.dev/projects/16963/badge" alt="OpenSSF Best Practices"></a>
   <a href="https://scorecard.dev/viewer/?uri=github.com/kironovlaziz-del/provenza"><img src="https://api.scorecard.dev/projects/github.com/kironovlaziz-del/provenza/badge" alt="OpenSSF Scorecard"></a>
-  <a href="CODE_OF_CONDUCT.md"><img src="https://img.shields.io/badge/Contributor%20Covenant-2.1-4baaaa.svg" alt="Contributor Covenant"></a>
-  <a href="CONTRIBUTING.md"><img src="https://img.shields.io/badge/PRs-welcome-brightgreen.svg" alt="PRs Welcome"></a>
   <a href="https://pypi.org/project/provenza/"><img src="https://img.shields.io/pypi/v/provenza?label=PyPI&color=blue" alt="PyPI"></a>
-  <a href="https://pypi.org/project/provenza/"><img src="https://img.shields.io/pypi/pyversions/provenza?label=Python" alt="Python versions"></a>
-  <a href="https://glama.ai/mcp/servers/kironovlaziz-del/provenza"><img src="https://glama.ai/mcp/servers/kironovlaziz-del/provenza/badges/score.svg" alt="Glama MCP score"></a>
-  <a href="https://mcpservers.org/servers/kironovlaziz-del/provenza"><img src="https://img.shields.io/badge/mcpservers.org-Provenza-blue" alt="Listed on mcpservers.org"></a>
 </p>
 
 <p align="center">
-  <a href="#-try-the-live-demo"><b>👀 Live demo</b></a> &nbsp;·&nbsp;
-  <a href="docs/quickstart.md"><b>⏱ Quickstart</b></a> &nbsp;·&nbsp;
-  <a href="https://youtu.be/me8UsPf4Ndw"><b>▶ Video tutorial</b></a> &nbsp;·&nbsp;
-  <a href="#-deploy-on-your-server"><b>🚀 Deploy</b></a> &nbsp;·&nbsp;
-  <a href="#-what-makes-it-different"><b>✨ Why it's different</b></a> &nbsp;·&nbsp;
-  <a href="#-features"><b>🧩 Features</b></a> &nbsp;·&nbsp;
-  <a href="docs/README.md"><b>📖 Docs</b></a>
+  <a href="https://stickstock.lol"><b>Live demo</b></a> &nbsp;·&nbsp;
+  <a href="docs/quickstart.md"><b>Quickstart</b></a> &nbsp;·&nbsp;
+  <a href="https://youtu.be/me8UsPf4Ndw"><b>4-minute video</b></a> &nbsp;·&nbsp;
+  <a href="docs/README.md"><b>Docs</b></a>
 </p>
 
----
+**Provenza** is an open-source, self-hosted AI governance platform for AI agents
+and shadow AI. No external SaaS: your data stays on your server.
 
-**Provenza is an open-source AI governance platform** for companies that use AI agents: it finds
-shadow AI, keeps a registry of every AI agent, checks each agent action against policy *before* it runs
-(an MCP gateway), and writes a signed, tamper-evident audit log that anyone can verify offline.
+## What it does
 
-> **AI entered your company through every door at once** — shadow AI on laptops,
-> autonomous agents delegating to each other, and no way to *prove* who authorized
-> what. Most governance tools watch one door. **Provenza covers them all,
-> under one set of rules.**
+- **Finds shadow AI.** An endpoint agent (Linux, Windows, macOS), a browser
+  extension and your DNS or proxy logs show which AI tools people and machines
+  use. [Shadow AI](docs/shadow-ai.md)
+- **Controls AI agents.** Every tool call goes through an MCP gateway or a
+  one-line wrapper (LangChain, LangGraph, OpenAI Agents SDK, CrewAI, AutoGen) and
+  is checked against your policy before it runs. Risky calls wait for a person;
+  a kill switch stops one agent or all of them.
+  [Policies](docs/policies.md) · [Frameworks](docs/integrations.md)
+- **Proves what happened.** A signed, tamper-evident audit log, published to
+  Sigstore Rekor, and a signed proof of who allowed each agent action. Anyone can
+  check them offline, without trusting your server.
+  [Audit log](docs/audit-proofs.md) · [Proof of Authority](docs/proof-of-authority.md)
 
-## 👀 Try the live demo
+Works with Claude Code, Cursor, Gemini CLI, VS Code and any OpenAI-compatible
+client. Everything else: **[what Provenza does](docs/features.md)**.
 
-**[stickstock.lol](https://stickstock.lol)** — click **Try the demo** (or sign in: organization
-`demo`, e-mail `demo@stickstock.lol`, password `provenza-demo`). A read-only login to a demo bank: agents with their own
-keys, a signed delegation chain, denied and held actions, a refused privilege
-escalation, AI tools found on employees' laptops. In **Agent activity → Live Map**,
-click a delegation and check its signature in your browser. The data is made
-again every night.
+## Try it
 
-<p align="center">
-  <img src="docs/demo.gif" width="860" alt="The live demo: agent activity, a capability escalation refused, a delegation signature (Ed25519 + ML-DSA-65) checked in the browser, Shadow AI and agents found on employees' machines">
-</p>
+**In the browser:** [stickstock.lol](https://stickstock.lol) → **Try the demo**
+(read-only).
 
-## 🚀 Deploy on your server
-
-**Requirements:** Linux with systemd (Ubuntu 24.04+, Debian 13+, RHEL/Rocky 9.3+
-or Fedora), 4 GB RAM, a domain pointing at the server. The installer sets up
-Podman itself.
-
-```bash
-git clone https://github.com/kironovlaziz-del/provenza.git /opt/provenza
-cd /opt/provenza
-sudo ./install.sh
-```
-
-The installer asks for your domain and the first administrator, generates every
-secret, runs the stack as rootful Podman containers managed by systemd (Quadlet),
-gets an HTTPS certificate and schedules a daily backup.
-It also puts the egress proxy and the endpoint agent on the server, with their keys -
-nothing to copy from the interface; add `--sensor` for the eBPF egress sensor.
-Upgrades are one command, `sudo provenza upgrade`: it backs up first and rolls back if the
-new version does not come up. Full guide: [docs/self-hosting.md](docs/self-hosting.md).
-
-**First time?** The [quickstart](docs/quickstart.md) goes from this install to Claude Code
-calling a tool through Provenza: checked, refused by one line of policy, and proven offline.
-Prefer to watch first? The same seven steps as a
-[4-minute video tutorial](https://youtu.be/me8UsPf4Ndw).
-
-**Connect an agent** from the interface: AI agents → **Connect an agent**. Tick
-the tools it may use, and it gives one command for the machine where Gemini CLI,
-Claude Code, Cursor or any OpenAI-compatible client runs. The agent's keys are
-made there and never leave it.
-
-**Govern egress on another Linux host:** Runtime → **Register sensor** gives a
-one-line command that downloads the sensor from your Provenza (no Go, no git there).
-
-**Just looking?** On your own computer, not a server, from the published images
-(about a minute, nothing to build):
+**On your computer** (about a minute, Docker or Podman):
 
 ```bash
 curl -fsSLO https://raw.githubusercontent.com/kironovlaziz-del/provenza/main/docker-compose.try.yml
-docker compose -f docker-compose.try.yml up -d        # or: podman compose
+docker compose -f docker-compose.try.yml up -d
 ```
 
-(On Windows, in PowerShell: `curl.exe` instead of `curl`.)
+Open http://localhost:8080: organization `provenza`, `admin@example.com` /
+`provenza-try-local` (a public password; the ports listen only on this computer).
 
-Then http://localhost:8080 with organization `provenza`, `admin@example.com` /
-`provenza-try-local`. Its ports listen only on this computer and that password is
-public. **[A governed refund agent](examples/governed-refund-agent/)** runs against
-it: a refund over $100 waits for a person, a prompt injection that asks for the
-customer list is refused. To work on Provenza itself: [development guide](docs/development.md).
+**On a server** (Linux with systemd, 4 GB RAM, a domain):
 
-## ✨ What makes it different
+```bash
+git clone https://github.com/kironovlaziz-del/provenza.git /opt/provenza
+cd /opt/provenza && sudo ./install.sh
+```
 
-### 🔐 Verifiable Agent Governance
+Then the [quickstart](docs/quickstart.md) connects Claude Code and shows a tool
+call checked, refused and proven offline.
 
-When one AI agent delegates a task to another, the delegating agent **signs** the
-handoff — the delegated capabilities, the TTL, a single-use nonce and a timestamp —
-with **Ed25519**, or with a **post-quantum hybrid key (Ed25519 *and* ML-DSA-65,
-FIPS 204)**, where both signatures must verify. With **agent-held keys**, Provenza
-stores only the public key, so it cannot sign in the agent's name. Recorded agent
-actions are signed the same way and bound to the policy check that allowed them.
+## Documentation
 
-**Proof that does not depend on trusting Provenza:** download the evidence for any
-delegation or action and check it offline with `tools/provenza_sign.py` or plain
-OpenSSL, against the key fingerprint the agent's owner gave you. On the live
-delegation map, click an edge to run the same check in your browser.
-
-**Agent Manifest.** Provenza also issues a signed [Agent Manifest](docs/agent-manifest.md)
-for every agent (AgenTrust specification v0.2, hybrid Ed25519 + ML-DSA-65, both
-signers required), binding the agent's approved MCP tools and the audit-log root.
-It is listed in [AgenTrust's integrations](https://github.com/agentrust-io/integrations/tree/main/integrations/provenza-agent-manifest),
-with a verifier you can run offline.
-
-This is the kind of *verifiable accountability* the EU AI Act asks for — made
-**clickable** ([how it works](docs/agent-signing.md)). What it does and does not
-guarantee is spelled out in the [security model](docs/security-model.md).
-
-> 🟦 active agent &nbsp; 🟥 policy violation &nbsp; — verified delegation &nbsp; ┈ blocked chain &nbsp; ✓ verified in your browser
-
-## 🧩 Features
-
-### 🎯 Governance — default
-
-- **Governed LLM gateway** — agents reach OpenAI, Anthropic, Groq, Azure OpenAI
-  or a self-hosted model through one OpenAI-compatible gateway, under the same
-  rules. Every call is recorded as metadata (model, outcome, tokens, time) — the
-  prompt and the answer are never stored. "Self-hosted providers only" is one switch.
-- **Policy hierarchy and approvals** — one policy at three levels (organization →
-  team → agent; lower levels only tighten), visual agent rules, and a person's
-  approval for risky agent actions ([policy hierarchy](docs/policies.md)).
-
-### 👁️ Shadow AI — unsanctioned AI
-
-- **Endpoint agent** for Linux, Windows and macOS finds local models and AI
-  agents (Claude Code, Cursor, Copilot, Aider, CrewAI, n8n, …), including unknown
-  ones by their behavior. One command from the console installs it as a service;
-  Intune, Group Policy and Jamf are covered.
-- **Browser extension** (Chrome, Edge) reports visits to AI services, closes the
-  ones your organization blocks and offers the approved ones instead. Deployed by
-  policy, it also tells who uses what.
-- **DNS and proxy logs** — upload a log (Squid, BIND, dnsmasq, Windows DNS, Zeek,
-  Cisco Umbrella, Zscaler, …) or stream it with a log forwarder: AI use on every
-  device on the network, without installing anything. Only the lines that reach
-  an AI service are kept.
-- **Passive network discovery** — read-only; nothing is connected automatically.
-- Everything lands in one Sightings list, with an AI domain catalog, who uses each
-  service, and device inventory ([collectors](docs/shadow-ai.md)).
-
-### 🤖 Agents — autonomous AI
-
-- **Registry** with scoped tools, delegation limits, teams and role templates.
-- **Governed MCP gateway** — clients see only the tools an admin approved, and
-  every call is checked and recorded. Desktop clients (Claude, Cursor, Gemini CLI,
-  VS Code) start it as `uvx --from provenza provenza-mcp` ([SDK](sdk/python/README.md#integrations)).
-- **Agent frameworks** — LangChain, LangGraph, the OpenAI Agents SDK, CrewAI and
-  AutoGen: wrap the tools in one line; every call is checked, recorded, and can
-  wait for a person, a LangGraph graph pausing until the decision
-  ([docs](docs/integrations.md)).
-- **Signed delegations and actions**, offline-verifiable (above).
-- **Workload attestation** — Kubernetes, GitHub Actions, Google Cloud, Azure,
-  GitLab, SPIFFE: each agent bound to its workload ([docs](docs/attestation.md)).
-- **One way out** — an egress proxy that holds the credentials and checks every
-  outbound call ([egress lockdown](docs/egress-lockdown.md)), and an eBPF sensor
-  daemon that contains each governed workload's network in the kernel: allowed
-  destinations only, DNS filtered, blocks reported ([sensor](sensor/README.md)).
-- **Behavior and circuit breakers** — baselines and self-protection.
-- **Kill switch** in levels: agent → team → all agents → all AI traffic, with
-  exact undo ([docs](docs/kill-switch.md)).
-- **SDKs** for [Python](sdk/python/README.md), [JavaScript](sdk/js/README.md) and
-  [Go](sdk/go/README.md).
-
-### 📜 Identity and evidence
-
-- **Single sign-on** (OpenID Connect) and **SCIM** — people switched off at the
-  identity provider lose their sessions, and their agents' keys are revoked
-  ([docs](docs/identity-provider.md)).
-- **Tamper-evident audit log** — append-only, hash-chained, signed Merkle
-  checkpoints with RFC 3161 time-stamps; any record provable offline with
-  `tools/provenza_audit.py` ([docs](docs/audit-proofs.md)).
-- **Proof of Authority** — for any agent action, one file shows who allowed
-  it, every link signed: the task a person gave the agent, signed with their
-  passkey; the policy release administrators signed with their
-  passkeys, the agent's rights and key in it, each delegation hop, the
-  agent's signature on the call, the approver's passkey. Checked offline,
-  with a completeness report of everything an agent did over a period
-  ([docs](docs/proof-of-authority.md)).
-- **Incidents, notifications** (e-mail, webhooks) and a compliance view.
-
-## 📖 Documentation
-
-Start at **[docs/README.md](docs/README.md)**. The [user guide](USER_GUIDE.md)
-([oʻzbekcha](USER_GUIDE.uz.md)) walks through the UI; the
-[development guide](docs/development.md) covers running from source, configuration
-and tests.
+- [What Provenza does](docs/features.md): every feature in one place
+- [Quickstart](docs/quickstart.md) · [Self-hosting](docs/self-hosting.md) · [User guide](USER_GUIDE.md) ([oʻzbekcha](USER_GUIDE.uz.md))
+- SDKs: [Python](sdk/python/README.md) · [JavaScript](sdk/js/README.md) · [Go](sdk/go/README.md)
+- [Security model](docs/security-model.md): what is guaranteed, and what is not
+- [All documentation](docs/README.md)
 
 ## Contributing
 
-Bug reports, feature requests and pull requests are welcome. Please read
-[CONTRIBUTING.md](CONTRIBUTING.md) first.
+Bug reports and pull requests are welcome: [CONTRIBUTING.md](CONTRIBUTING.md) ·
+[Code of Conduct](CODE_OF_CONDUCT.md) · [Security policy](SECURITY.md) ·
+[Changelog](CHANGELOG.md)
 
-- [Code of Conduct](CODE_OF_CONDUCT.md)
-- [Security policy](SECURITY.md) — report vulnerabilities privately
-- [Changelog](CHANGELOG.md)
-
-## License
-
-Apache License 2.0 — see [LICENSE](LICENSE).
-
-Copyright 2026 Laziz Kironov.
+Apache License 2.0, see [LICENSE](LICENSE). Copyright 2026 Laziz Kironov.
 
 ## Featured in
 
-- [AgenTrust integrations](https://github.com/agentrust-io/integrations/tree/main/integrations/provenza-agent-manifest): Provenza Agent Manifest issuer (community tier)
-- [![Awesome AI Governance](https://img.shields.io/badge/Awesome-AI%20Governance-blue?logo=github)](https://github.com/agentrust-io/awesome-ai-governance)
-- [![Awesome AI Agent Governance](https://img.shields.io/badge/Awesome-AI%20Agent%20Governance-blue?logo=github)](https://github.com/systempromptio/awesome-ai-agent-governance)
+- [AgenTrust integrations](https://github.com/agentrust-io/integrations/tree/main/integrations/provenza-agent-manifest): Provenza Agent Manifest issuer
+- [Awesome AI Governance](https://github.com/agentrust-io/awesome-ai-governance) · [Awesome AI Agent Governance](https://github.com/systempromptio/awesome-ai-agent-governance)
+- MCP: [Glama](https://glama.ai/mcp/servers/kironovlaziz-del/provenza) · [mcpservers.org](https://mcpservers.org/servers/kironovlaziz-del/provenza) · [GitHub MCP Registry](https://github.com/mcp/kironovlaziz-del/provenza)
