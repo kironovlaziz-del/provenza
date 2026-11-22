@@ -100,9 +100,17 @@ async def list_audit_logs(
 async def integrity(db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)) -> Dict[str, Any]:
     head = await audit_proofs.head(db, current_user.org_id)
     cp = await audit_proofs.latest_checkpoint(db, current_user.org_id)
+    out = None
+    if cp:
+        # downloaded as is from the Audit Log page: with its time-stamps and publications,
+        # so the offline verifier can check them (--tsa-ca, --require-rekor)
+        stamps = await audit_witness.timestamps_for(db, [cp.id])
+        published = await audit_publish.publications_for(db, [cp.id])
+        out = {**audit_proofs.checkpoint_out(cp), "timestamps": stamps.get(cp.id, []),
+               "publications": published.get(cp.id, [])}
     return {
         "head_seq": head,
-        "checkpoint": audit_proofs.checkpoint_out(cp) if cp else None,
+        "checkpoint": out,
         "unsigned_records": head - (cp.tree_size if cp else 0),
     }
 
