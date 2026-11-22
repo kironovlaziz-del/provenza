@@ -19,6 +19,48 @@ export interface CheckpointT {
   key_fingerprint: string;
   /** RFC 3161 time-stamps of the statement (app/services/audit_witness.py) */
   timestamps?: TimestampT[];
+  /** where this checkpoint was published outside the server (app/services/audit_publish.py) */
+  publications?: PublicationT[];
+}
+
+export type PublicationTarget = "rekor" | "github" | "s3";
+
+export interface PublicationT {
+  id: number;
+  checkpoint_id: number;
+  tree_size: number | null;
+  target: PublicationTarget;
+  destination: string;
+  reference: string;
+  location: string | null;
+  log_index: number | null;
+  published_at: string;
+  receipt: Record<string, unknown>;
+}
+
+export interface PublicationTargetT {
+  target: PublicationTarget;
+  enabled: boolean;
+  configured: boolean;
+  /** the outbound destination: Rekor's URL, owner/repo, the bucket */
+  destination: string | null;
+  host: string | null;
+  public_instance?: boolean;
+  last_published_at: string | null;
+  last_tree_size: number | null;
+  last_location: string | null;
+  last_error: string | null;
+  last_error_at: string | null;
+}
+
+export interface PublicationSettingsT {
+  interval_minutes: number;
+  min_interval: number;
+  max_interval: number;
+  targets: PublicationTargetT[];
+  publications: number;
+  publishing_key: { fingerprint: string; public_key: string } | null;
+  result?: Partial<Record<PublicationTarget, string>>;
 }
 
 export interface TimestampT {
@@ -333,4 +375,18 @@ export async function pinStatus(pinned: string, current: string, handovers: Hand
     if (fp === current) return "changed";
   }
   return "unknown";
+}
+
+export async function getPublication() {
+  return (await api.get<PublicationSettingsT>("/audit-logs/publication")).data;
+}
+
+export async function setPublication(input: {
+  interval_minutes: number; rekor_enabled: boolean; rekor_url?: string | null; rekor_public_key?: string | null;
+}) {
+  return (await api.put<PublicationSettingsT>("/audit-logs/publication", input)).data;
+}
+
+export async function publishNow() {
+  return (await api.post<PublicationSettingsT>("/audit-logs/publication/run")).data;
 }

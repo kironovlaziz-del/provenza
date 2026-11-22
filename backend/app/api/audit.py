@@ -19,6 +19,12 @@ Audit log: list, plus the tamper-evidence endpoints (docs/audit-proofs.md).
     PUT  /audit-logs/tsa                    set it - tested first (admin)
     POST /audit-logs/tsa/stamp              time-stamp pending checkpoints now (admin)
   Checkpoints carry their time-stamp tokens ("timestamps") in /checkpoints and /consistency.
+
+    GET  /audit-logs/publication            where checkpoints are published outside the server, how often
+    PUT  /audit-logs/publication            the interval and the Rekor target (admin)
+    POST /audit-logs/publication/run        publish the latest checkpoint now, to every target on (admin)
+    GET  /audit-logs/publications           what was published where, newest first, with the receipts
+  Checkpoints carry their publications ("publications") in /checkpoints and /consistency.
 """
 
 from typing import Any, Dict, List, Optional
@@ -37,7 +43,7 @@ from app.models.audit_log import AuditCheckpoint
 from app.models.user import User, UserRole
 from app.schemas.audit_log import AuditLogOut
 from app.schemas.pagination import Page
-from app.services import audit_keys, audit_proofs, audit_witness
+from app.services import audit_keys, audit_proofs, audit_publish, audit_witness
 from app.services.audit_keys import RotationError
 from app.services.audit_proofs import ProofError
 from app.services.audit_service import AuditService
@@ -111,7 +117,9 @@ async def list_checkpoints(
         .order_by(AuditCheckpoint.tree_size.desc()).limit(limit)
     )).scalars())
     stamps = await audit_witness.timestamps_for(db, [cp.id for cp in rows])
-    return [{**audit_proofs.checkpoint_out(cp), "timestamps": stamps.get(cp.id, [])} for cp in rows]
+    published = await audit_publish.publications_for(db, [cp.id for cp in rows])
+    return [{**audit_proofs.checkpoint_out(cp), "timestamps": stamps.get(cp.id, []),
+             "publications": published.get(cp.id, [])} for cp in rows]
 
 
 @router.post("/checkpoints")
@@ -139,9 +147,13 @@ async def consistency(
         AuditCheckpoint.org_id == current_user.org_id,
         AuditCheckpoint.tree_size.in_([doc["old"]["tree_size"], doc["new"]["tree_size"]])))).all()
     stamps = await audit_witness.timestamps_for(db, [r.id for r in rows])
-    by_size = {r.tree_size: stamps.get(r.id, []) for r in rows}
-    doc["old"]["timestamps"] = by_size.get(doc["old"]["tree_size"], [])
-    doc["new"]["timestamps"] = by_size.get(doc["new"]["tree_size"], [])
+    published = await audit_publish.publications_for(db, [r.id for r in rows])
+    by_size = {r.tree_size: r.id for r in rows}
+    for end in ("old", "new"):
+        cp_id = by_size.get(doc[end]["tree_size"])
+        doc[end]["timestamps"] = stamps.get(cp_id, [])
+        # where this state of the log was published outside the server
+        doc[end]["publications"] = published.get(cp_id, [])
     return doc
 
 
@@ -253,3 +265,54 @@ async def set_tsa(data: TsaIn, db: AsyncSession = Depends(get_db), current_user:
 @router.post("/tsa/stamp")
 async def stamp_now(db: AsyncSession = Depends(get_db), current_user: User = Depends(_admin)):
     return await audit_witness.stamp_pending(db, current_user.org_id)
+
+
+# ----------------------------------------------------------------------------- publication
+
+class PublicationIn(BaseModel):
+    interval_minutes: int = Field(default=audit_publish.DEFAULT_INTERVAL, ge=audit_publish.MIN_INTERVAL,
+                                  le=audit_publish.MAX_INTERVAL)
+    rekor_enabled: bool = True
+    # None: the public instance (rekor.sigstore.dev), whose key Provenza knows
+    rekor_url: Optional[str] = Field(default=None, max_length=500)
+    # an instance's own key (PEM, ECDSA P-256); None keeps the stored one for the same URL
+    rekor_public_key: Optional[str] = Field(default=None, max_length=4000)
+
+
+@router.get("/publication")
+async def get_publication(db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+    return await audit_publish.settings_out(db, current_user.org_id)
+
+
+@router.put("/publication")
+async def set_publication(data: PublicationIn, db: AsyncSession = Depends(get_db),
+                          current_user: User = Depends(_admin)):
+    """Checkpoints are published to the targets switched on, at most once per
+    interval and only when the log grew."""
+    org_id, user_id = current_user.org_id, current_user.id
+    row = await audit_publish.save_settings(db, org_id, user_id, interval_minutes=data.interval_minutes,
+                                            rekor_enabled=data.rekor_enabled, rekor_url=data.rekor_url,
+                                            rekor_public_key=data.rekor_public_key)
+    await AuditService(db).log(org_id, user_id, "audit_publication", org_id, "configured",
+                               {"interval_minutes": row.interval_minutes, "rekor_enabled": row.rekor_enabled,
+                                "rekor_url": row.rekor_url,
+                                "rekor_key": audit_publish.fingerprint(row.rekor_public_key)
+                                if row.rekor_public_key else None})
+    return await audit_publish.settings_out(db, org_id)
+
+
+@router.post("/publication/run")
+async def publish_now(db: AsyncSession = Depends(get_db), current_user: User = Depends(_admin)):
+    """The latest checkpoint, to every target switched on, without waiting for
+    the interval (a target that already has it is left alone)."""
+    result = await audit_publish.publish_org(db, current_user.org_id, force=True)
+    return {"result": result, **await audit_publish.settings_out(db, current_user.org_id)}
+
+
+@router.get("/publications")
+async def list_publications(target: Optional[str] = Query(default=None, pattern="^(rekor|github|s3)$"),
+                            skip: int = Query(default=0, ge=0), limit: int = Query(default=50, ge=1, le=200),
+                            db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+    items, total = await audit_publish.list_publications(db, current_user.org_id, target=target, skip=skip,
+                                                         limit=limit)
+    return {"items": items, "total": total, "skip": skip, "limit": limit}

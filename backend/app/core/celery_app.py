@@ -72,6 +72,13 @@ celery_app.conf.beat_schedule = {
         "task": "audit.timestamp",
         "schedule": crontab(minute="4-59/5"),
     },
+    # Publish the latest checkpoint outside the server - Sigstore Rekor by
+    # default, a GitHub repository, an S3 bucket - where an organization's
+    # interval (1 hour by default) is over (app/services/audit_publish.py).
+    "audit-publish": {
+        "task": "audit.publish",
+        "schedule": crontab(minute="1-59/5"),
+    },
     # Commit recorded agent actions to the audit log in batches (one record
     # per organization and run), so the next checkpoint covers them and
     # PVP receipts are provable offline (app/pvp/seal.py).

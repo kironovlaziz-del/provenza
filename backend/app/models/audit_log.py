@@ -176,6 +176,74 @@ class AuditCheckpointTimestamp(Base):
     created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
 
 
+class AuditPublicationSettings(Base):
+    """Where an organization's checkpoints are published outside the server
+    (app/services/audit_publish.py), and how often. No row: the defaults -
+    Sigstore Rekor every hour. Each target is outbound traffic to the host it
+    names and can be switched off. The publishing key (ECDSA P-256) signs
+    only what is sent to Rekor, which does not take the audit key's
+    Ed25519 + ML-DSA signatures; it is made with the first publication and
+    never replaced through the API."""
+
+    __tablename__ = "audit_publication_settings"
+
+    id = Column(Integer, primary_key=True)
+    org_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, unique=True)
+    interval_minutes = Column(Integer, nullable=False, server_default="60")
+    # Sigstore Rekor (a public transparency log)
+    rekor_enabled = Column(Boolean, nullable=False, server_default="true")
+    rekor_url = Column(String(500), nullable=False, server_default="https://rekor.sigstore.dev")
+    rekor_public_key = Column(Text)              # PEM; required for an instance other than the public one
+    rekor_last_error = Column(String(500))
+    rekor_last_error_at = Column(DateTime(timezone=True))
+    # a GitHub repository the organization owns: one file per publication
+    github_enabled = Column(Boolean, nullable=False, server_default="false")
+    github_repo = Column(String(200))           # owner/name
+    github_branch = Column(String(100))
+    github_path = Column(String(200))
+    github_token_enc = Column(Text)
+    github_last_error = Column(String(500))
+    github_last_error_at = Column(DateTime(timezone=True))
+    # an S3 (or S3-compatible) bucket with Object Lock
+    s3_enabled = Column(Boolean, nullable=False, server_default="false")
+    s3_endpoint = Column(String(500))
+    s3_region = Column(String(50))
+    s3_bucket = Column(String(100))
+    s3_prefix = Column(String(200))
+    s3_access_key = Column(String(200))
+    s3_secret_enc = Column(Text)
+    s3_retention_days = Column(Integer)
+    s3_last_error = Column(String(500))
+    s3_last_error_at = Column(DateTime(timezone=True))
+    # the publishing key
+    publish_private_key_enc = Column(Text)
+    publish_public_key = Column(Text)            # PEM (SubjectPublicKeyInfo)
+    publish_key_fingerprint = Column(String(80))
+    updated_by = Column(Integer, ForeignKey("users.id"))
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class AuditCheckpointPublication(Base):
+    """A checkpoint published outside the server: the target, where, and the
+    receipt (for Rekor the log entry with its signed entry timestamp, verified
+    before it is kept). Append-only, like the checkpoints."""
+
+    __tablename__ = "audit_checkpoint_publications"
+    __table_args__ = (UniqueConstraint("checkpoint_id", "target", "destination", name="uq_audit_publication"),)
+
+    id = Column(Integer, primary_key=True)
+    org_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
+    checkpoint_id = Column(Integer, ForeignKey("audit_checkpoints.id"), nullable=False, index=True)
+    target = Column(String(20), nullable=False)          # rekor | github | s3
+    destination = Column(String(500), nullable=False)    # the log URL, owner/repo@branch, endpoint/bucket
+    reference = Column(String(200), nullable=False)      # Rekor entry UUID, commit SHA, object version
+    location = Column(String(500))                       # where to see it: a URL or the object key
+    log_index = Column(BigInteger)                       # Rekor
+    published_at = Column(DateTime(timezone=True), nullable=False)   # Rekor's integrated time, else ours
+    receipt = Column(Text, nullable=False)               # JSON
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+
 # --- append-only enforcement ------------------------------------------------
 # No percent signs in this SQL: DDL() and DBAPI drivers treat them as
 # format markers. Same SQL as migration d5e8a1c3f7b2; attached here too so test databases
@@ -199,7 +267,8 @@ END
 $$ LANGUAGE plpgsql
 """
 
-APPEND_ONLY_TABLES = ("ai_audit_logs", "audit_checkpoints", "audit_key_handovers", "audit_checkpoint_timestamps")
+APPEND_ONLY_TABLES = ("ai_audit_logs", "audit_checkpoints", "audit_key_handovers", "audit_checkpoint_timestamps",
+                      "audit_checkpoint_publications")
 
 
 def append_only_triggers(table: str):
@@ -212,7 +281,7 @@ def append_only_triggers(table: str):
 
 
 for _table in (AIAuditLog.__table__, AuditCheckpoint.__table__, AuditKeyHandover.__table__,
-               AuditCheckpointTimestamp.__table__):
+               AuditCheckpointTimestamp.__table__, AuditCheckpointPublication.__table__):
     event.listen(_table, "after_create", DDL(APPEND_ONLY_FUNCTION).execute_if(dialect="postgresql"))
     for _stmt in append_only_triggers(_table.name):
         event.listen(_table, "after_create", DDL(_stmt).execute_if(dialect="postgresql"))

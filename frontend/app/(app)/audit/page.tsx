@@ -18,6 +18,7 @@ import {
 } from "@/lib/audit_api";
 import { AuditConsole } from "./AuditConsole";
 import { KeyPanel } from "./KeyPanel";
+import { PublicationPanel } from "./PublicationPanel";
 import { TsaPanel } from "./TsaPanel";
 import { PvpEvidence } from "./PvpEvidence";
 
@@ -144,6 +145,7 @@ function IntegrityPanel({ isAdmin }: { isAdmin: boolean }) {
           </div>
         )}
         <KeyPanel isAdmin={isAdmin} onChange={load} rev={rev} />
+        <PublicationPanel isAdmin={isAdmin} rev={rev} />
         <TsaPanel isAdmin={isAdmin} rev={rev} />
         <div className="hint-text">{t("audit.offline_hint")}</div>
       </div>
