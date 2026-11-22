@@ -200,6 +200,9 @@ async def test_publish_to_rekor(client, admin_token, rekor, db_session):
     # and the checkpoint carries it, for whoever exports it
     cps = (await client.get(f"{A}/checkpoints", headers=auth_headers(admin_token))).json()
     assert next(c for c in cps if c["tree_size"] == cp["tree_size"])["publications"][0]["reference"] == item["reference"]
+    # also the one "Download checkpoint" on the Audit Log page saves
+    latest = (await client.get(f"{A}/integrity", headers=auth_headers(admin_token))).json()["checkpoint"]
+    assert latest["tree_size"] == cp["tree_size"] and latest["publications"][0]["reference"] == item["reference"]
 
     # append-only
     with pytest.raises(DBAPIError):
