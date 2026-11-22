@@ -66,7 +66,7 @@ it gets `agent.egress_unchecked`, `agent.egress_unconfined` or
 `agent.egress_check_stale`. Run the check at start-up and then periodically,
 for example every few hours.
 
-An agent connected with **Agents → Connect an AI client** needs none of this
+An agent connected with **AI agents → Connect an agent** needs none of this
 by hand: `provenza-proxy connect` runs the check once the client is connected
 and prints the verdict, and agent mode runs it again when it starts and once a
 day (`provenza-proxy egress-check` runs it on demand: exit 0 confined, 3 open).
