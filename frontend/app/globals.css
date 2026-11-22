@@ -1332,6 +1332,7 @@ tbody tr.clickable:hover {
 .agent-page .ph-node:hover { background: var(--bg-app); }
 .agent-page .ph-node.active { border-color: var(--accent); background: var(--accent-dim); }
 .agent-page .ph-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0 14px; }
+.agent-page .ph-args { border-top: 1px solid var(--border); padding-top: 12px; }
 @media (max-width: 900px) {
   .agent-page .ph-layout { grid-template-columns: 1fr; }
 }

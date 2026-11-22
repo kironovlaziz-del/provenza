@@ -3112,6 +3112,442 @@
     "reason": "Blocked by policy 'no shell'",
     "required_capabilities": []
    }
+  },
+  {
+   "name": "hierarchy argument rule refuses",
+   "now": 1800000000,
+   "bundle": {
+    "policy_layers": {
+     "org": {
+      "tools": {
+       "deny": [
+        "*.drop"
+       ],
+       "arguments": [
+        {
+         "tool": "tickets.create",
+         "arg": "priority",
+         "op": "max",
+         "value": 2,
+         "effect": "deny"
+        },
+        {
+         "tool": "mail.send",
+         "arg": "cc",
+         "op": "domain_in",
+         "value": [
+          "corp.example"
+         ],
+         "effect": "deny"
+        }
+       ]
+      }
+     },
+     "team:11": {
+      "tools": {
+       "require_approval": [
+        "payments.*"
+       ]
+      },
+      "limits": {
+       "max_delegation_depth": 1
+      }
+     },
+     "team:10": {
+      "tools": {
+       "allow": [
+        "db.*",
+        "files.*",
+        "kb.*",
+        "llm.*",
+        "mail.*",
+        "payments.*",
+        "proxy.*",
+        "shell.*",
+        "tickets.*"
+       ]
+      },
+      "models": {
+       "allow": [
+        "gpt-4o*"
+       ]
+      }
+     },
+     "agent:1": {
+      "models": {
+       "allow": [
+        "gpt-4o"
+       ]
+      }
+     }
+    }
+   },
+   "request": {
+    "agent_id": 1,
+    "action_type": "tool_call",
+    "tool_name": "tickets.create",
+    "input": {
+     "priority": 3,
+     "title": "printer",
+     "tags": [
+      "ops"
+     ],
+     "queue": "it",
+     "count": 1,
+     "kind": "bug"
+    }
+   },
+   "expect": {
+    "decision": "denied",
+    "reason": "Blocked by policy 'organization policy': argument 'priority' must satisfy max 2",
+    "required_capabilities": []
+   }
+  },
+  {
+   "name": "hierarchy argument rule passes",
+   "now": 1800000000,
+   "bundle": {
+    "policy_layers": {
+     "org": {
+      "tools": {
+       "deny": [
+        "*.drop"
+       ],
+       "arguments": [
+        {
+         "tool": "tickets.create",
+         "arg": "priority",
+         "op": "max",
+         "value": 2,
+         "effect": "deny"
+        },
+        {
+         "tool": "mail.send",
+         "arg": "cc",
+         "op": "domain_in",
+         "value": [
+          "corp.example"
+         ],
+         "effect": "deny"
+        }
+       ]
+      }
+     },
+     "team:11": {
+      "tools": {
+       "require_approval": [
+        "payments.*"
+       ]
+      },
+      "limits": {
+       "max_delegation_depth": 1
+      }
+     },
+     "team:10": {
+      "tools": {
+       "allow": [
+        "db.*",
+        "files.*",
+        "kb.*",
+        "llm.*",
+        "mail.*",
+        "payments.*",
+        "proxy.*",
+        "shell.*",
+        "tickets.*"
+       ]
+      },
+      "models": {
+       "allow": [
+        "gpt-4o*"
+       ]
+      }
+     },
+     "agent:1": {
+      "models": {
+       "allow": [
+        "gpt-4o"
+       ]
+      }
+     }
+    }
+   },
+   "request": {
+    "agent_id": 1,
+    "action_type": "tool_call",
+    "tool_name": "tickets.create",
+    "input": {
+     "priority": 2,
+     "title": "printer",
+     "tags": [
+      "ops"
+     ],
+     "queue": "it",
+     "count": 1,
+     "kind": "bug"
+    }
+   },
+   "expect": {
+    "decision": "allowed",
+    "reason": "Action permitted",
+    "required_capabilities": []
+   }
+  },
+  {
+   "name": "hierarchy argument rule: missing argument",
+   "now": 1800000000,
+   "bundle": {
+    "policy_layers": {
+     "org": {
+      "tools": {
+       "deny": [
+        "*.drop"
+       ],
+       "arguments": [
+        {
+         "tool": "tickets.create",
+         "arg": "priority",
+         "op": "max",
+         "value": 2,
+         "effect": "deny"
+        },
+        {
+         "tool": "mail.send",
+         "arg": "cc",
+         "op": "domain_in",
+         "value": [
+          "corp.example"
+         ],
+         "effect": "deny"
+        }
+       ]
+      }
+     },
+     "team:11": {
+      "tools": {
+       "require_approval": [
+        "payments.*"
+       ]
+      },
+      "limits": {
+       "max_delegation_depth": 1
+      }
+     },
+     "team:10": {
+      "tools": {
+       "allow": [
+        "db.*",
+        "files.*",
+        "kb.*",
+        "llm.*",
+        "mail.*",
+        "payments.*",
+        "proxy.*",
+        "shell.*",
+        "tickets.*"
+       ]
+      },
+      "models": {
+       "allow": [
+        "gpt-4o*"
+       ]
+      }
+     },
+     "agent:1": {
+      "models": {
+       "allow": [
+        "gpt-4o"
+       ]
+      }
+     }
+    }
+   },
+   "request": {
+    "agent_id": 1,
+    "action_type": "tool_call",
+    "tool_name": "mail.send",
+    "input": {
+     "to": "ann@corp.example",
+     "subject": "hello"
+    }
+   },
+   "expect": {
+    "decision": "denied",
+    "reason": "Blocked by policy 'organization policy': argument 'cc' is required by policy but missing",
+    "required_capabilities": []
+   }
+  },
+  {
+   "name": "hierarchy argument rule on a lower level holds for a person",
+   "now": 1800000000,
+   "bundle": {
+    "policy_layers": {
+     "org": {
+      "tools": {
+       "deny": [
+        "*.drop"
+       ]
+      }
+     },
+     "team:11": {
+      "tools": {
+       "require_approval": [
+        "payments.*"
+       ]
+      },
+      "limits": {
+       "max_delegation_depth": 1
+      }
+     },
+     "team:10": {
+      "tools": {
+       "allow": [
+        "db.*",
+        "files.*",
+        "kb.*",
+        "llm.*",
+        "mail.*",
+        "payments.*",
+        "proxy.*",
+        "shell.*",
+        "tickets.*"
+       ]
+      },
+      "models": {
+       "allow": [
+        "gpt-4o*"
+       ]
+      }
+     },
+     "agent:1": {
+      "models": {
+       "allow": [
+        "gpt-4o"
+       ]
+      },
+      "tools": {
+       "arguments": [
+        {
+         "tool": "tickets.*",
+         "arg": "queue",
+         "op": "in",
+         "value": [
+          "it",
+          "ops"
+         ],
+         "effect": "require_approval"
+        }
+       ]
+      }
+     }
+    }
+   },
+   "request": {
+    "agent_id": 1,
+    "action_type": "tool_call",
+    "tool_name": "tickets.create",
+    "input": {
+     "priority": 2,
+     "title": "printer",
+     "tags": [
+      "ops"
+     ],
+     "queue": "hr",
+     "count": 1,
+     "kind": "bug"
+    }
+   },
+   "expect": {
+    "decision": "pending_approval",
+    "reason": "Action requires human approval per policy 'agent payer policy': argument 'queue' must satisfy in ['it', 'ops']",
+    "required_capabilities": []
+   }
+  },
+  {
+   "name": "hierarchy argument rule on a lower level passes",
+   "now": 1800000000,
+   "bundle": {
+    "policy_layers": {
+     "org": {
+      "tools": {
+       "deny": [
+        "*.drop"
+       ]
+      }
+     },
+     "team:11": {
+      "tools": {
+       "require_approval": [
+        "payments.*"
+       ]
+      },
+      "limits": {
+       "max_delegation_depth": 1
+      }
+     },
+     "team:10": {
+      "tools": {
+       "allow": [
+        "db.*",
+        "files.*",
+        "kb.*",
+        "llm.*",
+        "mail.*",
+        "payments.*",
+        "proxy.*",
+        "shell.*",
+        "tickets.*"
+       ]
+      },
+      "models": {
+       "allow": [
+        "gpt-4o*"
+       ]
+      }
+     },
+     "agent:1": {
+      "models": {
+       "allow": [
+        "gpt-4o"
+       ]
+      },
+      "tools": {
+       "arguments": [
+        {
+         "tool": "tickets.*",
+         "arg": "queue",
+         "op": "in",
+         "value": [
+          "it",
+          "ops"
+         ],
+         "effect": "require_approval"
+        }
+       ]
+      }
+     }
+    }
+   },
+   "request": {
+    "agent_id": 1,
+    "action_type": "tool_call",
+    "tool_name": "tickets.create",
+    "input": {
+     "priority": 2,
+     "title": "printer",
+     "tags": [
+      "ops"
+     ],
+     "queue": "ops",
+     "count": 1,
+     "kind": "bug"
+    }
+   },
+   "expect": {
+    "decision": "allowed",
+    "reason": "Action permitted",
+    "required_capabilities": []
+   }
   }
  ]
 }

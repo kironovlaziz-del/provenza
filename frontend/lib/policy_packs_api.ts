@@ -21,8 +21,8 @@ export interface PackChange {
   field: string;
   before: unknown;
   after: unknown;
-  added?: string[];
-  removed?: string[];
+  added?: unknown[];     // patterns, or argument rules (tools.arguments)
+  removed?: unknown[];
 }
 
 export interface ApplyPreviewT {

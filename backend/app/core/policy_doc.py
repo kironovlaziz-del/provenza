@@ -15,13 +15,19 @@ sub-teams), agent - written as YAML or through the forms:
       max_delegation_depth: 2
     models:     {allow: ["gpt-4o-mini", "claude-*"]}
     providers:  {allow: ["openai"]}
-    tools:      {allow: ["kb.*"], deny: ["shell.*"], require_approval: ["email.send"]}
+    tools:
+      allow: ["kb.*"]
+      deny: ["shell.*"]
+      require_approval: ["email.send"]
+      arguments:                   # what a tool may be called WITH
+        - {tool: "payments.*", arg: amount, op: max, value: 100, effect: require_approval}
 
 Levels combine so that a lower one can only TIGHTEN what is above it:
   * limits                 the smallest wins
   * allow lists            every level's list must allow the value
                            (a level without one does not restrict)
   * deny / approval lists  all of them apply
+  * argument rules         all of them apply (services/argument_rules.py)
 A lower level trying to loosen (a higher limit, a model the level above
 does not allow) has no effect; resolve() reports it
 under "ignored" so the editor can say so. Every effective value carries the
@@ -57,7 +63,9 @@ FIELDS: Dict[Tuple[str, str], Tuple[str, str, Any]] = {
     ("tools", "allow"): ("allow", "patterns", None),
     ("tools", "deny"): ("union", "patterns", None),
     ("tools", "require_approval"): ("union", "patterns", None),
+    ("tools", "arguments"): ("union", "argument_rules", None),
 }
+ARGUMENT_RULE_KEYS = ("tool", "arg", "op", "value", "effect")
 SECTIONS = ["limits", "models", "providers", "tools"]
 assert set(SECTIONS) == {s for s, _ in FIELDS}
 TOP_LEVEL = set(SECTIONS) | {"version", "description"}
@@ -141,6 +149,37 @@ def _patterns(value: Any, path: str, kind: str) -> List[str]:
     return out
 
 
+def _argument_rules(value: Any, path: str) -> List[Dict[str, Any]]:
+    """Argument rules (services/argument_rules.py), checked like everywhere
+    else - plus: no unknown keys in a rule (a misspelt "efect" would silently
+    turn an approval into a deny), the effect written out, duplicates once."""
+    from app.services.argument_rules import RuleError, validate_argument_rules
+
+    if not isinstance(value, list):
+        raise PolicyDocError("policy.expected_list", path)
+    out: List[Dict[str, Any]] = []
+    for i, rule in enumerate(value):
+        if isinstance(rule, dict):
+            extra = sorted(str(k) for k in rule if k not in ARGUMENT_RULE_KEYS)
+            if extra:
+                raise PolicyDocError("policy.unknown_key", f"{path}[{i}].{extra[0]}")
+    try:
+        validate_argument_rules(value)
+    except RuleError as e:
+        detail = str(e)
+        where = path
+        if detail.startswith("argument_rules["):
+            idx, _, detail = detail.partition("]: ")
+            where = f"{path}[{idx.removeprefix('argument_rules[')}]"
+        raise PolicyDocError("policy.bad_argument_rule", where, detail[:300])
+    for rule in value:
+        clean = {"tool": rule["tool"].strip(), "arg": rule["arg"].strip(), "op": rule["op"], "value": rule["value"],
+                 "effect": rule.get("effect", "deny")}
+        if clean not in out:
+            out.append(clean)
+    return out
+
+
 def validate(doc: Any) -> Dict[str, Any]:
     """The document, checked and normalized. Unknown keys are errors: a
     misspelt rule that silently applied nothing would be worse."""
@@ -187,6 +226,8 @@ def validate(doc: Any) -> Dict[str, Any]:
                 if not isinstance(v, bool):
                     raise PolicyDocError("policy.expected_boolean", path)
                 section[sub] = v
+            elif typ == "argument_rules":
+                section[sub] = _argument_rules(v, path)
             else:
                 section[sub] = _patterns(v, path, typ)
         if section:
@@ -245,7 +286,7 @@ def resolve(layers: Sequence[Tuple[str, Dict[str, Any]]]) -> Dict[str, Any]:
                 cur["constraints"].append({"source": source, "patterns": list(v)})
             else:  # union
                 cur = fields.setdefault(name, {"items": []})
-                have = {i["value"] for i in cur["items"]}
+                have = [i["value"] for i in cur["items"]]
                 cur["items"] += [{"value": p, "source": source} for p in v if p not in have]
     return {"fields": fields, "ignored": ignored}
 

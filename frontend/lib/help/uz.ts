@@ -362,6 +362,7 @@ export const ARTICLES_UZ: Article[] = [
         "Qaysi **AI modellar va provayderlardan** foydalanish mumkin.",
         "Agent qaysi **vositalarni** chaqirishi mumkin va qaysilarini hech qachon chaqira olmaydi.",
         "Qaysi harakatlar bajarilishidan oldin **inson tasdig'ini** talab qiladi.",
+        "**Vosita nima bilan chaqirilishi mumkinligi** — masalan, inson tasdig'isiz ko'pi bilan 100 lik qaytarish, email faqat o'z domeningizga, fayllar faqat bitta papka ichida. Bunday qoidani buzgan murojaat rad etiladi yoki inson qarorini kutadi; qoida talab qilgan, lekin murojaatda yo'q argument ham buzish hisoblanadi.",
         "**Cheklovlar** — masalan, ma'lum vaqt ichidagi murojaatlar soni yoki xarajat miqdori.",
       ]],
       ["h", "Siyosat yozish"],

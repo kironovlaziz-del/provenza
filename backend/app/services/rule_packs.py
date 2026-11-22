@@ -46,7 +46,7 @@ KINDS = ("profile", "guard")
 LEVELS = ("org", "team", "agent", "any")
 LIST_FIELDS = [f"{s}.{k}" for (s, k), (_, typ, _) in FIELDS.items() if typ == "patterns"]
 LIMIT_FIELDS = [k for (s, k), (_, typ, _) in FIELDS.items() if s == "limits"]
-UNION_FIELDS = [("tools", "deny"), ("tools", "require_approval")]
+UNION_FIELDS = [("tools", "deny"), ("tools", "require_approval"), ("tools", "arguments")]
 ALLOW_FIELDS = [("models", "allow"), ("providers", "allow")]   # what a guard may restrict to
 
 
@@ -242,7 +242,7 @@ def diff(before: Dict[str, Any], after: Dict[str, Any]) -> List[Dict[str, Any]]:
         b, a = _get(before, sec, key), _get(after, sec, key)
         if b == a:
             continue
-        if typ == "patterns":
+        if typ in ("patterns", "argument_rules"):
             out.append({"field": f"{sec}.{key}", "before": b, "after": a,
                         "added": [p for p in (a or []) if p not in (b or [])],
                         "removed": [p for p in (b or []) if p not in (a or [])]})

@@ -19,6 +19,9 @@ tools:
   allow: ["kb.*", "email.*"]
   deny: ["shell.*"]
   require_approval: ["email.send"]
+  arguments:                   # what a tool may be called WITH
+    - {tool: "payments.refund", arg: amount, op: max, value: 100, effect: require_approval}
+    - {tool: "email.send", arg: to, op: domain_in, value: ["provenza.dev"]}
 ```
 
 Every key is optional; an unknown key is an error (a misspelt rule that
@@ -33,6 +36,7 @@ brackets deep.
 | limits (`requests_per_minute`, `max_tokens`, `max_delegation_depth`) | the smallest wins |
 | allow lists (`models`, `providers`, `tools.allow`) | every level that has one must allow the value; a level without one does not restrict; `allow: []` allows nothing |
 | deny / approval lists | all of them apply |
+| argument rules (`tools.arguments`) | all of them apply; a lower level adds its own |
 
 A team or agent level that tries to loosen — a higher limit, a model the
 organization does not allow — has no effect. The editor
@@ -44,7 +48,7 @@ value of the effective policy shows the level it comes from.
 | | levels | fields |
 |---|---|---|
 | **Gateway** (agents' LLM calls) | gateway settings → organization → teams → agent | limits, models, providers |
-| **Agent actions** (`/agents/actions/check`, delegation) | organization → teams → agent | tools allow / deny / approval, models of model-invoking tools, delegation depth |
+| **Agent actions** (`/agents/actions/check`, delegation) | organization → teams → agent | tools allow / deny / approval, argument rules, models of model-invoking tools, delegation depth |
 
 The gateway settings take part as the topmost level, so nothing changes on
 upgrade: until an admin writes a level, the effective policy is exactly the
@@ -53,6 +57,42 @@ before; the hierarchy only adds restrictions to them.
 
 A refusal names the level: `Blocked by policy 'team support policy'`,
 `Model 'gpt-4o' is not allowed by the team ml policy`.
+
+## Argument rules
+
+A tool list says *which* tools an agent may call; `tools.arguments` says
+*what with*. Each rule is a condition the call's arguments must meet; when
+they do not, its `effect` applies: `deny` (the default) or
+`require_approval` (the call waits for a person).
+
+| Key | |
+|---|---|
+| `tool` | the tool, `*` patterns allowed (`payments.*`) |
+| `arg` | the argument, a dotted path for a nested one (`options.cc`) |
+| `op` | `max`, `min`, `max_length`, `equals`, `in`, `not_in`, `starts_with` (paths), `domain_in` (e-mail addresses), `matches`, `not_matches` (regular expressions) |
+| `value` | a number, a text, or a list for `in`, `not_in`, `starts_with`, `domain_in` |
+| `effect` | `deny` or `require_approval` |
+
+They fail closed, as on the Agent Policies page (the same rules, the same
+checks): an argument the rule names but the call leaves out breaks the rule;
+in a list *every* element must meet it; a path is normalized before
+`starts_with` (`/sandbox/../etc` is `/etc`); a number written as text counts
+as a number, anything else that is not a number breaks `max` / `min`; a
+regular expression is at most 300 characters and refused with nested
+quantifiers such as `(a+)+`. A rule with an unknown key or operator is
+refused when saved (`policy.bad_argument_rule`, `policy.unknown_key`), and
+a level holds at most 100. A refusal names the level and the rule:
+`Blocked by policy 'organization policy': argument 'amount' must satisfy max 100`.
+
+Every level's rules apply, so a team or agent level can only add rules, and
+under a [signed policy](#signed-policy) a rule taken out keeps applying
+until the next signed release. The rules travel in the signed policy to the
+egress proxy, which applies them itself (`sdk/testdata/policy-vectors.json`
+holds the cases the server and the proxy decide alike).
+
+In the form, **Argument constraints** under the tool lists edits them; a rule
+that is not complete keeps the level from being saved, and a level with a
+value the form would change (`in: [1, 2]`, `equals: true`) opens as YAML.
 
 ## Editing
 
@@ -120,8 +160,10 @@ change.
   *Download* gives the YAML of any pack. A pack is written like a level's
   YAML. Deleting a pack leaves the levels it was applied to as they are.
   Up to 200 per organization.
-* Guards work on tool names, limits and model lists - what a level of the
-  hierarchy holds; they do not look at a tool's arguments.
+* Guards may add argument rules (`tools.arguments`), and their undo takes
+  out exactly those. The built-in packs have none: argument names differ
+  from one tool to another, and a rule on an argument a tool does not have
+  would refuse every call of it.
 
 ## API
 

@@ -1317,7 +1317,8 @@
     "publish.s3_not_locked": "Obyekt qulfsiz saqlandi: bucket uchun Object Lock ni yoqing va kalitga s3:GetObjectRetention huquqini bering.",
     "publish.s3_unreadable": "Obyekt qulfini qayta o'qib bo'lmadi: kalitga s3:GetObject va s3:GetObjectRetention huquqlarini bering.",
     "publish.http_error": "Ombor xato bilan javob berdi: {{detail}}",
-    "publish.unreachable": "Omborga ulanib bo'lmadi: {{detail}}"
+    "publish.unreachable": "Omborga ulanib bo'lmadi: {{detail}}",
+    "policy.bad_argument_rule": "Argument qoidasi noto'g'ri"
   },
   "discovery": {
     "title": "Tarmoq kashfiyoti",
@@ -1651,7 +1652,9 @@
     "preset_read_only_sql": "Faqat o'qish uchun SQL",
     "preset_corp_email": "Email faqat o'z domeniga",
     "preset_sandbox_files": "Fayllar faqat sandboxda",
-    "preset_payment_limit": "To'lov limiti → tasdiq"
+    "preset_payment_limit": "To'lov limiti → tasdiq",
+    "args_incomplete": "To'liq emas: vosita, argument va qiymat kerak",
+    "args_remove": "Bu qoidani o'chirish"
   },
   "agent_policies": {
     "title": "Agent siyosatlari",
@@ -2817,7 +2820,7 @@
   },
   "ph": {
     "title": "Siyosatlar ierarxiyasi",
-    "intro": "Bitta siyosat uch darajada: tashkilot → jamoa (va uning kichik jamoalari) → agent. Pastki daraja faqat yuqoridagini qattiqlashtira oladi: eng kichik limit g'olib, har bir darajaning ruxsat ro'yxati ruxsat berishi kerak, barcha taqiq va tasdiq ro'yxatlari amal qiladi. LLM shlyuz va agent amallariga qo'llaniladi.",
+    "intro": "Bitta siyosat uch darajada: tashkilot → jamoa (va uning kichik jamoalari) → agent. Pastki daraja faqat yuqoridagini qattiqlashtira oladi: eng kichik limit g'olib, har bir darajaning ruxsat ro'yxati ruxsat berishi kerak, barcha taqiq va tasdiq ro'yxatlari hamda argument qoidalari amal qiladi. LLM shlyuz va agent amallariga qo'llaniladi.",
     "levels": "Darajalar",
     "org": "Tashkilot",
     "teams": "Jamoalar",
@@ -2874,13 +2877,15 @@
       "tools": {
         "allow": "Ruxsat etilgan vositalar",
         "deny": "Taqiqlangan vositalar",
-        "require_approval": "Tasdiq talab qiladigan vositalar"
+        "require_approval": "Tasdiq talab qiladigan vositalar",
+        "arguments": "Argument qoidalari"
       }
     },
     "agent_effective_link": "Bu agentga qo'llaniladigan siyosat darajalari",
-    "yaml_only": "Bu darajada bo'sh ruxsat ro'yxati bor (hech narsaga ruxsat yo'q), forma uni ko'rsata olmaydi - YAML sifatida tahrirlang.",
+    "yaml_only": "Bu darajada forma o'zgartirib yuboradigan narsa bor - bo'sh ruxsat ro'yxati (hech narsaga ruxsat yo'q) yoki qiymatini forma saqlay olmaydigan argument qoidasi - uni YAML sifatida tahrirlang.",
     "tab_levels": "Darajalar",
-    "tab_packs": "Qoidalar paketlari"
+    "tab_packs": "Qoidalar paketlari",
+    "args_incomplete": "Argument qoidasi to'liq emas (vosita, argument va qiymat): saqlashdan oldin uni to'ldiring yoki o'chiring."
   },
   "ks": {
     "title": "Favqulodda to'xtatish",

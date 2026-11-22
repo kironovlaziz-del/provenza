@@ -111,6 +111,16 @@ MANIFEST = {"type": "provenza.key.manifest", "v": 1, "org_id": 1, "version": 3, 
             "egress_proxies": {}, "egress_sensors": {}, "sensor_command_key": None}
 
 
+# argument rules in levels of the hierarchy (tools.arguments): every level's apply
+ORG_ARGS = {"tools": {"deny": ["*.drop"], "arguments": [
+    {"tool": "tickets.create", "arg": "priority", "op": "max", "value": 2, "effect": "deny"},
+    {"tool": "mail.send", "arg": "cc", "op": "domain_in", "value": ["corp.example"], "effect": "deny"},
+]}}
+AGENT_ARGS = {"models": {"allow": ["gpt-4o"]}, "tools": {"arguments": [
+    {"tool": "tickets.*", "arg": "queue", "op": "in", "value": ["it", "ops"], "effect": "require_approval"},
+]}}
+
+
 def proxy_input(**over):
     d = {"route": "stripe", "method": "POST", "path": "/v1/charges", "query_sha256": None,
          "body_sha256": "cd" * 32, "body_bytes": 32}
@@ -207,6 +217,14 @@ CASES = [
     ("model call: hierarchy narrows", {}, req("llm.gpt-4o-mini", {"model": "gpt-4o-mini"}, action_type="model_call")),
     ("deny beats approval", {"patch_layer": ("team:11", {"tools": {"require_approval": ["shell.*"]}})},
      req("shell.run", {"cmd": "ls"})),
+    ("hierarchy argument rule refuses", {"patch_layer": ("org", ORG_ARGS)}, req("tickets.create", ticket(priority=3))),
+    ("hierarchy argument rule passes", {"patch_layer": ("org", ORG_ARGS)}, req("tickets.create", ticket(priority=2))),
+    ("hierarchy argument rule: missing argument", {"patch_layer": ("org", ORG_ARGS)},
+     req("mail.send", mail())),
+    ("hierarchy argument rule on a lower level holds for a person", {"patch_layer": ("agent:1", AGENT_ARGS)},
+     req("tickets.create", ticket(queue="hr"))),
+    ("hierarchy argument rule on a lower level passes", {"patch_layer": ("agent:1", AGENT_ARGS)},
+     req("tickets.create", ticket(queue="ops"))),
 ]
 
 

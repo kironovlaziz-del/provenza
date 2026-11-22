@@ -8,6 +8,7 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { argRuleText } from "@/components/ArgumentRulesEditor";
 import { confirmDialog } from "@/components/Dialog";
 import { useAuth } from "@/lib/auth";
 import { errorMessage as apiError } from "@/lib/errors";
@@ -30,6 +31,7 @@ function Changes({ changes }: { changes: PackChange[] }) {
   const { t } = useTranslation();
   if (changes.length === 0) return <p className="hint-text ag-small">{t("packs.no_changes")}</p>;
   const show = (v: unknown) => (v === null || v === undefined ? "—" : Array.isArray(v) ? (v.length ? v.join(", ") : "[ ]") : String(v));
+  const item = (p: unknown) => (typeof p === "object" && p !== null ? argRuleText(p, t) : String(p));
   return (
     <div className="ag-stack" style={{ gap: 6 }}>
       {changes.map((c) => (
@@ -37,8 +39,8 @@ function Changes({ changes }: { changes: PackChange[] }) {
           <strong>{t(`ph.field.${c.field}`, c.field)}</strong>{" "}
           {c.added || c.removed ? (
             <>
-              {(c.added ?? []).map((p) => <span key={`+${p}`} className="pill pill-accent mono" style={{ marginRight: 4 }}>+ {p}</span>)}
-              {(c.removed ?? []).map((p) => <span key={`-${p}`} className="pill pill-neutral mono" style={{ marginRight: 4, textDecoration: "line-through" }}>{p}</span>)}
+              {(c.added ?? []).map((p) => <span key={`+${item(p)}`} className="pill pill-accent mono" style={{ marginRight: 4 }}>+ {item(p)}</span>)}
+              {(c.removed ?? []).map((p) => <span key={`-${item(p)}`} className="pill pill-neutral mono" style={{ marginRight: 4, textDecoration: "line-through" }}>{item(p)}</span>)}
               {Array.isArray(c.after) && c.after.length === 0 && <span className="hint-text"> {t("packs.allow_nothing")}</span>}
             </>
           ) : (
