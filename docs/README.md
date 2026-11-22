@@ -23,6 +23,7 @@
 - [Egress lockdown](egress-lockdown.md): leaving an agent one way out
 - [Kill switch](kill-switch.md): stopping an agent, a team, all agents or all AI traffic
 - [Automatic containment](containment.md): an agent that keeps reaching past its boundaries is quarantined on its own
+- [Agent frameworks](integrations.md): LangChain, LangGraph, OpenAI Agents SDK, CrewAI and AutoGen - tools governed, held calls waiting for a person
 - SDKs: [Python](../sdk/python/README.md), [JavaScript](../sdk/js/README.md), [Go](../sdk/go/README.md)
 - [Egress proxy](../proxy/README.md) and [egress sensor](../sensor/README.md)
 - [Sensor commands](sensor-commands.md): dump state, restart or detach a sensor with a signed command
