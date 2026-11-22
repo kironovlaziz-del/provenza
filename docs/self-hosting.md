@@ -305,8 +305,9 @@ Provenza's server calls out on its own only to what an administrator set up
 (AI providers, MCP servers, notification channels, a Time-Stamp Authority)
 and to **Sigstore Rekor** (`rekor.sigstore.dev`, HTTPS): the audit log's
 checkpoints are published there every hour by default. Only a hash, a
-signature and the publishing key leave, never the log. **Audit Log →
-Publication** shows every such target and switches it off; an installation
+signature and the publishing key leave, never the log; an S3 bucket with
+Object Lock can be added. **Audit Log → Publication outside the server**
+shows every such target and switches it off; an installation
 without internet access shows the failure there and keeps working
 ([audit-proofs.md](audit-proofs.md#publication)).
 
