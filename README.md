@@ -86,9 +86,10 @@ calling a tool through Provenza: checked, refused by one line of policy, and pro
 Prefer to watch first? The same seven steps as a
 [4-minute video tutorial](https://youtu.be/me8UsPf4Ndw).
 
-**Connect an agent** from the interface: Agents → New agent → **Connect an AI client**
-gives one command for the machine where Gemini CLI, Claude Code, Cursor or any
-OpenAI-compatible client runs. The agent's keys are made there and never leave it.
+**Connect an agent** from the interface: AI agents → **Connect an agent**. Tick
+the tools it may use, and it gives one command for the machine where Gemini CLI,
+Claude Code, Cursor or any OpenAI-compatible client runs. The agent's keys are
+made there and never leave it.
 
 **Govern egress on another Linux host:** Runtime → **Register sensor** gives a
 one-line command that downloads the sensor from your Provenza (no Go, no git there).

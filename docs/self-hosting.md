@@ -157,9 +157,9 @@ production setup:
    - set up notifications;
    - require two-factor sign-in.
 3. Under **My profile**, add a passkey and turn on two-factor sign-in for yourself. Then, under **Settings → Users**, require it for admins and approvers.
-4. **Sign the policy:** Policies → Policy hierarchy → Signed policy → Prepare the first release → Sign with passkey. The egress proxy of this host waits for it.
-5. Connect an agent: Agents → **New agent** → *Issue enrollment token* →
-   **Connect an AI client** gives one command for the machine where the agent's
+4. **Sign the policy:** Rules → Policy hierarchy → Signed policy → Prepare the first release → Sign with passkey. The egress proxy of this host waits for it.
+5. Connect an agent: AI agents → **Connect an agent** → tick the tools it may
+   use → **Next: connect** gives one command for the machine where the agent's
    client runs (Gemini CLI, Claude Code, Cursor, any OpenAI-compatible client).
    An agent written with the SDK (`pip install provenza`, or the JS or Go SDK)
    enrolls with the same token.
