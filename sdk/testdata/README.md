@@ -44,3 +44,13 @@ request, made with software passkeys by `backend/scripts/trust_vectors.py`
 (keys are random: generated once). Checked by the server's code and
 `tools/provenza_audit.py` (`backend/tests/test_trust_vectors.py`) and by the
 proxy (`proxy/internal/trust`, `proxy/internal/egress/enforce_test.go`).
+
+`audit-vectors.json`: public test vectors for verifying the audit log -
+record proofs, checkpoints, consistency proofs, key handovers, RFC 3161
+time-stamps and Rekor publications, each with the verdict a verifier must
+reach and why ([docs](../../docs/audit-proofs.md#test-vectors)). Made by
+`backend/scripts/audit_vectors.py` with the server's code (keys are random:
+generated once); checked by the server's code and `tools/provenza_audit.py`
+(`backend/tests/test_audit_vectors.py`). Run any verifier over them with
+`tools/audit_vectors.py`. `audit-sigstore-checkpoint.json` is the real one:
+a checkpoint of Provenza's own server published in the public Sigstore Rekor.

@@ -340,6 +340,46 @@ checkpoint published before the rewrite, and the published copy - with
 Rekor's time, or locked in your bucket - is out of the server's reach:
 whoever keeps the server cannot quietly undo it.
 
+## Test vectors
+
+`sdk/testdata/audit-vectors.json` holds public test vectors for everything on
+this page: record proofs, checkpoints, consistency proofs, audit key changes,
+RFC 3161 time-stamps and Rekor publications. Each case is a document, the
+options a verifier is given and the verdict it must reach, with why. Write your
+own verifier - in any language, from this page alone - and check it against
+them; when it agrees on every case, you no longer depend on Provenza's tools
+either.
+
+```sh
+python tools/audit_vectors.py --list                 # the cases, and why each passes or fails
+python tools/audit_vectors.py                        # tools/provenza_audit.py over all of them
+python tools/audit_vectors.py --exec "./my-verifier" # yours, with the same command line
+```
+
+With `--exec`, each case runs `PROGRAM COMMAND FILE [options]`, the command line
+of `tools/provenza_audit.py`, and the exit status is the verdict (0 verified,
+1 not verified). To read the file directly instead:
+
+| Field | Meaning |
+|---|---|
+| `command` | what the document is: `verify` (a record's proof), `checkpoint`, `consistency` |
+| `document` | the file a verifier is given, exactly as Provenza exports it |
+| `args.fingerprint` | the audit keys you trust (`--fingerprint`) |
+| `args.pinned` | an older checkpoint you saved earlier (`--pinned`) |
+| `args.tsa_ca` | the Time-Stamp Authority you trust (`--tsa-ca`, PEM) |
+| `args.rekor_key`, `args.require_rekor`, `args.publishing_key` | a Rekor log's key besides Sigstore's, whether a publication is required, the publishing keys you trust |
+| `expect` | `verified` or `not_verified` |
+| `why` | what the case is about; `reason`: part of what `tools/provenza_audit.py` prints |
+
+Most cases are made from a seven-record log of an example organization; each
+failing one changes one thing - a record, a hash of a path, half of a hybrid
+signature, a handover, the time of a Rekor entry - or gives the verifier
+options it must refuse (a key it was not told to trust, a second successor of
+a key). One is real: a checkpoint of Provenza's own server published in the
+public Sigstore Rekor, checked with the key Sigstore distributes. The
+generator is `backend/scripts/audit_vectors.py`; `backend/tests/test_audit_vectors.py`
+checks every case with the standalone tool and with the server's own code.
+
 ## Verifying on the server
 
 **Verify whole log** (admin, `POST /audit-logs/verify`) recomputes every
