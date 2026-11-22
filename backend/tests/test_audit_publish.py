@@ -372,6 +372,7 @@ async def test_s3_is_tried_before_it_is_saved(client, admin_token, approver_toke
         assert (await _use_s3(client, admin_token, s3, **over)).status_code == 422, over
 
     s3.mode = "ok"
+    s3.objects.clear()          # the unlocked one above; its name has the second in it, so it may differ
     r = await _use_s3(client, admin_token, s3)
     assert r.status_code == 200, r.text
     [test_obj] = s3.objects                                            # the test object, locked for a day
