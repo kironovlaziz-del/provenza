@@ -7,8 +7,8 @@ The master key encrypts, directly:
   - org_keys.config_secret_encrypted        BYOK: Vault token / AWS secret
   - org_keys.wrapped_dek  (provider=local)  BYOK: the organizations' data keys
   - audit_signing_keys.private_key_enc / pq_seed_enc   audit keys (checkpoints)
-  - audit_publication_settings.publish_private_key_enc / github_token_enc / s3_secret_enc
-                                            checkpoint publication: the publishing key, GitHub token, S3 secret
+  - audit_publication_settings.publish_private_key_enc / s3_secret_enc
+                                            checkpoint publication: the publishing key, the S3 secret
   - permit_signing_keys.private_key_enc     permit keys (signed action permits)
   - mcp_servers / a2a_peers / http_tools.auth_secret_encrypted, egress_routes.secret_encrypted
                                             credentials of the gateways' upstreams
@@ -93,7 +93,7 @@ def targets():
         out.append((AuditSigningKey, "pq_seed_enc", None))
     if "audit_publication_settings" in tables:
         from app.models.audit_log import AuditPublicationSettings
-        for col in ("publish_private_key_enc", "github_token_enc", "s3_secret_enc"):
+        for col in ("publish_private_key_enc", "s3_secret_enc"):
             out.append((AuditPublicationSettings, col, None))
     for table, module, name, col in (("mcp_servers", "app.models.mcp", "MCPServer", "auth_secret_encrypted"),
                                       ("a2a_peers", "app.models.a2a_gateway", "A2APeer", "auth_secret_encrypted"),

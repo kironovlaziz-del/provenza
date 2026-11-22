@@ -310,7 +310,7 @@ async def publish_now(db: AsyncSession = Depends(get_db), current_user: User = D
 
 
 @router.get("/publications")
-async def list_publications(target: Optional[str] = Query(default=None, pattern="^(rekor|github|s3)$"),
+async def list_publications(target: Optional[str] = Query(default=None, pattern="^(rekor|s3)$"),
                             skip: int = Query(default=0, ge=0), limit: int = Query(default=50, ge=1, le=200),
                             db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     items, total = await audit_publish.list_publications(db, current_user.org_id, target=target, skip=skip,

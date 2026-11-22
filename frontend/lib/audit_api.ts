@@ -23,7 +23,7 @@ export interface CheckpointT {
   publications?: PublicationT[];
 }
 
-export type PublicationTarget = "rekor" | "github" | "s3";
+export type PublicationTarget = "rekor" | "s3";
 
 export interface PublicationT {
   id: number;
@@ -42,7 +42,7 @@ export interface PublicationTargetT {
   target: PublicationTarget;
   enabled: boolean;
   configured: boolean;
-  /** the outbound destination: Rekor's URL, owner/repo, the bucket */
+  /** the outbound destination: Rekor's URL, or the bucket */
   destination: string | null;
   host: string | null;
   public_instance?: boolean;

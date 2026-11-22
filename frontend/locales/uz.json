@@ -789,7 +789,6 @@
     "pub_col_outbound": "Chiquvchi trafik",
     "pub_col_last": "Oxirgi e'lon",
     "pub_target_rekor": "Sigstore Rekor",
-    "pub_target_github": "GitHub",
     "pub_target_s3": "S3 (Object Lock)",
     "pub_on": "yoqilgan",
     "pub_off": "o'chirilgan",

@@ -135,7 +135,7 @@ async def test_rekor_is_on_by_default(client, admin_token, approver_token):
     by = {t["target"]: t for t in st["targets"]}
     assert by["rekor"]["enabled"] and by["rekor"]["public_instance"]
     assert by["rekor"]["host"] == "rekor.sigstore.dev"          # shown as the outbound destination it is
-    assert not by["github"]["enabled"] and not by["github"]["configured"]
+    assert set(by) == {"rekor", "s3"}
     assert not by["s3"]["enabled"] and not by["s3"]["configured"]
     assert st["publishing_key"] is None                           # made with the first publication
 

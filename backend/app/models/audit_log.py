@@ -196,14 +196,6 @@ class AuditPublicationSettings(Base):
     rekor_public_key = Column(Text)              # PEM; required for an instance other than the public one
     rekor_last_error = Column(String(500))
     rekor_last_error_at = Column(DateTime(timezone=True))
-    # a GitHub repository the organization owns: one file per publication
-    github_enabled = Column(Boolean, nullable=False, server_default="false")
-    github_repo = Column(String(200))           # owner/name
-    github_branch = Column(String(100))
-    github_path = Column(String(200))
-    github_token_enc = Column(Text)
-    github_last_error = Column(String(500))
-    github_last_error_at = Column(DateTime(timezone=True))
     # an S3 (or S3-compatible) bucket with Object Lock
     s3_enabled = Column(Boolean, nullable=False, server_default="false")
     s3_endpoint = Column(String(500))
@@ -234,9 +226,9 @@ class AuditCheckpointPublication(Base):
     id = Column(Integer, primary_key=True)
     org_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
     checkpoint_id = Column(Integer, ForeignKey("audit_checkpoints.id"), nullable=False, index=True)
-    target = Column(String(20), nullable=False)          # rekor | github | s3
-    destination = Column(String(500), nullable=False)    # the log URL, owner/repo@branch, endpoint/bucket
-    reference = Column(String(200), nullable=False)      # Rekor entry UUID, commit SHA, object version
+    target = Column(String(20), nullable=False)          # rekor | s3
+    destination = Column(String(500), nullable=False)    # the log URL, or endpoint/bucket
+    reference = Column(String(200), nullable=False)      # Rekor entry UUID, or the object's version
     location = Column(String(500))                       # where to see it: a URL or the object key
     log_index = Column(BigInteger)                       # Rekor
     published_at = Column(DateTime(timezone=True), nullable=False)   # Rekor's integrated time, else ours

@@ -4,7 +4,7 @@ Revision ID: 5b8d1f3a7c9e
 Revises: 4a7c2e9f1b3d
 
   * audit_publication_settings     - where and how often an organization's checkpoints are published
-                                      (Sigstore Rekor, a GitHub repository, an S3 bucket with Object Lock)
+                                      (Sigstore Rekor, an S3 bucket with Object Lock)
                                       and its publishing key; no row means the defaults
   * audit_checkpoint_publications  - each publication and its receipt; append-only
 """
@@ -28,13 +28,6 @@ def upgrade():
         sa.Column("rekor_public_key", sa.Text()),
         sa.Column("rekor_last_error", sa.String(500)),
         sa.Column("rekor_last_error_at", sa.DateTime(timezone=True)),
-        sa.Column("github_enabled", sa.Boolean(), nullable=False, server_default=sa.false()),
-        sa.Column("github_repo", sa.String(200)),
-        sa.Column("github_branch", sa.String(100)),
-        sa.Column("github_path", sa.String(200)),
-        sa.Column("github_token_enc", sa.Text()),
-        sa.Column("github_last_error", sa.String(500)),
-        sa.Column("github_last_error_at", sa.DateTime(timezone=True)),
         sa.Column("s3_enabled", sa.Boolean(), nullable=False, server_default=sa.false()),
         sa.Column("s3_endpoint", sa.String(500)),
         sa.Column("s3_region", sa.String(50)),

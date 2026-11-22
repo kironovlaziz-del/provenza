@@ -79,7 +79,7 @@ export function PublicationPanel({ isAdmin, rev }: { isAdmin: boolean; rev?: unk
 
   if (!st) return null;
   const presets = PRESETS.includes(st.interval_minutes) ? PRESETS : [...PRESETS, st.interval_minutes].sort((a, b) => a - b);
-  // GitHub and S3 appear once they are set up
+  // S3 appears once it is set up
   const shown = st.targets.filter((x) => x.target === "rekor" || x.configured);
 
   return (

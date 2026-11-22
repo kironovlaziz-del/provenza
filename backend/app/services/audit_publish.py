@@ -14,7 +14,6 @@ server cannot rewrite:
   rekor   Sigstore Rekor, a public append-only transparency log - on by
           default. Only the SHA-256 of the checkpoint's statement, a
           signature over it and the publishing key go there, never the log.
-  github  a repository the organization owns: one JSON file per checkpoint.
   s3      a bucket with Object Lock: one object per checkpoint, retained.
 
 A history that was rewritten after a checkpoint was published can no longer
@@ -55,7 +54,7 @@ from app.core.errors import api_error
 from app.core.outbound import guarded_async_client, validate_url
 from app.models.audit_log import AuditCheckpoint, AuditCheckpointPublication, AuditPublicationSettings
 
-TARGETS = ("rekor", "github", "s3")
+TARGETS = ("rekor", "s3")
 DEFAULT_INTERVAL = 60
 MIN_INTERVAL, MAX_INTERVAL = 5, 24 * 60
 TIMEOUT_SECONDS = 20.0
@@ -102,7 +101,7 @@ async def settings_row(db: AsyncSession, org_id: int) -> AuditPublicationSetting
     try:
         async with db.begin_nested():
             db.add(AuditPublicationSettings(org_id=org_id, interval_minutes=DEFAULT_INTERVAL, rekor_enabled=True,
-                                            rekor_url=DEFAULT_REKOR_URL, github_enabled=False, s3_enabled=False))
+                                            rekor_url=DEFAULT_REKOR_URL, s3_enabled=False))
     except IntegrityError:
         pass                                    # made meanwhile by another worker
     return await get_settings(db, org_id)
@@ -113,14 +112,12 @@ def interval_of(row: Optional[AuditPublicationSettings]) -> int:
 
 
 def enabled_targets(row: Optional[AuditPublicationSettings]) -> List[str]:
-    """No row: the defaults (Rekor). GitHub and S3 count once they are set up."""
+    """No row: the defaults (Rekor). S3 counts once it is set up."""
     if row is None:
         return ["rekor"]
     out = []
     if row.rekor_enabled:
         out.append("rekor")
-    if row.github_enabled and row.github_repo and row.github_token_enc:
-        out.append("github")
     if row.s3_enabled and row.s3_bucket and row.s3_secret_enc:
         out.append("s3")
     return out
@@ -400,10 +397,6 @@ async def settings_out(db: AsyncSession, org_id: int) -> Dict[str, Any]:
         if target == "rekor":
             url = (row.rekor_url if row else None) or DEFAULT_REKOR_URL
             item.update(configured=True, destination=url, host=_host(url), public_instance=url == DEFAULT_REKOR_URL)
-        elif target == "github":
-            repo = row.github_repo if row else None
-            item.update(configured=bool(repo and row.github_token_enc), destination=repo,
-                        host="api.github.com" if repo else None)
         else:
             endpoint = row.s3_endpoint if row else None
             item.update(configured=bool(row and row.s3_bucket and row.s3_secret_enc),

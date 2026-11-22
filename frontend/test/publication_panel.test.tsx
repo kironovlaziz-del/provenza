@@ -13,8 +13,6 @@ const base = (): PublicationSettingsT => ({
     { target: "rekor", enabled: true, configured: true, destination: "https://rekor.sigstore.dev", host: "rekor.sigstore.dev",
       public_instance: true, last_published_at: "2026-11-22T10:00:00Z", last_tree_size: 420,
       last_location: "https://search.sigstore.dev/?logIndex=7", last_error: null, last_error_at: null },
-    { target: "github", enabled: false, configured: false, destination: null, host: null, last_published_at: null,
-      last_tree_size: null, last_location: null, last_error: null, last_error_at: null },
     { target: "s3", enabled: false, configured: false, destination: null, host: null, last_published_at: null,
       last_tree_size: null, last_location: null, last_error: null, last_error_at: null },
   ],
@@ -37,7 +35,7 @@ describe("publication panel", () => {
     expect(screen.getByRole("link", { name: "View" }).getAttribute("href")).toBe("https://search.sigstore.dev/?logIndex=7");
     expect(screen.getByText(/Every hour · 3 publications/)).toBeTruthy();
     expect(screen.getByText("SHA256:abc")).toBeTruthy();
-    expect(screen.queryByText("GitHub")).toBeNull();               // shown once it is set up
+    expect(screen.queryByText("S3 (Object Lock)")).toBeNull();     // shown once it is set up
     expect(screen.queryByRole("button", { name: "Change" })).toBeNull();
   });
 

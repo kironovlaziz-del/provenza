@@ -789,7 +789,6 @@
     "pub_col_outbound": "Outbound to",
     "pub_col_last": "Last publication",
     "pub_target_rekor": "Sigstore Rekor",
-    "pub_target_github": "GitHub",
     "pub_target_s3": "S3 (Object Lock)",
     "pub_on": "on",
     "pub_off": "off",
