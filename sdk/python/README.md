@@ -58,8 +58,11 @@ never the content.
 
 ## Getting an identity
 
-An admin issues a one-time enrollment token in Provenza (**Agents → New
-agent**). The agent's keys are generated on its own machine, and only the
+An admin issues a one-time enrollment token in Provenza (**AI agents →
+Connect an agent**: the token, `pvz_enr_…`, is in the commands its second
+step shows; or the full registration form). A token that asks for hybrid
+keys - the default there - gets them without `hybrid=True`; they need
+`pip install 'provenza[pq]'` (below). The agent's keys are generated on its own machine, and only the
 public key goes to the server:
 
 ```bash
@@ -276,8 +279,8 @@ conn = connection(agent)                    # {"url": ".../api/v1/mcp", "headers
 
 **MCP clients that start a local command** (Claude Desktop, Claude Code,
 Cursor, Windsurf, Gemini CLI, VS Code): `provenza-mcp` is the same gateway
-over stdio. Issue an enrollment token in Provenza (**Agents → New agent**)
-and add:
+over stdio. Issue an enrollment token in Provenza (**AI agents → Connect an
+agent**, or the full registration form) and add:
 
 ```json
 {"mcpServers": {"provenza": {
@@ -305,6 +308,18 @@ schema, so the model sees no difference:
 from provenza.integrations.langchain import govern_tools
 tools = govern_tools(agent, [search, read_file])        # a refusal reaches the model as the tool's answer
 
+# pip install 'provenza[langgraph]': a held call pauses the graph until a person decides
+from provenza.integrations.langgraph import govern_tools, resume_command
+graph = create_agent(model, govern_tools(agent, [refund]), checkpointer=InMemorySaver())
+result = graph.invoke({"messages": [("user", "Refund order 1042")]}, config)
+if "__interrupt__" in result:
+    result = graph.invoke(resume_command(agent, result), config)   # waits for the decision
+
+# pip install 'provenza[openai-agents]'
+from provenza.integrations.openai_agents import gateway_model, govern_tools
+assistant = agents.Agent(name="Support", model=gateway_model(agent, "gpt-4o-mini"),
+                         tools=govern_tools(agent, [lookup_order, refund]))
+
 # pip install 'provenza[autogen]'
 from provenza.integrations.autogen import govern_tools
 tools = govern_tools(agent, [FunctionTool(lookup, description="...")])
@@ -315,7 +330,14 @@ researcher = crewai.Agent(role="...", goal="...", tools=govern_tools(agent, [sea
 ```
 
 `prefix=` namespaces the names policies see, so `prefix="kb."` turns
-`search` into `kb.search`. For anything else, govern a single call with
+`search` into `kb.search`. `approval=` decides what a call held for a
+person does: `"refuse"` (default) answers the model that it waits for
+approval; `"wait"` waits for the decision and then makes the same call once
+more - approved, the server lets it through once. LangGraph's default is
+`"interrupt"`, which pauses the graph instead of a thread. The whole guide,
+with an example per framework:
+[docs/integrations.md](https://github.com/kironovlaziz-del/provenza/blob/main/docs/integrations.md).
+For anything else, govern a single call with
 `agent.call(name, arguments, lambda: ...)` or `await agent.acall(...)`.
 
 ## What this is, and what it is not

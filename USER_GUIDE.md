@@ -56,11 +56,41 @@ devices, so a lost phone does not lock you out.
 
 ---
 
-## 2. Finding your way: the top bar
+## 2. Finding your way: simple mode and the full console
 
-After sign-in, administrators, approvers, auditors and compliance officers
-land on the **Inbox**; everybody else on the **AI** list. Everything is
-reached from one bar at the top:
+The console opens in **simple mode**: the essentials on four tabs. After
+sign-in everybody lands on **AI agents**.
+
+- **AI agents** — the organization's agents; administrators connect one
+  with **Connect an agent** (section 8.4.2).
+- **Rules** — the policy hierarchy (levels, rule packs, the signed policy)
+  and the **Gateways** through which agents reach AI models, MCP and HTTP
+  tools, other agents and external APIs.
+- **Audit log** — every action of people and agents, with its proofs and
+  downloads.
+- **Shadow AI** — AI people use without approval, and for administrators
+  **What works**: whether the browser extension and the endpoint agent
+  report, and the DNS and proxy log import.
+- **Search** (or **Ctrl K**) opens any page by name, also those simple mode
+  does not show.
+- The **protection** sign (administrators): **Protected**, **Needs
+  attention** or **Setup unfinished**, from the protection coverage; it
+  opens Settings.
+- **Stop all** (administrators) opens the kill switch. While any stop is in
+  force, a red line under the bar says so on every page.
+- The **bell** (administrators, approvers, auditors, compliance officers):
+  the number of approvals and open incidents waiting; it opens the Inbox.
+- **Settings (⚙)** — you, people and notifications, with the setup
+  checklist and the protection coverage on top for administrators.
+- **Help (?)** — guides for each role, an article for each feature, and the
+  FAQ, in English and Uzbek.
+- The **account menu** — profile, language, light or dark theme, sign out.
+
+**The full console** shows every page. Open it with **Settings → Open the
+full console**; **Back to simple mode** returns. The browser remembers the
+choice, and both modes show the same data and rules. In the full console,
+administrators, approvers, auditors and compliance officers land on the
+**Inbox**, everybody else on the **AI** list, and the bar has four parts:
 
 - **Inbox** — what waits for a person: approvals (decided right in the
   list), open incidents, and AI found in use that nobody reviewed yet; on
@@ -74,15 +104,11 @@ reached from one bar at the top:
   breaker and behavior monitor.
 - **Evidence** — the audit log, compliance and the kill switch with the
   history of every stop.
-- **Search** (or **Ctrl K**) opens any page by name.
-- **Stop all** (administrators) opens the kill switch. While any stop is in
-  force, a red line under the bar says so on every page.
-- **Help (?)** — guides for each role, an article for each feature, and the
-  FAQ, in English and Uzbek.
-- **Settings (⚙)** — one page listing every setting in groups (you, people,
-  gateways and agent identity, keys and data, system), with the setup
-  checklist on top for administrators.
-- The **account menu** — profile, language, light or dark theme, sign out.
+- **Settings (⚙)** lists every setting in groups (you, people, gateways
+  and agent identity, keys and data, system).
+
+The pages below are named as the full console shows them; every one of
+them opens in either mode, by search or from a link.
 
 A page a role does not see answers "You don't have access to this page"
 instead of showing refused data.
@@ -359,9 +385,17 @@ ignore findings.
 
 ### 8.4.2 Enrolling an agent
 
-Agents → **New agent**: fill in what the agent may do
-(capabilities, tools, models, delegation depth, team) and **Issue
-enrollment token**.
+**AI agents → Connect an agent** is the short way, in two steps: tick the
+tools the agent may use (the gateways' approved tools are offered; those
+awaiting approval are named), then **Next: connect** issues the token and
+shows the commands below. **Start over** revokes a token nobody used yet.
+
+For more - capabilities, models, delegation depth, a team or a role, or
+the tools in an SDK agent's own code (see
+[agent frameworks](docs/integrations.md)) - use the full form: **More
+options → the full registration form**, or in the full console Agents →
+**Register agent**. Fill in what the agent may do and **Issue enrollment
+token**.
 
 **Connect an AI client** (Gemini CLI, Claude Code, Cursor or any
 OpenAI-compatible client) is the simplest way: pick the client and copy the
@@ -404,7 +438,7 @@ edit them on the agent - and editing the role updates every agent that has
 it (the page tells you how many). An org-wide role can be given to any
 agent, a team's role only to agents of that team.
 
-Pick the team and role on **New agent** (the rights fields are replaced by
+Pick the team and role on **Register agent** (the rights fields are replaced by
 the role's), or change them on the agent's page (**Team and role →
 Change**). Taking an agent off its role keeps its current rights, now
 editable per agent. A team or role still in use (agents, sub-teams, open

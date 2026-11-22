@@ -173,6 +173,10 @@ guarantee is spelled out in the [security model](docs/security-model.md).
 - **Governed MCP gateway** — clients see only the tools an admin approved, and
   every call is checked and recorded. Desktop clients (Claude, Cursor, Gemini CLI,
   VS Code) start it as `uvx --from provenza provenza-mcp` ([SDK](sdk/python/README.md#integrations)).
+- **Agent frameworks** — LangChain, LangGraph, the OpenAI Agents SDK, CrewAI and
+  AutoGen: wrap the tools in one line; every call is checked, recorded, and can
+  wait for a person, a LangGraph graph pausing until the decision
+  ([docs](docs/integrations.md)).
 - **Signed delegations and actions**, offline-verifiable (above).
 - **Workload attestation** — Kubernetes, GitHub Actions, Google Cloud, Azure,
   GitLab, SPIFFE: each agent bound to its workload ([docs](docs/attestation.md)).

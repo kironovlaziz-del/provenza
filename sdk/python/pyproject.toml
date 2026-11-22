@@ -11,7 +11,8 @@ requires-python = ">=3.10"
 license = "Apache-2.0"
 license-files = ["LICENSE", "NOTICE"]
 authors = [{name = "Laziz Kironov"}]
-keywords = ["ai-governance", "agents", "audit", "mcp", "mcp-server", "mcp-gateway", "a2a", "security"]
+keywords = ["ai-governance", "agents", "audit", "mcp", "mcp-server", "mcp-gateway", "a2a", "security",
+            "langchain", "langgraph", "crewai", "autogen", "openai-agents"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
@@ -33,6 +34,8 @@ pq = ["cryptography>=48"]         # hybrid Ed25519 + ML-DSA-65 keys
 # even pin conflicting protobuf versions, so one environment may hold only one of them
 openai = ["openai>=1.40"]
 langchain = ["langchain-core>=0.3"]
+langgraph = ["langchain-core>=0.3", "langgraph>=0.6"]   # interrupt() and resuming by interrupt id
+openai-agents = ["openai-agents>=0.4"]
 autogen = ["autogen-core>=0.4"]
 crewai = ["crewai>=1.0"]
 dev = ["pytest>=8", "pytest-asyncio>=0.23"]

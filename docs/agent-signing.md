@@ -48,7 +48,7 @@ keys for evidence that does not depend on the server.
 ### Enrollment: the agent proves it holds its key
 
 By default an agent joins only with a **one-time enrollment token** an admin
-issues (Agents → New agent, or `POST /api/v1/agent-enrollment/tokens`).
+issues (AI agents → Connect an agent, the full registration form, or `POST /api/v1/agent-enrollment/tokens`).
 The token carries the agent's rights - capabilities, tools, models, depth,
 team - and an expiry; the agent cannot ask for anything else. Where the
 agent runs (add `--hybrid` for the post-quantum scheme below):

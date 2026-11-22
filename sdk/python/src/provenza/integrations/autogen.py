@@ -12,14 +12,21 @@ Govern AutoGen tools (pip install 'provenza[autogen]', autogen-core >= 0.4).
 Each tool keeps its name, description and argument types (the same JSON
 schema reaches the model). A refused call raises ProvenzaDenied inside the
 tool, which AutoGen reports to the model as a failed tool call; nothing ran.
+
+A call that policy holds for a person (approval=): "refuse" (default) or
+"wait" - wait until a person decides, then repeat the call once.
 """
 
 from typing import Any, List, Sequence
 
+from provenza.integrations import _approvals
 
-def govern_tool(agent, tool, *, name: str = None):
+
+def govern_tool(agent, tool, *, name: str = None, approval: str = "refuse",
+                approval_timeout: float = _approvals.WAIT_TIMEOUT):
     from autogen_core.tools import BaseTool
 
+    _approvals.check_mode(approval)
     governed_name = name or tool.name
 
     class GovernedTool(BaseTool):
@@ -28,8 +35,8 @@ def govern_tool(agent, tool, *, name: str = None):
                              strict=getattr(tool, "_strict", False))
 
         async def run(self, args: Any, cancellation_token: Any) -> Any:
-            return await agent.acall(governed_name, args.model_dump(mode="json"),
-                                     lambda: tool.run(args, cancellation_token))
+            return await _approvals.acall(agent, governed_name, args.model_dump(mode="json"),
+                                          lambda: tool.run(args, cancellation_token), approval, approval_timeout)
 
         def return_value_as_string(self, value: Any) -> str:
             return tool.return_value_as_string(value)
@@ -37,5 +44,7 @@ def govern_tool(agent, tool, *, name: str = None):
     return GovernedTool()
 
 
-def govern_tools(agent, tools: Sequence, *, prefix: str = "") -> List:
-    return [govern_tool(agent, t, name=prefix + t.name) for t in tools]
+def govern_tools(agent, tools: Sequence, *, prefix: str = "", approval: str = "refuse",
+                 approval_timeout: float = _approvals.WAIT_TIMEOUT) -> List:
+    return [govern_tool(agent, t, name=prefix + t.name, approval=approval, approval_timeout=approval_timeout)
+            for t in tools]

@@ -21,7 +21,7 @@ class FakeProvenza:
     """Enrollment, check and record - and the server's signature rule."""
 
     def __init__(self):
-        self.verdicts = {}          # tool -> decision
+        self.verdicts = {}          # tool -> decision, or a list of decisions answered in turn
         self.public_key = None
         self.checks, self.records = {}, []
         self.nonces = set()
@@ -70,6 +70,8 @@ class FakeProvenza:
             self.n += 1
             token = f"chk_{self.n:040d}"
             decision = self.verdicts.get(body["tool_name"], "allowed")
+            if isinstance(decision, list):          # answered in turn, the last one repeats
+                decision = decision.pop(0) if len(decision) > 1 else decision[0]
             self.checks[token] = {**body, "decision": decision}
             return self._json(200, {"decision": decision, "reason": f"policy says {decision}", "check_id": token,
                                     "incident_type": None, "policy_id": None})

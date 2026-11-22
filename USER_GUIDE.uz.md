@@ -58,11 +58,47 @@ qurilmalarda ikkita qo‘shing.
 
 ---
 
-## 2. Yo‘l topish: yuqori panel
+## 2. Yo‘l topish: oddiy rejim va to‘liq konsol
 
-Kirgandan so‘ng administratorlar, tasdiqlovchilar, auditorlar va
-muvofiqlik xodimlari **Inbox** (Kiruvchi) sahifasiga, qolganlar esa **AI**
-ro‘yxatiga tushadi. Hamma narsa yuqoridagi bitta paneldan ochiladi:
+Konsol **oddiy rejimda** ochiladi: eng keraklisi to‘rtta yorliqda.
+Kirgandan so‘ng hamma **AI agents** (AI agentlar) sahifasiga tushadi.
+
+- **AI agents** — tashkilot agentlari; administratorlar yangisini
+  **Connect an agent** (Agentni ulash) orqali ulaydi (8.4.2-bo‘lim).
+- **Rules** — siyosatlar ierarxiyasi (darajalar, qoidalar paketlari,
+  imzolangan siyosat) va agentlar AI modellar, MCP va HTTP vositalar,
+  boshqa agentlar va tashqi API'larga murojaat qiladigan **Gateways**
+  (shlyuzlar).
+- **Audit log** — odamlar va agentlarning har bir harakati, isbotlari va
+  yuklab olish bilan.
+- **Shadow AI** — xodimlar ruxsatsiz ishlatadigan AI, administratorlar
+  uchun esa **What works** (Nima ishlayapti): brauzer kengaytmasi va
+  endpoint agent xabar beryaptimi, hamda DNS va proksi jurnallarini import
+  qilish.
+- **Qidiruv** (yoki **Ctrl K**) istalgan sahifani, jumladan oddiy rejim
+  ko‘rsatmaydiganlarini ham nomi bo‘yicha ochadi.
+- **Himoya** belgisi (administratorlar): himoya qamrovi bo‘yicha
+  **Protected** (himoyalangan), **Needs attention** (e’tibor talab qiladi)
+  yoki **Setup unfinished** (sozlash tugallanmagan); u Sozlamalarni ochadi.
+- **Stop all** (administratorlar) Kill switch sahifasini ochadi. Biror
+  to‘xtatish amal qilayotgan paytda panel ostidagi qizil qator buni har
+  bir sahifada ko‘rsatadi.
+- **Qo‘ng‘iroqcha** (administratorlar, tasdiqlovchilar, auditorlar,
+  muvofiqlik xodimlari): kutayotgan tasdiqlashlar va ochiq hodisalar soni;
+  u Inbox'ni ochadi.
+- **Sozlamalar (⚙)** — siz, odamlar va bildirishnomalar; administratorlar
+  uchun tepasida sozlash ro‘yxati va himoya qamrovi.
+- **Yordam (?)** — har bir rol uchun qo‘llanmalar, har bir funksiya
+  haqida maqola va ko‘p beriladigan savollar, ingliz va o‘zbek tillarida.
+- **Hisob menyusi** — profil, til, yorug‘ yoki qorong‘i mavzu, chiqish.
+
+**To‘liq konsol** barcha sahifalarni ko‘rsatadi. Uni **Settings → Open the
+full console** (To‘liq konsolni ochish) orqali oching; **Back to simple
+mode** (Oddiy rejimga qaytish) orqaga qaytaradi. Brauzer tanlovni eslab
+qoladi, ikkala rejim bir xil ma’lumotlar va qoidalarni ko‘rsatadi. To‘liq
+konsolda administratorlar, tasdiqlovchilar, auditorlar va muvofiqlik
+xodimlari **Inbox** (Kiruvchi) sahifasiga, qolganlar esa **AI** ro‘yxatiga
+tushadi, panel esa to‘rt qismdan iborat:
 
 - **Inbox** — inson qarorini kutayotgan narsalar: tasdiqlashlar (qaror
   to‘g‘ridan-to‘g‘ri ro‘yxatda), ochiq hodisalar va hali hech kim ko‘rib
@@ -77,16 +113,12 @@ ro‘yxatiga tushadi. Hamma narsa yuqoridagi bitta paneldan ochiladi:
   reyestri, circuit breaker va xulq-atvor monitori.
 - **Evidence** — audit jurnali, muvofiqlik va har bir to‘xtatish tarixi
   bilan Kill switch.
-- **Qidiruv** (yoki **Ctrl K**) istalgan sahifani nomi bo‘yicha ochadi.
-- **Stop all** (administratorlar) Kill switch sahifasini ochadi. Biror
-  to‘xtatish amal qilayotgan paytda panel ostidagi qizil qator buni har
-  bir sahifada ko‘rsatadi.
-- **Yordam (?)** — har bir rol uchun qo‘llanmalar, har bir funksiya
-  haqida maqola va ko‘p beriladigan savollar, ingliz va o‘zbek tillarida.
-- **Sozlamalar (⚙)** — barcha sozlamalar guruhlarga ajratilgan bitta
-  sahifa (siz, odamlar, shlyuzlar va agent identifikatori, kalitlar va
-  ma’lumotlar, tizim); administratorlar uchun tepasida sozlash ro‘yxati.
-- **Hisob menyusi** — profil, til, yorug‘ yoki qorong‘i mavzu, chiqish.
+- **Sozlamalar (⚙)** barcha sozlamalarni guruhlarda ko‘rsatadi (siz,
+  odamlar, shlyuzlar va agent identifikatori, kalitlar va ma’lumotlar,
+  tizim).
+
+Quyidagi sahifalar to‘liq konsoldagi nomlari bilan atalgan; ularning har
+biri ikkala rejimda ham qidiruv yoki havola orqali ochiladi.
 
 Rol ko‘rmaydigan sahifa rad etilgan ma’lumotlarni ko‘rsatish o‘rniga
 "Bu sahifaga kirish huquqingiz yo‘q" deb javob beradi.
@@ -381,8 +413,18 @@ faqat adminlar ro‘yxatdan o‘tkazadi yoki e’tiborsiz qoldiradi.
 
 ### 8.4.2 Agentni ro'yxatga olish
 
-Agents → **New agent**: agent nima qila olishini kiriting
-(imkoniyatlar, vositalar, modellar, delegatsiya chuqurligi, jamoa) va
+**AI agents → Connect an agent** (Agentni ulash) — ikki bosqichli qisqa
+yo'l: agent foydalana oladigan vositalarni belgilang (shlyuzlarning
+tasdiqlangan vositalari taklif qilinadi, tasdiqlashni kutayotganlari nomi
+bilan ko'rsatiladi), so'ng **Next: connect** tokenni beradi va quyidagi
+buyruqlarni ko'rsatadi. **Start over** hali hech kim ishlatmagan tokenni
+bekor qiladi.
+
+Ko'proq narsa kerak bo'lsa — imkoniyatlar, modellar, delegatsiya
+chuqurligi, jamoa yoki rol, yoki SDK agentining o'z kodidagi vositalar
+([agent freymvorklari](docs/integrations.md)) — to'liq shakldan
+foydalaning: **More options → the full registration form**, yoki to'liq
+konsolda Agents → **Register agent**. Agent nima qila olishini kiriting va
 **Issue enrollment token** tugmasini bosing.
 
 Eng oson yo'l — **AI mijozini ulash** (Gemini CLI, Claude Code, Cursor
@@ -430,7 +472,7 @@ barcha agentlarni yangilaydi (sahifa nechtaligini ko'rsatadi). Butun
 tashkilot roli har qanday agentga, jamoa roli faqat o'sha jamoa agentlariga
 beriladi.
 
-Jamoa va rolni **New agent** sahifasida tanlang (huquq maydonlari rol
+Jamoa va rolni **Register agent** sahifasida tanlang (huquq maydonlari rol
 huquqlari bilan almashtiriladi) yoki agent sahifasida o'zgartiring
 (**Jamoa va rol → O'zgartirish**). Agent roldan chiqarilsa, joriy
 huquqlari saqlanadi va endi agent bo'yicha tahrirlanadi. Hali

@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+## 0.3.0 (2026-11-22)
+
+- **LangGraph** (`provenza.integrations.langgraph`, extra `langgraph`): the
+  tools of a LangGraph agent - a `ToolNode`, LangChain's `create_agent` - are
+  governed, and a call that policy holds for a person pauses the graph with
+  `interrupt()` instead of failing. `resume_command(agent, result)` waits for
+  the decision and returns the `Command` that resumes it: approved, the call
+  runs once; denied or expired, the model is told and nothing ran.
+- **OpenAI Agents SDK** (`provenza.integrations.openai_agents`, extra
+  `openai-agents`): `govern_tools` governs function tools, keeping every
+  other setting of the tool; `gateway_model(agent, "gpt-4o-mini")` sends the
+  model calls through Provenza's LLM gateway. Hosted tools are refused with
+  a `TypeError` rather than passed through ungoverned.
+- Every tool wrapper (LangChain, LangGraph, OpenAI Agents SDK, AutoGen,
+  CrewAI) takes `approval=` for a call held for a person: `"refuse"` (the
+  default, as before) or `"wait"` - wait for the decision, then make the same
+  call once more, which the server lets through once if it was approved.
+
 ## 0.2.2 (2026-11-17)
 
 - `uvx provenza` starts the MCP gateway (`provenza-mcp` under the package's

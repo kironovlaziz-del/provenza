@@ -496,7 +496,11 @@ jobs:
       fail-fast: false
       matrix:
         # crewai and autogen-core pin conflicting protobuf versions: separate environments
-        extras: ["openai,langchain,autogen", "crewai"]
+        include:
+          - extras: "openai,langchain,langgraph,openai-agents,autogen"
+            also: "langchain>=1.0"          # create_agent, a LangGraph agent, in the LangGraph tests
+          - extras: "crewai"
+            also: ""
 
     defaults:
       run:
@@ -511,9 +515,12 @@ jobs:
           python-version: "3.12"
 
       - name: Install the SDK with ${{ matrix.extras }}
+        env:
+          ALSO: ${{ matrix.also }}
         run: |
           python -m pip install --upgrade pip
           pip install -e ".[dev,${{ matrix.extras }}]"
+          if [ -n "$ALSO" ]; then pip install "$ALSO"; fi
 
       - name: Run the integration tests
         run: pytest -q tests/test_integrations.py
