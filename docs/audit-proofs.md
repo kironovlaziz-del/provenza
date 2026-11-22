@@ -247,6 +247,43 @@ python tools/provenza_audit.py consistency consistency.json --pinned checkpoint-
 `tools/rfc3161.py`, a standalone copy of the server's verifier kept identical
 by a test.
 
+## Publication
+
+A checkpoint you kept proves what the log was. **Publication** keeps a copy
+for you, automatically, where the server cannot rewrite it: every interval
+(1 hour by default, from 5 minutes to 24 hours) the latest checkpoint is
+published, if the log grew since the last one.
+
+| Target | Default | What leaves the server |
+|---|---|---|
+| **Sigstore Rekor** (`rekor.sigstore.dev`), a public append-only transparency log | on | the SHA-256 of the checkpoint's statement, a signature over it and the publishing key |
+
+Each target is outbound traffic to the host it names. The Audit Log page lists
+them with their host, the last publication and the last error, and switches
+each one off (`GET`/`PUT /audit-logs/publication`, `POST
+/audit-logs/publication/run` to publish now).
+
+**The publishing key.** Rekor does not take the audit key's Ed25519 + ML-DSA-65
+signatures, so each organization has a publishing key (ECDSA P-256), made with
+its first publication and never replaced through the API. It signs only what
+is sent to Rekor and says nothing about the log's contents - the checkpoint
+is signed by the audit key as always. Its fingerprint is on the Audit Log
+page; anyone can list the organization's entries in Rekor by that key.
+
+**What is checked.** Rekor's answer is kept only if the entry is exactly the
+one sent and its *signed entry timestamp* verifies with the log's key: for
+`rekor.sigstore.dev`, the key Sigstore distributes (built in, log ID
+`c0d23d6a…`); for another Rekor instance, the key the administrator gave.
+A failure is shown with its error and retried every 5 minutes. Publications
+are append-only, and every checkpoint lists its own (`publications`) in
+`GET /audit-logs/checkpoints` and in both ends of `GET /audit-logs/consistency`,
+with the full receipt: the entry, its index and integrated time.
+
+**What it adds.** A rewritten history can no longer be shown to extend a
+checkpoint published before the rewrite, and the published copy - with
+Rekor's time - is out of the server's reach: whoever keeps the server
+cannot quietly undo it.
+
 ## Verifying on the server
 
 **Verify whole log** (admin, `POST /audit-logs/verify`) recomputes every

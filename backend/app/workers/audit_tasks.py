@@ -45,3 +45,17 @@ async def _stamp() -> dict:
 def timestamp_task() -> dict:
     """RFC 3161 time-stamps for new checkpoints (app/services/audit_witness.py)."""
     return asyncio.run(_stamp())
+
+
+async def _publish() -> dict:
+    from app.services import audit_publish
+
+    async with CelerySessionLocal() as db:
+        return await audit_publish.publish_all(db)
+
+
+@celery_app.task(name="audit.publish", ignore_result=True, expires=240)
+def publish_task() -> dict:
+    """The latest checkpoints, published outside the server where each
+    organization's interval is over (app/services/audit_publish.py)."""
+    return asyncio.run(_publish())

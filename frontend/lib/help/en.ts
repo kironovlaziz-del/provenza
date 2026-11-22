@@ -439,6 +439,7 @@ export const ARTICLES_EN: Article[] = [
       ["p", "Provenza records every action of people and agents: sign-ins, decisions, policy changes, agent calls, stops. Each record says who, when and from which address and browser."],
       ["h", "Why you can trust it"],
       ["p", "The records form a **hash chain**: each one is linked to the one before. Every few minutes Provenza signs a **checkpoint** of the chain. Changing or deleting any record breaks the chain at that point, and the check below finds it."],
+      ["p", "Every hour (an administrator can choose from 5 minutes to 24 hours) the latest checkpoint is also **published outside the server** — to Sigstore Rekor, a public append-only log, by default. Only its hash and a signature leave, never the records. A history rewritten afterwards can no longer be shown to extend a published checkpoint. The Audit Log page lists every place it goes, as outbound traffic, and each one can be switched off."],
       ["h", "Checking the record"],
       ["steps", [
         "Open the **[Audit trail](/audit)**.",
