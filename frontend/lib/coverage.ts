@@ -11,6 +11,13 @@ export interface CoverageItem {
   facts: Record<string, number | boolean | null>;
 }
 
+/** How a state is marked wherever coverage is shown. */
+export const STATE_STYLE: Record<CoverageState, { mark: string; color: string }> = {
+  ok: { mark: "✓", color: "var(--risk-low)" },
+  attention: { mark: "!", color: "var(--risk-medium)" },
+  missing: { mark: "○", color: "var(--text-muted)" },
+};
+
 export interface CoverageSummary {
   ok: number;
   attention: number;

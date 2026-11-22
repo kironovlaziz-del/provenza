@@ -5,6 +5,7 @@ import React, { useEffect, useState, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { PageHeader } from "@/components/PageHeader";
 import { LogImport } from "@/components/LogImport";
+import { ShadowSources } from "@/components/ShadowSources";
 import { StatusPill } from "@/components/Pill";
 import { useAuth } from "@/lib/auth";
 import {
@@ -294,6 +295,8 @@ export default function ShadowAIPage() {
             </div>
           </div>
         </div>
+
+        <ShadowSources onImport={canRegister ? () => setShowImport(true) : undefined} />
 
         {showImport && canRegister && <LogImport onDone={() => setTimeout(refresh, 3000)} />}
 

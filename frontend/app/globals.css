@@ -2029,3 +2029,12 @@ tr.sub-row > td { background: var(--bg-app); }
 .wizard-tool input { width: auto; margin: 0; }
 .wizard-tool .mono { flex: 1; min-width: 0; overflow-wrap: anywhere; font-size: 12.5px; }
 .wizard-more > summary { cursor: pointer; color: var(--accent); font-size: 13px; }
+
+/* ---------------------------------------------------------------- shadow AI: what works */
+.shadow-sources { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.shadow-sources li { display: flex; align-items: flex-start; gap: 12px; padding: 10px 12px;
+  border: 1px solid var(--border); border-radius: 8px; }
+.shadow-source-mark { width: 16px; font-weight: 700; text-align: center; line-height: 20px; }
+.shadow-source-text { flex: 1; min-width: 0; }
+.shadow-source-text small { display: block; color: var(--text-muted); font-size: 12.5px; line-height: 1.45; margin-top: 2px; }
+.shadow-sources .btn { flex: none; }

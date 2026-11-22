@@ -10,7 +10,7 @@ import React, { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
-import { evidence, fixKey, needsDashboard, type CoverageItem, type CoverageSummary } from "@/lib/coverage";
+import { STATE_STYLE, evidence, fixKey, needsDashboard, type CoverageItem, type CoverageSummary } from "@/lib/coverage";
 
 interface Item {
   key: string;
@@ -27,11 +27,6 @@ interface Setup {
 
 const FOLDED_KEY = "pvz.setup.folded";
 
-const STATE_STYLE: Record<CoverageItem["state"], { mark: string; color: string }> = {
-  ok: { mark: "✓", color: "var(--risk-low)" },
-  attention: { mark: "!", color: "var(--risk-medium)" },
-  missing: { mark: "○", color: "var(--text-muted)" },
-};
 
 /** always: also when every required step is done (the Settings page keeps it, open). */
 export function SetupChecklist({ always = false }: { always?: boolean } = {}) {
