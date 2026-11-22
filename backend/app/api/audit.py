@@ -22,6 +22,7 @@ Audit log: list, plus the tamper-evidence endpoints (docs/audit-proofs.md).
 
     GET  /audit-logs/publication            where checkpoints are published outside the server, how often
     PUT  /audit-logs/publication            the interval and the Rekor target (admin)
+    PUT  /audit-logs/publication/s3         the S3 bucket with Object Lock - tried first (admin)
     POST /audit-logs/publication/run        publish the latest checkpoint now, to every target on (admin)
     GET  /audit-logs/publications           what was published where, newest first, with the receipts
   Checkpoints carry their publications ("publications") in /checkpoints and /consistency.
@@ -316,3 +317,35 @@ async def list_publications(target: Optional[str] = Query(default=None, pattern=
     items, total = await audit_publish.list_publications(db, current_user.org_id, target=target, skip=skip,
                                                          limit=limit)
     return {"items": items, "total": total, "skip": skip, "limit": limit}
+
+
+class S3In(BaseModel):
+    enabled: bool = True
+    # None: Amazon S3 itself; else an S3-compatible store (MinIO, Backblaze B2, Wasabi, ...)
+    endpoint: Optional[str] = Field(default=None, max_length=500)
+    region: str = Field(min_length=2, max_length=30)
+    bucket: str = Field(min_length=3, max_length=63)
+    prefix: Optional[str] = Field(default=None, max_length=200)
+    access_key: str = Field(min_length=3, max_length=128)
+    # None keeps the stored one (e.g. switching S3 off)
+    secret_key: Optional[str] = Field(default=None, min_length=8, max_length=200)
+    retention_days: int = Field(default=audit_publish.S3_DEFAULT_RETENTION_DAYS,
+                                ge=audit_publish.S3_MIN_RETENTION_DAYS, le=audit_publish.S3_MAX_RETENTION_DAYS)
+
+
+@router.put("/publication/s3")
+async def set_publication_s3(data: S3In, db: AsyncSession = Depends(get_db), current_user: User = Depends(_admin)):
+    """Each checkpoint is written to the bucket as an object locked in
+    compliance mode for retention_days. Switched on, a test object (locked
+    for one day) is written and its lock read back before anything is saved."""
+    org_id, user_id = current_user.org_id, current_user.id
+    row = await audit_publish.save_s3(db, org_id, user_id, enabled=data.enabled, endpoint=data.endpoint,
+                                      region=data.region, bucket=data.bucket, prefix=data.prefix,
+                                      access_key=data.access_key, secret_key=data.secret_key,
+                                      retention_days=data.retention_days)
+    await AuditService(db).log(org_id, user_id, "audit_publication", org_id, "s3_configured",
+                               {"enabled": row.s3_enabled, "endpoint": row.s3_endpoint, "region": row.s3_region,
+                                "bucket": row.s3_bucket, "prefix": row.s3_prefix, "access_key": row.s3_access_key,
+                                "retention_days": row.s3_retention_days,
+                                "secret_changed": bool(data.secret_key)})
+    return await audit_publish.settings_out(db, org_id)

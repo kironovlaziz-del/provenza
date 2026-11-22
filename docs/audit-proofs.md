@@ -257,6 +257,7 @@ published, if the log grew since the last one.
 | Target | Default | What leaves the server |
 |---|---|---|
 | **Sigstore Rekor** (`rekor.sigstore.dev`), a public append-only transparency log | on | the SHA-256 of the checkpoint's statement, a signature over it and the publishing key |
+| **An S3 bucket with Object Lock** (Amazon S3, or an S3-compatible store: MinIO, Backblaze B2, Wasabi, Ceph) | off until set up | the signed checkpoint itself, one object per checkpoint, locked |
 
 Each target is outbound traffic to the host it names. The Audit Log page lists
 them with their host, the last publication and the last error, and switches
@@ -279,10 +280,37 @@ are append-only, and every checkpoint lists its own (`publications`) in
 `GET /audit-logs/checkpoints` and in both ends of `GET /audit-logs/consistency`,
 with the full receipt: the entry, its index and integrated time.
 
+**S3 with Object Lock.** Each checkpoint becomes one object,
+`<prefix>org-<id>/checkpoint-<tree size>.json` - the signed checkpoint as
+`GET /audit-logs/checkpoints` returns it, so `tools/provenza_audit.py
+checkpoint` verifies it as is - written with
+`x-amz-object-lock-mode: COMPLIANCE` and a retain-until date the
+administrator chooses (1 to 3650 days, 365 by default). In compliance mode
+nobody, not the bucket's owner and not the account's root user, can delete
+or overwrite the object, or shorten its lock, before that date. After each
+write Provenza reads the lock back; a bucket without Object Lock, or a store
+that ignores it, is refused rather than trusted.
+
+- The bucket needs **Object Lock** switched on (which needs versioning).
+- The access key needs, on the prefix: `s3:PutObject`,
+  `s3:PutObjectRetention`, `s3:GetObject` and `s3:GetObjectRetention`.
+  Nothing else; in particular not `s3:DeleteObject` or
+  `s3:BypassGovernanceRetention`.
+- Requests are signed with AWS Signature Version 4: the secret key never
+  leaves the server, and it is kept encrypted with `ENCRYPTION_KEY`.
+- Amazon S3 is addressed as `<bucket>.s3.<region>.amazonaws.com`; another
+  endpoint path-style (`<endpoint>/<bucket>/<key>`). An endpoint must use
+  HTTPS unless it is on your own network (`OUTBOUND_PRIVATE_ALLOWLIST`).
+- Saving the settings writes a small test object, locked for one day, and
+  reads its lock back: settings that cannot publish are not saved
+  (`PUT /audit-logs/publication/s3`).
+- Locked objects are billed until their lock ends: one small JSON file per
+  publication, at most one per interval.
+
 **What it adds.** A rewritten history can no longer be shown to extend a
 checkpoint published before the rewrite, and the published copy - with
-Rekor's time - is out of the server's reach: whoever keeps the server
-cannot quietly undo it.
+Rekor's time, or locked in your bucket - is out of the server's reach:
+whoever keeps the server cannot quietly undo it.
 
 ## Verifying on the server
 

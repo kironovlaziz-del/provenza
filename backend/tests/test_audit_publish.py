@@ -266,3 +266,154 @@ async def test_the_publishing_key_stays(client, admin_token, rekor, db_session):
     assert len(keys) == 1
     row = (await db_session.execute(select(AuditPublicationSettings))).scalars().one()
     assert "PRIVATE KEY" not in row.publish_private_key_enc          # stored encrypted
+
+
+# ----------------------------------------------------------------------------- S3 with Object Lock
+
+class FakeS3:
+    """A bucket of an S3-compatible store (path style): checks the SigV4
+    signature and Content-MD5 like S3, keeps each object with its lock, and
+    answers HEAD with the lock - or, in mode "no_lock", without it (a bucket
+    without Object Lock)."""
+
+    ACCESS, SECRET, REGION, BUCKET = "PROVENZATESTKEY", "provenza-test-secret-0123456789", "eu-central-1", "audit-bucket"
+
+    def __init__(self):
+        self.objects, self.mode, self.versions = {}, "ok", 0     # ok | down | deny | no_lock
+        outer = self
+
+        class H(BaseHTTPRequestHandler):
+            def _check(self, body: bytes) -> bool:
+                from datetime import datetime as dt, timezone as tz
+                from app.core import sigv4
+                auth = self.headers["Authorization"]
+                signed = auth.split("SignedHeaders=")[1].split(",")[0].split(";")
+                when = dt.strptime(self.headers["x-amz-date"], "%Y%m%dT%H%M%SZ").replace(tzinfo=tz.utc)
+                want = sigv4.sign(self.command, self.path, {n: self.headers[n] for n in signed},
+                                  hashlib.sha256(body).hexdigest(), access_key=outer.ACCESS, secret_key=outer.SECRET,
+                                  region=outer.REGION, when=when)
+                return auth == want and auth.startswith(f"AWS4-HMAC-SHA256 Credential={outer.ACCESS}/")
+
+            def do_PUT(self):
+                body = self.rfile.read(int(self.headers["Content-Length"]))
+                if outer.mode == "down":
+                    return self._send(503)
+                if outer.mode == "deny" or not self._check(body):
+                    return self._send(403, b"<Error><Code>AccessDenied</Code><Message>Access Denied</Message></Error>")
+                if base64.b64decode(self.headers["Content-MD5"]) != hashlib.md5(body).digest():
+                    return self._send(400, b"<Error><Code>BadDigest</Code></Error>")
+                outer.versions += 1
+                outer.objects[self.path] = {"body": body, "version": f"v{outer.versions}",
+                                            "mode": self.headers.get("x-amz-object-lock-mode"),
+                                            "until": self.headers.get("x-amz-object-lock-retain-until-date")}
+                self._send(200, headers={"ETag": f'"{hashlib.md5(body).hexdigest()}"',
+                                         "x-amz-version-id": f"v{outer.versions}"})
+
+            def do_HEAD(self):
+                obj = outer.objects.get(self.path)
+                if obj is None or not self._check(b""):
+                    return self._send(404)
+                h = {"x-amz-version-id": obj["version"]}
+                if outer.mode != "no_lock":
+                    h.update({"x-amz-object-lock-mode": obj["mode"],
+                              "x-amz-object-lock-retain-until-date": obj["until"].replace("Z", ".000Z")})
+                self._send(200, headers=h)
+
+            def _send(self, code, body=b"", headers=None):
+                self.send_response(code)
+                for k, v in (headers or {}).items():
+                    self.send_header(k, v)
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                if self.command != "HEAD":
+                    self.wfile.write(body)
+
+            def log_message(self, *a):
+                pass
+
+        self.httpd = HTTPServer(("127.0.0.1", 0), H)
+        self.url = f"http://127.0.0.1:{self.httpd.server_address[1]}"
+        threading.Thread(target=self.httpd.serve_forever, daemon=True).start()
+
+    def close(self):
+        self.httpd.shutdown()
+        self.httpd.server_close()
+
+
+@pytest.fixture
+def s3(monkeypatch):
+    monkeypatch.setattr(settings, "OUTBOUND_PRIVATE_ALLOWLIST", "127.0.0.1")
+    server = FakeS3()
+    yield server
+    server.close()
+
+
+async def _use_s3(client, token, s3, **over):
+    body = {"enabled": True, "endpoint": s3.url, "region": s3.REGION, "bucket": s3.BUCKET, "prefix": "audit",
+            "access_key": s3.ACCESS, "secret_key": s3.SECRET, "retention_days": 30, **over}
+    return await client.put(f"{A}/publication/s3", json=body, headers=auth_headers(token))
+
+
+@pytest.mark.asyncio
+async def test_s3_is_tried_before_it_is_saved(client, admin_token, approver_token, s3, db_session):
+    assert (await _use_s3(client, approver_token, s3)).status_code == 403
+    r = await _use_s3(client, admin_token, s3, secret_key="wrong-secret-0000")
+    assert r.status_code == 422 and _code(r) == "publish.http_error" and "AccessDenied" in r.json()["detail"]["context"]["detail"]
+    s3.mode = "no_lock"
+    r = await _use_s3(client, admin_token, s3)
+    assert r.status_code == 422 and _code(r) == "publish.s3_not_locked"
+    row = (await db_session.execute(select(AuditPublicationSettings))).scalars().first()
+    assert row is None or not row.s3_enabled                          # nothing stored
+    for over in ({"bucket": "Bad_Bucket"}, {"region": "EU"}, {"prefix": "../x"}, {"retention_days": 0},
+                 {"endpoint": "http://s3.example.com"}):          # plain HTTP only inside the operator's network
+        assert (await _use_s3(client, admin_token, s3, **over)).status_code == 422, over
+
+    s3.mode = "ok"
+    r = await _use_s3(client, admin_token, s3)
+    assert r.status_code == 200, r.text
+    [test_obj] = s3.objects                                            # the test object, locked for a day
+    assert test_obj.startswith("/audit-bucket/audit/org-") and "provenza-test-" in test_obj
+    t = next(x for x in r.json()["targets"] if x["target"] == "s3")
+    assert t["enabled"] and t["configured"] and t["host"] == s3.url.removeprefix("http://")
+    assert t["settings"]["retention_days"] == 30 and t["settings"]["lock_mode"] == "COMPLIANCE"
+    assert "secret" not in json.dumps(t["settings"]).lower()
+    row = (await db_session.execute(select(AuditPublicationSettings))).scalars().one()
+    assert s3.SECRET not in row.s3_secret_enc                          # stored encrypted
+    # switched off without giving the secret again: it is kept
+    r = await _use_s3(client, admin_token, s3, enabled=False, secret_key=None)
+    assert r.status_code == 200 and not next(x for x in r.json()["targets"] if x["target"] == "s3")["enabled"]
+
+
+@pytest.mark.asyncio
+async def test_publish_to_s3_locked(client, admin_token, rekor, s3, db_session):
+    assert (await _use(client, admin_token, rekor)).status_code == 200
+    assert (await _use_s3(client, admin_token, s3)).status_code == 200
+    cp = (await client.post(f"{A}/checkpoints", headers=auth_headers(admin_token))).json()
+    r = await client.post(f"{A}/publication/run", headers=auth_headers(admin_token))
+    assert r.json()["result"] == {"rekor": "published", "s3": "published"}, r.text
+    key = f"/audit-bucket/audit/org-{cp['org_id']}/checkpoint-{cp['tree_size']:012d}.json"
+    obj = s3.objects[key]
+    assert json.loads(obj["body"]) == cp                               # the signed checkpoint itself
+    assert obj["mode"] == "COMPLIANCE"
+    from datetime import datetime, timezone
+    days = (datetime.fromisoformat(obj["until"].replace("Z", "+00:00")) - datetime.now(timezone.utc)).days
+    assert days in (29, 30)
+    [pub] = (await client.get(f"{A}/publications", params={"target": "s3"}, headers=auth_headers(admin_token))).json()["items"]
+    assert pub["location"] == f"s3:/{key}" and pub["reference"] == obj["version"]
+    assert pub["receipt"]["lock_mode"] == "COMPLIANCE" and pub["receipt"]["sha256"] == hashlib.sha256(obj["body"]).hexdigest()
+
+
+@pytest.mark.asyncio
+async def test_an_s3_failure_is_noted_and_retried(client, admin_token, s3, db_session):
+    r = await client.put(f"{A}/publication", json={"interval_minutes": 60, "rekor_enabled": False},
+                         headers=auth_headers(admin_token))
+    assert r.status_code == 200
+    assert (await _use_s3(client, admin_token, s3)).status_code == 200
+    await client.post(f"{A}/checkpoints", headers=auth_headers(admin_token))
+    s3.mode = "no_lock"
+    r = await client.post(f"{A}/publication/run", headers=auth_headers(admin_token))
+    assert r.json()["result"] == {"s3": "failed"}
+    assert next(x for x in r.json()["targets"] if x["target"] == "s3")["last_error"].startswith("publish.s3_not_locked")
+    s3.mode = "ok"
+    assert (await client.post(f"{A}/publication/run", headers=auth_headers(admin_token))).json()["result"] == {"s3": "published"}
+

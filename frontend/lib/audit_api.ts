@@ -51,6 +51,18 @@ export interface PublicationTargetT {
   last_location: string | null;
   last_error: string | null;
   last_error_at: string | null;
+  /** S3, once set up (never the secret) */
+  settings?: S3SettingsT | null;
+}
+
+export interface S3SettingsT {
+  endpoint: string | null;
+  region: string;
+  bucket: string;
+  prefix: string | null;
+  access_key: string;
+  retention_days: number;
+  lock_mode: "COMPLIANCE";
 }
 
 export interface PublicationSettingsT {
@@ -389,4 +401,11 @@ export async function setPublication(input: {
 
 export async function publishNow() {
   return (await api.post<PublicationSettingsT>("/audit-logs/publication/run")).data;
+}
+
+export async function setPublicationS3(input: {
+  enabled: boolean; endpoint: string | null; region: string; bucket: string; prefix: string | null;
+  access_key: string; secret_key?: string | null; retention_days: number;
+}) {
+  return (await api.put<PublicationSettingsT>("/audit-logs/publication/s3", input)).data;
 }

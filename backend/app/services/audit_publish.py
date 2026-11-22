@@ -14,7 +14,10 @@ server cannot rewrite:
   rekor   Sigstore Rekor, a public append-only transparency log - on by
           default. Only the SHA-256 of the checkpoint's statement, a
           signature over it and the publishing key go there, never the log.
-  s3      a bucket with Object Lock: one object per checkpoint, retained.
+  s3      a bucket with Object Lock (Amazon S3 or an S3-compatible store):
+          one object per checkpoint - the signed checkpoint itself - locked in
+          compliance mode for the retention the administrator chose, so not
+          even the bucket's owner can delete or overwrite it before then.
 
 A history that was rewritten after a checkpoint was published can no longer
 be shown to extend it (a consistency proof, docs/audit-proofs.md) - and the
@@ -35,7 +38,9 @@ key the administrator gave).
 
 import base64
 import hashlib
+import ipaddress
 import json
+import re
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import urlparse
@@ -49,9 +54,10 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core import sigv4
 from app.core.crypto import decrypt_secret, encrypt_secret
 from app.core.errors import api_error
-from app.core.outbound import guarded_async_client, validate_url
+from app.core.outbound import _allowlist, guarded_async_client, validate_url
 from app.models.audit_log import AuditCheckpoint, AuditCheckpointPublication, AuditPublicationSettings
 
 TARGETS = ("rekor", "s3")
@@ -70,6 +76,16 @@ kBbmLSGtks4L3qX6yYY0zufBnhC8Ur/iy55GhWP/9A/bY2LhC30M9+RYtw==
 -----END PUBLIC KEY-----
 """
 SIGSTORE_REKOR_LOG_ID = "c0d23d6ad406973f9559f3ba2d1ca01f84147d8ffc5b8445c224f98b9591801d"
+
+
+S3_DEFAULT_PREFIX = "provenza-audit/"
+S3_DEFAULT_RETENTION_DAYS = 365
+S3_MIN_RETENTION_DAYS, S3_MAX_RETENTION_DAYS = 1, 3650
+S3_LOCK_MODE = "COMPLIANCE"     # not GOVERNANCE: nobody, not the bucket's owner either, can shorten it
+_REGION = re.compile(r"^[a-z0-9-]{2,30}$")
+_BUCKET = re.compile(r"^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$")
+_PREFIX = re.compile(r"^[A-Za-z0-9._/-]{0,200}$")
+_ACCESS_KEY = re.compile(r"^[A-Za-z0-9+/=_.-]{3,128}$")
 
 
 class PublishError(Exception):
@@ -295,7 +311,202 @@ async def publish_rekor(db: AsyncSession, row: AuditPublicationSettings, cp: Aud
                             "uuid": uuid, "entry": entry, "sent": sent}, sort_keys=True, separators=(",", ":")))
 
 
-PUBLISHERS = {"rekor": publish_rekor}
+# ----------------------------------------------------------------------------- S3 with Object Lock
+
+def s3_target(endpoint: Optional[str], region: str, bucket: str, key: str) -> Tuple[str, str, str]:
+    """(URL, Host header, path signed). Amazon S3 itself: virtual-hosted style
+    (bucket.s3.region.amazonaws.com). Another endpoint: path style
+    (endpoint/bucket/key), which S3-compatible stores take."""
+    if endpoint:
+        parsed = urlparse(endpoint)
+        path = f"{parsed.path.rstrip('/')}/{bucket}/{key}"
+        return f"{parsed.scheme}://{parsed.netloc}{sigv4.canonical_uri(path)}", parsed.netloc, path
+    host = f"{bucket}.s3.{region}.amazonaws.com"
+    return f"https://{host}{sigv4.canonical_uri('/' + key)}", host, "/" + key
+
+
+def _s3_error(body: bytes) -> str:
+    """S3's own error code and message (an XML document), read without an XML parser."""
+    text_ = body[:4000].decode("utf-8", "replace")
+    code = re.search(r"<Code>([^<]{1,100})</Code>", text_)
+    msg = re.search(r"<Message>([^<]{1,200})</Message>", text_)
+    return ": ".join(x.group(1) for x in (code, msg) if x)
+
+
+def _iso(when: datetime) -> str:
+    return when.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _parse_iso(value: Optional[str]) -> Optional[datetime]:
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00")).astimezone(timezone.utc)
+    except ValueError:
+        return None
+
+
+async def _s3_request(method: str, url: str, host: str, path: str, body: bytes, extra: Dict[str, str], *,
+                      region: str, access_key: str, secret_key: str) -> Tuple[int, Dict[str, str], bytes]:
+    now = _now()
+    payload_sha = hashlib.sha256(body).hexdigest()
+    headers = {"Host": host, "x-amz-date": now.strftime("%Y%m%dT%H%M%SZ"), "x-amz-content-sha256": payload_sha,
+               **extra}
+    headers["Authorization"] = sigv4.sign(method, path, headers, payload_sha, access_key=access_key,
+                                          secret_key=secret_key, region=region, when=now)
+    try:
+        async with guarded_async_client(timeout=TIMEOUT_SECONDS) as client:
+            async with client.stream(method, url, content=body if body else None, headers=headers) as resp:
+                out = b""
+                async for chunk in resp.aiter_bytes():
+                    out += chunk
+                    if len(out) > MAX_RESPONSE_BYTES:
+                        raise PublishError("publish.response_too_large")
+                return resp.status_code, {k.lower(): v for k, v in resp.headers.items()}, out
+    except httpx.HTTPError as exc:
+        raise PublishError("publish.unreachable", f"{type(exc).__name__}: {str(exc)[:150]}")
+
+
+async def s3_put_locked(*, endpoint: Optional[str], region: str, bucket: str, key: str, access_key: str,
+                        secret_key: str, body: bytes, retain_until: datetime) -> Dict[str, Any]:
+    """Write one object locked in compliance mode until retain_until, then read
+    its lock back: a bucket without Object Lock (or a store that ignores it)
+    is refused, not trusted."""
+    url, host, path = s3_target(endpoint, region, bucket, key)
+    until = _iso(retain_until)
+    md5 = base64.b64encode(hashlib.md5(body, usedforsecurity=False).digest()).decode()
+    code, headers, out = await _s3_request(
+        "PUT", url, host, path, body,
+        {"Content-Type": "application/json", "Content-MD5": md5,   # Object Lock needs an integrity header
+         "x-amz-object-lock-mode": S3_LOCK_MODE, "x-amz-object-lock-retain-until-date": until},
+        region=region, access_key=access_key, secret_key=secret_key)
+    if code != 200:
+        raise PublishError("publish.http_error", f"HTTP {code}" + (f": {_s3_error(out)}" if out else ""))
+    version = headers.get("x-amz-version-id")
+    code, head, out = await _s3_request("HEAD", url, host, path, b"", {}, region=region, access_key=access_key,
+                                        secret_key=secret_key)
+    if code != 200:
+        raise PublishError("publish.s3_unreadable", f"HTTP {code}: the object's lock could not be read back")
+    locked_until = _parse_iso(head.get("x-amz-object-lock-retain-until-date"))
+    if head.get("x-amz-object-lock-mode") != S3_LOCK_MODE or locked_until is None \
+            or abs((locked_until - _parse_iso(until)).total_seconds()) > 1:
+        raise PublishError("publish.s3_not_locked",
+                           "the object's lock was not confirmed: Object Lock must be on for the bucket, "
+                           "and the key needs s3:GetObjectRetention")
+    return {"bucket": bucket, "key": key, "host": host, "version_id": version or head.get("x-amz-version-id"),
+            "etag": (headers.get("etag") or "").strip('"'), "content_md5": md5,
+            "sha256": hashlib.sha256(body).hexdigest(), "lock_mode": S3_LOCK_MODE, "retain_until": until}
+
+
+def _s3_key(row: AuditPublicationSettings, name: str) -> str:
+    return f"{row.s3_prefix or ''}org-{row.org_id}/{name}"
+
+
+async def publish_s3(db: AsyncSession, row: AuditPublicationSettings, cp: AuditCheckpoint) -> AuditCheckpointPublication:
+    from app.services.audit_proofs import checkpoint_out
+
+    body = json.dumps(checkpoint_out(cp), sort_keys=True, indent=2).encode("utf-8")
+    key = _s3_key(row, f"checkpoint-{cp.tree_size:012d}.json")
+    try:
+        secret = decrypt_secret(row.s3_secret_enc)
+    except ValueError:
+        raise PublishError("publish.s3_secret_unreadable")
+    done = await s3_put_locked(endpoint=row.s3_endpoint, region=row.s3_region, bucket=row.s3_bucket, key=key,
+                               access_key=row.s3_access_key, secret_key=secret, body=body,
+                               retain_until=_now() + timedelta(days=row.s3_retention_days or S3_DEFAULT_RETENTION_DAYS))
+    destination = f"{row.s3_endpoint or 'https://s3.' + row.s3_region + '.amazonaws.com'}/{row.s3_bucket}"
+    return AuditCheckpointPublication(
+        org_id=cp.org_id, checkpoint_id=cp.id, target="s3", destination=destination[:500],
+        reference=(done["version_id"] or done["etag"] or key)[:200], location=f"s3://{row.s3_bucket}/{key}"[:500],
+        published_at=_now(),
+        receipt=json.dumps({"format": "provenza.audit.publication/1", "target": "s3", **done},
+                           sort_keys=True, separators=(",", ":")))
+
+
+def _s3_check(endpoint: Optional[str], region: str, bucket: str, prefix: Optional[str], access_key: str,
+              retention_days: int) -> Tuple[Optional[str], str]:
+    """The settings as they will be used: (endpoint or None for Amazon S3, prefix)."""
+    def bad(code: str, detail: str = ""):
+        return api_error(status.HTTP_422_UNPROCESSABLE_ENTITY, code, **({"detail": detail} if detail else {}))
+    if not _REGION.match(region or ""):
+        raise bad("publish.s3_bad_region")
+    if not _BUCKET.match(bucket or "") or ".." in bucket:
+        raise bad("publish.s3_bad_bucket")
+    prefix = (prefix if prefix is not None else S3_DEFAULT_PREFIX).strip().lstrip("/")
+    if not _PREFIX.match(prefix) or ".." in prefix or "//" in prefix:
+        raise bad("publish.s3_bad_prefix")
+    if prefix and not prefix.endswith("/"):
+        prefix += "/"
+    if not _ACCESS_KEY.match(access_key or ""):
+        raise bad("publish.s3_bad_access_key")
+    if not S3_MIN_RETENTION_DAYS <= retention_days <= S3_MAX_RETENTION_DAYS:
+        raise bad("publish.s3_bad_retention")
+    endpoint = (endpoint or "").strip().rstrip("/") or None
+    if not endpoint and "." in bucket:
+        # bucket.s3.<region>.amazonaws.com: a dot would break the certificate's wildcard
+        raise bad("publish.s3_bad_bucket", "Amazon S3 buckets with a dot in the name are not supported")
+    if endpoint:
+        try:
+            endpoint = validate_url(endpoint).rstrip("/")
+        except ValueError as exc:
+            raise bad("publish.bad_url", str(exc)[:200])
+        parsed = urlparse(endpoint)
+        if parsed.query or parsed.fragment:
+            raise bad("publish.bad_url", "no query or fragment")
+        if parsed.scheme != "https":
+            # plain HTTP only to a store on the operator's own network
+            hosts, _ = _allowlist()
+            if (parsed.hostname or "").lower() not in hosts and not _private_literal(parsed.hostname):
+                raise bad("publish.s3_https_required")
+    return endpoint, prefix
+
+
+def _private_literal(host: Optional[str]) -> bool:
+    try:
+        ip = ipaddress.ip_address(host or "")
+    except ValueError:
+        return False
+    _, nets = _allowlist()
+    return any(ip in n for n in nets)
+
+
+async def save_s3(db: AsyncSession, org_id: int, user_id: int, *, enabled: bool, endpoint: Optional[str],
+                  region: str, bucket: str, prefix: Optional[str], access_key: str, secret_key: Optional[str],
+                  retention_days: int) -> AuditPublicationSettings:
+    """Switched on, the bucket is tried first: a small test object is written
+    with a one-day lock and its lock read back. Settings that cannot do that
+    are refused, not stored. No secret_key keeps the stored one."""
+    endpoint, prefix = _s3_check(endpoint, region, bucket, prefix, access_key, retention_days)
+    row = await settings_row(db, org_id)
+    if secret_key:
+        secret = secret_key.strip()
+    elif row.s3_secret_enc:
+        secret = decrypt_secret(row.s3_secret_enc)
+    else:
+        raise api_error(status.HTTP_422_UNPROCESSABLE_ENTITY, "publish.s3_no_secret")
+    if enabled:
+        try:
+            await s3_put_locked(
+                endpoint=endpoint, region=region, bucket=bucket, access_key=access_key, secret_key=secret,
+                key=f"{prefix}org-{org_id}/provenza-test-{_now().strftime('%Y%m%dT%H%M%SZ')}.json",
+                body=json.dumps({"provenza": "publication test", "at": _iso(_now())}).encode(),
+                retain_until=_now() + timedelta(days=1))
+        except PublishError as exc:
+            raise api_error(status.HTTP_422_UNPROCESSABLE_ENTITY, exc.code, detail=(exc.detail or "")[:200])
+    changed = (endpoint, region, bucket, prefix) != (row.s3_endpoint, row.s3_region, row.s3_bucket, row.s3_prefix)
+    row.s3_enabled, row.s3_endpoint, row.s3_region, row.s3_bucket, row.s3_prefix = (
+        enabled, endpoint, region, bucket, prefix)
+    row.s3_access_key, row.s3_retention_days = access_key, retention_days
+    if secret_key:
+        row.s3_secret_enc = encrypt_secret(secret)
+    if changed or enabled:
+        row.s3_last_error = row.s3_last_error_at = None
+    row.updated_by = user_id
+    await db.commit()
+    return row
+
+
+PUBLISHERS = {"rekor": publish_rekor, "s3": publish_s3}
 
 
 # ----------------------------------------------------------------------------- when and what
@@ -398,9 +609,16 @@ async def settings_out(db: AsyncSession, org_id: int) -> Dict[str, Any]:
             url = (row.rekor_url if row else None) or DEFAULT_REKOR_URL
             item.update(configured=True, destination=url, host=_host(url), public_instance=url == DEFAULT_REKOR_URL)
         else:
-            endpoint = row.s3_endpoint if row else None
-            item.update(configured=bool(row and row.s3_bucket and row.s3_secret_enc),
-                        destination=(f"{row.s3_bucket}" if row and row.s3_bucket else None), host=_host(endpoint))
+            configured = bool(row and row.s3_bucket and row.s3_secret_enc)
+            host = None
+            if configured:
+                host = (urlparse(row.s3_endpoint).netloc if row.s3_endpoint
+                        else f"{row.s3_bucket}.s3.{row.s3_region}.amazonaws.com")
+            item.update(configured=configured, destination=row.s3_bucket if configured else None, host=host,
+                        settings=({"endpoint": row.s3_endpoint, "region": row.s3_region, "bucket": row.s3_bucket,
+                                   "prefix": row.s3_prefix, "access_key": row.s3_access_key,
+                                   "retention_days": row.s3_retention_days, "lock_mode": S3_LOCK_MODE}
+                                  if configured else None))
         targets.append(item)
     published = int(await db.scalar(select(func.count()).select_from(AuditCheckpointPublication).where(
         AuditCheckpointPublication.org_id == org_id)) or 0)
