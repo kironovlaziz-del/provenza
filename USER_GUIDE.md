@@ -154,9 +154,9 @@ You can also set an SLA and a risk score for vendor-risk tracking.
 Policies → **Policy hierarchy**: one policy at three levels -
 organization, team (and its sub-teams), agent - edited as a form or as
 YAML. A lower level can only tighten: the smallest limit wins, every
-level's allow list must allow, and all deny / approval lists apply. It
-applies to the LLM gateway (limits, models, providers) and to agent
-actions (tools, delegation depth). While you edit, *Effective policy*
+level's allow list must allow, and all deny / approval lists and argument
+rules apply. It applies to the LLM gateway (limits, models, providers) and
+to agent actions (tools, what a tool may be called with, delegation depth). While you edit, *Effective policy*
 shows every value with the level it comes from and lists what has no
 effect because a level above is stricter. Every save is in the audit log.
 Details: docs/policies.md.

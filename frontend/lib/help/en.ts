@@ -361,6 +361,7 @@ export const ARTICLES_EN: Article[] = [
         "Which **AI models and providers** may be used.",
         "Which **tools** an agent may call, and which it may never call.",
         "Which actions need **human approval** before they run.",
+        "**What a tool may be called with** — for example a refund of at most 100 without a person, e-mail only to your own domain, files only under one folder. A call that breaks such a rule is refused or waits for a person; an argument the rule needs but the call leaves out counts as breaking it.",
         "**Limits** — for example how many calls or how much spending in a period.",
       ]],
       ["h", "Writing a policy"],

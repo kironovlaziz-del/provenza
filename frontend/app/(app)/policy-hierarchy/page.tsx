@@ -19,17 +19,20 @@ import {
 } from "@/lib/policy_layers_api";
 import { confirmDialog } from "@/components/Dialog";
 import { RulePacks } from "@/components/RulePacks";
+import {
+  ArgumentRulesEditor, argRowFromRule, argRuleFromRow, argRuleText, rowsRoundTrip, type ArgRow,
+} from "@/components/ArgumentRulesEditor";
 import { Tabs } from "@/components/Tabs";
 
 type Sel = { scope: Scope; id: number | null; label: string };
 type FormState = {
   description: string; rpm: string; maxTokens: string; depth: string; models: string; providers: string;
-  toolsAllow: string; toolsDeny: string; toolsApproval: string;
+  toolsAllow: string; toolsDeny: string; toolsApproval: string; args: ArgRow[];
 };
 
 const EMPTY_FORM: FormState = {
   description: "", rpm: "", maxTokens: "", depth: "", models: "", providers: "", toolsAllow: "", toolsDeny: "",
-  toolsApproval: "",
+  toolsApproval: "", args: [],
 };
 
 const split = (s: string) => Array.from(new Set(s.split(/[,\n]/).map((x) => x.trim()).filter(Boolean)));
@@ -53,6 +56,7 @@ function docFromForm(f: FormState): PolicyDocument {
   put("tools", "allow", split(f.toolsAllow));
   put("tools", "deny", split(f.toolsDeny));
   put("tools", "require_approval", split(f.toolsApproval));
+  put("tools", "arguments", f.args.map(argRuleFromRow).filter(Boolean));
   return d;
 }
 
@@ -63,14 +67,20 @@ function formFromDoc(d: PolicyDocument): FormState {
     depth: d.limits?.max_delegation_depth?.toString() ?? "", models: join(d.models?.allow),
     providers: join(d.providers?.allow), toolsAllow: join(d.tools?.allow), toolsDeny: join(d.tools?.deny),
     toolsApproval: join(d.tools?.require_approval),
+    args: (d.tools?.arguments ?? []).map(argRowFromRule).filter(Boolean) as ArgRow[],
   };
 }
 
-/** The form cannot show an empty allow list ("allow nothing"): editing such a
- *  level as a form would drop it and loosen the policy - YAML only. */
+/** The form cannot show an empty allow list ("allow nothing"), nor an argument
+ *  rule whose value it would turn into text (`in: [1, 2]`): editing such a
+ *  level as a form would change it, and could loosen the policy - YAML only. */
 function formCannotShow(d: PolicyDocument): boolean {
-  return [d.models?.allow, d.providers?.allow, d.tools?.allow].some((v) => Array.isArray(v) && v.length === 0);
+  return [d.models?.allow, d.providers?.allow, d.tools?.allow].some((v) => Array.isArray(v) && v.length === 0)
+    || !rowsRoundTrip(d.tools?.arguments ?? []);
 }
+
+/** Rules being typed that are not complete yet are not saved - say so. */
+const incompleteArgs = (f: FormState) => f.args.some((r) => argRuleFromRow(r) === null);
 
 
 function Source({ s }: { s: string }) {
@@ -97,9 +107,18 @@ function EffectiveValue({ kind, v }: { kind: string; v?: FieldValue }) {
     );
   }
   if (kind === "union" && v.items.length === 0) return <span className="hint-text">{t("ph.not_restricted")}</span>;
+  if (v.items.some((i) => typeof i.value === "object")) {
+    return (
+      <div className="ag-stack" style={{ gap: 4 }}>
+        {v.items.map((i, n) => (
+          <div key={n}><Source s={i.source} />{" "}<span className="mono" style={{ fontSize: 12 }}>{argRuleText(i.value, t)}</span></div>
+        ))}
+      </div>
+    );
+  }
   return (
     <div className="ag-chips">
-      {v.items.map((i) => <span key={i.value} className="pill pill-neutral mono" title={i.source}>{i.value} · {i.source}</span>)}
+      {v.items.map((i) => <span key={String(i.value)} className="pill pill-neutral mono" title={i.source}>{String(i.value)} · {i.source}</span>)}
     </div>
   );
 }
@@ -217,7 +236,7 @@ export default function PolicyHierarchyPage() {
     }
   }
 
-  const f = (k: keyof FormState) => ({
+  const f = (k: Exclude<keyof FormState, "args">) => ({
     value: form[k],
     disabled: !isAdmin,
     onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
@@ -322,6 +341,11 @@ export default function PolicyHierarchyPage() {
                       <div className="field"><label>{t("ph.f.tools_deny")}</label><input className="mono" placeholder="shell.*" {...f("toolsDeny")} /></div>
                       <div className="field"><label>{t("ph.f.tools_require_approval")}</label><input className="mono" placeholder="email.send" {...f("toolsApproval")} /></div>
                     </div>
+                    <div className="ph-args">
+                      <ArgumentRulesEditor rows={form.args} disabled={!isAdmin}
+                        onChange={(args) => { setForm({ ...form, args }); setDirty(true); }} />
+                      {incompleteArgs(form) && <p className="error-text ag-small">{t("ph.args_incomplete")}</p>}
+                    </div>
                     <p className="hint-text ag-small">{t("ph.form_hint")}</p>
                   </>
                 )}
@@ -333,7 +357,9 @@ export default function PolicyHierarchyPage() {
                 )}
                 {isAdmin && (
                   <div className="ag-actions">
-                    <button className="btn btn-primary" disabled={busy || !dirty || (preview !== null && !preview.ok)} onClick={() => save()}>{t("ph.save")}</button>
+                    <button className="btn btn-primary"
+                      disabled={busy || !dirty || (preview !== null && !preview.ok) || (tab === "form" && incompleteArgs(form))}
+                      onClick={() => save()}>{t("ph.save")}</button>
                     {layer && layer.revision > 0 && Object.keys(layer.document).length > 0 && (
                       <button className="btn" disabled={busy} onClick={() => save(true)}>{t("ph.clear")}</button>
                     )}

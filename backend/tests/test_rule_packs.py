@@ -195,3 +195,13 @@ def test_merge_and_undo_are_inverse_on_what_the_guard_added():
     # a limit changed by hand since stays as it is
     new["limits"]["max_tokens"] = 50
     assert rule_packs.undo_guard(new, delta)["limits"] == {"max_tokens": 50}
+
+
+def test_a_guard_adds_argument_rules_and_its_undo_takes_them_out():
+    mine = {"tool": "kb.search", "arg": "q", "op": "max_length", "value": 200, "effect": "deny"}
+    theirs = {"tool": "payments.*", "arg": "amount", "op": "max", "value": 100, "effect": "require_approval"}
+    level = {"tools": {"arguments": [mine]}}
+    new, delta, _ = rule_packs.merge_guard(level, {"tools": {"arguments": [mine, theirs]}})
+    assert new["tools"]["arguments"] == [mine, theirs] and delta == {"tools.arguments": [theirs]}
+    assert rule_packs.diff(level, new)[0]["added"] == [theirs]
+    assert rule_packs.undo_guard(new, delta) == level

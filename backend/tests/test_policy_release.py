@@ -165,6 +165,29 @@ class TestEnforcement:
         assert (await _check(client, admin_token, a, "db.write"))["decision"] == "allowed"
 
     @pytest.mark.asyncio
+    async def test_an_argument_rule_taken_out_still_applies_until_signed(self, client, admin_token):
+        from tests.test_behavior_monitor import containment
+        await containment(client, admin_token, containment_enabled=False)    # refused on purpose
+        a = await _agent(client, admin_token, tools=("db.read",))
+        L = "/api/v1/policy-layers"
+        rule = "tools: {arguments: [{tool: db.read, arg: q, op: max, value: 5}]}"
+        assert (await client.put(L, json={"scope": "org", "yaml": rule}, headers=auth_headers(admin_token))
+                ).status_code == 200
+        await _release(client, admin_token)
+        assert (await _check(client, admin_token, a, inp={"q": 9}))["decision"] == "denied"
+        # taken out of the working copy: the signed one still has it
+        assert (await client.put(L, json={"scope": "org", "yaml": ""}, headers=auth_headers(admin_token))
+                ).status_code == 200
+        assert (await _check(client, admin_token, a, inp={"q": 9}))["decision"] == "denied"
+        # made stricter: at once
+        rule3 = "tools: {arguments: [{tool: db.read, arg: q, op: max, value: 3}]}"
+        await client.put(L, json={"scope": "org", "yaml": rule3}, headers=auth_headers(admin_token))
+        assert (await _check(client, admin_token, a, inp={"q": 4}))["decision"] == "denied"
+        await _release(client, admin_token)
+        assert (await _check(client, admin_token, a, inp={"q": 3}))["decision"] == "allowed"
+        assert (await _check(client, admin_token, a, inp={"q": 4}))["decision"] == "denied"
+
+    @pytest.mark.asyncio
     async def test_an_agent_or_key_not_in_the_release_cannot_act(self, client, admin_token, db_session):
         a = await _agent(client, admin_token)
         await _release(client, admin_token)

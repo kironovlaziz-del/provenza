@@ -99,6 +99,11 @@ async def collect_facts(db: AsyncSession, org_id: int) -> dict:
     f["agent_policies"] = len(rules)
     f["approval_rules"] = sum(1 for r in rules if r.get("require_approval_tools"))
     f["argument_rules"] = sum(len(r.get("argument_rules") or []) for r in rules)
+    # and those of the policy hierarchy (tools.arguments of every level)
+    from app.models.policy_layer import PolicyLayer
+    docs = await _safe(db.execute(select(PolicyLayer.document).where(PolicyLayer.org_id == org_id)), None)
+    f["argument_rules"] += sum(len(((d or {}).get("tools") or {}).get("arguments") or [])
+                               for d in (docs.scalars().all() if docs is not None else []))
 
     inc = await _safe(db.execute(select(AgentIncident.severity, func.count()).where(
         AgentIncident.org_id == org_id, AgentIncident.resolved.is_(False)).group_by(AgentIncident.severity)), None)

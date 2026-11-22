@@ -223,3 +223,99 @@ async def test_a_team_with_a_policy_level(client, admin_token):
     await put(client, admin_token, "team", "", target_id=t["id"])  # cleared - kept in the audit log
     r = await client.delete(f"{T}/{t['id']}", headers=auth_headers(admin_token))
     assert r.status_code == 200, r.text
+
+
+# ----------------------------------------------------------------------------- argument rules (tools.arguments)
+
+ARGS = """
+tools:
+  arguments:
+    - {tool: "payments.*", arg: amount, op: max, value: 100, effect: require_approval}
+    - {tool: email.send, arg: to, op: domain_in, value: [provenza.dev]}
+"""
+
+
+def test_argument_rules_in_a_level():
+    doc = policy_doc.from_yaml(ARGS + "    - {tool: email.send, arg: to, op: domain_in, value: [provenza.dev]}\n")
+    rules = doc["tools"]["arguments"]
+    assert len(rules) == 2                                                # the same rule twice: once
+    assert rules[1] == {"tool": "email.send", "arg": "to", "op": "domain_in", "value": ["provenza.dev"],
+                        "effect": "deny"}                                 # the effect written out
+    assert policy_doc.from_yaml(policy_doc.to_yaml(doc)) == doc
+    for text, code, path in (
+        ("tools: {arguments: [{tool: x, arg: y, op: max, value: 1, efect: deny}]}", "policy.unknown_key",
+         "tools.arguments[0].efect"),
+        ("tools: {arguments: [{tool: x, arg: y, op: max, value: 1}, {tool: x, arg: y, op: nope, value: 1}]}",
+         "policy.bad_argument_rule", "tools.arguments[1]"),
+        ("tools: {arguments: [{tool: x, arg: y, op: matches, value: '(a+)+'}]}", "policy.bad_argument_rule",
+         "tools.arguments[0]"),
+        ("tools: {arguments: [{tool: x, arg: y, op: max, value: 1, effect: allow}]}", "policy.bad_argument_rule",
+         "tools.arguments[0]"),
+        ("tools: {arguments: {tool: x}}", "policy.expected_list", "tools.arguments"),
+    ):
+        with pytest.raises(policy_doc.PolicyDocError) as err:
+            policy_doc.from_yaml(text)
+        assert (err.value.code, err.value.path) == (code, path), text
+    # every level's rules apply, each with the level it comes from
+    team = policy_doc.from_yaml("tools: {arguments: [{tool: kb.search, arg: q, op: max_length, value: 200}]}")
+    eff = policy_doc.Effective(policy_doc.resolve([("organization", doc), ("team ml", team)]))
+    assert [(i["value"]["tool"], i["source"]) for i in eff.fields["tools.arguments"]["items"]] == \
+        [("payments.*", "organization"), ("email.send", "organization"), ("kb.search", "team ml")]
+
+
+async def test_agent_actions_follow_argument_rules_of_every_level(client, admin_token):
+    from tests.test_behavior_monitor import containment
+    await containment(client, admin_token, containment_enabled=False)    # refused on purpose, again and again
+    agent = await enroll(client, admin_token, "arg-bot", capabilities=["read"],
+                         allowed_tools=["payments.refund", "email.send", "kb.search"])
+    t = await team_with(client, admin_token, agent["id"], name="arg-team")
+    assert (await put(client, admin_token, "org", ARGS)).status_code == 200
+    r = await put(client, admin_token, "team", "tools: {arguments: [{tool: kb.search, arg: q, op: max_length, "
+                                                "value: 10}]}", target_id=t["id"])
+    assert r.status_code == 200, r.text
+
+    async def check(tool, inp):
+        r = await client.post(f"{A}/actions/check", headers={"X-Agent-Key": agent["api_key"]},
+                              json={"agent_id": agent["id"], "tool_name": tool, "input": inp})
+        assert r.status_code == 200, r.text
+        return r.json()
+
+    assert (await check("payments.refund", {"amount": 40}))["decision"] == "allowed"
+    d = await check("payments.refund", {"amount": 240})
+    assert d["decision"] == "pending_approval" and "organization policy" in d["reason"] and "amount" in d["reason"]
+    d = await check("payments.refund", {"amount": "40; also 900"})        # not a number: fails closed
+    assert d["decision"] == "pending_approval"
+    assert (await check("email.send", {"to": "ann@provenza.dev"}))["decision"] == "allowed"
+    d = await check("email.send", {"to": ["ann@provenza.dev", "eve@evil.example"]})   # every one of them
+    assert d["decision"] == "denied" and "organization policy" in d["reason"]
+    d = await check("email.send", {"subject": "no recipient"})            # a missing argument violates
+    assert d["decision"] == "denied" and "missing" in d["reason"]
+    d = await check("kb.search", {"q": "a question longer than ten"})
+    assert d["decision"] == "denied" and "team arg-team policy" in d["reason"]
+
+    # an agent level adds its own; it cannot take one away from above
+    await put(client, admin_token, "agent", "tools: {arguments: [{tool: payments.refund, arg: currency, op: in, "
+                                            "value: [EUR]}]}", target_id=agent["id"])
+    d = await check("payments.refund", {"amount": 40, "currency": "USD"})
+    assert d["decision"] == "denied" and "agent arg-bot policy" in d["reason"]
+    assert (await check("payments.refund", {"amount": 40, "currency": "EUR"}))["decision"] == "allowed"
+
+    eff = (await client.get(f"{L}/effective?agent_id={agent['id']}", headers=auth_headers(admin_token))).json()
+    items = eff["effective"]["fields"]["tools.arguments"]["items"]
+    assert [i["source"] for i in items] == ["organization", "organization", "team arg-team", "agent arg-bot"]
+
+    # a bad rule is named in the preview, with where it is
+    r = await client.post(f"{L}/preview", headers=auth_headers(admin_token), json={
+        "scope": "org", "target_id": None, "yaml": "tools: {arguments: [{tool: x, arg: y, op: maximum, value: 1}]}"})
+    assert r.json()["ok"] is False
+    assert r.json()["error"]["code"] == "policy.bad_argument_rule" and r.json()["error"]["path"] == "tools.arguments[0]"
+    assert "unknown op" in r.json()["error"]["detail"]
+
+
+async def test_argument_rules_of_the_hierarchy_count_for_compliance(client, admin_token, db_session):
+    from app.services import compliance_engine
+
+    org_id = (await client.get("/api/v1/users/me", headers=auth_headers(admin_token))).json()["org_id"]
+    before = (await compliance_engine.collect_facts(db_session, org_id))["argument_rules"]
+    assert (await put(client, admin_token, "org", ARGS)).status_code == 200
+    assert (await compliance_engine.collect_facts(db_session, org_id))["argument_rules"] == before + 2

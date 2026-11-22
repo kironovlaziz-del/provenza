@@ -1,5 +1,6 @@
 // Hierarchical policies (backend services/hier_policy.py, core/policy_doc.py).
 import { api } from "./api";
+import type { ArgRule } from "@/components/ArgumentRulesEditor";
 
 export type Scope = "org" | "team" | "agent";
 
@@ -9,7 +10,7 @@ export interface PolicyDocument {
   limits?: { requests_per_minute?: number; max_tokens?: number; max_delegation_depth?: number };
   models?: { allow?: string[] };
   providers?: { allow?: string[] };
-  tools?: { allow?: string[]; deny?: string[]; require_approval?: string[] };
+  tools?: { allow?: string[]; deny?: string[]; require_approval?: string[]; arguments?: ArgRule[] };
 }
 
 export interface LayerT {
@@ -33,7 +34,7 @@ export interface LevelT {
 export type FieldValue =
   | { value: number | boolean; source: string }
   | { constraints: { source: string; patterns: string[] }[] }
-  | { items: { value: string; source: string }[] };
+  | { items: { value: string | ArgRule; source: string }[] };
 
 export interface ResolvedT {
   fields: Record<string, FieldValue>;
@@ -86,4 +87,5 @@ export const FIELD_ORDER: { field: string; kind: "min" | "allow" | "union" | "or
   { field: "tools.allow", kind: "allow" },
   { field: "tools.deny", kind: "union" },
   { field: "tools.require_approval", kind: "union" },
+  { field: "tools.arguments", kind: "union" },
 ];

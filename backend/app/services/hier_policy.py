@@ -12,7 +12,7 @@ Where it applies:
     calling agent, on top of the gateway settings (which take part as the
     topmost level, "gateway settings");
   * agent actions (agent_audit -> agent_policy_engine): tools allow / deny /
-    require approval, models, delegation depth.
+    require approval, argument rules, models, delegation depth.
 """
 
 from __future__ import annotations
@@ -221,7 +221,7 @@ def signed_chain(signed, *, team_id: Optional[int] = None, agent=None, gateway: 
 
 def engine_rules(levels: List[Dict[str, Any]]) -> Tuple[List[Dict[str, Any]], Optional[int]]:
     """Levels as agent_policy_engine custom policies - one per level that has
-    tool or model rules, so every level must pass on its own (and a refusal
+    tool, argument or model rules, so every level must pass on its own (and a refusal
     names the level) - and the delegation depth limit."""
     policies: List[Dict[str, Any]] = []
     for lv in levels:
@@ -234,6 +234,8 @@ def engine_rules(levels: List[Dict[str, Any]]) -> Tuple[List[Dict[str, Any]], Op
             rules["deny_tool_patterns"] = tools["deny"]
         if tools.get("require_approval"):
             rules["require_approval_tool_patterns"] = tools["require_approval"]
+        if tools.get("arguments"):
+            rules["argument_rules"] = tools["arguments"]
         if "allow" in models:
             rules["allow_only_model_patterns"] = models["allow"]
         if rules:

@@ -135,6 +135,9 @@ func engineRules(levels []level) ([]customPolicy, *int) {
 		if truthy(tools["require_approval"]) {
 			rules["require_approval_tool_patterns"] = tools["require_approval"]
 		}
+		if truthy(tools["arguments"]) {
+			rules["argument_rules"] = tools["arguments"]
+		}
 		if v, ok := models["allow"]; ok {
 			rules["allow_only_model_patterns"] = v
 		}

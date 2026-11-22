@@ -1317,7 +1317,8 @@
     "publish.s3_not_locked": "The object was stored without the lock: switch Object Lock on for the bucket, and give the key s3:GetObjectRetention.",
     "publish.s3_unreadable": "The object's lock could not be read back: give the key s3:GetObject and s3:GetObjectRetention.",
     "publish.http_error": "The store answered with an error: {{detail}}",
-    "publish.unreachable": "The store could not be reached: {{detail}}"
+    "publish.unreachable": "The store could not be reached: {{detail}}",
+    "policy.bad_argument_rule": "Invalid argument rule"
   },
   "discovery": {
     "title": "Network Discovery",
@@ -1651,7 +1652,9 @@
     "preset_read_only_sql": "Read-only SQL",
     "preset_corp_email": "Email to own domain only",
     "preset_sandbox_files": "Files in sandbox only",
-    "preset_payment_limit": "Payment limit → approval"
+    "preset_payment_limit": "Payment limit → approval",
+    "args_incomplete": "Not complete: a tool, an argument and a value are needed",
+    "args_remove": "Remove this rule"
   },
   "agent_policies": {
     "title": "Agent Policies",
@@ -2817,7 +2820,7 @@
   },
   "ph": {
     "title": "Policy hierarchy",
-    "intro": "One policy at three levels: organization → team (and its sub-teams) → agent. A lower level can only tighten what is above it: the smallest limit wins, every level's allow list must allow, all deny and approval lists apply. It applies to the LLM gateway and to agent actions.",
+    "intro": "One policy at three levels: organization → team (and its sub-teams) → agent. A lower level can only tighten what is above it: the smallest limit wins, every level's allow list must allow, all deny and approval lists and argument rules apply. It applies to the LLM gateway and to agent actions.",
     "levels": "Levels",
     "org": "Organization",
     "teams": "Teams",
@@ -2874,13 +2877,15 @@
       "tools": {
         "allow": "Allowed tools",
         "deny": "Denied tools",
-        "require_approval": "Tools needing approval"
+        "require_approval": "Tools needing approval",
+        "arguments": "Argument rules"
       }
     },
     "agent_effective_link": "Policy levels that apply to this agent",
-    "yaml_only": "This level has an empty allow list (allow nothing), which the form cannot show - edit it as YAML.",
+    "yaml_only": "This level has something the form would change - an empty allow list (allow nothing), or an argument rule whose value is not plain text or numbers the form can keep - edit it as YAML.",
     "tab_levels": "Levels",
-    "tab_packs": "Rule packs"
+    "tab_packs": "Rule packs",
+    "args_incomplete": "An argument rule is not complete (tool, argument and value): finish it or remove it before saving."
   },
   "ks": {
     "title": "Kill switch",
