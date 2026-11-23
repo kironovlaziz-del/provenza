@@ -46,6 +46,7 @@ type Daemon struct {
 
 	rb     *ringbuf.Reader
 	dns    *dnsServers
+	names  *nameCache // the names behind the addresses (names.go)
 	viol   *violationBuffer
 	act    *activityBuffer
 	stats  *statsRing
@@ -140,6 +141,7 @@ func New(cfgPath, version string) (*Daemon, error) {
 		viol:      newViolationBuffer(cl),
 		act:       newActivityBuffer(cl),
 		stats:     newStatsRing(),
+		names:     newNameCache(),
 		startTime: time.Now(),
 		signed:    newSignedPolicy(cfg.Policy.Pin, cfg.StateDir),
 		seen:      newSeenCommands(cfg.StateDir),

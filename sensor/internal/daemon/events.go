@@ -77,6 +77,9 @@ func (d *Daemon) handleViolation(raw []byte) {
 	if ip, ok := addrOf(e.Family, e.Addr); ok {
 		s := ip.String()
 		v.DstIP = &s
+		if n, ok := d.names.get(e.Wid, ip, time.Now()); ok {
+			v.DstName = &n
+		}
 	}
 	if comm := strings.TrimRight(string(e.Comm[:]), "\x00"); comm != "" {
 		v.Comm = &comm
@@ -107,6 +110,9 @@ func (d *Daemon) handleAllowed(raw []byte) {
 	if ip, ok := addrOf(e.Family, e.Addr); ok {
 		s := ip.String()
 		a.DstIP = &s
+		if n, ok := d.names.get(e.Wid, ip, time.Now()); ok {
+			a.DstName = &n
+		}
 	}
 	if comm := strings.TrimRight(string(e.Comm[:]), "\x00"); comm != "" {
 		a.Comm = &comm
