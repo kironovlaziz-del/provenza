@@ -387,8 +387,8 @@ directory. From that release:
   the process's start time. The cgroup stays held until every process
   reported a pinned configuration: the pinned binary run with another
   server, another pin or `policy.mode` "off" gets nothing out.
-- **Commands** (`signers` in the manifest). Detach, restart and dump-state
-  run only when an administrator's session key signed
+- **Commands** (`signers` in the manifest). Detach, restart, dump-state
+  and prepare-bpf-lsm run only when an administrator's session key signed
   `provenza.sensor.command` for this sensor and kind, the session was
   certified by a passkey the manifest lists for an administrator, the
   statement has not expired (Provenza makes it valid for 4 minutes; a

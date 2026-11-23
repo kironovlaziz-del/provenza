@@ -21,7 +21,7 @@ const noPinWarning = "no policy.pin: commands are verified with the server's com
 
 // warnings: the kernel's notes and what weakens this sensor (heartbeat and status).
 func (d *Daemon) warnings() []string {
-	out := append([]string(nil), d.kernel.Notes...)
+	out := d.kernelNotes()
 	if d.signed == nil {
 		out = append(out, noPinWarning)
 	}
@@ -126,6 +126,7 @@ func (d *Daemon) sendHeartbeat(ctx context.Context) {
 		ConfigVersion:  cfgVer,
 		Enforcing:      enforcing,
 		Hooks:          d.kernel.Hooks,
+		BPFLSM:         d.bpfLSMState(),
 		Workloads:      wls,
 		Warnings:       warnings,
 		DroppedEvents:  d.kernel.Stat(bpfobj.StatEventsLost) + d.viol.droppedTotal() + d.act.droppedTotal(),

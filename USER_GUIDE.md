@@ -603,6 +603,9 @@ processes, matched by cgroup) may connect.
 3. The sensor's row shows its last heartbeat, attached hooks and
    warnings; expand it to **Dump state**, **Restart** or **Detach** the
    sensor with a command your session signs ([details](docs/sensor-commands.md)).
+   When the host's boot line leaves BPF LSM out, **Prepare BPF LSM…** turns
+   it on for the next boot (signed with your passkey); reboot the host
+   yourself when the page says it is prepared.
 
 Give each sensor the signed policy's pin (`install.sh --policy-pin <SHA-256>`,
 the value shown under **Signed policy**). It then checks the releases

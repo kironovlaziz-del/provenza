@@ -54,6 +54,8 @@ class SensorOut(BaseModel):
     hooks: Optional[List[str]] = None
     warnings: Optional[List[str]] = None
     errors: Optional[List[str]] = None
+    # BPF LSM on the sensor's host: active, inactive, prepared (after a reboot) or unavailable
+    bpf_lsm: Optional[str] = None
     dropped_events: int = 0
     allowed_total: Optional[int] = None
     denied_total: Optional[int] = None
@@ -204,14 +206,15 @@ class WorkloadOut(BaseModel):
 # ---------------------------------------------------------------- commands
 
 class CommandIn(BaseModel):
-    """Admin input for POST /sensors/{id}/commands. Only the three known
-    kinds are accepted: there is no generic channel. `statement` and
+    """Admin input for POST /sensors/{id}/commands. Only the known kinds
+    are accepted: there is no generic channel. prepare-bpf-lsm needs the
+    signature. `statement` and
     `signature`: the administrator signed the command with their session key
     (POST .../commands/statement) - a sensor that follows the signed policy
     runs nothing else."""
     model_config = ConfigDict(extra="forbid")
 
-    kind: Literal["detach", "restart", "dump-state"]
+    kind: Literal["detach", "restart", "dump-state", "prepare-bpf-lsm"]
     statement: Optional[Dict[str, Any]] = None
     signature: Optional[str] = Field(default=None, max_length=200)
 
@@ -219,7 +222,7 @@ class CommandIn(BaseModel):
 class CommandStatementIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    kind: Literal["detach", "restart", "dump-state"]
+    kind: Literal["detach", "restart", "dump-state", "prepare-bpf-lsm"]
 
 
 class CommandForSensor(BaseModel):
@@ -434,6 +437,8 @@ class HeartbeatIn(BaseModel):
     # docs/pvp/edge.md, section 5: what the sensor verified itself
     signed_policy: Optional[SignedPolicyReportIn] = None
     proxy_runs: Optional[List[ProxyRunReportIn]] = Field(default=None, max_length=50)
+    # active | inactive | prepared | unavailable (anything else is not kept)
+    bpf_lsm: Optional[str] = Field(default=None, max_length=20)
 
 
 # ---------------------------------------------------------------- violations (sensor input)

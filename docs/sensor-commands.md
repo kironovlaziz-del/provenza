@@ -1,15 +1,16 @@
 # Egress sensor commands
 
-How the control plane tells a sensor to detach, restart, or dump its
-state — and what stops a stolen control plane key from doing anything
-worse.
+How the control plane tells a sensor to detach, restart, dump its state
+or prepare BPF LSM for the next boot — and what stops a stolen control
+plane key from doing anything worse.
 
 ## What a command is
 
 A command is a small, signed instruction queued for exactly one sensor.
 It has three parts:
 
-- a **kind** — one of `detach`, `restart`, `dump-state`;
+- a **kind** — one of `detach`, `restart`, `dump-state`,
+  `prepare-bpf-lsm`;
 - a **payload** — the ids and timestamps that make this command
   unambiguous;
 - an **Ed25519 signature** over the canonical form of the payload.
@@ -17,7 +18,7 @@ It has three parts:
 The sensor verifies the signature and every field of the payload before
 doing anything. There is no channel back to the sensor other than the
 heartbeat it already sends: the control plane never connects to a host,
-never runs a shell, and cannot ask for anything outside the three kinds.
+never runs a shell, and cannot ask for anything outside these kinds.
 
 ## Signed by an administrator
 
@@ -54,16 +55,18 @@ organization's key, as below, and says so in its warnings.
 ## Threat model
 
 **What a signed command can do.** Uninstall the sensor from the host it
-is queued for, restart its systemd unit, or ask it to report its own
-status (the same JSON `provenza-sensor status --json` prints locally).
+is queued for, restart its systemd unit, ask it to report its own status
+(the same JSON `provenza-sensor status --json` prints locally), or add
+`bpf` to the kernel's LSMs for the host's next boot (it never reboots).
 
 With `policy.pin`, the organization's key alone does nothing (above): what
 follows is the model for a sensor without it.
 
 **What a stolen control plane signing key cannot do:**
 
-- Run arbitrary commands. The three kinds are fixed in the sensor's
-  binary; an unknown kind is refused.
+- Run arbitrary commands. The kinds are fixed in the sensor's binary; an
+  unknown kind is refused. `prepare-bpf-lsm` takes no arguments: what it
+  writes is decided on the host, from the LSMs the kernel runs now.
 - Target a different sensor. The payload names the sensor id, and the
   sensor refuses a command addressed elsewhere. The signing key is per
   organization, so the id is what tells commands apart.
@@ -79,7 +82,7 @@ program, and the key files. A compromised sensor key (`pvz_sensor_...`)
 lets an attacker read the policy and post violations, but not issue
 commands — the sensor key is not the signing key.
 
-## The three commands
+## The commands
 
 ### `dump-state`
 
@@ -116,6 +119,57 @@ command.
 Detach is irreversible from the sensor side: the daemon exits and there
 is no code left to answer more commands. Re-enroll the host to bring a
 sensor back.
+
+### `prepare-bpf-lsm`
+
+Turn BPF LSM on for the host's **next boot**. The sensor's
+`lsm/socket_create` program (socket families other than IP) runs only when
+the kernel was booted with `bpf` among its LSMs, and many distributions
+leave it out; the sensor then reports BPF LSM as `inactive` and its page
+on Runtime offers **Prepare BPF LSM…**.
+
+Provenza queues this command **only signed with an administrator's
+passkey** (`egress_command.passkey_required` otherwise), because it changes
+the host's boot line. A sensor with `policy.pin` verifies that signature
+itself; a sensor without a pin trusts the organization's key, so there the
+rule is the server's (see *Signed by an administrator*).
+
+On the host:
+
+1. The daemon checks its own state: `active` is done already, and a kernel
+   that refused the program (`unavailable`, no `CONFIG_BPF_LSM`) is
+   refused - a boot parameter would not help.
+2. It starts **one fixed systemd unit**, `provenzasensor-bpf-lsm.service`
+   (`provenza-sensor prepare-bpf-lsm`). The daemon's own unit cannot write
+   `/etc/default` or `/boot` (`ProtectSystem=strict`) and is not loosened
+   for this; the oneshot unit may write only those, has no network, and
+   does nothing else.
+3. That run reads the LSMs the kernel runs now
+   (`/sys/kernel/security/lsm`), and **changes nothing** when the boot line
+   already sets `lsm=` or `security=`, when a GRUB file already does, or
+   when the host has no `/etc/default/grub` or no `update-grub` (Debian and
+   Ubuntu with GRUB; elsewhere it says what to add by hand).
+4. Otherwise it writes one file, `/etc/default/grub.d/99-provenza-bpf-lsm.cfg`:
+
+       GRUB_CMDLINE_LINUX="$GRUB_CMDLINE_LINUX lsm=<the LSMs active now>,bpf"
+
+   and runs `update-grub`. If `update-grub` fails, the file is removed
+   again.
+5. The command is acked `done` with `{"status": "prepared",
+   "reboot_required": true, ...}`, and the sensor reports `prepared` until
+   the host reboots. **It never reboots the host**: you do, when it suits
+   you. After the reboot the sensor reports BPF LSM `active` and attaches
+   the program.
+
+To undo: `sudo rm /etc/default/grub.d/99-provenza-bpf-lsm.cfg && sudo
+update-grub`, then reboot. The same can be done by hand on the host:
+`sudo provenza-sensor prepare-bpf-lsm` (or `sudo systemctl start
+provenzasensor-bpf-lsm`).
+
+A sensor installed before this command has no unit for it: run the
+sensor's install command again (Runtime -> Register sensor shows it; on
+the Provenza server `provenza upgrade` does it), which replaces the binary
+and the units and keeps the enrollment.
 
 ## How the signature works
 
@@ -238,7 +292,7 @@ the previous key is refused even if a sensor still has it on disk.
 compromised, rotate it: the new key is introduced by a command signed
 with the old one, so an attacker who only has the *new* key cannot
 introduce anything. An attacker who already has the *old* key can only
-issue the same three fixed commands it could have issued before the
+issue the same fixed commands it could have issued before the
 rotation — nothing about the leak is amplified.
 
 **Deleting the sensor is different.** The sensor's own key

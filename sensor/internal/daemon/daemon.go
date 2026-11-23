@@ -93,6 +93,10 @@ type Daemon struct {
 	// tests: the clock (nil: time.Now) and what runs a verified signed command (nil: execute)
 	clock    func() time.Time
 	executor func(context.Context, client.Command) error
+	// tests: systemctl (nil: the real one) and prepare-bpf-lsm's files ("": the real ones, bpflsm.go)
+	runSystemctl func(context.Context, ...string) ([]byte, error)
+	bpfLSMDropIn string
+	bpfLSMResult string
 }
 
 // wlState holds the per-workload data the daemon needs at runtime.

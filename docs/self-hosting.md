@@ -75,7 +75,7 @@ sudo PROVENZA_ADMIN_PASSWORD='…' ./install.sh --yes \
 | `--admin-name NAME` | The administrator's display name. |
 | `--no-backup` | Do not schedule the daily backup (`--no-cron` still works). |
 | `--force` | Go on despite host warnings: low memory or disk, ports 80/443 already in use. |
-| `--sensor` / `--no-sensor` | Install the egress sensor on this host too (enrolled with a key made by the installer), or do not ask. |
+| `--sensor` / `--no-sensor` | Install the egress sensor on this host (enrolled with a key made by the installer), or leave it out - without asking. Without either, a first install puts it here when the kernel can run it (Linux 5.15+, cgroup v2, BTF) and says why when it cannot. |
 | `--no-edge` | Do not set up the egress proxy and the endpoint agent on this host. |
 | `--dir DIR` | Where to clone the repository when the script runs without it (default `/opt/provenza`). |
 | `PROVENZA_READY_TIMEOUT` | Seconds to wait for the stack to become healthy (default 900). |
@@ -97,7 +97,7 @@ issues a local certificate, and the browser warns about it once.
 5. **Starts the stack and waits** until every service reports healthy.
 6. **Creates the organization and its first administrator.** The password reaches the container through the environment and never appears in a command line.
 7. **Schedules a daily backup** at 03:15 with the systemd timer `provenza-backup.timer`.
-8. **Sets up the edge services of this host** (`provenza edge setup`, below): the egress proxy and the endpoint agent, with their keys. With `--sensor`, the egress sensor too, enrolled. `--no-edge` leaves them out.
+8. **Sets up the edge services of this host** (`provenza edge setup`, below): the egress proxy and the endpoint agent, with their keys. With the egress sensor installed (by default on a first install, when the kernel can run it), the sensor too, enrolled. `--no-edge` leaves them out.
 
 Running `sudo ./install.sh` again is safe: it keeps the existing `deploy/.env`,
 rebuilds the images, re-renders the units and leaves existing users alone.
@@ -135,7 +135,7 @@ two services next to the stack, with nothing to copy from the interface:
 - **The binaries** come from the backend image, built from this checkout: no Go on the host.
 - **Their keys** are made by the backend (`scripts/edge_keys.py`) and written straight into their files (mode 600). They are never shown; the objects are named after the host and listed in the interface like any other (**Gateways → External APIs → Proxies**, **Settings → Ingestion Sources**), where they are revoked.
 - **What exists is kept:** a key file, a configuration you edited. Run it again at any time.
-- **Upgrades** (`provenza upgrade`, `provenza rebuild`) refresh the binaries and units (`provenza edge refresh`).
+- **Upgrades** (`provenza upgrade`, `provenza rebuild`) refresh the binaries and units (`provenza edge refresh`), and the egress sensor's where it is installed on this host.
 - **The signed policy:** the proxy binary's and configuration's SHA-256 are added to the next release (Policies → Policy hierarchy → Signed policy), for sensors that follow it. They take effect when the release is signed.
 - `provenza edge setup --sensor-guard`: the proxy runs through the egress sensor of this host, which lets it out only while it runs this exact binary with this exact configuration (`proxy_binaries` / `proxy_configs` in `sensor.json`, kept up to date on every refresh). For a sensor without `policy.pin`.
 - `provenza edge status` shows the services and the release the proxy follows.

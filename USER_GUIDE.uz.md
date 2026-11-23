@@ -647,6 +647,9 @@ jarayonlari) qayerga ulana olishini yadro darajasida belgilaydi.
    ko‘rinadi; qatorni ochib, imzolangan buyruq bilan **Dump state**,
    **Restart** yoki **Detach** qilish mumkin - buyruqni seansingiz
    imzolaydi ([batafsil](docs/sensor-commands.md)).
+   Xostning yuklash qatorida BPF LSM bo‘lmasa, **Prepare BPF LSM…** uni
+   keyingi yuklanish uchun yoqadi (passkey bilan imzolanadi); sahifa
+   tayyorligini aytganda xostni o‘zingiz qayta yuklang.
 
 Har bir sensorga imzolangan siyosat pinini bering (`install.sh --policy-pin <SHA-256>`,
 qiymat **Signed policy** ostida ko‘rsatiladi). Shunda sensor relizlarni

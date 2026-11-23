@@ -270,3 +270,46 @@ async def test_workloads_are_in_the_signed_bundle(client, admin_token, db_sessio
     await signer.signer(client, admin_token)
     draft = (await client.post(f"{R}/prepare", headers=auth_headers(admin_token))).json()["draft"]
     assert any(c["section"] == "egress_workloads" and c["key"] == str(w["id"]) for c in draft["changes"])
+
+
+@pytest.mark.asyncio
+async def test_prepare_bpf_lsm_is_queued_only_signed_with_a_passkey(client, admin_token):
+    """It changes the host's boot line: the organization's key alone does not
+    queue it, whether or not the sensor follows the signed policy."""
+    sensor = await _sensor(client, admin_token)
+    r = await client.post(f"{S}/sensors/{sensor['id']}/commands", json={"kind": "prepare-bpf-lsm"},
+                          headers=auth_headers(admin_token))
+    assert r.status_code == 422 and r.json()["detail"] == "egress_command.passkey_required"
+
+    st, sig = await _signed(client, admin_token, sensor["id"], kind="prepare-bpf-lsm")
+    assert st["kind"] == "prepare-bpf-lsm"
+    r = await client.post(f"{S}/sensors/{sensor['id']}/commands",
+                          json={"kind": "prepare-bpf-lsm", "statement": st, "signature": sig},
+                          headers=auth_headers(admin_token))
+    assert r.status_code == 201, r.text
+    assert r.json()["kind"] == "prepare-bpf-lsm" and r.json()["signed_by"] == st["user_id"]
+
+    r = await client.post(f"{S}/heartbeat", json={"hostname": "h"}, headers={"X-Sensor-Key": sensor["api_key"]})
+    cmd = r.json()["commands"][0]
+    assert cmd["kind"] == "prepare-bpf-lsm" and cmd["payload"]["kind"] == "prepare-bpf-lsm"
+    assert cmd["proof"]["statement"] == st and proof_holds(cmd["proof"])
+
+    # signed for another kind: refused
+    st, sig = await _signed(client, admin_token, sensor["id"], kind="restart")
+    r = await client.post(f"{S}/sensors/{sensor['id']}/commands",
+                          json={"kind": "prepare-bpf-lsm", "statement": st, "signature": sig},
+                          headers=auth_headers(admin_token))
+    assert r.status_code == 422 and r.json()["detail"] == "session.statement_mismatch"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("sent,kept", [("inactive", "inactive"), ("prepared", "prepared"), ("active", "active"),
+                                       ("unavailable", "unavailable"), ("on", None), (None, None)])
+async def test_the_heartbeat_reports_bpf_lsm(client, admin_token, sent, kept):
+    sensor = await _sensor(client, admin_token)
+    body = {"hostname": "h"} if sent is None else {"hostname": "h", "bpf_lsm": sent}
+    r = await client.post(f"{S}/heartbeat", json=body, headers={"X-Sensor-Key": sensor["api_key"]})
+    assert r.status_code == 200, r.text
+    r = await client.get(f"{S}/sensors", headers=auth_headers(admin_token))
+    got = next(s for s in r.json() if s["id"] == sensor["id"])
+    assert got["bpf_lsm"] == kept

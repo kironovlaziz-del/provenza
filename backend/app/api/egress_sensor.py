@@ -789,7 +789,8 @@ async def create_sensor_command(
     """With `statement` and `signature` the administrator signed it (POST
     .../commands/statement, then the session key): a sensor that follows the
     signed policy runs only such a command. Without them it carries only the
-    organization's key, which such a sensor refuses."""
+    organization's key, which such a sensor refuses. prepare-bpf-lsm is
+    queued only signed (egress_command.passkey_required)."""
     sensor = await _get_org_sensor(db, sensor_id, current_user.org_id, include_revoked=True)
     proof = None
     try:

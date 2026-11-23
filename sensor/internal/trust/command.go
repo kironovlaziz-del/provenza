@@ -30,7 +30,7 @@ const (
 )
 
 // CommandKinds are the commands an administrator can sign for a sensor.
-var CommandKinds = map[string]bool{"detach": true, "restart": true, "dump-state": true}
+var CommandKinds = map[string]bool{"detach": true, "restart": true, "dump-state": true, "prepare-bpf-lsm": true}
 
 // Command is a verified administrator's command.
 type Command struct {
