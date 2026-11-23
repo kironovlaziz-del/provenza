@@ -21,7 +21,7 @@ email-validator==2.2.0
 
 # Task queue
 celery[redis]==5.7.0
-redis==5.2.1
+redis==7.4.1
 
 # Database (sync, for Celery workers)
 psycopg2-binary==2.9.13
