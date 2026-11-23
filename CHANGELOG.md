@@ -30,6 +30,7 @@ this project adheres to [Semantic Versioning](https://semver.org/).
 - `pyasn1` (used by `ldap3` for directory discovery) is pinned to 0.6.5, a release without the known denial-of-service issues.
 
 ### Changed
+- **The Runtime page keeps its sensors current** while it is open: the list (last seen, hooks, warnings, BPF LSM) reloads once per heartbeat interval, so the result of a command such as **Prepare BPF LSM** shows without reloading the page. It pauses while the tab is hidden and refreshes at once when it comes back.
 - **Supply chain of the build** ([OpenSSF Scorecard](https://scorecard.dev/viewer/?uri=github.com/kironovlaziz-del/provenza)): every GitHub Action is pinned to a full commit SHA, on releases that run on Node.js 24; Dependabot keeps the pins current and now also updates the sensor's and the endpoint agent's Go modules.
 - **CI checks the Go programs for known vulnerabilities** (`govulncheck`, with the Go toolchain the images are built with): a vulnerability the code reaches fails the check when a fixed version exists; one without a fix yet, or in code that is imported but not called, is shown as a warning.
 - **Fuzz tests** for what the egress proxy and the eBPF sensor read from outside - the canonical JSON every signature is taken over, the agent's signed request header and the release documents - run their seeds with the tests and explore for 15 seconds per target on every change.
