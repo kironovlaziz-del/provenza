@@ -593,6 +593,7 @@
   },
   "export_keys": {
     "title": "SIEM & OpenTelemetry",
+    "siem_title": "SIEM keys",
     "new": "New key",
     "hint": "A SIEM or SOAR reads the egress sensor events - blocked or observed violations and the sample of allowed connections - with a read-only key of this organization. A key reads nothing else and can be revoked at any time.",
     "load_failed": "Could not load the keys.",

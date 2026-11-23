@@ -89,18 +89,23 @@ export default function ExportKeysPage() {
     <>
       <PageHeader
         title={t("export_keys.title", "SIEM & OpenTelemetry")}
-        actions={
-          <button className="btn btn-primary btn-sm" onClick={() => setShowForm((s) => !s)}>
-            {showForm ? t("common.cancel", "Cancel") : t("export_keys.new", "New key")}
-          </button>
-        }
       />
       <div className="content">
         <OtelPanel />
 
-        <p className="hint-text u-mb-16">
-          {t("export_keys.hint", "A SIEM or SOAR reads the egress sensor events - blocked or observed violations and the sample of allowed connections - with a read-only key of this organization. A key reads nothing else and can be revoked at any time.")}
-        </p>
+        <div className="panel u-mb-16" id="siem">
+          <div className="panel-header">
+            <h2>{t("export_keys.siem_title", "SIEM keys")}</h2>
+            <button className="btn btn-primary btn-sm" onClick={() => setShowForm((s) => !s)}>
+              {showForm ? t("common.cancel", "Cancel") : t("export_keys.new", "New key")}
+            </button>
+          </div>
+          <div className="panel-body">
+            <p className="hint-text" style={{ margin: 0 }}>
+              {t("export_keys.hint", "A SIEM or SOAR reads the egress sensor events - blocked or observed violations and the sample of allowed connections - with a read-only key of this organization. A key reads nothing else and can be revoked at any time.")}
+            </p>
+          </div>
+        </div>
 
         {revealedKey && (
           <div className="panel" style={{ marginBottom: 20, borderColor: "var(--danger, #c0392b)" }}>

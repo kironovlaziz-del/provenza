@@ -593,6 +593,7 @@
   },
   "export_keys": {
     "title": "SIEM va OpenTelemetry",
+    "siem_title": "SIEM kalitlari",
     "new": "Yangi kalit",
     "hint": "SIEM yoki SOAR egress sensor hodisalarini - bloklangan yoki kuzatilgan qoidabuzarliklar va ruxsat etilgan ulanishlar namunasini - shu tashkilotning faqat o'qish uchun kalitida o'qiydi. Kalit boshqa hech narsani o'qimaydi va istalgan payt bekor qilinishi mumkin.",
     "load_failed": "Kalitlarni yuklab bo'lmadi.",
