@@ -226,19 +226,22 @@ async def save_settings(db: AsyncSession, org_id: int, user_id: int, *, enabled:
             value = decrypt_secret(row.header_value_enc)
         except ValueError:
             raise api_error(status.HTTP_422_UNPROCESSABLE_ENTITY, "otel.header_unreadable")
-    if enabled:
-        try:
-            await send(logs_url(endpoint), probe_payload(org_id), _headers(name, value))
-        except ExportError as exc:
-            raise api_error(status.HTTP_422_UNPROCESSABLE_ENTITY, exc.code, detail=(exc.detail or "")[:200])
-    if enabled and not row.enabled:
-        row.cursors = await current_cursors(db)     # from now on; the past is not replayed
-    if enabled or endpoint != row.endpoint:
-        row.last_error = row.last_error_at = None
-    row.enabled, row.endpoint, row.header_name = enabled, endpoint, name
-    row.header_value_enc = encrypt_secret(value) if name and value else None
-    row.config_rev = (row.config_rev or 0) + 1
-    row.updated_by, row.updated_at = user_id, _now()
+    try:
+        async with db.begin_nested():           # a collector that refuses undoes only this change
+            if enabled and not row.enabled:
+                row.cursors = await current_cursors(db)     # from now on; the past is not replayed
+            if enabled or endpoint != row.endpoint:
+                row.last_error = row.last_error_at = None
+            row.enabled, row.endpoint, row.header_name = enabled, endpoint, name
+            row.header_value_enc = encrypt_secret(value) if name and value else None
+            row.config_rev = (row.config_rev or 0) + 1
+            row.updated_by, row.updated_at = user_id, _now()
+            await db.flush()
+            if enabled:
+                # tried as stored - the address every later export uses, through the SSRF-guarded client
+                await send_stored(await get_settings(db, org_id), probe_payload(org_id))
+    except ExportError as exc:
+        raise api_error(status.HTTP_422_UNPROCESSABLE_ENTITY, exc.code, detail=(exc.detail or "")[:200])
     await db.commit()
     return row
 
@@ -442,6 +445,17 @@ async def send(url: str, body: Dict[str, Any], headers: Dict[str, str]) -> Optio
     raise ExportError("otel.http_error", detail, drop=code in (400, 413))
 
 
+async def send_stored(row: OtelExportSettings, body: Dict[str, Any]) -> Optional[str]:
+    """send() to the organization's endpoint with its header, both as stored."""
+    if row is None or not row.endpoint:
+        raise ExportError("otel.no_endpoint")
+    try:
+        value = decrypt_secret(row.header_value_enc) if row.header_value_enc else None
+    except ValueError:
+        raise ExportError("otel.header_unreadable")
+    return await send(logs_url(row.endpoint), body, _headers(row.header_name, value))
+
+
 # ----------------------------------------------------------------------------- the worker
 
 # columns an event never reads (content, signatures): not loaded
@@ -483,12 +497,12 @@ async def export_org(db: AsyncSession, org_id: int) -> Dict[str, Any]:
     if row is None or not row.enabled or not row.endpoint:
         await db.commit()                        # ends the transaction, and with it the lock
         return {"skipped": "off"}
-    rev, url = row.config_rev, logs_url(row.endpoint)
-    try:
-        value = decrypt_secret(row.header_value_enc) if row.header_value_enc else None
-    except ValueError:
-        return await _note(db, org_id, rev, error=ExportError("otel.header_unreadable"))
-    headers = _headers(row.header_name, value)
+    rev = row.config_rev
+    if row.header_value_enc:
+        try:
+            decrypt_secret(row.header_value_enc)
+        except ValueError:
+            return await _note(db, org_id, rev, error=ExportError("otel.header_unreadable"))
     cursors: Dict[str, int] = {k: int((row.cursors or {}).get(k) or 0) for k in KINDS}
     sent, note = 0, None
     for _ in range(MAX_ROUNDS):
@@ -509,7 +523,7 @@ async def export_org(db: AsyncSession, org_id: int) -> Dict[str, Any]:
                     records.append(record(kind, item[1], r, names))
         if records:
             try:
-                note = await send(url, payload(org_id, records), headers) or note
+                note = await send_stored(row, payload(org_id, records)) or note
             except ExportError as exc:
                 if exc.drop:
                     cursors = moved                # malformed or too large for this collector: not retried
@@ -570,15 +584,8 @@ async def export_all(db: AsyncSession) -> Dict[str, int]:
 
 async def send_test(db: AsyncSession, org_id: int) -> Dict[str, Any]:
     """One test record with the stored settings."""
-    row = await get_settings(db, org_id)
-    if row is None or not row.endpoint:
-        raise api_error(status.HTTP_422_UNPROCESSABLE_ENTITY, "otel.no_endpoint")
     try:
-        value = decrypt_secret(row.header_value_enc) if row.header_value_enc else None
-    except ValueError:
-        raise api_error(status.HTTP_422_UNPROCESSABLE_ENTITY, "otel.header_unreadable")
-    try:
-        note = await send(logs_url(row.endpoint), probe_payload(org_id), _headers(row.header_name, value))
+        note = await send_stored(await get_settings(db, org_id), probe_payload(org_id))
     except ExportError as exc:
         raise api_error(status.HTTP_422_UNPROCESSABLE_ENTITY, exc.code, detail=(exc.detail or "")[:200])
     return {"ok": True, "note": note}
