@@ -11,6 +11,7 @@ import { confirmDialog } from "@/components/Dialog";
 import { errorMessage as apiError } from "@/lib/errors";
 import { SensorActivity } from "@/components/SensorActivity";
 import { BpfLsmButton, BpfLsmHint } from "./BpfLsm";
+import { usePollWhileVisible } from "@/lib/use_poll";
 import { listAgents } from "@/lib/agent_api";
 import type { Agent } from "@/lib/agent_types";
 import {
@@ -228,6 +229,16 @@ export default function RuntimePage() {
   useEffect(loadSensors, [loadSensors]);
   useEffect(loadSettings, [loadSettings]);
   useEffect(loadSigningKey, [loadSigningKey]);
+
+  // A sensor's state arrives with its heartbeat (last seen, hooks, warnings,
+  // BPF LSM after a command): keep the list current while the page is open,
+  // once per heartbeat interval (10 to 60 s). A failed round is quiet: the
+  // next one tries again.
+  const refreshSensors = useCallback(() => {
+    listSensors(showRevokedSensors).then(setSensors).catch(() => {});
+  }, [showRevokedSensors]);
+  usePollWhileVisible(refreshSensors,
+    Math.min(60, Math.max(10, settings?.heartbeat_seconds ?? 30)) * 1000);
 
   // Poll the command history while a details row is open and something in
   // it is still in flight. When every command is terminal (done/failed/
