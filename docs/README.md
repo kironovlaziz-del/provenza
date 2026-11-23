@@ -30,6 +30,7 @@
 - [Egress proxy](../proxy/README.md) and [egress sensor](../sensor/README.md)
 - [Sensor commands](sensor-commands.md): dump state, restart or detach a sensor with a signed command
 - [SIEM export](siem-export.md): a SIEM or SOAR pulling the egress sensor events with a read-only key
+- [OpenTelemetry export](opentelemetry.md): every PVP decision to your OpenTelemetry collector as a log record, inside the agent's own trace
 
 ## Shadow AI
 

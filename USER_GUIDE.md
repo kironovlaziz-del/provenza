@@ -635,13 +635,23 @@ the alert rules behind it are described in
 
 ---
 
-## 14. SIEM export
+## 14. SIEM and OpenTelemetry export
 
-Settings → **SIEM export** (admin only) makes read-only keys a SIEM or
-SOAR uses to pull the egress sensor events (violations and allowed
-connections). The key is shown once; revoke it there when it is no longer
-needed. The page shows the request to make; see
-[SIEM export](docs/siem-export.md).
+Settings → **SIEM & OpenTelemetry** (admin only) has two parts.
+
+**OpenTelemetry** sends every PVP decision (policy checks, recorded
+actions, LLM calls, delegations and incidents) to your OpenTelemetry
+collector as log records, within about a minute. Set the collector's
+OTLP/HTTP address and, if it needs a key, one header; the collector gets a
+test record before anything is saved. Records hold metadata only, never
+arguments, prompts or outputs. An agent that sends a `traceparent` sees the
+decisions inside its own trace. The export starts when it is switched on.
+See [OpenTelemetry export](docs/opentelemetry.md).
+
+**SIEM keys** are read-only keys a SIEM or SOAR uses to pull the egress
+sensor events (violations and allowed connections). The key is shown once;
+revoke it there when it is no longer needed. The page shows the request to
+make; see [SIEM export](docs/siem-export.md).
 
 ---
 

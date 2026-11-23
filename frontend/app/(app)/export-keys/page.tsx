@@ -10,10 +10,12 @@ import {
   revokeExportKey,
   type ExportKey,
 } from "@/lib/export_keys_api";
+import { OtelPanel } from "./OtelPanel";
 
-// Read-only keys for a SIEM/SOAR: it pulls the egress sensor feed
-// (violations and allowed connections) with X-Export-Key instead of a
-// person's session. The key is shown once, right after it is made.
+// Export: PVP decisions pushed to the organization's OpenTelemetry collector
+// (OtelPanel), and read-only keys for a SIEM/SOAR that pulls the egress sensor
+// feed (violations and allowed connections) with X-Export-Key instead of a
+// person's session. A key is shown once, right after it is made.
 export default function ExportKeysPage() {
   const { t, i18n } = useTranslation();
   const [keys, setKeys] = useState<ExportKey[]>([]);
@@ -86,7 +88,7 @@ export default function ExportKeysPage() {
   return (
     <>
       <PageHeader
-        title={t("export_keys.title", "SIEM export")}
+        title={t("export_keys.title", "SIEM & OpenTelemetry")}
         actions={
           <button className="btn btn-primary btn-sm" onClick={() => setShowForm((s) => !s)}>
             {showForm ? t("common.cancel", "Cancel") : t("export_keys.new", "New key")}
@@ -94,6 +96,8 @@ export default function ExportKeysPage() {
         }
       />
       <div className="content">
+        <OtelPanel />
+
         <p className="hint-text u-mb-16">
           {t("export_keys.hint", "A SIEM or SOAR reads the egress sensor events - blocked or observed violations and the sample of allowed connections - with a read-only key of this organization. A key reads nothing else and can be revoked at any time.")}
         </p>

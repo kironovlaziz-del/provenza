@@ -133,7 +133,7 @@ export const ARTICLES_UZ: Article[] = [
         "Muvofiqlik xodimi sifatida o'zingiz tekshirgan narsalarni tasdiqlang. Tasdig'ingiz ismingiz bilan yoziladi.",
         "**Hisobot** yarating: barmoq izi bilan muzlatilgan nusxa. Hisobot sahifasi u o'zgartirilmaganini tekshiradi va regulyator yoki tashqi auditor uchun PDF'ga chop etadi.",
       ]],
-      ["tip", "Audit jurnalini SIEM tizimingizga eksport qilishni administrator Sozlamalar → SIEM eksporti bo'limida sozlaydi."],
+      ["tip", "Administrator agent qarorlarini SIEM yoki monitoring vositalaringizga ham yuborishi mumkin: Sozlamalar → SIEM va OpenTelemetry."],
     ],
   },
   {
@@ -271,6 +271,7 @@ export const ARTICLES_UZ: Article[] = [
       ]],
       ["h", "Agentlarni kuzatish"],
       ["p", "**Agentlar monitoringi** barcha agentlarning murojaatlarini sodir bo'layotgan paytda ko'rsatadi. **Jonli xarita** qaysi agentlar qaysi vositalar va bir-biri bilan bog'lanayotganini, **delegatsiya zanjirlari** esa agent boshqa agentlarga topshirgan ishni ko'rsatadi — bitta so'rov bir nechta agent orqali o'tganda foydali."],
+      ["p", "Xuddi shu qarorlarni o'zingiz ishlatayotgan monitoring vositalarida — Grafana, Datadog, Honeycomb, Elastic, Splunk yoki istalgan OpenTelemetry kollektorida — ko'rish uchun administrator **[SIEM va OpenTelemetry](/export-keys)** sahifasida **OpenTelemetry** eksportini yoqadi. Har bir tekshiruv, harakat, LLM murojaati, delegatsiya va hodisa argumentlar, promptlar va javoblarsiz log yozuvi sifatida yuboriladi. O'z trace kontekstini (traceparent) yuboradigan agent Provenza qarorlarini o'z trace'lari ichida ko'radi."],
       ["tip", "Agentga faqat kerakli vositalarni bering. Agent o'ziga imkoniyat bera olmaydi: u nima qila olishini uning roli va sizning siyosatlaringiz belgilaydi, ko'proq olishga urinish esa rad etiladi va xabar qilinadi."],
     ],
   },
@@ -451,7 +452,7 @@ export const ARTICLES_UZ: Article[] = [
       ["h", "Biror narsani topish"],
       ["p", "Faoliyat jurnalini shaxs, harakat yoki obyekt bo'yicha filtrlang va tafsilotlarini ko'rish uchun yozuvni oching. Har bir agent harakati agentning o'z imzosiga ham ega, shuning uchun uni Provenza serveriga ishonmasdan tekshirish mumkin."],
       ["p", "Audit jurnalini faqat administratorlar, tasdiqlovchilar, auditorlar va muvofiqlik xodimlari o'qiy oladi."],
-      ["tip", "Provenza'dan tashqarida nusxa saqlash uchun administrator audit jurnalini SIEM tizimingizga yuborishi mumkin (Sozlamalar → SIEM eksporti)."],
+      ["tip", "E'lon qilingan nazorat nuqtalaridan tashqari, administrator agent qarorlarini SIEM yoki monitoring vositalaringizga yuborishi mumkin (Sozlamalar → SIEM va OpenTelemetry)."],
     ],
   },
   {

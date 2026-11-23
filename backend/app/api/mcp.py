@@ -38,6 +38,7 @@ from app.api.deps import require_role
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.errors import api_error
+from app.core import trace_context
 from app.pvp import hidden_text
 from app.core.outbound import validate_url
 from app.models.mcp import MCPServer, MCPTool
@@ -200,6 +201,8 @@ async def mcp_endpoint(request: Request, db: AsyncSession = Depends(get_db), use
     if method == "tools/list":
         return _result(rid, {"tools": await gw.list_tools(agent)}, modern)
 
+    # an MCP client carries the W3C trace context in _meta; it wins over the header
+    trace_context.use(trace_context.parse(meta.get("traceparent")))
     chain_id = meta.get(CHAIN_META)
     if chain_id is not None and (isinstance(chain_id, bool) or not isinstance(chain_id, int) or chain_id < 1):
         return _error(rid, -32602, f"Invalid params: _meta['{CHAIN_META}'] must be a positive integer")

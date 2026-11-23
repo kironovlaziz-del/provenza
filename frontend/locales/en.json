@@ -85,7 +85,7 @@
       "shadow_ai": "Shadow AI Sightings",
       "domain_catalog": "AI Domain Catalog",
       "ingestion_sources": "Ingestion Sources",
-      "export_keys": "SIEM export",
+      "export_keys": "SIEM & OpenTelemetry",
       "audit": "Audit Log",
       "notifications": "Notifications",
       "users": "Users",
@@ -592,7 +592,7 @@
     }
   },
   "export_keys": {
-    "title": "SIEM export",
+    "title": "SIEM & OpenTelemetry",
     "new": "New key",
     "hint": "A SIEM or SOAR reads the egress sensor events - blocked or observed violations and the sample of allowed connections - with a read-only key of this organization. A key reads nothing else and can be revoked at any time.",
     "load_failed": "Could not load the keys.",
@@ -620,6 +620,37 @@
     "revoked": "revoked",
     "active": "active",
     "revoke": "Revoke"
+  },
+  "otel": {
+    "title": "OpenTelemetry",
+    "hint": "Provenza sends every PVP decision - policy checks, recorded actions, LLM calls, delegations and incidents - to your OpenTelemetry collector as log records, within about a minute. Metadata only: never arguments, prompts or outputs. When an agent sends a W3C traceparent, its decisions appear inside the agent's own trace. The export starts when it is switched on; earlier events are not sent.",
+    "state": "Export",
+    "on": "on",
+    "off": "off",
+    "not_set_up": "not set up",
+    "col_outbound": "Outbound to",
+    "col_last": "Last sent",
+    "never": "not yet",
+    "sent_total_one": "{{count}} record sent",
+    "sent_total_other": "{{count}} records sent",
+    "last_error": "Last failure ({{time}})",
+    "header_stored": "value stored, not shown",
+    "header": "Header",
+    "change": "Change",
+    "set_up": "Set up",
+    "test": "Send a test record",
+    "endpoint": "Collector endpoint (OTLP/HTTP)",
+    "endpoint_hint": "The collector's OTLP/HTTP address, usually on port 4318; /v1/logs is added unless the address ends with it. HTTPS, or plain HTTP only to a host the operator lists in OUTBOUND_PRIVATE_ALLOWLIST.",
+    "header_name": "Header (optional)",
+    "header_name_hint": "For a collector or service that needs a key: Authorization, x-honeycomb-team, DD-API-KEY, …",
+    "header_value": "Header value",
+    "header_kept": "kept - type to replace",
+    "save": "Test and save",
+    "switch_off": "Switch off",
+    "saved_on": "Saved. The collector took a test record; new decisions follow within a minute.",
+    "saved_off": "Switched off. Nothing more is sent.",
+    "test_sent": "The collector took the test record.",
+    "failed": "Could not change the export."
   },
   "ingestion_sources": {
     "title": "Ingestion Sources",
@@ -1318,7 +1349,17 @@
     "publish.s3_unreadable": "The object's lock could not be read back: give the key s3:GetObject and s3:GetObjectRetention.",
     "publish.http_error": "The store answered with an error: {{detail}}",
     "publish.unreachable": "The store could not be reached: {{detail}}",
-    "policy.bad_argument_rule": "Invalid argument rule"
+    "policy.bad_argument_rule": "Invalid argument rule",
+    "otel.no_endpoint": "Give the collector's address.",
+    "otel.bad_url": "The address is not valid: {{detail}}",
+    "otel.https_required": "Use HTTPS: plain HTTP only to a collector on your own network (OUTBOUND_PRIVATE_ALLOWLIST).",
+    "otel.bad_header_name": "The header name is not valid, or it is a header Provenza sets itself.",
+    "otel.bad_header_value": "The header value must be one line of printable characters.",
+    "otel.no_header_value": "Give the header's value.",
+    "otel.header_unreadable": "The stored header value cannot be read (the server key changed): give it again.",
+    "otel.http_error": "The collector answered with an error: {{detail}}",
+    "otel.unreachable": "The collector could not be reached: {{detail}}",
+    "otel.response_too_large": "The collector's answer was too large."
   },
   "discovery": {
     "title": "Network Discovery",
@@ -3971,7 +4012,7 @@
       "domain_catalog": "Which web addresses count as AI services, and how risky each one is.",
       "encryption_keys": "The keys that protect stored secrets; bring your own key store.",
       "retention": "How long records are kept before they are removed.",
-      "export_keys": "Send the audit trail to your SIEM.",
+      "export_keys": "Send agent decisions to your OpenTelemetry collector; give your SIEM a key to the egress sensor events.",
       "system_status": "Whether the background jobs, database and gateways are healthy.",
       "observability": "Metrics of this installation, all organizations (operators only)."
     }

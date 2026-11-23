@@ -9,6 +9,7 @@ The master key encrypts, directly:
   - audit_signing_keys.private_key_enc / pq_seed_enc   audit keys (checkpoints)
   - audit_publication_settings.publish_private_key_enc / s3_secret_enc
                                             checkpoint publication: the publishing key, the S3 secret
+  - otel_export_settings.header_value_enc  the OpenTelemetry collector's header (its token)
   - permit_signing_keys.private_key_enc     permit keys (signed action permits)
   - mcp_servers / a2a_peers / http_tools.auth_secret_encrypted, egress_routes.secret_encrypted
                                             credentials of the gateways' upstreams
@@ -95,6 +96,9 @@ def targets():
         from app.models.audit_log import AuditPublicationSettings
         for col in ("publish_private_key_enc", "s3_secret_enc"):
             out.append((AuditPublicationSettings, col, None))
+    if "otel_export_settings" in tables:
+        from app.models.otel_export import OtelExportSettings
+        out.append((OtelExportSettings, "header_value_enc", None))
     for table, module, name, col in (("mcp_servers", "app.models.mcp", "MCPServer", "auth_secret_encrypted"),
                                       ("a2a_peers", "app.models.a2a_gateway", "A2APeer", "auth_secret_encrypted"),
                                       ("egress_routes", "app.models.egress_proxy", "EgressRoute", "secret_encrypted"),

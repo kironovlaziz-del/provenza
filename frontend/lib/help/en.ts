@@ -132,7 +132,7 @@ export const ARTICLES_EN: Article[] = [
         "As a compliance officer, confirm what you have checked yourself. Your confirmation is recorded with your name.",
         "Create a **report**: a frozen snapshot with a fingerprint. The report page checks that it has not been altered and prints to PDF for a regulator or an external auditor.",
       ]],
-      ["tip", "Exporting the audit trail to your SIEM is set up by an administrator in Settings → SIEM export."],
+      ["tip", "An administrator can also send agent decisions to your SIEM or monitoring tools: Settings → SIEM & OpenTelemetry."],
     ],
   },
   {
@@ -270,6 +270,7 @@ export const ARTICLES_EN: Article[] = [
       ]],
       ["h", "Watching agents"],
       ["p", "**Agent activity** shows the calls of all agents as they happen. The **live map** shows which agents talk to which tools and to each other, and **delegation chains** show work an agent passed on to other agents — useful when one request travels through several agents."],
+      ["p", "To see the same decisions in the monitoring tools you already use — Grafana, Datadog, Honeycomb, Elastic, Splunk or any OpenTelemetry collector — an administrator switches on the **OpenTelemetry** export in **[SIEM & OpenTelemetry](/export-keys)**. Every check, action, LLM call, delegation and incident is sent as a log record, without arguments, prompts or outputs. An agent that sends its trace context (traceparent) sees Provenza's decisions inside its own traces."],
       ["tip", "Give an agent only the tools it needs. An agent cannot give itself a capability: what it may do is decided by its role and your policies, and an attempt to get more is refused and reported."],
     ],
   },
@@ -450,7 +451,7 @@ export const ARTICLES_EN: Article[] = [
       ["h", "Finding something"],
       ["p", "Filter the activity log by person, action or object, and open a record to see its details. Each agent action also carries the agent's own signature, so it can be checked without trusting the Provenza server."],
       ["p", "Only administrators, approvers, auditors and compliance officers can read the audit trail."],
-      ["tip", "To keep a copy outside Provenza, an administrator can send the audit trail to your SIEM (Settings → SIEM export)."],
+      ["tip", "Besides the published checkpoints, an administrator can send agent decisions to your SIEM or monitoring tools (Settings → SIEM & OpenTelemetry)."],
     ],
   },
   {

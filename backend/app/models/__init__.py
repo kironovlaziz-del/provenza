@@ -20,6 +20,7 @@ from app.models.model_deployment import ModelDeployment
 from app.models.prediction_log import PredictionLog
 from app.models.ingestion_source import IngestionSource
 from app.models.export_key import ExportKey
+from app.models.otel_export import OtelExportSettings
 from app.models.impact_assessment import ImpactAssessment
 from app.models.assurance import AssuranceRecord
 from app.models.ai_domain_catalog import AIDomainCatalog
@@ -122,6 +123,7 @@ __all__ = [
     "SealedCredential",
     "AgentManifestRecord",
     "TaskMandate",
+    "OtelExportSettings",
 ]
 
 # live agent events (after-commit session hook)

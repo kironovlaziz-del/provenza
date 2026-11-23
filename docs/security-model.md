@@ -45,7 +45,8 @@ What Provenza protects, how, and where its guarantees stop.
   bind to `127.0.0.1`. Forwarding headers are trusted only from
   `TRUSTED_PROXIES`.
 - **Outbound calls.** URLs that admins configure (AI providers, Vault,
-  webhooks, identity providers, time-stamp authorities) cannot reach
+  webhooks, identity providers, time-stamp authorities, OpenTelemetry
+  collectors) cannot reach
   private or internal addresses unless those addresses are listed in
   `OUTBOUND_PRIVATE_ALLOWLIST`. The check is made at connect time, so a
   host name that resolves to an internal address is refused too.

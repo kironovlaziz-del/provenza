@@ -58,4 +58,7 @@ class GatewayCall(Base):
     completion_tokens = Column(Integer)
     action_id = Column(Integer, ForeignKey("agent_actions.id", ondelete="SET NULL"), index=True)
     chain_id = Column(Integer, ForeignKey("delegation_chains.id", ondelete="SET NULL"))
+    # the caller's W3C trace context (app/core/trace_context.py)
+    trace_id = Column(String(32))
+    span_id = Column(String(16))
     created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
