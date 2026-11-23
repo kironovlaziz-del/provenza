@@ -57,6 +57,10 @@ class AgentAction(Base):
     evidence = Column(JSONB)
     evidence_sha256 = Column(String(64))
     seal_id = Column(Integer, ForeignKey("pvp_action_seals.id"), index=True)
+    # the caller's W3C trace context (app/core/trace_context.py): correlation
+    # for the OpenTelemetry export only, never part of the evidence
+    trace_id = Column(String(32))
+    span_id = Column(String(16))
     created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
 
 
@@ -126,6 +130,9 @@ class ActionCheck(Base):
     # the agent reached past a boundary it was given (Decision.boundary):
     # what automatic containment counts (app/services/containment.py)
     boundary = Column(Boolean, nullable=False, default=False, server_default="false")
+    # the caller's W3C trace context (app/core/trace_context.py)
+    trace_id = Column(String(32))
+    span_id = Column(String(16))
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     __table_args__ = (

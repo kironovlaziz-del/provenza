@@ -481,6 +481,7 @@ which tools need a person's approval (ASI09). Nothing is executed in a
 | Google A2A 1.0 and 0.3 | P5 ✓ | remote agents are reached only through `/api/v1/a2a-gateway/<peer>`. See §5.2 |
 | TRACE v0.2 (export) | P6 ✓ | a Trust Record per action or per delegation chain. See §5.3 |
 | OpenAI chat completions | ✓ | the LLM gateway `POST /api/v1/gateway/v1/chat/completions`: every call is a PVP action. See §5.7 |
+| OpenTelemetry logs (export) | ✓ | every decision as an OTLP log record named `pvp.*`, in the agent's trace when it sent one. See §5.8 |
 
 ### 5.1 MCP gateway
 
@@ -869,6 +870,43 @@ outcome is recorded as the action (refusals as denied) and as a
 pending and answered `403 approval_required` with the action id; it is not
 sent. After the approval, the same request (same messages) runs once
 (§3.1). The prompt and the answer are never stored, only their hashes.
+
+### 5.8 OpenTelemetry export
+
+Code: `backend/app/services/otel_export.py`, `app/core/trace_context.py`.
+User documentation: [docs/opentelemetry.md](../opentelemetry.md).
+
+Every PVP event an organization's live view shows is sent, when an
+administrator switches the export on, to its OpenTelemetry collector as one
+OTLP log record (OTLP/HTTP, JSON encoding). Spans are not used: Provenza
+decides about an action, it does not run it. Span events are not used
+either: OpenTelemetry deprecates them for log-based events.
+
+| PVP | OTLP log record |
+|---|---|
+| `action.check` (a verdict) | `eventName: pvp.action.checked` |
+| `action` (a recorded action) | `eventName: pvp.action.recorded` |
+| an LLM gateway call (§5.7) | `eventName: pvp.llm.call` |
+| `delegation` | `eventName: pvp.delegation.hop` |
+| an incident | `eventName: pvp.incident.created` |
+| `decision` | `pvp.decision` (`allowed`, `denied`, `pending_approval`) and the severity: INFO allowed, WARN otherwise |
+| the agent | `gen_ai.agent.id`, `gen_ai.agent.name` |
+| `tool_name` of a `tool_call` | `gen_ai.operation.name: execute_tool`, `gen_ai.tool.name` (also `pvp.tool.name`, for every action type) |
+| the caller's W3C trace context | `traceId`, `spanId` |
+
+The `pvp.` prefix keeps the protocol's name in every record; the `gen_ai.`
+attributes are those of the OpenTelemetry GenAI semantic conventions, so
+tools that know them read the records unchanged. A record carries the
+same metadata as the live view and nothing more: no input, output, reason
+or incident details. It is not evidence and is not signed; a verifier
+reads receipts and checkpoints (§3.4).
+
+**Trace context.** A caller may send `traceparent` (W3C Trace Context):
+as an HTTP header, or for MCP in `params._meta.traceparent`, which wins.
+The trace and span ids are kept with the check, the action and the LLM
+call, and an action recorded without one takes its check's. They are
+correlation only: never part of a decision, of the canonical form or of
+the evidence. An invalid value is ignored.
 
 ## 6. Versioning
 

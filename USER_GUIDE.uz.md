@@ -681,13 +681,25 @@ endpointlar. Grafana va uning ortidagi ogohlantirish qoidalari
 
 ---
 
-## 14. SIEM eksporti
+## 14. SIEM va OpenTelemetry eksporti
 
-Settings → **SIEM export** (faqat admin) SIEM yoki SOAR egress sensori
-hodisalarini (qoidabuzarliklar va ruxsat etilgan ulanishlar) olishi uchun
-faqat o‘qish kalitlarini yaratadi. Kalit bir marta ko‘rsatiladi; kerak
-bo‘lmay qolganda o‘sha yerda bekor qiling. Sahifa yuboriladigan so‘rovni
-ko‘rsatadi; qarang: [SIEM eksporti](docs/siem-export.md).
+Settings → **SIEM & OpenTelemetry** (faqat admin) ikki qismdan iborat.
+
+**OpenTelemetry** har bir PVP qarorini (siyosat tekshiruvlari, yozib
+olingan harakatlar, LLM murojaatlari, delegatsiyalar va hodisalar)
+OpenTelemetry kollektoringizga log yozuvlari sifatida taxminan bir daqiqa
+ichida yuboradi. Kollektorning OTLP/HTTP manzilini va, agar u kalit talab
+qilsa, bitta sarlavhani kiriting; biror narsa saqlanishidan oldin kollektor
+sinov yozuvini oladi. Yozuvlarda faqat metama’lumotlar bo‘ladi:
+argumentlar, promptlar va javoblar hech qachon yuborilmaydi. `traceparent`
+yuboradigan agent qarorlarni o‘z trace’i ichida ko‘radi. Eksport yoqilgan
+paytdan boshlanadi. Qarang: [OpenTelemetry eksporti](docs/opentelemetry.md).
+
+**SIEM kalitlari** — SIEM yoki SOAR egress sensori hodisalarini
+(qoidabuzarliklar va ruxsat etilgan ulanishlar) olishi uchun faqat o‘qish
+kalitlari. Kalit bir marta ko‘rsatiladi; kerak bo‘lmay qolganda o‘sha yerda
+bekor qiling. Sahifa yuboriladigan so‘rovni ko‘rsatadi; qarang:
+[SIEM eksporti](docs/siem-export.md).
 
 ---
 

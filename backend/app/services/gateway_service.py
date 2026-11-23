@@ -41,6 +41,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.pvp import enforcement
+from app.core import trace_context
 from app.core.agent_signing import content_hash
 from app.models.agent import Agent
 from app.models.ai_provider import AIProvider
@@ -182,7 +183,7 @@ class GatewayService:
                            latency_ms=latency_ms,
                            prompt_tokens=(usage or {}).get("prompt_tokens"),
                            completion_tokens=(usage or {}).get("completion_tokens"),
-                           action_id=action_id, chain_id=chain_id)
+                           action_id=action_id, chain_id=chain_id, **trace_context.columns())
         self.db.add(call)
         await self.db.commit()
         await self.db.refresh(call)

@@ -302,8 +302,8 @@ Every setting is documented in `deploy/.env.example`. The most common:
 - `*_MEMORY`: container memory limits.
 
 Provenza's server calls out on its own only to what an administrator set up
-(AI providers, MCP servers, notification channels, a Time-Stamp Authority)
-and to **Sigstore Rekor** (`rekor.sigstore.dev`, HTTPS): the audit log's
+(AI providers, MCP servers, notification channels, a Time-Stamp Authority,
+an [OpenTelemetry collector](opentelemetry.md)) and to **Sigstore Rekor** (`rekor.sigstore.dev`, HTTPS): the audit log's
 checkpoints are published there every hour by default. Only a hash, a
 signature and the publishing key leave, never the log; an S3 bucket with
 Object Lock can be added. **Audit Log → Publication outside the server**

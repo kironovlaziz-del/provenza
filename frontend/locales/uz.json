@@ -85,7 +85,7 @@
       "shadow_ai": "Shadow AI topilmalari",
       "domain_catalog": "AI domenlar katalogi",
       "ingestion_sources": "Telemetriya manbalari",
-      "export_keys": "SIEM eksporti",
+      "export_keys": "SIEM va OpenTelemetry",
       "audit": "Audit jurnali",
       "notifications": "Bildirishnomalar",
       "users": "Foydalanuvchilar",
@@ -592,7 +592,7 @@
     }
   },
   "export_keys": {
-    "title": "SIEM eksporti",
+    "title": "SIEM va OpenTelemetry",
     "new": "Yangi kalit",
     "hint": "SIEM yoki SOAR egress sensor hodisalarini - bloklangan yoki kuzatilgan qoidabuzarliklar va ruxsat etilgan ulanishlar namunasini - shu tashkilotning faqat o'qish uchun kalitida o'qiydi. Kalit boshqa hech narsani o'qimaydi va istalgan payt bekor qilinishi mumkin.",
     "load_failed": "Kalitlarni yuklab bo'lmadi.",
@@ -620,6 +620,37 @@
     "revoked": "bekor qilingan",
     "active": "faol",
     "revoke": "Bekor qilish"
+  },
+  "otel": {
+    "title": "OpenTelemetry",
+    "hint": "Provenza har bir PVP qarorini - siyosat tekshiruvlari, yozib olingan harakatlar, LLM murojaatlari, delegatsiyalar va hodisalarni - OpenTelemetry kollektoringizga log yozuvlari sifatida taxminan bir daqiqa ichida yuboradi. Faqat metama'lumotlar: argumentlar, promptlar va javoblar hech qachon yuborilmaydi. Agent W3C traceparent yuborsa, uning qarorlari agentning o'z trace'i ichida ko'rinadi. Eksport yoqilgan paytdan boshlanadi; undan oldingi hodisalar yuborilmaydi.",
+    "state": "Eksport",
+    "on": "yoqilgan",
+    "off": "o'chirilgan",
+    "not_set_up": "sozlanmagan",
+    "col_outbound": "Chiquvchi trafik",
+    "col_last": "Oxirgi yuborilgan",
+    "never": "hali yo'q",
+    "sent_total_one": "{{count}} ta yozuv yuborildi",
+    "sent_total_other": "{{count}} ta yozuv yuborildi",
+    "last_error": "Oxirgi xato ({{time}})",
+    "header_stored": "qiymati saqlangan, ko'rsatilmaydi",
+    "header": "Sarlavha",
+    "change": "O'zgartirish",
+    "set_up": "Sozlash",
+    "test": "Sinov yozuvini yuborish",
+    "endpoint": "Kollektor manzili (OTLP/HTTP)",
+    "endpoint_hint": "Kollektorning OTLP/HTTP manzili, odatda 4318-port; manzil /v1/logs bilan tugamasa, u qo'shiladi. HTTPS, oddiy HTTP esa faqat operator OUTBOUND_PRIVATE_ALLOWLIST ro'yxatiga kiritgan xostga.",
+    "header_name": "Sarlavha (ixtiyoriy)",
+    "header_name_hint": "Kalit talab qiladigan kollektor yoki xizmat uchun: Authorization, x-honeycomb-team, DD-API-KEY, …",
+    "header_value": "Sarlavha qiymati",
+    "header_kept": "saqlangan — almashtirish uchun kiriting",
+    "save": "Tekshirish va saqlash",
+    "switch_off": "O'chirish",
+    "saved_on": "Saqlandi. Kollektor sinov yozuvini qabul qildi; yangi qarorlar bir daqiqa ichida yuboriladi.",
+    "saved_off": "O'chirildi. Boshqa hech narsa yuborilmaydi.",
+    "test_sent": "Kollektor sinov yozuvini qabul qildi.",
+    "failed": "Eksportni o'zgartirib bo'lmadi."
   },
   "ingestion_sources": {
     "title": "Telemetriya manbalari",
@@ -1318,7 +1349,17 @@
     "publish.s3_unreadable": "Obyekt qulfini qayta o'qib bo'lmadi: kalitga s3:GetObject va s3:GetObjectRetention huquqlarini bering.",
     "publish.http_error": "Ombor xato bilan javob berdi: {{detail}}",
     "publish.unreachable": "Omborga ulanib bo'lmadi: {{detail}}",
-    "policy.bad_argument_rule": "Argument qoidasi noto'g'ri"
+    "policy.bad_argument_rule": "Argument qoidasi noto'g'ri",
+    "otel.no_endpoint": "Kollektor manzilini kiriting.",
+    "otel.bad_url": "Manzil noto'g'ri: {{detail}}",
+    "otel.https_required": "HTTPS dan foydalaning: oddiy HTTP faqat o'z tarmog'ingizdagi kollektorga (OUTBOUND_PRIVATE_ALLOWLIST).",
+    "otel.bad_header_name": "Sarlavha nomi noto'g'ri yoki bu Provenza o'zi o'rnatadigan sarlavha.",
+    "otel.bad_header_value": "Sarlavha qiymati chop etiladigan belgilardan iborat bitta qator bo'lishi kerak.",
+    "otel.no_header_value": "Sarlavha qiymatini kiriting.",
+    "otel.header_unreadable": "Saqlangan sarlavha qiymatini o'qib bo'lmadi (server kaliti o'zgargan): uni qayta kiriting.",
+    "otel.http_error": "Kollektor xato bilan javob berdi: {{detail}}",
+    "otel.unreachable": "Kollektorga ulanib bo'lmadi: {{detail}}",
+    "otel.response_too_large": "Kollektor javobi juda katta."
   },
   "discovery": {
     "title": "Tarmoq kashfiyoti",
@@ -3971,7 +4012,7 @@
       "domain_catalog": "Qaysi veb-manzillar AI xizmati hisoblanadi va har biri qanchalik xavfli.",
       "encryption_keys": "Saqlangan sirlarni himoya qiluvchi kalitlar; o'z kalit omboringizni ulash.",
       "retention": "Yozuvlar o'chirilgunga qadar qancha vaqt saqlanadi.",
-      "export_keys": "Audit jurnalini SIEM tizimingizga yuborish.",
+      "export_keys": "Agent qarorlarini OpenTelemetry kollektoringizga yuborish; SIEM tizimingizga egress sensori hodisalari uchun kalit berish.",
       "system_status": "Fon vazifalari, ma'lumotlar bazasi va shlyuzlar sog'lommi.",
       "observability": "Ushbu o'rnatishning barcha tashkilotlar bo'yicha ko'rsatkichlari (faqat operatorlar)."
     }

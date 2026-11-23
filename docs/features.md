@@ -121,6 +121,10 @@ not come up ([self-hosting](self-hosting.md)).
   daemon that contains each governed workload's network in the kernel: allowed
   destinations only, DNS filtered, blocks reported ([sensor](../sensor/README.md)).
 - **Behavior and circuit breakers** — baselines and self-protection.
+- **OpenTelemetry export** — every decision (checks, actions, LLM calls,
+  delegations, incidents) to your OpenTelemetry collector as a log record,
+  metadata only, inside the agent's own trace when it sends one
+  ([docs](opentelemetry.md)).
 - **Kill switch** in levels: agent → team → all agents → all AI traffic, with
   exact undo ([docs](kill-switch.md)).
 - **SDKs** for [Python](../sdk/python/README.md), [JavaScript](../sdk/js/README.md) and

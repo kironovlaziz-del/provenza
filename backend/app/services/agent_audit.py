@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.agent import Agent, AgentPolicy
 from app.models.delegation import DelegationChain
 from app.models.agent_action import AgentAction, AgentIncident, ActionCheck
+from app.core import trace_context
 from app.core.agent_signing import content_hash
 from app.services.agent_rights import Rights
 from app.services.agent_policy_engine import (
@@ -353,6 +354,7 @@ class AgentAudit:
             witness=witness,
             # set here, not by the database, so the evidence below can carry it
             created_at=datetime.now(timezone.utc),
+            **trace_context.columns(),
         )
         self.db.add(action)
         if decision is not None:
@@ -362,6 +364,9 @@ class AgentAudit:
             await self.db.flush()
             chk = await self.db.get(ActionCheck, check_id) if check_id is not None else None
             stamp(action, check_token, chk)
+            if action.trace_id is None and chk is not None and chk.trace_id:
+                # recorded without a trace context of its own: the trace its check was in
+                action.trace_id, action.span_id = chk.trace_id, chk.span_id
 
         if decision and decision.result == DENIED and decision.incident_type:
             self.db.add(
@@ -412,6 +417,7 @@ class AgentAudit:
             # the clock the windows over checks are measured with (containment,
             # the circuit breaker), not the start of the database transaction
             created_at=now,
+            **trace_context.columns(),
         )
         self.db.add(chk)
         await self.db.commit()

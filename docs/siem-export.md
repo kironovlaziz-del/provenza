@@ -6,7 +6,7 @@ feed, with a read-only key of the organization.
 
 ## Make a key
 
-Settings → **SIEM export** → **New key** (administrators). The key starts
+Settings → **SIEM & OpenTelemetry** → **New key** (administrators). The key starts
 with `pvx_` and is shown once; Provenza keeps only its SHA-256. The list
 shows each key's first characters, when it was last used, and lets you
 revoke it: a revoked key stops working at once and stays listed, and both

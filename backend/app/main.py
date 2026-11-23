@@ -15,12 +15,14 @@ from app.core.metrics import (
 from app.core.config import settings
 from app.pvp.guard import BodyLimitMiddleware
 from app.core.security_headers import SecurityHeadersMiddleware
+from app.core.trace_context import TraceContextMiddleware
 from app.api import auth, signing, users, use_cases, incidents, policy_release
 from app.api import providers
 from app.api import audit
 from app.api import shadow_ai
 from app.api import ingestion_sources
 from app.api import export_keys
+from app.api import otel_export as otel_export_api
 from app.api import impact_assessments
 from app.api import assurance
 from app.api import domain_catalog
@@ -76,6 +78,10 @@ app = FastAPI(
 # browsers reject that combination, and it would let any site issue
 # authenticated requests as the logged-in user.
 _origins = [o.strip() for o in settings.CORS_ORIGINS.split(",") if o.strip()]
+
+# The caller's W3C trace context (traceparent), kept with the checks, actions
+# and LLM calls of the request for the OpenTelemetry export (app/core/trace_context.py)
+app.add_middleware(TraceContextMiddleware)
 
 # PVP Input Guard, step 1: oversized bodies on the PVP routes are refused
 # before anything reads them (app/pvp/guard.py)
@@ -166,6 +172,7 @@ app.include_router(audit.router, prefix=f"{settings.API_V1_STR}/audit-logs", tag
 app.include_router(shadow_ai.router, prefix=f"{settings.API_V1_STR}/shadow-ai", tags=["shadow-ai"])
 app.include_router(ingestion_sources.router, prefix=f"{settings.API_V1_STR}/ingestion-sources", tags=["shadow-ai"])
 app.include_router(export_keys.router, prefix=f"{settings.API_V1_STR}/export-keys", tags=["export"])
+app.include_router(otel_export_api.router, prefix=f"{settings.API_V1_STR}/otel-export", tags=["export"])
 app.include_router(impact_assessments.router, prefix=f"{settings.API_V1_STR}/impact-assessments", tags=["compliance"])
 app.include_router(assurance.router, prefix=f"{settings.API_V1_STR}/assurance", tags=["compliance"])
 app.include_router(domain_catalog.router, prefix=f"{settings.API_V1_STR}/domain-catalog", tags=["shadow-ai"])

@@ -79,6 +79,12 @@ celery_app.conf.beat_schedule = {
         "task": "audit.publish",
         "schedule": crontab(minute="1-59/5"),
     },
+    # PVP decisions to each organization's OpenTelemetry collector, when it
+    # switched the export on (app/services/otel_export.py).
+    "otel-export": {
+        "task": "otel.export",
+        "schedule": 30.0,
+    },
     # Commit recorded agent actions to the audit log in batches (one record
     # per organization and run), so the next checkpoint covers them and
     # PVP receipts are provable offline (app/pvp/seal.py).
@@ -135,6 +141,7 @@ from app.workers import (  # noqa: E402,F401
     pvp_tasks,
     egress_sensor_commands_tasks,
     egress_sensor_tasks,
+    otel_tasks,
 )
 
 
