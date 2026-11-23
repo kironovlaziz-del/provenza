@@ -340,6 +340,12 @@ async def enroll(db: AsyncSession, raw: str, *, public_key: str, pq_public_key: 
     await AuditService(db).log(e.org_id, e.created_by, "agent", agent.id,
                                "agent_enrolled" if e.purpose == "new" else "agent_rekeyed",
                                {"enrollment_id": e.id, "key_fingerprint": fp, "proof": "signed_challenge"})
+    if e.purpose == "new":
+        from app.services.agent_network import ensure_agent_workload
+
+        # its network, observed (docs/egress-lockdown.md); after the agent is stored
+        await ensure_agent_workload(db, agent, e.created_by, by_default=True)
+        await db.commit()
     return {"agent_id": agent.id, "name": agent.name, "api_key": api_key, "key_fingerprint": fp,
             "algorithm": sig.scheme_of(pq_public_key), "purpose": e.purpose}
 

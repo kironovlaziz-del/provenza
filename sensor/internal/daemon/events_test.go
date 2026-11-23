@@ -179,6 +179,9 @@ func TestHandleViolationDecodesAllFields(t *testing.T) {
 	if v.Comm == nil || *v.Comm != "curl" {
 		t.Errorf("Comm: want curl got %v", v.Comm)
 	}
+	if v.DstName != nil {
+		t.Errorf("DstName: want none (nothing resolved) got %q", *v.DstName)
+	}
 	// TsNs was 0 in the event, so eventTime returns nil; the backend
 	// falls back to now(). This is the "old sensor / no clock" path.
 	if v.Ts != nil {
@@ -292,5 +295,33 @@ func TestEventSizeMatchesKernelLayout(t *testing.T) {
 	const want = 72
 	if got := eventSize; got != want {
 		t.Fatalf("eventSize: want %d got %d — struct layout changed, update bpfobj and bpf/sensor.bpf.c together", want, got)
+	}
+}
+
+// An address the workload resolved through the sensor's listener carries
+// the name it came from, on violations and on allowed connections alike.
+func TestEventsCarryTheResolvedName(t *testing.T) {
+	var addr [16]byte
+	copy(addr[:], []byte{104, 18, 7, 192})
+	e := bpfobj.Event{Type: bpfobj.EvViolation, Action: bpfobj.ActObserved, Kind: bpfobj.KindConnect,
+		Proto: 6, Family: 2, Port: 443, Wid: 7, Count: 1, Addr: addr}
+
+	d := newTestDaemon()
+	d.names = newNameCache()
+	d.names.put(7, "api.openai.com", []netip.Addr{netip.MustParseAddr("104.18.7.192")}, time.Now())
+	d.handleViolation(buildRaw(t, e))
+	e.Type, e.Action = bpfobj.EvAllowed, bpfobj.ActAllowed
+	d.handleAllowed(buildRaw(t, e))
+	e.Wid = 8 // another workload did not resolve it
+	d.handleViolation(buildRaw(t, e))
+
+	if v := d.viol.buf[0]; v.DstName == nil || *v.DstName != "api.openai.com" {
+		t.Fatalf("violation: %v", v.DstName)
+	}
+	if a := d.act.buf[0]; a.DstName == nil || *a.DstName != "api.openai.com" {
+		t.Fatalf("activity: %v", a.DstName)
+	}
+	if v := d.viol.buf[1]; v.DstName != nil {
+		t.Fatalf("another workload's name: %q", *v.DstName)
 	}
 }

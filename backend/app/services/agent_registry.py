@@ -68,6 +68,12 @@ class AgentRegistry:
 
         await kill_switch.hold_new_agent(self.db, agent)  # an organization-wide stop holds new agents too
         await self.db.commit()
+        from app.services.agent_network import ensure_agent_workload
+
+        # its network, observed (docs/egress-lockdown.md); after the agent is
+        # stored, so this can never cost the agent itself
+        await ensure_agent_workload(self.db, agent, created_by, by_default=True)
+        await self.db.commit()
         await self.db.refresh(agent)
         return agent, raw_key
 

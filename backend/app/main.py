@@ -56,6 +56,7 @@ from app.api import http_tools as http_tools_api
 from app.api import scim as scim_api
 from app.api import sso as sso_api
 from app.api import egress_check as egress_check_api
+from app.api import agent_network as agent_network_api
 from app.api import search_files as search_files_api
 from app.api import mcp as mcp_api
 from app.api import a2a_gateway as a2a_gateway_api
@@ -234,6 +235,7 @@ from sqlalchemy.exc import IntegrityError as _IntegrityError  # noqa: E402
 
 app.add_exception_handler(_IntegrityError, _lost_race)
 app.include_router(egress_check_api.agent_router, prefix=f"{settings.API_V1_STR}/agents", tags=["egress"])
+app.include_router(agent_network_api.router, prefix=f"{settings.API_V1_STR}/agents", tags=["egress"])
 app.include_router(egress_check_api.admin_router, prefix=f"{settings.API_V1_STR}/agent-identity", tags=["egress"])
 app.include_router(egress_check_api.lockdown_router, prefix=f"{settings.API_V1_STR}/egress-lockdown", tags=["egress"])
 # outside /api/v1 on purpose: the egress proxy's relay passes /api/v1 only (app/services/egress_check.py)

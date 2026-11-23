@@ -106,3 +106,49 @@ Provenza and nothing else would look open.
 |---|---|---|
 | `EGRESS_PROBE_TARGETS` | `api.openai.com:443,1.1.1.1:443` | what a confined host must fail to reach |
 | `EGRESS_BEACON_BASE_URL` | `PUBLIC_BASE_URL` | where the beacon is |
+
+## The agent's network
+
+The egress sensor gives the same control from inside the host's kernel,
+for one agent at a time, without rules written by hand. **Every agent has
+a workload of its own from the moment it is made**, named `agent-<id>`:
+
+| | |
+|---|---|
+| Mode | **observe**: every connection is recorded, nothing is blocked |
+| DNS | `any`: every name resolves, through the sensor, which learns the name behind each address |
+| Allowed | nothing yet |
+| cgroup patterns | none: it governs only what is started for the agent |
+
+It governs nothing until the agent is started on a Linux host with the
+Provenza sensor (the Provenza server has one by default):
+
+```sh
+provenza-sensor --agent <id> run -- <the agent's command>
+```
+
+as root or as a member of the sensor's group (`provenza`). The sensor puts
+the command in a cgroup of its own, and from then on every connection the
+agent opens is recorded. The agent's page in Provenza (**AI agents → the
+agent → Network**, administrators) shows the hosts that run it and where it
+went: the names it resolved, or the bare address of what it reached
+without asking the sensor's DNS.
+
+When the list looks right, **Allow the checked and enforce** makes it the
+agent's allow list and switches the workload to **enforce**: from then on
+the kernel refuses everything else, on every host that runs the agent under
+the sensor, within a minute. Names in the list resolve through the sensor,
+and no other name does (`dns: listed`). The workload stays editable on the
+Runtime page like any other.
+
+Observe by default, enforce by a person's decision: a new agent is never
+blocked by a list nobody wrote. An agent made before this was done by
+default gets the same workload with **Observe its network** on its page.
+So does a new agent of an organization that already has 1000 workloads:
+every workload goes to every sensor, and a sensor holds about 4096, so
+Provenza stops making them on its own there and leaves the room to people.
+
+An agent that runs where there is no sensor - a developer's laptop with
+Claude Code or Cursor, say - is not contained by this: only its calls
+through Provenza (MCP tools, the LLM gateway) are governed. Its page says
+so.

@@ -142,6 +142,7 @@ func (d *Daemon) applyPolicy(ctx context.Context, server *config.Policy) error {
 	}
 
 	d.dns.reload(ctx, wls)
+	d.names.forget(func(wid uint32) bool { return wls[wid] != nil })
 	slog.Info("policy applied", "version", p.Version, "workloads", len(p.Workloads))
 	return nil
 }

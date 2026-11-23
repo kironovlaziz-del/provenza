@@ -18,7 +18,10 @@ beyond the kernel.
 - **DNS mediation.** For workloads with `dns: listed`, the sensor runs a
   per-workload DNS listener on `127.0.0.1:<port>`, filters queries against
   the workload's allow list, forwards the rest to the host's resolvers,
-  and feeds the resolved addresses back into the kernel allow map.
+  and feeds the resolved addresses back into the kernel allow map. With
+  `dns: any` every name resolves. Either way the sensor notes which name
+  each address came from (for an hour), and the workload's events to that
+  address carry the name (`dst_name`).
 - **Generation swap.** A new policy is written as generation N+1 and
   switched with a single map write. Programs that read the old generation
   finish before its entries are deleted, so there is no window with an
@@ -29,7 +32,9 @@ beyond the kernel.
 - **`run` subcommand.** `provenza-sensor --agent N run -- cmd` asks the
   running daemon for a dedicated cgroup, moves the child into it, and
   execs the command. The cgroup is named `provenza-agent-N-<random>` and
-  is removed when the last process exits.
+  is removed when the last process exits. Every agent has a workload for
+  this from the start, in observe mode
+  ([docs/egress-lockdown.md](../docs/egress-lockdown.md#the-agents-network)).
 - **The signed policy.** With `policy.pin` the sensor verifies the
   organization's signed policy releases itself, as the egress proxy does,
   and holds every workload to its signed version: the server can tighten a

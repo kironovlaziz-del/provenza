@@ -650,6 +650,13 @@ jarayonlari) qayerga ulana olishini yadro darajasida belgilaydi.
    Xostning yuklash qatorida BPF LSM bo‘lmasa, **Prepare BPF LSM…** uni
    keyingi yuklanish uchun yoqadi (passkey bilan imzolanadi); sahifa
    tayyorligini aytganda xostni o‘zingiz qayta yuklang.
+4. **Har bir agentning o‘z ish yuklamasi bor** (`agent-<id>`, observe
+   rejimi). Agentni sensor o‘rnatilgan xostda
+   `provenza-sensor --agent <id> run -- <buyruq>` bilan ishga tushiring:
+   agent sahifasida (**Network**) u qayerga ulanayotgani ko‘rinadi,
+   **Allow the checked and enforce** esa shuni uning ruxsat ro‘yxatiga
+   aylantiradi - qolganini yadro rad etadi
+   ([batafsil](docs/egress-lockdown.md#the-agents-network)).
 
 Har bir sensorga imzolangan siyosat pinini bering (`install.sh --policy-pin <SHA-256>`,
 qiymat **Signed policy** ostida ko‘rsatiladi). Shunda sensor relizlarni

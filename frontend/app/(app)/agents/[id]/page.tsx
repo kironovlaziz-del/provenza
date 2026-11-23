@@ -16,6 +16,7 @@ import { EnrollPanel } from "@/components/EnrollPanel";
 import { AgentAssignment } from "@/components/AgentAssignment";
 import { AgentAttestation } from "@/components/AgentAttestation";
 import { AgentTask } from "@/components/AgentTask";
+import { AgentNetwork } from "@/components/AgentNetwork";
 import { translateApiError } from "@/lib/errors";
 import { confirmDialog, promptDialog } from "@/components/Dialog";
 
@@ -443,6 +444,9 @@ export default function AgentDetailPage() {
             </details>
           )}
         </section>
+
+        {/* ---- its own network (administrators: egress workloads are theirs) ---- */}
+        {isAdmin && <AgentNetwork agentId={agentId} />}
 
         {/* ---- recent actions ---- */}
         <section className="panel ag-section">

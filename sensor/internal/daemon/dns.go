@@ -241,12 +241,16 @@ func (s *dnsServer) handle(w dnsWork, upstream []string) {
 	}
 	_, _ = s.conn.WriteToUDP(resp, w.addr)
 
+	ips := extractIPs(resp)
+	// which name these addresses came from, for the events that follow (names.go)
+	s.d.names.put(s.wid, name, ips, time.Now())
+
 	// Feed resolved addresses back into the kernel allow map.
 	ports, protos := s.portsFor(name)
 	if len(ports) == 0 {
 		return
 	}
-	for _, ip := range extractIPs(resp) {
+	for _, ip := range ips {
 		prefix := netip.PrefixFrom(ip, ip.BitLen())
 		var rules []kern.Rule
 		for _, port := range ports {
