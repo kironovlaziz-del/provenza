@@ -153,6 +153,7 @@ type HooksSection struct {
 	Attached []string `json:"attached"`
 	LSM      bool     `json:"lsm"`
 	Mkdir    bool     `json:"mkdir"`
+	LSMState string   `json:"lsm_state,omitempty"`
 }
 
 type PolicySection struct {
@@ -241,7 +242,11 @@ func printReport(w *os.File, st *Status) {
 			fmt.Fprintln(w, line)
 		}
 	}
-	fmt.Fprintf(w, "  lsm            %s\n", yesNo(st.Hooks.LSM))
+	if st.Hooks.LSMState != "" {
+		fmt.Fprintf(w, "  lsm            %s (%s)\n", yesNo(st.Hooks.LSM), st.Hooks.LSMState)
+	} else {
+		fmt.Fprintf(w, "  lsm            %s\n", yesNo(st.Hooks.LSM))
+	}
 	fmt.Fprintf(w, "  mkdir          %s\n", yesNo(st.Hooks.Mkdir))
 	fmt.Fprintln(w)
 

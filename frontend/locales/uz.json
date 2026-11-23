@@ -1257,6 +1257,7 @@
     "kill_switch.bad_receipt": "Hisobot proksining ro'yxatdan o'tgan kaliti bilan imzolanmagan.",
     "egress_command.not_signed": "Buyruq imzolanmagan: uni ushbu seans kaliti bilan imzolang.",
     "egress_command.replayed": "Bu imzolangan buyruq allaqachon navbatga qo'yilgan.",
+    "egress_command.passkey_required": "Bu buyruqni passkey bilan imzolang: u xostning yuklash qatorini o'zgartiradi.",
     "a2a.synced_by_proxy": "Uning hisob ma'lumoti egress proksilarga muhrlangan: bu hamkorning kartasini ular oladi.",
     "mcp.synced_by_proxy": "Uning hisob ma'lumoti egress proksilarga muhrlangan: bu serverni ular sinxronlaydi.",
     "credential.no_upstream": "Bunda hisob ma'lumoti yuborilishi mumkin bo'lgan manzil yo'q.",
@@ -3457,10 +3458,15 @@
       "cmd_confirm_restart": "{{name}} dagi sensorni qayta ishga tushirish? Daemon chiqadi, systemd bir sekund ichida qaytaradi; himoya qisqa vaqt to'xtaydi.",
       "cmd_confirm_detach_1": "{{name}} dan sensorni uzish? Bu xostda uni o'chiradi: BPF dasturlari uziladi va siyosat u yerda qo'llanilmaydi.",
       "cmd_confirm_detach_2": "Yana tasdiqlang: {{host}} da o'chirishni boshlaysizmi? Sensor buyruqni keyingi heartbeat'da oladi.",
+      "cmd_prepare_lsm": "BPF LSM ni tayyorlash…",
+      "cmd_confirm_prepare_lsm": "{{host}} keyingi yuklanishida BPF LSM yoqilsinmi? Sensor bitta GRUB faylida (/etc/default/grub.d/99-provenza-bpf-lsm.cfg) yadro LSM ro'yxatiga \"bpf\" ni qo'shadi va update-grub ni ishga tushiradi. U xostni hech qachon qayta yuklamaydi: o'zingizga qulay vaqtda qayta yuklaysiz. Buni passkey bilan imzolaysiz.",
+      "lsm_inactive_hint": "Bu xostning yuklash qatorida BPF LSM o'chiq, shuning uchun sensor IP dan boshqa soket oilalarini boshqara olmaydi. Uni shu yerda tayyorlang, keyin xostni o'zingiz qayta yuklang (GRUB li Debian va Ubuntu).",
+      "lsm_prepared_hint": "BPF LSM tayyor: uni yoqish uchun {{host}} ni qayta yuklang.",
       "cmd_kind": {
         "detach": "Uzish",
         "restart": "Qayta ishga tushirish",
         "dump-state": "Holatni yuborish",
+        "prepare-bpf-lsm": "BPF LSM ni tayyorlash",
         "update-signing-key": "Imzolash kalitini yangilash"
       },
       "cmd_status": {

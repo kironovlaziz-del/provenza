@@ -72,10 +72,29 @@ type Kernel struct {
 	LSM   bool
 	Mkdir bool
 	Notes []string // why an optional part is missing
+	// LSMState: what became of the BPF LSM program, for the heartbeat
+	// (LSMActive, LSMInactive, LSMUnavailable).
+	LSMState string
 
 	mu  sync.Mutex // serializes map writes from the daemon's goroutines
 	cur *genState
 }
+
+// What became of the BPF LSM program (Kernel.LSMState).
+const (
+	// LSMActive: attached, and the kernel runs it.
+	LSMActive = "active"
+	// LSMInactive: the kernel accepts the program but was booted without
+	// "bpf" among its LSMs; adding it to the lsm= boot parameter turns it on
+	// (provenza-sensor prepare-bpf-lsm).
+	LSMInactive = "inactive"
+	// LSMUnavailable: the kernel refused the program (built without
+	// CONFIG_BPF_LSM) or it could not be attached.
+	LSMUnavailable = "unavailable"
+)
+
+// NoteLSMInactive is the note an inactive BPF LSM leaves in Notes.
+const NoteLSMInactive = "BPF LSM: loaded, but not active in this kernel (add bpf to the lsm= boot parameter)"
 
 // Load loads everything the kernel accepts, without attaching anything. The
 // core programs are required; LSM and the cgroup tracepoints are optional.
@@ -125,6 +144,9 @@ func Load(opt Options) (*Kernel, error) {
 
 	// Optional programs reuse the same maps.
 	k.LSM = k.loadOptional(spec, bpfobj.LSMProgs, "BPF LSM (socket families other than IP)")
+	if !k.LSM {
+		k.LSMState = LSMUnavailable
+	}
 	k.Mkdir = k.loadOptional(spec, bpfobj.MkdirProgs, "cgroup tracepoints (new cgroups governed at creation)")
 	return k, nil
 }
@@ -170,8 +192,8 @@ func (k *Kernel) Attach(opt Options) error {
 	if k.LSM {
 		if active, err := bpfLSMActive(); err == nil && !active {
 			k.LSM = false
-			k.Notes = append(k.Notes, "BPF LSM: loaded, but not active in this kernel "+
-				"(add bpf to the lsm= boot parameter)")
+			k.LSMState = LSMInactive
+			k.Notes = append(k.Notes, NoteLSMInactive)
 		}
 	}
 	if k.LSM {
@@ -180,8 +202,10 @@ func (k *Kernel) Attach(opt Options) error {
 		})
 		if err != nil {
 			k.LSM = false
+			k.LSMState = LSMUnavailable
 			k.Notes = append(k.Notes, fmt.Sprintf("BPF LSM: not attached (%v)", err))
 		} else {
+			k.LSMState = LSMActive
 			k.links = append(k.links, l)
 			k.Hooks = append(k.Hooks, "lsm_socket_create")
 		}

@@ -10,6 +10,7 @@ binaries, served by the control plane itself.
     GET /api/v1/egress-sensor/download/provenza-sensor-linux-amd64
     GET /api/v1/egress-sensor/download/provenza-sensor-linux-arm64
     GET /api/v1/egress-sensor/download/provenzasensor.service
+    GET /api/v1/egress-sensor/download/provenzasensor-bpf-lsm.service
     GET /api/v1/egress-sensor/download/SHA256SUMS
     GET /api/v1/egress-sensor/download/provenza-proxy-linux-{amd64,arm64}
     GET /api/v1/egress-sensor/download/provenza-proxy-windows-{amd64,arm64}.exe
@@ -44,6 +45,8 @@ router = APIRouter()
 FILES = {
     "install.sh": ("install.sh", "text/x-shellscript; charset=utf-8"),
     "provenzasensor.service": ("provenzasensor.service", "text/plain; charset=utf-8"),
+    # the oneshot unit the "prepare-bpf-lsm" command starts (docs/sensor-commands.md)
+    "provenzasensor-bpf-lsm.service": ("provenzasensor-bpf-lsm.service", "text/plain; charset=utf-8"),
     "SHA256SUMS": ("SHA256SUMS", "text/plain; charset=utf-8"),
     "provenza-sensor-linux-amd64": ("provenza-sensor-linux-amd64", "application/octet-stream"),
     "provenza-sensor-linux-arm64": ("provenza-sensor-linux-arm64", "application/octet-stream"),

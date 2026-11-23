@@ -3,15 +3,15 @@
 // Part of Provenza - https://github.com/kironovlaziz-del/provenza
 
 // Commands the control plane can queue for this sensor: detach, restart,
-// dump-state. With policy.pin set, a command runs only when an administrator
-// signed it with a passkey the signed manifest lists (docs/pvp/edge.md,
-// section 5; internal/trust.VerifyCommand) - the server, which only carries
-// it, cannot make one. Without a pin, every command is signed by the
+// dump-state, prepare-bpf-lsm. With policy.pin set, a command runs only when
+// an administrator signed it with a passkey the signed manifest lists
+// (docs/pvp/edge.md, section 5; internal/trust.VerifyCommand) - the server,
+// which only carries it, cannot make one. Without a pin, every command is signed by the
 // organization's Ed25519 key, which the server holds. Either way it is
 // verified before anything happens; if a check fails the command is
 // dropped and the failure is logged. There is no shell, no generic
-// execution - only the three behaviours below, whichever way the command
-// arrived.
+// execution - only the behaviours below, whichever way the command
+// arrived. prepare-bpf-lsm starts one fixed systemd unit (bpflsm.go).
 
 package daemon
 
@@ -180,7 +180,7 @@ func (d *Daemon) handleCommands(ctx context.Context, cmds []client.Command) {
 
 // handleOneCommand verifies a command and dispatches it. Every check
 // happens before any side effect; the signature is the only gate on what
-// the command may do, and the three behaviours below are the only things
+// the command may do, and the behaviours in execute are the only things
 // it may trigger.
 func (d *Daemon) handleOneCommand(ctx context.Context, c client.Command) error {
 	if d.signed != nil {
@@ -290,6 +290,8 @@ func (d *Daemon) execute(ctx context.Context, c client.Command) error {
 		return d.execRestart(ctx, c)
 	case "detach":
 		return d.execDetach(ctx, c)
+	case "prepare-bpf-lsm":
+		return d.execPrepareBPFLSM(ctx, c)
 	case "update-signing-key":
 		if d.signed != nil {
 			// the server's key does not command a sensor that follows the signed policy

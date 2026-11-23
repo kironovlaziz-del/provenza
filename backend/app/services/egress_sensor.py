@@ -52,6 +52,9 @@ KEY_DISPLAY_LEN = 19
 # What the UI shows in the incident card; distinguishes this kind of incident
 # from others.
 INCIDENT_TYPE = "egress_violation"
+
+# What a sensor may say about BPF LSM on its host (sensor/internal/daemon/bpflsm.go)
+BPF_LSM_STATES = ("active", "inactive", "prepared", "unavailable")
 # Only these actions produce an incident or a notification: observe mode is a
 # record, not a signal.
 _LOUD = ("alerted", "blocked")
@@ -413,6 +416,7 @@ async def ingest_heartbeat(
     sensor.hooks = list(data.hooks or [])
     sensor.warnings = list(data.warnings or [])
     sensor.errors = list(data.errors or [])
+    sensor.bpf_lsm = data.bpf_lsm if data.bpf_lsm in BPF_LSM_STATES else None
     sensor.dropped_events = data.dropped_events
     sensor.config_version = data.config_version
     sensor.last_seen_at = now_utc()

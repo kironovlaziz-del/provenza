@@ -10,6 +10,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { confirmDialog } from "@/components/Dialog";
 import { errorMessage as apiError } from "@/lib/errors";
 import { SensorActivity } from "@/components/SensorActivity";
+import { BpfLsmButton, BpfLsmHint } from "./BpfLsm";
 import { listAgents } from "@/lib/agent_api";
 import type { Agent } from "@/lib/agent_types";
 import {
@@ -372,6 +373,8 @@ export default function RuntimePage() {
       if (!await confirmDialog(t("rt.sensors.cmd_confirm_detach_2", { host: s.hostname ?? s.name }), { danger: true })) return;
     } else if (kind === "restart") {
       if (!await confirmDialog(t("rt.sensors.cmd_confirm_restart", { name: s.name }))) return;
+    } else if (kind === "prepare-bpf-lsm") {
+      if (!await confirmDialog(t("rt.sensors.cmd_confirm_prepare_lsm", { host: s.hostname ?? s.name }))) return;
     }
     setBusy(true); setError(null);
     try {
@@ -1049,11 +1052,14 @@ export default function RuntimePage() {
                                   onClick={() => queueCommand(s, "restart")}>
                                   {t("rt.sensors.cmd_restart")}
                                 </button>
+                                <BpfLsmButton state={s.bpf_lsm} busy={busy}
+                                  onPrepare={() => queueCommand(s, "prepare-bpf-lsm")} />
                                 <button className="btn btn-sm btn-danger" disabled={busy}
                                   onClick={() => queueCommand(s, "detach")}>
                                   {t("rt.sensors.cmd_detach")}
                                 </button>
                               </div>
+                              <BpfLsmHint state={s.bpf_lsm} host={s.hostname ?? s.name} />
 
                               {sensorCommands[s.id] === undefined || sensorCommands[s.id] === null ? (
                                 <div style={{ fontSize: 12, opacity: 0.6 }}>{t("rt.sensors.loading")}</div>

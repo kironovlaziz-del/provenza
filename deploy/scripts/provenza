@@ -162,6 +162,7 @@ cmd_rebuild() {
   wait_ready 300 backend worker frontend || die "not healthy after the restart: provenza logs backend"
   podman image prune -f >/dev/null 2>&1 || true  # the previous build's layers
   bash "$DEPLOY_DIR/scripts/edge.sh" refresh || warn "the edge services were not refreshed: provenza edge refresh"
+  refresh_sensor_here
   ok "running $rev (provenza status)"
 }
 

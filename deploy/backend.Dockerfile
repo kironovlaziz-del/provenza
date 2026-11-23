@@ -22,8 +22,8 @@ RUN set -eu; mkdir -p /dist; \
         -ldflags "-s -w -X main.version=${SENSOR_VERSION}" \
         -o /dist/provenza-sensor-linux-$arch ./cmd/provenza-sensor; \
     done; \
-    cp install.sh packaging/provenzasensor.service /dist/; \
-    cd /dist && sha256sum provenza-sensor-linux-* install.sh provenzasensor.service > SHA256SUMS
+    cp install.sh packaging/provenzasensor.service packaging/provenzasensor-bpf-lsm.service /dist/; \
+    cd /dist && sha256sum provenza-sensor-linux-* install.sh provenzasensor.service provenzasensor-bpf-lsm.service > SHA256SUMS
 
 # --------------------------------------------------------------- edge stage
 # The egress proxy and the endpoint agent, for the hosts that run them: this

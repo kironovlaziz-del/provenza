@@ -190,3 +190,57 @@ release_check() {  # release_check <commit>
   rm -rf "$tmp"
   return 0
 }
+
+# ---------------------------------------------------------------- the egress sensor on this host
+
+SENSOR_UNIT=/etc/systemd/system/provenzasensor.service
+
+# Why this host cannot run the egress sensor (empty: it can). sensor/install.sh
+# checks the same again.
+sensor_unfit() {
+  local kv kmaj kmin
+  case "$(uname -m)" in x86_64|amd64|aarch64|arm64) ;; *) echo "no sensor build for $(uname -m)"; return 0 ;; esac
+  kv=$(uname -r | cut -d. -f1-2); kmaj=${kv%%.*}; kmin=${kv#*.}; kmin=${kmin%%[!0-9]*}
+  if ! [[ "$kmaj" =~ ^[0-9]+$ && "$kmin" =~ ^[0-9]+$ ]]; then echo "kernel version $(uname -r) not understood"; return 0; fi
+  if [ "$kmaj" -lt 5 ] || { [ "$kmaj" -eq 5 ] && [ "$kmin" -lt 15 ]; }; then echo "kernel $kv is older than 5.15"; return 0; fi
+  [ -f /sys/fs/cgroup/cgroup.controllers ] || { echo "no cgroup v2 at /sys/fs/cgroup"; return 0; }
+  [ -r /sys/kernel/btf/vmlinux ] || { echo "the kernel has no BTF (/sys/kernel/btf/vmlinux)"; return 0; }
+  return 0
+}
+
+# Install, or update, the egress sensor on this host with the build in the
+# backend image (made from this checkout), checked against the image's
+# SHA256SUMS: sensor/install.sh puts the binary and the units in place, and
+# an enrolled sensor restarts on the new binary.
+install_sensor_from_image() {
+  local a img cid dir rc=0 f
+  case "$(uname -m)" in x86_64|amd64) a=amd64 ;; aarch64|arm64) a=arm64 ;; *) warn "no sensor build for $(uname -m)"; return 1 ;; esac
+  img=$(image_ref backend)
+  podman image exists "$img" || { warn "the backend image $img is not built"; return 1; }
+  dir=$(mktemp -d)
+  if ! cid=$(podman create "$img" true 2>/dev/null); then rm -rf "$dir"; warn "could not read the backend image"; return 1; fi
+  for f in SHA256SUMS "provenza-sensor-linux-$a"; do
+    podman cp "$cid:/app/sensor-dist/$f" "$dir/$f" 2>/dev/null || rc=1
+  done
+  podman rm -f "$cid" >/dev/null
+  if [ "$rc" = 0 ] && ( cd "$dir" && grep -E " provenza-sensor-linux-$a\$" SHA256SUMS | sha256sum -c --quiet - ); then
+    mv "$dir/provenza-sensor-linux-$a" "$dir/provenza-sensor"
+    chmod 0755 "$dir/provenza-sensor"
+    "$ROOT_DIR/sensor/install.sh" --binary "$dir/provenza-sensor" --yes || rc=1
+  else
+    warn "no sensor for linux/$a in the backend image, or it does not match the image's SHA256SUMS"
+    rc=1
+  fi
+  rm -rf "$dir"
+  return "$rc"
+}
+
+# After an upgrade or a rebuild: the sensor installed on this host, if any,
+# onto the new version's binary and units.
+refresh_sensor_here() {
+  [ -f "$SENSOR_UNIT" ] && [ -x /usr/local/bin/provenza-sensor ] || return 0
+  step "Updating the egress sensor on this host"
+  install_sensor_from_image \
+    || warn "the sensor was not updated (above): sudo $ROOT_DIR/sensor/install.sh --url https://$(env_get PROVENZA_DOMAIN)"
+  return 0
+}

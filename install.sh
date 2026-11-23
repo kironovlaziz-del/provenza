@@ -15,13 +15,16 @@
 # Alertmanager), creates the administrator and schedules a daily backup.
 # On this host it also sets up the egress proxy and the endpoint agent, with
 # their keys (deploy/scripts/edge.sh): nothing to copy from the interface.
+# A first install puts the egress sensor here too, enrolled, when the kernel
+# can run it (Linux 5.15+, cgroup v2, BTF); --no-sensor leaves it out.
 #
 # Unattended:
 #   PROVENZA_ADMIN_PASSWORD=... ./install.sh --yes --domain app.example.com \
 #     --org "Example Inc" --admin-email admin@example.com [--admin-name "Jane Admin"] \
 #     [--no-backup] [--force] [--sensor|--no-sensor] [--no-edge]
 #   (--force: go on despite host warnings - low memory or disk, ports 80/443 taken;
-#    --no-edge: no egress proxy and endpoint agent on this host)
+#    --no-edge: no egress proxy and endpoint agent on this host;
+#    --sensor / --no-sensor: the egress sensor here or not, without asking)
 #
 # Run it again at any time: an existing configuration (deploy/.env) is kept,
 # and an existing administrator is left unchanged. A stack still running on
@@ -68,7 +71,7 @@ confirm() {  # confirm "Question" [y|n]
 # A host warning (memory, disk, ports): go on with --force, else ask (--yes alone stops).
 accept_warning() { [ "$FORCE" = 1 ] || confirm "Continue anyway?" n; }
 
-usage() { sed -n '2,25p' "$0" | sed 's/^# \{0,1\}//'; exit 0; }
+usage() { sed -n '2,28p' "$0" | sed 's/^# \{0,1\}//'; exit 0; }
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -182,6 +185,8 @@ fi
 # ---------------------------------------------------------------- 2. configuration
 
 step "Configuration"
+FIRST_INSTALL=1
+[ -f .env ] && FIRST_INSTALL=0
 if [ -f .env ]; then
   ok "existing configuration found (deploy/.env) - keeping its secrets"
   DOMAIN=$(env_get PROVENZA_DOMAIN)
@@ -293,29 +298,34 @@ url="https://$DOMAIN"
 # ---------------------------------------------------------------- 5. sensor
 
 SENSOR_INSTALLED=0
-if [ "$SENSOR_MODE" = yes ] || { [ "$SENSOR_MODE" = ask ] && [ "$ASSUME_YES" = 0 ] && confirm "Install the egress sensor on this host as well?" n; }; then
-  step "Installing the egress sensor on this host"
-  if [ -x "$ROOT_DIR/sensor/install.sh" ]; then
-    # The backend image carries the sensor built from this checkout
-    # (deploy/backend.Dockerfile): no Go on this host, and no need for the
-    # domain's DNS or certificate to be ready yet.
-    case "$(uname -m)" in x86_64|amd64) sarch=amd64 ;; aarch64|arm64) sarch=arm64 ;; *) sarch="" ;; esac
-    SENSOR_BIN=$(mktemp -d)/provenza-sensor
-    if [ -n "$sarch" ] && podman cp "backend:/app/sensor-dist/provenza-sensor-linux-$sarch" "$SENSOR_BIN" 2>/dev/null; then
-      chmod 0755 "$SENSOR_BIN"
-      # prepared only: edge.sh below makes its key and enrolls it
-      if "$ROOT_DIR/sensor/install.sh" --binary "$SENSOR_BIN" --yes; then
-        SENSOR_INSTALLED=1
-      else
-        warn "sensor install returned non-zero - see the output above"
-      fi
-    else
-      warn "no sensor binary for $(uname -m) in the backend image; later: sudo $ROOT_DIR/sensor/install.sh --url $url"
-    fi
-    rm -rf "$(dirname "$SENSOR_BIN")"
-  else
-    warn "sensor/install.sh not found in $ROOT_DIR - skipping"
+WANT_SENSOR=0
+if [ "$SENSOR_MODE" = yes ]; then
+  WANT_SENSOR=1
+elif [ "$SENSOR_MODE" = ask ] && [ "$FIRST_INSTALL" = 1 ]; then
+  # a first install: the sensor too, when this kernel can run it
+  unfit=$(sensor_unfit)
+  if [ -n "$unfit" ]; then
+    step "Egress sensor"
+    warn "not installed on this host: $unfit. On another Linux host: $url/runtime -> Register sensor"
+  elif confirm "Install the egress sensor on this host as well (recommended)?" y; then
+    WANT_SENSOR=1
   fi
+elif [ "$SENSOR_MODE" = ask ] && [ "$ASSUME_YES" = 0 ] && [ ! -f "$SENSOR_UNIT" ]; then
+  confirm "Install the egress sensor on this host as well?" n && WANT_SENSOR=1
+fi
+if [ "$WANT_SENSOR" = 1 ]; then
+  step "Installing the egress sensor on this host"
+  # The backend image carries the sensor built from this checkout
+  # (deploy/backend.Dockerfile): no Go on this host, and no need for the
+  # domain's DNS or certificate to be ready yet. Prepared only: edge.sh
+  # below makes its key and enrolls it.
+  if install_sensor_from_image; then
+    SENSOR_INSTALLED=1
+  else
+    warn "the sensor was not installed (above); later: sudo $ROOT_DIR/sensor/install.sh --url $url"
+  fi
+elif [ "$SENSOR_MODE" != no ] && [ -f "$SENSOR_UNIT" ] && [ -x /usr/local/bin/provenza-sensor ]; then
+  SENSOR_INSTALLED=1   # installed by an earlier run: edge.sh below enrolls it if it has no key yet
 fi
 
 # ---------------------------------------------------------------- 6. edge

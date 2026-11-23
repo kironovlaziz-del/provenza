@@ -208,6 +208,10 @@ type Heartbeat struct {
 	// egress proxies it lets out (docs/pvp/edge.md, section 5).
 	SignedPolicy *SignedPolicyReport `json:"signed_policy,omitempty"`
 	ProxyRuns    []ProxyRunReport    `json:"proxy_runs,omitempty"`
+
+	// BPF LSM: "active", "inactive" (the boot line lacks bpf), "prepared"
+	// (it will have it after a reboot) or "unavailable"
+	BPFLSM string `json:"bpf_lsm,omitempty"`
 }
 
 // SignedPolicyReport: what the sensor verified itself.

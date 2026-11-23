@@ -1257,6 +1257,7 @@
     "kill_switch.bad_receipt": "The report is not signed with the proxy's registered key.",
     "egress_command.not_signed": "The command is not signed: sign it with this session's key.",
     "egress_command.replayed": "This signed command was queued already.",
+    "egress_command.passkey_required": "Sign this command with your passkey: it changes the host's boot line.",
     "a2a.synced_by_proxy": "Its credential is sealed to the egress proxies: they fetch this peer's card.",
     "mcp.synced_by_proxy": "Its credential is sealed to the egress proxies: they sync this server.",
     "credential.no_upstream": "This has no address a credential could be sent to.",
@@ -3457,10 +3458,15 @@
       "cmd_confirm_restart": "Restart the sensor on {{name}}? The daemon will exit and systemd brings it back within a second; enforcement pauses briefly.",
       "cmd_confirm_detach_1": "Detach the sensor from {{name}}? This uninstalls it on the host: the BPF programs are detached and the policy stops being enforced there.",
       "cmd_confirm_detach_2": "Confirm again: run the uninstall on {{host}}? The sensor will pick up the command at its next heartbeat.",
+      "cmd_prepare_lsm": "Prepare BPF LSM…",
+      "cmd_confirm_prepare_lsm": "Turn BPF LSM on at {{host}}'s next boot? The sensor adds \"bpf\" to the kernel's LSMs in one GRUB file (/etc/default/grub.d/99-provenza-bpf-lsm.cfg) and runs update-grub. It never reboots the host: you reboot it when it suits you. You sign this with your passkey.",
+      "lsm_inactive_hint": "BPF LSM is off in this host's boot line, so the sensor cannot govern socket families other than IP. Prepare it here, then reboot the host yourself (Debian and Ubuntu with GRUB).",
+      "lsm_prepared_hint": "BPF LSM is prepared: reboot {{host}} to turn it on.",
       "cmd_kind": {
         "detach": "Detach",
         "restart": "Restart",
         "dump-state": "Dump state",
+        "prepare-bpf-lsm": "Prepare BPF LSM",
         "update-signing-key": "Update signing key"
       },
       "cmd_status": {

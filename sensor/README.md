@@ -38,9 +38,9 @@ beyond the kernel.
 - **The egress proxy's host.** `provenza-sensor --proxy run --
   provenza-proxy ...` lets the proxy out only while it runs a binary whose
   SHA-256 is pinned (below).
-- **Signed commands.** The control plane can queue one of three
-  operations for a sensor — detach, restart, dump-state — delivered on the
-  next heartbeat. With `policy.pin` the sensor runs only one an
+- **Signed commands.** The control plane can queue one of four
+  operations for a sensor — detach, restart, dump-state, prepare-bpf-lsm —
+  delivered on the next heartbeat. With `policy.pin` the sensor runs only one an
   administrator signed with a passkey; without it, the organization's
   Ed25519 key (which the server holds) is enough. See
   `docs/sensor-commands.md`.
@@ -63,9 +63,11 @@ binary with `//go:embed`, so the deployed binary is self-contained.
 
 ## Install
 
-On the Provenza server itself, `sudo ./install.sh --sensor` installs it and
-enrolls it with a key the installer makes - nothing to copy from the
-interface ([docs/self-hosting.md](../docs/self-hosting.md)).
+On the Provenza server itself, `sudo ./install.sh` installs it on a first
+install when the kernel can run it (`--sensor` / `--no-sensor` decide
+without asking) and enrolls it with a key the installer makes - nothing to
+copy from the interface; `provenza upgrade` keeps it up to date
+([docs/self-hosting.md](../docs/self-hosting.md)).
 
 On any other host the usual way needs neither this repository nor Go: in Provenza, Gateways
 → **Runtime** → **Register sensor** gives a key and the command to run on
@@ -86,7 +88,7 @@ does the same with a binary built here; `--help` lists the flags.
 By hand, with a binary you built:
 
     sudo install -m 0755 provenza-sensor /usr/local/bin/
-    sudo cp packaging/provenzasensor.service /etc/systemd/system/
+    sudo cp packaging/provenzasensor.service packaging/provenzasensor-bpf-lsm.service /etc/systemd/system/
     sudo systemctl daemon-reload
     sudo systemctl enable provenzasensor
     # writes sensor.json, the key, the sensor id and the signing key, then (re)starts the service
@@ -172,7 +174,7 @@ keeps the current policy and keeps retrying.
 
 ## Commands
 
-An admin can queue one of three operations for a sensor from the
+An admin can queue one of these operations for a sensor from the
 Runtime page (expand the sensor's row):
 
 - **Dump state** — the sensor sends back its own snapshot, the same JSON
@@ -181,6 +183,12 @@ Runtime page (expand the sensor's row):
   enforcement across the restart.
 - **Detach** — full uninstall on the host. Irreversible from the sensor
   side; re-enroll to bring the sensor back.
+- **Prepare BPF LSM…** — shown when the kernel can run the sensor's BPF
+  LSM program but was booted without `bpf` among its LSMs. It adds `bpf`
+  to the boot line in one GRUB drop-in and runs `update-grub` (Debian and
+  Ubuntu with GRUB), in its own unit `provenzasensor-bpf-lsm.service`; it
+  never reboots the host, you do. Provenza queues it only signed with a
+  passkey. By hand: `sudo provenza-sensor prepare-bpf-lsm`.
 
 The browser signs every command with the administrator's session key,
 which their passkey certified. With `policy.pin` the sensor runs only such

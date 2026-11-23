@@ -11,6 +11,9 @@
 #   5. anything unhealthy -> roll back: the old code, units and images, and
 #      the database from that backup if the migrations had already changed it
 #
+# Afterwards this host's egress proxy, endpoint agent and egress sensor, where
+# installed, get the new version's binaries.
+#
 # Downtime is step 3 to 4: usually under a minute. Options: --yes (no
 # questions), --force (upgrade over local changes to tracked files).
 
@@ -36,7 +39,7 @@ while [ $# -gt 0 ]; do
     --version) VERSION=${2:?}; shift 2 ;;
     --yes|-y) ASSUME_YES=1; shift ;;
     --force) FORCE=1; shift ;;
-    -h|--help) sed -n '2,16p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) sed -n '2,19p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) die "unknown option: $1 (see --help)" ;;
   esac
 done
@@ -134,6 +137,7 @@ if start_version; then
   ok "upgraded to $(git_as_owner describe --tags --always HEAD), database at $(db_revision)"
   # this host's egress proxy and endpoint agent: the binaries of the new version
   bash "$DEPLOY_DIR/scripts/edge.sh" refresh || warn "the edge services were not refreshed: provenza edge refresh"
+  refresh_sensor_here   # and this host's egress sensor, when installed here
   printf '\n%s✓ Upgrade complete%s - the previous images are kept as :rollback until the next upgrade.\n' "$G$B" "$N"
   exit 0
 fi

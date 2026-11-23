@@ -1,0 +1,38 @@
+[Unit]
+Description=Provenza egress sensor: prepare BPF LSM for the next boot
+Documentation=https://github.com/kironovlaziz-del/provenza/blob/main/docs/sensor-commands.md
+
+# Started by the sensor for the "prepare-bpf-lsm" command an administrator
+# signed (or by hand: sudo systemctl start provenzasensor-bpf-lsm). It adds
+# "bpf" to the kernel's LSMs in one GRUB drop-in,
+# /etc/default/grub.d/99-provenza-bpf-lsm.cfg, and runs update-grub. It never
+# reboots the host. Undo: remove that file, run update-grub, reboot.
+#
+# The sensor's own unit cannot write /etc/default or /boot and is not loosened
+# for this: this unit does the one fixed job, with a sandbox of its own.
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/provenza-sensor prepare-bpf-lsm
+TimeoutStartSec=150
+
+# update-grub reads the disks to find the root device (grub-probe), so the
+# devices stay visible; it writes /boot/grub and nothing else.
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=-/etc/default -/boot /run/provenza-sensor
+ProtectHome=read-only
+PrivateTmp=true
+PrivateNetwork=true
+RestrictAddressFamilies=AF_UNIX
+ProtectKernelModules=true
+ProtectKernelTunables=true
+ProtectKernelLogs=true
+RestrictNamespaces=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+SystemCallArchitectures=native

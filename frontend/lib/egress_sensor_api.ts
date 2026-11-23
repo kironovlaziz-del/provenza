@@ -31,6 +31,8 @@ export interface SensorT {
   hooks: string[] | null;
   warnings: string[] | null;
   errors: string[] | null;
+  /** BPF LSM on its host; null from a sensor that does not report it */
+  bpf_lsm: BpfLsmState | null;
   dropped_events: number;
   config_version: string | null;
   last_seen_at: string | null;
@@ -258,7 +260,11 @@ export const updateSensorSettings = async (input: SensorSettingsInput) =>
 
 // ---------------------------------------------------------------- commands
 
-export type CommandKind = "detach" | "restart" | "dump-state";
+export type CommandKind = "detach" | "restart" | "dump-state" | "prepare-bpf-lsm";
+
+/** inactive: the kernel can run it, the boot line leaves it out (prepare-bpf-lsm);
+ *  prepared: it will be on after the host reboots */
+export type BpfLsmState = "active" | "inactive" | "prepared" | "unavailable";
 export type CommandStatus =
   | "pending"
   | "delivered"

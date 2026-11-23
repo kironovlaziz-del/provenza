@@ -69,6 +69,8 @@ type HooksSection struct {
 	Attached []string `json:"attached"`
 	LSM      bool     `json:"lsm"`
 	Mkdir    bool     `json:"mkdir"`
+	// "active", "inactive", "prepared" (after a reboot) or "unavailable"
+	LSMState string `json:"lsm_state,omitempty"`
 }
 
 type PolicySection struct {
@@ -186,6 +188,7 @@ func (d *Daemon) snapshot() Status {
 			Attached: append([]string(nil), d.kernel.Hooks...),
 			LSM:      d.kernel.LSM,
 			Mkdir:    d.kernel.Mkdir,
+			LSMState: d.bpfLSMState(),
 		},
 		Warnings: d.warnings(),
 		DNS:      d.dns.stats(cgByWid),

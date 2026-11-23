@@ -18,6 +18,10 @@
 # The sensor needs Linux 5.15+, cgroup v2, BPF and BTF. The BPF object is
 # embedded in the binary, so clang is only needed if you build from source.
 #
+# Run it again to update an installed sensor (the same command): the binary
+# and the units are replaced, the enrollment is kept, and an enrolled sensor
+# restarts on the new binary.
+#
 # Flags:
 #   --url URL         control plane URL (required for enroll, optional to just prepare)
 #   --key-file PATH   read the sensor key from this file; enroll and start
@@ -105,9 +109,16 @@ fetch_from_control_plane() {
   done
   ( cd "$DL_DIR" && grep -E " (provenza-sensor-linux-$arch|provenzasensor.service)\$" SHA256SUMS | sha256sum -c --quiet - ) \
     || die "checksum mismatch: the downloaded files do not match the control plane's SHA256SUMS"
+  # the BPF LSM unit (prepare-bpf-lsm): a control plane older than it has none
+  if grep -q " provenzasensor-bpf-lsm.service\$" "$DL_DIR/SHA256SUMS"; then
+    curl -fsSL --proto '=https,http' --max-time 60 -o "$DL_DIR/provenzasensor-bpf-lsm.service" \
+      "$base/provenzasensor-bpf-lsm.service" || die "could not download $base/provenzasensor-bpf-lsm.service"
+    ( cd "$DL_DIR" && grep -E " provenzasensor-bpf-lsm.service\$" SHA256SUMS | sha256sum -c --quiet - ) \
+      || die "checksum mismatch: provenzasensor-bpf-lsm.service does not match the control plane's SHA256SUMS"
+  fi
   mv "$DL_DIR/provenza-sensor-linux-$arch" "$DL_DIR/provenza-sensor"
   chmod 0755 "$DL_DIR/provenza-sensor"
-  ok "linux/$arch binary and unit, checksums match"
+  ok "linux/$arch binary and units, checksums match"
 }
 
 [ "$(id -u)" = 0 ] || die "run as root: sudo $0 ..."
@@ -120,11 +131,16 @@ if [ "$UNINSTALL" = 1 ]; then
     provenza-sensor --uninstall || warn "provenza-sensor --uninstall returned non-zero"
   fi
   systemctl disable --now provenzasensor 2>/dev/null || true
-  rm -f /etc/systemd/system/provenzasensor.service
+  rm -f /etc/systemd/system/provenzasensor.service /etc/systemd/system/provenzasensor-bpf-lsm.service
   rm -f /etc/tmpfiles.d/provenza-sensor.conf
   rm -rf /etc/provenza-sensor "$STATE_DIR" /run/provenza-sensor
   systemctl daemon-reload
   ok "removed"
+  if [ -f /etc/default/grub.d/99-provenza-bpf-lsm.cfg ]; then
+    # BPF LSM on without the sensor is harmless; the boot line is not changed behind your back
+    echo "  BPF LSM stays on at boot (/etc/default/grub.d/99-provenza-bpf-lsm.cfg). To turn it off:"
+    echo "    sudo rm /etc/default/grub.d/99-provenza-bpf-lsm.cfg && sudo update-grub   # then reboot"
+  fi
   exit 0
 fi
 
@@ -136,7 +152,9 @@ if [ -n "$KEY_FILE" ]; then
   KEY=$(head -n1 "$KEY_FILE" | tr -d '[:space:]')
 elif [ -z "$KEY" ] && [ -n "${PROVENZA_SENSOR_KEY:-}" ]; then
   KEY=$PROVENZA_SENSOR_KEY
-elif [ -z "$KEY" ] && [ -n "$URL" ] && [ "$ASSUME_YES" = 0 ] && [ -r /dev/tty ]; then
+# (an enrolled sensor is only updated: no key to ask for; enroll again with
+# --key-file or provenza-sensor enroll)
+elif [ -z "$KEY" ] && [ -n "$URL" ] && [ "$ASSUME_YES" = 0 ] && [ -r /dev/tty ] && [ ! -s /etc/provenza-sensor/key ]; then
   printf '%s? Sensor key%s (Runtime -> Register sensor; input hidden, Enter to only prepare): ' "$B" "$N" >/dev/tty
   IFS= read -rs KEY </dev/tty || true
   printf '\n' >/dev/tty
@@ -191,10 +209,12 @@ fi
 ok "binary: $BIN"
 
 UNIT_SRC="$SELF_DIR/packaging/provenzasensor.service"
+LSM_UNIT_SRC="$SELF_DIR/packaging/provenzasensor-bpf-lsm.service"
 if [ ! -f "$UNIT_SRC" ]; then
   [ -n "$URL" ] || die "packaging/provenzasensor.service not found next to this script: pass --url to download it"
   [ -f "$DL_DIR/provenzasensor.service" ] || fetch_from_control_plane
   UNIT_SRC="$DL_DIR/provenzasensor.service"
+  LSM_UNIT_SRC="$DL_DIR/provenzasensor-bpf-lsm.service"
 fi
 
 # ---------------------------------------------------------------- install
@@ -216,6 +236,8 @@ install -d -m 0755 /etc/tmpfiles.d
 cat > /etc/tmpfiles.d/provenza-sensor.conf <<'TMPF'
 # Parent for run cgroups created by the Provenza egress sensor daemon.
 d /sys/fs/cgroup/provenza-run 0755 root root -
+# The daemon's sockets; its unit needs the directory at every boot.
+d /run/provenza-sensor 0755 root root -
 TMPF
 systemd-tmpfiles --create /etc/tmpfiles.d/provenza-sensor.conf
 ok "/etc/tmpfiles.d/provenza-sensor.conf"
@@ -223,8 +245,15 @@ ok "/etc/tmpfiles.d/provenza-sensor.conf"
 step "installing systemd unit"
 install -d -m 0755 /etc/provenza-sensor "$STATE_DIR" /run/provenza-sensor
 install -m 0644 "$UNIT_SRC" /etc/systemd/system/provenzasensor.service
-systemctl daemon-reload
 ok "/etc/systemd/system/provenzasensor.service"
+# started only for the "prepare-bpf-lsm" command (or by hand): not enabled
+if [ -f "$LSM_UNIT_SRC" ]; then
+  install -m 0644 "$LSM_UNIT_SRC" /etc/systemd/system/provenzasensor-bpf-lsm.service
+  ok "/etc/systemd/system/provenzasensor-bpf-lsm.service"
+else
+  warn "provenzasensor-bpf-lsm.service not found: the Prepare BPF LSM command will not work on this host"
+fi
+systemctl daemon-reload
 
 # ---------------------------------------------------------------- enroll
 
@@ -239,6 +268,15 @@ if [ -n "$URL" ] && [ -n "$KEY" ]; then
   echo
   echo "  Check it:  systemctl status provenzasensor"
   echo "  In the UI: ${URL%/}/runtime"
+  exit 0
+fi
+
+# Already enrolled (a re-run to update it): onto the new binary, enrollment kept
+if [ -s /etc/provenza-sensor/key ] && [ -s /etc/provenza-sensor/sensor.json ]; then
+  step "updating the enrolled sensor"
+  systemctl enable provenzasensor >/dev/null
+  systemctl restart provenzasensor
+  ok "restarted on $(provenza-sensor --version 2>/dev/null || echo 'the new binary')"
   exit 0
 fi
 

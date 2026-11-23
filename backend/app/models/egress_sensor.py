@@ -32,6 +32,8 @@ class EgressSensor(Base):
     hooks = Column(JSONB)
     warnings = Column(JSONB)
     errors = Column(JSONB)
+    # BPF LSM on its host: active, inactive, prepared (for the next boot) or unavailable
+    bpf_lsm = Column(String(20))
     dropped_events = Column(Integer, nullable=False, default=0)
     config_version = Column(String(64))
     # What the sensor verified itself (docs/pvp/edge.md, section 5), as its last

@@ -12,10 +12,11 @@ sensor verifies the signature, the organization, its own sensor id, the
 command kind and the expiry before doing anything; nothing here trusts
 the transport.
 
-This is deliberately not a generic channel: three kinds are accepted, and
-the only behaviour each triggers on the sensor is fixed. A stolen control
-plane key can at worst detach, restart or dump-state a host - not run
-arbitrary code.
+This is deliberately not a generic channel: a handful of kinds are
+accepted, and the only behaviour each triggers on the sensor is fixed. A
+stolen control plane key can at worst detach, restart or dump-state a host,
+or add "bpf" to its LSMs for the next boot (prepare-bpf-lsm, which a person
+must still reboot for) - not run arbitrary code.
 
 An administrator also signs each command (docs/pvp/edge.md, section 5):
 the statement below, with the session key their passkey certified. The
@@ -57,7 +58,7 @@ log = logging.getLogger(__name__)
 # Kinds the sensor understands. A payload with anything else is refused by
 # the sensor before execution, but we also reject it here so an admin gets
 # an immediate, clear error instead of a command that silently does nothing.
-ALLOWED_KINDS = {"detach", "restart", "dump-state", "update-signing-key"}
+ALLOWED_KINDS = {"detach", "restart", "dump-state", "prepare-bpf-lsm", "update-signing-key"}
 
 # A command is valid for this long. Short enough that a leaked payload
 # cannot be replayed much later; long enough that a sensor polling every
@@ -71,7 +72,12 @@ ACTIVE_STATUSES = ("pending", "delivered", "executing")
 
 # What an administrator signs to command a sensor (sensor/internal/trust/command.go).
 SENSOR_COMMAND = "provenza.sensor.command"
-SIGNED_KINDS = ("detach", "restart", "dump-state")
+SIGNED_KINDS = ("detach", "restart", "dump-state", "prepare-bpf-lsm")
+# Kinds this server queues only when an administrator signed them with a
+# passkey-certified session: prepare-bpf-lsm changes the host's boot line.
+# (A sensor with policy.pin checks that signature itself; one without a pin
+# trusts the organization's key, so there this rule is the server's.)
+PASSKEY_ONLY_KINDS = ("prepare-bpf-lsm",)
 # Seconds a signed command is valid from its issued_at: the passkey prompt,
 # then delivery on a heartbeat. The sensor refuses more than 5 minutes: a
 # command signed before its signer signed out stays valid only that long.
@@ -246,6 +252,9 @@ async def create_command(
     """
     if kind not in ALLOWED_KINDS:
         raise UnknownKind(f"unknown command kind: {kind}", kind=kind)
+    if kind in PASSKEY_ONLY_KINDS and proof is None:
+        raise CommandError("an administrator must sign this command with a passkey",
+                           code="egress_command.passkey_required")
 
     key = await signing_key_for(db, sensor.org_id, actor_user_id)
     now = _utcnow()
