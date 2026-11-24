@@ -26,9 +26,11 @@ recorded. Nothing else is written to stdout; diagnostics go to stderr.
 Environment: PROVENZA_URL, PROVENZA_TOKEN (first start only),
 PROVENZA_AGENT_NAME (default "mcp"), PROVENZA_IDENTITY (identity file path).
 
-Without PROVENZA_URL it still speaks MCP (initialize, ping, an empty
-tools/list), and a tool call answers how to connect it - so a client or a
-directory that starts it unconfigured sees a working server, not a crash.
+Without PROVENZA_URL it still speaks MCP (initialize, ping, tools/list),
+with one tool of its own, provenza_status, that says it is not connected
+and how to connect it - so a client or a directory that starts it
+unconfigured sees a working server, not a crash. Once connected that tool is
+gone: the client sees only what an administrator approved.
 """
 
 import base64
@@ -46,6 +48,36 @@ VERSIONS = ("2025-11-25", "2025-06-18", "2025-03-26")   # what this server answe
 SETUP = ("Provenza is not connected: set PROVENZA_URL to your Provenza (https://...) and, on the first start, "
          "PROVENZA_TOKEN to an enrollment token from Agents -> New agent. "
          "See https://github.com/kironovlaziz-del/provenza")
+
+
+# The one tool before PROVENZA_URL is set. Connected, the gateway lists only
+# the tools an administrator approved: this one is never among them.
+STATUS_TOOL = "provenza_status"
+STATUS_TOOL_DEF: Dict[str, Any] = {
+    "name": STATUS_TOOL,
+    "title": "Provenza connection status",
+    "description": (
+        "Report whether this Provenza MCP gateway is connected to a Provenza server, and what to set to "
+        "connect it. Call it when no other tools are listed or a tool call fails with \"not connected\". "
+        "It takes no arguments, changes nothing and makes no network request: it returns connected=false "
+        "and the setup steps (PROVENZA_URL, then PROVENZA_TOKEN on the first start). Once connected, this "
+        "tool is no longer listed - the gateway then lists exactly the tools an administrator approved for "
+        "this agent, and checks and records every call against the organization's policies."
+    ),
+    "inputSchema": {"type": "object", "properties": {}, "additionalProperties": False},
+    "outputSchema": {
+        "type": "object",
+        "properties": {
+            "connected": {"type": "boolean", "description": "Whether the gateway is connected to Provenza."},
+            "setup": {"type": "string", "description": "What to set to connect it."},
+            "docs": {"type": "string", "description": "Where the setup is described."},
+        },
+        "required": ["connected", "setup", "docs"],
+        "additionalProperties": False,
+    },
+    "annotations": {"title": "Provenza connection status", "readOnlyHint": True, "destructiveHint": False,
+                    "idempotentHint": True, "openWorldHint": False},
+}
 
 
 def _log(msg: str) -> None:
@@ -135,7 +167,8 @@ class Bridge:
 
 
 class Unconfigured:
-    """The server's answers before PROVENZA_URL is set: valid MCP, no tools."""
+    """The server's answers before PROVENZA_URL is set: valid MCP, and only
+    provenza_status among the tools."""
 
     def handle(self, msg: Any) -> Optional[Dict[str, Any]]:
         if not isinstance(msg, dict):
@@ -155,8 +188,13 @@ class Unconfigured:
         if method == "ping":
             return {"jsonrpc": "2.0", "id": rid, "result": {}}
         if method == "tools/list":
-            return {"jsonrpc": "2.0", "id": rid, "result": {"tools": []}}
+            return {"jsonrpc": "2.0", "id": rid, "result": {"tools": [STATUS_TOOL_DEF]}}
         if method == "tools/call":
+            if params.get("name") == STATUS_TOOL:
+                status = {"connected": False, "setup": SETUP,
+                          "docs": "https://github.com/kironovlaziz-del/provenza/blob/main/docs/quickstart.md"}
+                return {"jsonrpc": "2.0", "id": rid, "result": {
+                    "content": [{"type": "text", "text": json.dumps(status)}], "structuredContent": status}}
             return {"jsonrpc": "2.0", "id": rid,
                     "result": {"content": [{"type": "text", "text": SETUP}], "isError": True}}
         return _error(rid, -32601, f"Method not found: {str(method)[:100]}")
