@@ -80,6 +80,28 @@ def test_without_provenza_url_it_still_speaks_mcp_and_says_how_to_connect():
                {"jsonrpc": "2.0", "id": 4, "method": "resources/list"})
     assert out[0]["result"]["protocolVersion"] == "2025-06-18"
     assert "PROVENZA_URL" in out[0]["result"]["instructions"]
-    assert out[1]["result"] == {"tools": []}
+    assert [t["name"] for t in out[1]["result"]["tools"]] == ["provenza_status"]
     assert out[2]["result"]["isError"] and "PROVENZA_URL" in out[2]["result"]["content"][0]["text"]
     assert out[3]["error"]["code"] == -32601 and out[4]["error"]["code"] == -32700
+
+
+def test_the_status_tool_says_how_to_connect_and_only_while_unconfigured():
+    """Unconfigured, one tool of its own, read-only, that says what to set;
+    connected, the gateway's list is the server's alone (Bridge adds nothing)."""
+    import json as _json
+
+    from provenza.mcp_stdio import STATUS_TOOL_DEF, Unconfigured
+    out = _run(Unconfigured(),
+               {"jsonrpc": "2.0", "id": 1, "method": "tools/list"},
+               {"jsonrpc": "2.0", "id": 2, "method": "tools/call", "params": {"name": "provenza_status"}},
+               {"jsonrpc": "2.0", "id": 3, "method": "tools/call",
+                "params": {"name": "provenza_status", "arguments": {}}})
+    tool = out[0]["result"]["tools"][0]
+    assert tool == STATUS_TOOL_DEF and tool["annotations"]["readOnlyHint"] is True
+    assert tool["inputSchema"] == {"type": "object", "properties": {}, "additionalProperties": False}
+    for r in (out[1]["result"], out[2]["result"]):
+        assert not r.get("isError")
+        st = r["structuredContent"]
+        assert st["connected"] is False and "PROVENZA_URL" in st["setup"] and st["docs"].startswith("https://")
+        assert _json.loads(r["content"][0]["text"]) == st
+        assert set(st) == set(tool["outputSchema"]["required"])

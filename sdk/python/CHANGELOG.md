@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 0.3.1 (2026-11-24)
+
+- `provenza-mcp` started without `PROVENZA_URL` lists one tool of its own,
+  `provenza_status` (read-only, no arguments, no network): it answers that
+  the gateway is not connected and what to set to connect it. Before, the
+  list was empty, so a client or an MCP directory that starts the server
+  unconfigured found nothing to show or evaluate. Once connected, the tool
+  is gone: the client sees only the tools an administrator approved.
+
 ## 0.3.0 (2026-11-22)
 
 - **LangGraph** (`provenza.integrations.langgraph`, extra `langgraph`): the
