@@ -55,6 +55,29 @@ _UNIT_CGROUP = re.compile(r"^(system\.slice/[^/]{1,200}\.service|system\.slice/d
                           r"|machine\.slice/libpod-[0-9a-f]{64}\.scope)$")
 
 
+# Never offered and never attached: an agent attached there and then enforced
+# would cut the network of what governs it - Provenza's own services and
+# containers (provenza-*, the sensor's provenzasensor*) - or of the host
+# itself: the system manager, SSH, D-Bus, polkit, scheduling, logging, time,
+# storage, the container runtimes, the network, the hypervisor's and the
+# cloud's guest agents, package updates, the firewall.
+_RESERVED_SERVICE = re.compile(
+    r"^(provenza[^/]*|systemd-[^/]+|(ssh|sshd|dbus|dbus-broker|polkit|cron|crond|anacron|atd|rsyslog|syslog-ng"
+    r"|auditd|containerd|docker|podman|snapd|NetworkManager|ModemManager|networkd-dispatcher|chronyd|ntp|ntpd"
+    r"|multipathd|udisks2|lvm2-[^/]+|irqbalance|thermald|accounts-daemon|packagekit|fwupd|unattended-upgrades"
+    r"|apparmor|firewalld|ufw|qemu-guest-agent|open-vm-tools|vmtoolsd|cloud-init[^/]*|cloud-config|cloud-final"
+    r"|google-guest-agent|amazon-ssm-agent|walinuxagent|getty@[^/]+|serial-getty@[^/]+)\.service)$")
+_RESERVED_CONTAINER = re.compile(r"^provenza", re.IGNORECASE)
+
+
+def reserved_unit(unit: Dict[str, Any]) -> bool:
+    """A service or container no agent may be attached to (above)."""
+    cgroup = unit.get("cgroup") or ""
+    if cgroup.endswith(".service"):
+        return bool(_RESERVED_SERVICE.match(cgroup.rsplit("/", 1)[-1]))
+    return bool(_RESERVED_CONTAINER.match(unit.get("name") or ""))
+
+
 def clean_units(units: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """A sensor's list as it is kept: the entries that look like what a
     sensor lists, with only the known fields, bounded."""
@@ -180,6 +203,8 @@ async def network_state(db: AsyncSession, agent) -> Dict[str, Any]:
     for s in sensors:
         units = []
         for u in s.units or []:
+            if reserved_unit(u):
+                continue
             pat = literal_pattern(u["cgroup"])
             units.append({**u, "pattern": pat, "attached": pat in patterns, "taken_by": others.get(pat)})
         out["hosts"].append({"sensor_id": s.id, "sensor": s.name, "hostname": s.hostname, "units": units})
@@ -254,14 +279,18 @@ async def attach(db: AsyncSession, agent, w: EgressWorkload, sensor_id: int, cgr
                  actor_user_id: Optional[int]) -> EgressWorkload:
     """Govern the service or container the sensor listed as this agent: its
     cgroup becomes one of the workload's patterns. Only what the sensor
-    listed, and not what another workload governs."""
+    listed, not what another workload governs, and never Provenza's own
+    services or the host's core ones (reserved_unit)."""
     s = (await db.execute(select(EgressSensor).where(
         EgressSensor.id == sensor_id, EgressSensor.org_id == agent.org_id, EgressSensor.revoked_at.is_(None))
     )).scalar_one_or_none()
     if s is None:
         raise UnitError("agent_network.sensor_not_found", 404)
-    if not any(u.get("cgroup") == cgroup for u in (s.units or [])):
+    unit = next((u for u in (s.units or []) if u.get("cgroup") == cgroup), None)
+    if unit is None:
         raise UnitError("agent_network.unit_not_listed", 422)
+    if reserved_unit(unit):
+        raise UnitError("agent_network.unit_reserved", 422)
     pat = literal_pattern(cgroup)
     taken = (await db.execute(select(EgressWorkload.name).where(
         EgressWorkload.org_id == agent.org_id, EgressWorkload.deleted_at.is_(None), EgressWorkload.id != w.id,

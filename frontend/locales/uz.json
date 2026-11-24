@@ -1262,6 +1262,7 @@
     "agent_network.sensor_not_found": "Bu sensor ushbu tashkilotniki emas.",
     "agent_network.unit_not_listed": "Sensor bu xizmat yoki konteynerni ro'yxatlamaydi: u to'xtagan bo'lishi mumkin. Sahifani yangilab, qayta tanlang.",
     "agent_network.unit_taken": "Bu xizmat yoki konteynerni boshqa workload allaqachon boshqaradi: bitta cgroup ni bitta workload boshqaradi.",
+    "agent_network.unit_reserved": "Provenza'ning o'z xizmatlari va hostning asosiy xizmatlari (systemd, SSH, D-Bus, polkit, konteyner runtime'lari) biriktirilmaydi: ularni cheklash Provenza yoki hostning o'z tarmog'ini uzib qo'yadi.",
     "a2a.synced_by_proxy": "Uning hisob ma'lumoti egress proksilarga muhrlangan: bu hamkorning kartasini ular oladi.",
     "mcp.synced_by_proxy": "Uning hisob ma'lumoti egress proksilarga muhrlangan: bu serverni ular sinxronlaydi.",
     "credential.no_upstream": "Bunda hisob ma'lumoti yuborilishi mumkin bo'lgan manzil yo'q.",
