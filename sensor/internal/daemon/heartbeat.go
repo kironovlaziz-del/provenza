@@ -119,6 +119,7 @@ func (d *Daemon) sendHeartbeat(ctx context.Context) {
 	warnings := d.warnings()
 
 	aMin, dMin, oMin := d.stats.rates()
+	units, unitsKey := d.unitsToSend(time.Now())
 	h := client.Heartbeat{
 		Hostname:       host,
 		Version:        d.version,
@@ -138,12 +139,14 @@ func (d *Daemon) sendHeartbeat(ctx context.Context) {
 		ObservedPerMin: oMin,
 		SignedPolicy:   d.signedReport(),
 		ProxyRuns:      d.proxyReports(),
+		Units:          units,
 	}
 	resp, err := d.client.Heartbeat(ctx, h)
 	if err != nil {
 		slog.Warn("heartbeat", "err", err)
 		return
 	}
+	d.unitsDelivered(unitsKey, time.Now())
 	if len(resp.Commands) > 0 {
 		d.handleCommands(ctx, resp.Commands)
 	}

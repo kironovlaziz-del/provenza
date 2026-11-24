@@ -155,6 +155,7 @@ func (d *Daemon) resyncCgroups() error {
 	if err != nil {
 		return err
 	}
+	d.noteUnits(dirs) // what an agent could be attached to (units.go)
 	d.mu.Lock()
 	pats := append([]pattern(nil), d.patterns...)
 	old := d.cgWid

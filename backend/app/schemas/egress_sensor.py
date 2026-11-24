@@ -439,6 +439,9 @@ class HeartbeatIn(BaseModel):
     proxy_runs: Optional[List[ProxyRunReportIn]] = Field(default=None, max_length=50)
     # active | inactive | prepared | unavailable (anything else is not kept)
     bpf_lsm: Optional[str] = Field(default=None, max_length=20)
+    # the host's services and containers, when the list changed (None: as
+    # last sent); entries that do not look right are dropped, not refused
+    units: Optional[List[Dict[str, Any]]] = Field(default=None, max_length=500)
 
 
 # ---------------------------------------------------------------- violations (sensor input)

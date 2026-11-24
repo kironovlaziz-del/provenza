@@ -35,6 +35,11 @@ beyond the kernel.
   is removed when the last process exits. Every agent has a workload for
   this from the start, in observe mode
   ([docs/egress-lockdown.md](../docs/egress-lockdown.md#the-agents-network)).
+- **The host's services and containers.** With its heartbeat, when the
+  list changes, the sensor sends the host's systemd services and its
+  Docker and rootful Podman containers: the unit or container name and its
+  cgroup path, nothing else. An administrator attaches an agent to one of
+  them on the agent's page, which adds that cgroup to the agent's workload.
 - **The signed policy.** With `policy.pin` the sensor verifies the
   organization's signed policy releases itself, as the egress proxy does,
   and holds every workload to its signed version: the server can tighten a
