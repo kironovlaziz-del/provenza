@@ -607,10 +607,11 @@ processes, matched by cgroup) may connect.
    it on for the next boot (signed with your passkey); reboot the host
    yourself when the page says it is prepared.
 4. **Every agent has a workload of its own** (`agent-<id>`, observe mode).
-   Start the agent on a host with the sensor with
-   `provenza-sensor --agent <id> run -- <command>`: the agent's page
-   (**Network**) then lists where it connects, and **Allow the checked and
-   enforce** makes that its allow list - the kernel refuses the rest
+   On the agent's page (**Network**), **Attach to a service or
+   container…** lists the services and containers the host's sensor found:
+   pick the one the agent runs as. The page then lists where it connects,
+   and **Allow the checked and enforce** makes that its allow list - the
+   kernel refuses the rest
    ([details](docs/egress-lockdown.md#the-agents-network)).
 
 Give each sensor the signed policy's pin (`install.sh --policy-pin <SHA-256>`,

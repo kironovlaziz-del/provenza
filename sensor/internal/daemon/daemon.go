@@ -53,6 +53,11 @@ type Daemon struct {
 	run    *runServer
 	status *statusServer
 
+	// the host's services and containers (units.go), and the last list delivered
+	units       []client.HostUnit
+	unitsSent   string
+	unitsSentAt time.Time
+
 	// ktimeOffset converts a kernel monotonic timestamp (what
 	// bpf_ktime_get_ns returns) to wall-clock. Computed once at startup
 	// from CLOCK_MONOTONIC and time.Now(); drift over a typical uptime

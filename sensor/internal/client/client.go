@@ -212,6 +212,19 @@ type Heartbeat struct {
 	// BPF LSM: "active", "inactive" (the boot line lacks bpf), "prepared"
 	// (it will have it after a reboot) or "unavailable"
 	BPFLSM string `json:"bpf_lsm,omitempty"`
+
+	// The host's services and containers, when the list changed (nil: as
+	// last sent). daemon/units.go
+	Units *[]HostUnit `json:"units,omitempty"`
+}
+
+// HostUnit is a systemd service or a container on the sensor's host.
+type HostUnit struct {
+	Kind    string `json:"kind"`              // service | container
+	Name    string `json:"name,omitempty"`    // the unit, or the container's name when known
+	Runtime string `json:"runtime,omitempty"` // docker | podman (containers)
+	ID      string `json:"id,omitempty"`      // a container's short id
+	Cgroup  string `json:"cgroup"`            // its cgroup, relative to the cgroup root
 }
 
 // SignedPolicyReport: what the sensor verified itself.

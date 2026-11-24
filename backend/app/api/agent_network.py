@@ -8,6 +8,8 @@ An agent's own network (app/services/agent_network.py):
     GET  /api/v1/agents/{id}/network           its workload, where it runs, where it went
     POST /api/v1/agents/{id}/network           a workload in observe mode, for an agent made before
     POST /api/v1/agents/{id}/network/enforce   allow these destinations, refuse the rest
+    POST /api/v1/agents/{id}/network/attach    govern a service or container a sensor listed as the agent
+    POST /api/v1/agents/{id}/network/detach    no longer
 
 Administrators only, as every egress workload.
 """
@@ -41,6 +43,7 @@ class NetworkWorkloadOut(BaseModel):
     enabled: bool
     isolated: bool
     egress_allow: List[dict]
+    cgroup_patterns: List[str] = Field(default_factory=list)
 
 
 class RunningOut(BaseModel):
@@ -63,11 +66,30 @@ class DestinationOut(BaseModel):
     blocked: bool
 
 
+class HostUnitOut(BaseModel):
+    kind: str
+    name: Optional[str] = None
+    runtime: Optional[str] = None
+    id: Optional[str] = None
+    cgroup: str
+    pattern: str
+    attached: bool
+    taken_by: Optional[str] = None  # another workload governs it
+
+
+class HostOut(BaseModel):
+    sensor_id: int
+    sensor: str
+    hostname: Optional[str] = None
+    units: List[HostUnitOut] = Field(default_factory=list)
+
+
 class NetworkOut(BaseModel):
     agent_id: int
     workload: Optional[NetworkWorkloadOut] = None
     running: List[RunningOut] = Field(default_factory=list)
     destinations: List[DestinationOut] = Field(default_factory=list)
+    hosts: List[HostOut] = Field(default_factory=list)
 
 
 class DestinationIn(BaseModel):
@@ -96,6 +118,19 @@ class EnforceIn(BaseModel):
     destinations: List[DestinationIn] = Field(max_length=500)
 
 
+class AttachIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    sensor_id: int
+    cgroup: str = Field(min_length=1, max_length=255)
+
+
+class DetachIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    pattern: str = Field(min_length=1, max_length=512)
+
+
 async def _agent(db: AsyncSession, agent_id: int, user: User):
     return await AgentRegistry(db).get_agent(agent_id, user.org_id)  # 404 for another organization's
 
@@ -121,10 +156,40 @@ async def observe_network(agent_id: int, db: AsyncSession = Depends(get_db),
 async def enforce_network(agent_id: int, data: EnforceIn, db: AsyncSession = Depends(get_db),
                           current_user: User = Depends(require_role(UserRole.admin))):
     agent = await _agent(db, agent_id, current_user)
+    w = await _workload(db, agent)
+    rules = net.allow_rules([d.model_dump() for d in data.destinations])
+    await net.enforce(db, agent, w, rules, current_user.id)
+    await db.commit()
+    return await net.network_state(db, agent)
+
+
+async def _workload(db: AsyncSession, agent):
     w = await net.agent_workload(db, agent.org_id, agent.id)
     if w is None:
         raise api_error(status.HTTP_409_CONFLICT, "agent_network.not_observed")
-    rules = net.allow_rules([d.model_dump() for d in data.destinations])
-    await net.enforce(db, agent, w, rules, current_user.id)
+    return w
+
+
+@router.post("/{agent_id}/network/attach", response_model=NetworkOut,
+             summary="Govern a service or container a sensor listed as this agent")
+async def attach_unit(agent_id: int, data: AttachIn, db: AsyncSession = Depends(get_db),
+                      current_user: User = Depends(require_role(UserRole.admin))):
+    agent = await _agent(db, agent_id, current_user)
+    w = await _workload(db, agent)
+    try:
+        await net.attach(db, agent, w, data.sensor_id, data.cgroup, current_user.id)
+    except net.UnitError as e:
+        raise api_error(e.status, e.code)
+    await db.commit()
+    return await net.network_state(db, agent)
+
+
+@router.post("/{agent_id}/network/detach", response_model=NetworkOut,
+             summary="No longer govern what this pattern matches as the agent")
+async def detach_unit(agent_id: int, data: DetachIn, db: AsyncSession = Depends(get_db),
+                      current_user: User = Depends(require_role(UserRole.admin))):
+    agent = await _agent(db, agent_id, current_user)
+    w = await _workload(db, agent)
+    await net.detach(db, agent, w, data.pattern, current_user.id)
     await db.commit()
     return await net.network_state(db, agent)

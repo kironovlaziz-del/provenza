@@ -9,7 +9,9 @@ An agent's own network, seen by the egress sensor (docs/egress-lockdown.md,
 Every new agent gets a workload of its own: observe mode, DNS through the
 sensor ("any": every name resolves, and the sensor learns which name each
 address came from), nothing allowed, no cgroup patterns. It governs nothing
-until the agent is started on a Linux host with the sensor:
+until the agent is attached to what it runs as on a Linux host with the
+sensor - with a click, from the services and containers the host's sensor
+lists (attach) - or started through the sensor:
 
     provenza-sensor --agent <id> run -- <the agent's command>
 
@@ -24,6 +26,7 @@ blocked by a list nobody wrote.
 
 from __future__ import annotations
 
+import re
 from datetime import timedelta
 from typing import Any, Dict, List, Optional
 
@@ -44,6 +47,38 @@ RUNNING_FRESH = timedelta(minutes=5)
 # agents stop getting one of their own past this many, leaving room for the
 # ones people make; the agent's page still offers it.
 AUTO_WORKLOADS_MAX = 1000
+# a sensor whose list of services and containers is older than this is not offered
+HOSTS_FRESH = timedelta(minutes=15)
+
+# what a sensor may list (sensor/internal/daemon/units.go)
+_UNIT_CGROUP = re.compile(r"^(system\.slice/[^/]{1,200}\.service|system\.slice/docker-[0-9a-f]{64}\.scope"
+                          r"|machine\.slice/libpod-[0-9a-f]{64}\.scope)$")
+
+
+def clean_units(units: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """A sensor's list as it is kept: the entries that look like what a
+    sensor lists, with only the known fields, bounded."""
+    out = []
+    for u in units[:500]:
+        cg = u.get("cgroup")
+        if not isinstance(cg, str) or not _UNIT_CGROUP.match(cg):
+            continue
+        kind = "service" if cg.endswith(".service") else "container"
+        item: Dict[str, Any] = {"kind": kind, "cgroup": cg}
+        for key, cap in (("name", 200), ("runtime", 10), ("id", 12)):
+            v = u.get(key)
+            if isinstance(v, str) and v and v.isprintable():
+                item[key] = v[:cap]
+        if kind == "container" and item.get("runtime") not in ("docker", "podman"):
+            item.pop("runtime", None)
+        out.append(item)
+    return out
+
+
+def literal_pattern(cgroup: str) -> str:
+    """A workload pattern that matches exactly this cgroup (the sensor's
+    patterns are shell wildcards per path segment)."""
+    return re.sub(r"([*?\[\\])", r"\\\1", cgroup)
 
 
 def _description(agent_id: int) -> str:
@@ -111,18 +146,43 @@ async def ensure_agent_workload(db: AsyncSession, agent, actor_user_id: Optional
 
 def _workload_out(w: EgressWorkload) -> Dict[str, Any]:
     return {"id": w.id, "name": w.name, "mode": w.mode, "dns": w.dns, "enabled": bool(w.enabled),
-            "isolated": bool(w.isolated), "egress_allow": list(w.egress_allow or [])}
+            "isolated": bool(w.isolated), "egress_allow": list(w.egress_allow or []),
+            "cgroup_patterns": list(w.cgroup_patterns or [])}
 
 
 async def network_state(db: AsyncSession, agent) -> Dict[str, Any]:
     """What the agent's page shows: its workload, the hosts that run it under
     the sensor now, and where it went."""
     w = await agent_workload(db, agent.org_id, agent.id)
-    out: Dict[str, Any] = {"agent_id": agent.id, "workload": None, "running": [], "destinations": []}
+    out: Dict[str, Any] = {"agent_id": agent.id, "workload": None, "running": [], "destinations": [], "hosts": []}
     if w is None:
         return out
     out["workload"] = _workload_out(w)
     now = svc.now_utc()
+
+    # where it can be attached: each live sensor's services and containers,
+    # marked when this workload or another one already governs them
+    patterns = set(w.cgroup_patterns or [])
+    others: Dict[str, str] = {}
+    for name, pats in (await db.execute(
+        select(EgressWorkload.name, EgressWorkload.cgroup_patterns).where(
+            EgressWorkload.org_id == agent.org_id, EgressWorkload.deleted_at.is_(None),
+            EgressWorkload.id != w.id)
+    )).all():
+        for p in pats or []:
+            others.setdefault(p, name)
+    sensors = (await db.execute(
+        select(EgressSensor).where(
+            EgressSensor.org_id == agent.org_id, EgressSensor.revoked_at.is_(None),
+            EgressSensor.units.isnot(None), EgressSensor.units_at >= now - HOSTS_FRESH)
+        .order_by(EgressSensor.name.asc())
+    )).scalars().all()
+    for s in sensors:
+        units = []
+        for u in s.units or []:
+            pat = literal_pattern(u["cgroup"])
+            units.append({**u, "pattern": pat, "attached": pat in patterns, "taken_by": others.get(pat)})
+        out["hosts"].append({"sensor_id": s.id, "sensor": s.name, "hostname": s.hostname, "units": units})
 
     rows = (await db.execute(
         select(EgressSensor.id, EgressSensor.name, EgressSensor.hostname, EgressSensorWorkload.cgroups,
@@ -182,6 +242,61 @@ def _is_name(dest: str) -> bool:
         return False
     except ValueError:
         return True
+
+
+class UnitError(Exception):
+    def __init__(self, code: str, status: int):
+        super().__init__(code)
+        self.code, self.status = code, status
+
+
+async def attach(db: AsyncSession, agent, w: EgressWorkload, sensor_id: int, cgroup: str,
+                 actor_user_id: Optional[int]) -> EgressWorkload:
+    """Govern the service or container the sensor listed as this agent: its
+    cgroup becomes one of the workload's patterns. Only what the sensor
+    listed, and not what another workload governs."""
+    s = (await db.execute(select(EgressSensor).where(
+        EgressSensor.id == sensor_id, EgressSensor.org_id == agent.org_id, EgressSensor.revoked_at.is_(None))
+    )).scalar_one_or_none()
+    if s is None:
+        raise UnitError("agent_network.sensor_not_found", 404)
+    if not any(u.get("cgroup") == cgroup for u in (s.units or [])):
+        raise UnitError("agent_network.unit_not_listed", 422)
+    pat = literal_pattern(cgroup)
+    taken = (await db.execute(select(EgressWorkload.name).where(
+        EgressWorkload.org_id == agent.org_id, EgressWorkload.deleted_at.is_(None), EgressWorkload.id != w.id,
+        EgressWorkload.cgroup_patterns.contains([pat])))).scalars().first()
+    if taken:
+        raise UnitError("agent_network.unit_taken", 409)
+    before = list(w.cgroup_patterns or [])
+    if pat in before:
+        return w
+    w.cgroup_patterns = before + [pat]
+    await svc.bump_revision(db, agent.org_id)
+    await db.flush()
+    await AuditService(db).log(
+        agent.org_id, actor_user_id, "egress_workload", w.id, "updated",
+        {"changes": {"cgroup_patterns": {"from": before, "to": list(w.cgroup_patterns)}}, "agent_id": agent.id,
+         "sensor_id": s.id, "via": "agent_network"},
+    )
+    return w
+
+
+async def detach(db: AsyncSession, agent, w: EgressWorkload, pattern: str,
+                 actor_user_id: Optional[int]) -> EgressWorkload:
+    """No longer govern what this pattern matches as the agent."""
+    before = list(w.cgroup_patterns or [])
+    if pattern not in before:
+        return w
+    w.cgroup_patterns = [p for p in before if p != pattern]
+    await svc.bump_revision(db, agent.org_id)
+    await db.flush()
+    await AuditService(db).log(
+        agent.org_id, actor_user_id, "egress_workload", w.id, "updated",
+        {"changes": {"cgroup_patterns": {"from": before, "to": list(w.cgroup_patterns)}}, "agent_id": agent.id,
+         "via": "agent_network"},
+    )
+    return w
 
 
 async def enforce(db: AsyncSession, agent, w: EgressWorkload, rules: List[Dict[str, Any]],

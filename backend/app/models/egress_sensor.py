@@ -34,6 +34,10 @@ class EgressSensor(Base):
     errors = Column(JSONB)
     # BPF LSM on its host: active, inactive, prepared (for the next boot) or unavailable
     bpf_lsm = Column(String(20))
+    # its host's services and containers, as last reported ([{kind, name,
+    # runtime, id, cgroup}]): what an agent can be attached to (agent_network)
+    units = Column(JSONB)
+    units_at = Column(DateTime(timezone=True))
     dropped_events = Column(Integer, nullable=False, default=0)
     config_version = Column(String(64))
     # What the sensor verified itself (docs/pvp/edge.md, section 5), as its last

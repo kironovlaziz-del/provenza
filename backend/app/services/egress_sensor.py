@@ -417,6 +417,11 @@ async def ingest_heartbeat(
     sensor.warnings = list(data.warnings or [])
     sensor.errors = list(data.errors or [])
     sensor.bpf_lsm = data.bpf_lsm if data.bpf_lsm in BPF_LSM_STATES else None
+    if data.units is not None:
+        from app.services.agent_network import clean_units
+
+        sensor.units = clean_units(data.units)
+        sensor.units_at = now_utc()
     sensor.dropped_events = data.dropped_events
     sensor.config_version = data.config_version
     sensor.last_seen_at = now_utc()

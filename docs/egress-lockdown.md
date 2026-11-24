@@ -120,19 +120,34 @@ a workload of its own from the moment it is made**, named `agent-<id>`:
 | Allowed | nothing yet |
 | cgroup patterns | none: it governs only what is started for the agent |
 
-It governs nothing until the agent is started on a Linux host with the
-Provenza sensor (the Provenza server has one by default):
+It governs nothing until it knows which processes are the agent, on a
+Linux host with the Provenza sensor (the Provenza server has one by
+default). On the agent's page (**AI agents → the agent → Network**,
+administrators), **Attach to a service or container…** lists what each
+sensor found on its host - its systemd services (Quadlet containers
+included) and its Docker and rootful Podman containers - and one click
+attaches the agent to what it runs as: that cgroup becomes the workload's,
+nothing on the host is changed, and the agent need not be restarted. A
+service stays attached across restarts of the service and the host; a
+container until it is recreated (a new container has a new id), so attach
+the systemd service that runs a container you recreate. One workload
+governs a cgroup: a service another workload governs is shown as such.
+
+The sensor sends that list with its heartbeat when it changes: the unit
+or container name and its cgroup path, nothing from inside the processes.
+Login sessions and rootless containers are not listed.
+
+An agent started by hand can go through the sensor instead:
 
 ```sh
 provenza-sensor --agent <id> run -- <the agent's command>
 ```
 
-as root or as a member of the sensor's group (`provenza`). The sensor puts
-the command in a cgroup of its own, and from then on every connection the
-agent opens is recorded. The agent's page in Provenza (**AI agents → the
-agent → Network**, administrators) shows the hosts that run it and where it
-went: the names it resolved, or the bare address of what it reached
-without asking the sensor's DNS.
+as root or as a member of the sensor's group (`provenza`).
+
+From then on every connection the agent opens is recorded. Its page shows
+the hosts that run it and where it went: the names it resolved, or the
+bare address of what it reached without asking the sensor's DNS.
 
 When the list looks right, **Allow the checked and enforce** makes it the
 agent's allow list and switches the workload to **enforce**: from then on

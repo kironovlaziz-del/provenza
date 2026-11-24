@@ -180,3 +180,125 @@ async def test_not_past_what_a_sensor_holds(client, admin_token, monkeypatch):
     assert (await _network(client, admin_token, second["id"]))["workload"] is None
     r = await client.post(f"{A}/{second['id']}/network", headers=auth_headers(admin_token))
     assert r.status_code == 201 and r.json()["workload"]["mode"] == "observe"
+
+
+DOCKER = "a1" * 32
+UNITS = [
+    {"kind": "service", "name": "billing-agent.service", "cgroup": "system.slice/billing-agent.service"},
+    {"kind": "service", "name": "ssh.service", "cgroup": "system.slice/ssh.service"},
+    {"kind": "container", "runtime": "docker", "id": DOCKER[:12], "name": "support-bot",
+     "cgroup": f"system.slice/docker-{DOCKER}.scope"},
+    {"kind": "service", "cgroup": "../../etc/passwd"},              # not what a sensor lists: dropped
+    {"kind": "service", "cgroup": "user.slice/user-1000.slice"},     # nor this
+]
+
+
+async def _host(client, token, name, units=UNITS):
+    sensor = await _sensor(client, token, name=name)
+    r = await client.post(f"{S}/heartbeat", headers={"X-Sensor-Key": sensor["api_key"]},
+                          json={"hostname": f"{name}-host", "units": units})
+    assert r.status_code == 200, r.text
+    return sensor
+
+
+@pytest.mark.asyncio
+async def test_attach_a_service_the_sensor_listed(client, admin_token):
+    agent = await _agent(client, admin_token, name="net-attach")
+    sensor = await _host(client, admin_token, "attach-s")
+    net = await _network(client, admin_token, agent["id"])
+    host = next(h for h in net["hosts"] if h["sensor_id"] == sensor["id"])
+    assert host["hostname"] == "attach-s-host"
+    assert [u["cgroup"] for u in host["units"]] == [u["cgroup"] for u in UNITS[:3]]
+    assert host["units"][2]["name"] == "support-bot" and not any(u["attached"] for u in host["units"])
+
+    r = await client.post(f"{A}/{agent['id']}/network/attach", headers=auth_headers(admin_token),
+                          json={"sensor_id": sensor["id"], "cgroup": "system.slice/billing-agent.service"})
+    assert r.status_code == 200, r.text
+    net = r.json()
+    w = net["workload"]
+    host = next(h for h in net["hosts"] if h["sensor_id"] == sensor["id"])
+    assert [u["attached"] for u in host["units"]] == [True, False, False]
+
+    # the sensors govern that service as the agent's workload
+    r = await client.get(f"{S}/config", headers={"X-Sensor-Key": sensor["api_key"]})
+    pw = next(x for x in r.json()["workloads"] if x["id"] == w["id"])
+    assert pw["cgroup_patterns"] == ["system.slice/billing-agent.service"]
+
+    # twice: once
+    r = await client.post(f"{A}/{agent['id']}/network/attach", headers=auth_headers(admin_token),
+                          json={"sensor_id": sensor["id"], "cgroup": "system.slice/billing-agent.service"})
+    r = await client.get(f"{S}/config", headers={"X-Sensor-Key": sensor["api_key"]})
+    assert next(x for x in r.json()["workloads"] if x["id"] == w["id"])["cgroup_patterns"] == \
+        ["system.slice/billing-agent.service"]
+
+    # another agent cannot take it: one workload governs a cgroup
+    other = await _agent(client, admin_token, name="net-attach-2")
+    net2 = await _network(client, admin_token, other["id"])
+    unit = next(u for h in net2["hosts"] if h["sensor_id"] == sensor["id"] for u in h["units"]
+                if u["cgroup"] == "system.slice/billing-agent.service")
+    assert unit["taken_by"] == f"agent-{agent['id']}" and not unit["attached"]
+    r = await client.post(f"{A}/{other['id']}/network/attach", headers=auth_headers(admin_token),
+                          json={"sensor_id": sensor["id"], "cgroup": "system.slice/billing-agent.service"})
+    assert r.status_code == 409 and r.json()["detail"] == "agent_network.unit_taken"
+
+    # detach
+    r = await client.post(f"{A}/{agent['id']}/network/detach", headers=auth_headers(admin_token),
+                          json={"pattern": "system.slice/billing-agent.service"})
+    assert r.status_code == 200, r.text
+    r = await client.get(f"{S}/config", headers={"X-Sensor-Key": sensor["api_key"]})
+    assert next(x for x in r.json()["workloads"] if x["id"] == w["id"])["cgroup_patterns"] == []
+
+
+@pytest.mark.asyncio
+async def test_only_what_a_sensor_of_the_organization_listed(client, admin_token, db_session):
+    from tests.conftest import _create_org_with_admin_and_approver, _login
+
+    other = await _create_org_with_admin_and_approver(db_session, org_slug="net-other", admin_email="n@x.com",
+                                                      approver_email="n2@x.com")
+    await db_session.commit()
+    second_org_admin_token = await _login(client, "net-other", "n@x.com", other["password"])
+    agent = await _agent(client, admin_token, name="net-attach-bad")
+    sensor = await _host(client, admin_token, "attach-bad-s")
+    for body, code in (({"sensor_id": sensor["id"], "cgroup": "system.slice/cron.service"}, 422),
+                       ({"sensor_id": sensor["id"], "cgroup": "../../etc/passwd"}, 422),
+                       ({"sensor_id": 999999, "cgroup": "system.slice/ssh.service"}, 404)):
+        r = await client.post(f"{A}/{agent['id']}/network/attach", headers=auth_headers(admin_token), json=body)
+        assert r.status_code == code, (body, r.text)
+    # another organization's sensor
+    foreign = await _host(client, second_org_admin_token, "attach-foreign")
+    r = await client.post(f"{A}/{agent['id']}/network/attach", headers=auth_headers(admin_token),
+                          json={"sensor_id": foreign["id"], "cgroup": "system.slice/ssh.service"})
+    assert r.status_code == 404
+    net = await _network(client, admin_token, agent["id"])
+    assert all(h["sensor_id"] != foreign["id"] for h in net["hosts"])
+
+
+@pytest.mark.asyncio
+async def test_the_list_is_kept_until_sent_again_and_ages_out(client, admin_token, db_session):
+    from datetime import timedelta
+
+    from app.models.egress_sensor import EgressSensor
+    from app.services.egress_sensor import now_utc
+
+    agent = await _agent(client, admin_token, name="net-attach-age")
+    sensor = await _host(client, admin_token, "attach-age-s")
+    # a heartbeat without the list keeps it
+    r = await client.post(f"{S}/heartbeat", headers={"X-Sensor-Key": sensor["api_key"]}, json={"hostname": "h"})
+    assert r.status_code == 200
+    net = await _network(client, admin_token, agent["id"])
+    assert len(next(h for h in net["hosts"] if h["sensor_id"] == sensor["id"])["units"]) == 3
+    # a list not refreshed for a while is not offered
+    row = await db_session.get(EgressSensor, sensor["id"])
+    row.units_at = now_utc() - timedelta(hours=1)
+    await db_session.commit()
+    net = await _network(client, admin_token, agent["id"])
+    assert all(h["sensor_id"] != sensor["id"] for h in net["hosts"])
+
+
+def test_a_listed_cgroup_becomes_a_pattern_matching_only_it():
+    """The same strings the sensor's own test matches (units_test.go)."""
+    from app.services.agent_network import literal_pattern
+
+    assert literal_pattern("system.slice/foo\\x2dbar.service") == "system.slice/foo\\\\x2dbar.service"
+    assert literal_pattern("system.slice/a*b?[c].service") == "system.slice/a\\*b\\?\\[c].service"
+    assert literal_pattern("system.slice/billing-agent.service") == "system.slice/billing-agent.service"
