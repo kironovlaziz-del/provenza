@@ -46,11 +46,32 @@ MAX_RULES = 100
 MAX_PATTERN = 300
 MAX_SUBJECT = 10_000
 
-# (x+)+, (a*)*, (a|b+){2,} ... - the classic catastrophic-backtracking shapes.
-# The part before the first + or * excludes them, so this check itself takes
-# linear time per start whatever the pattern (nothing for it to backtrack over)
-_NESTED_QUANTIFIER = re.compile(r"\([^)+*]*[+*][^)]*\)\s*[+*{]")
 _MISSING = object()
+
+
+def _has_nested_quantifier(pattern: str) -> bool:
+    """(x+)+, (a*)*, (a|b+){2,} ... - the classic catastrophic-backtracking
+    shapes: a "(" then a + or * before the next ")", and that ")" followed
+    (after any whitespace) by +, * or {. One pass over the pattern, no
+    regular expression: checking a pattern must not itself be slow."""
+    first_open = -1  # the first "(" since the last ")"
+    last_quant = -1  # the last + or * since the last ")"
+    n = len(pattern)
+    for j, ch in enumerate(pattern):
+        if ch == ")":
+            if first_open != -1 and last_quant > first_open:
+                k = j + 1
+                while k < n and pattern[k].isspace():
+                    k += 1
+                if k < n and pattern[k] in "+*{":
+                    return True
+            first_open = last_quant = -1
+        elif ch == "(":
+            if first_open == -1:
+                first_open = j
+        elif ch in "+*":
+            last_quant = j
+    return False
 
 
 class RuleError(ValueError):
@@ -63,7 +84,7 @@ def _check_pattern(pattern: Any, where: str) -> None:
         raise RuleError(f"{where}: a regular expression string is required")
     if len(pattern) > MAX_PATTERN:
         raise RuleError(f"{where}: regular expression is longer than {MAX_PATTERN} characters")
-    if _NESTED_QUANTIFIER.search(pattern):
+    if _has_nested_quantifier(pattern):
         raise RuleError(f"{where}: nested quantifiers such as (a+)+ are not allowed (catastrophic backtracking)")
     try:
         re.compile(pattern)
