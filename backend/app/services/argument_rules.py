@@ -46,8 +46,10 @@ MAX_RULES = 100
 MAX_PATTERN = 300
 MAX_SUBJECT = 10_000
 
-# (x+)+, (a*)*, (a|b+){2,} ... - the classic catastrophic-backtracking shapes
-_NESTED_QUANTIFIER = re.compile(r"\([^)]*[+*][^)]*\)\s*[+*{]")
+# (x+)+, (a*)*, (a|b+){2,} ... - the classic catastrophic-backtracking shapes.
+# The part before the first + or * excludes them, so this check itself takes
+# linear time per start whatever the pattern (nothing for it to backtrack over)
+_NESTED_QUANTIFIER = re.compile(r"\([^)+*]*[+*][^)]*\)\s*[+*{]")
 _MISSING = object()
 
 
