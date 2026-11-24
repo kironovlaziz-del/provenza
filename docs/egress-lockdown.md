@@ -132,6 +132,12 @@ service stays attached across restarts of the service and the host; a
 container until it is recreated (a new container has a new id), so attach
 the systemd service that runs a container you recreate. One workload
 governs a cgroup: a service another workload governs is shown as such.
+Provenza's own services and containers (`provenza-*`, the sensor's
+`provenzasensor*`) and the host's system services (`systemd-*`, SSH, D-Bus,
+polkit, cron, logging, time, storage, the container runtimes, the network,
+the hypervisor's and the cloud's guest agents, package updates, the
+firewall) are neither offered nor attached (`agent_network.unit_reserved`): enforcing on
+them would cut the network of Provenza itself or of the host.
 
 The sensor sends that list with its heartbeat when it changes: the unit
 or container name and its cgroup path, nothing from inside the processes.

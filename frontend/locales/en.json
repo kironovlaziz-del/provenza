@@ -1262,6 +1262,7 @@
     "agent_network.sensor_not_found": "That sensor is not one of this organization's.",
     "agent_network.unit_not_listed": "The sensor does not list that service or container: it may have stopped. Reload and pick again.",
     "agent_network.unit_taken": "Another workload governs that service or container already: one workload governs a cgroup.",
+    "agent_network.unit_reserved": "Provenza's own services and the host's core services (systemd, SSH, D-Bus, polkit, the container runtimes) cannot be attached: enforcing on them would cut Provenza's or the host's own network.",
     "a2a.synced_by_proxy": "Its credential is sealed to the egress proxies: they fetch this peer's card.",
     "mcp.synced_by_proxy": "Its credential is sealed to the egress proxies: they sync this server.",
     "credential.no_upstream": "This has no address a credential could be sent to.",

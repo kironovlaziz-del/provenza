@@ -185,7 +185,7 @@ async def test_not_past_what_a_sensor_holds(client, admin_token, monkeypatch):
 DOCKER = "a1" * 32
 UNITS = [
     {"kind": "service", "name": "billing-agent.service", "cgroup": "system.slice/billing-agent.service"},
-    {"kind": "service", "name": "ssh.service", "cgroup": "system.slice/ssh.service"},
+    {"kind": "service", "name": "nightly-report.service", "cgroup": "system.slice/nightly-report.service"},
     {"kind": "container", "runtime": "docker", "id": DOCKER[:12], "name": "support-bot",
      "cgroup": f"system.slice/docker-{DOCKER}.scope"},
     {"kind": "service", "cgroup": "../../etc/passwd"},              # not what a sensor lists: dropped
@@ -271,6 +271,59 @@ async def test_only_what_a_sensor_of_the_organization_listed(client, admin_token
     assert r.status_code == 404
     net = await _network(client, admin_token, agent["id"])
     assert all(h["sensor_id"] != foreign["id"] for h in net["hosts"])
+
+
+PODMAN = "b2" * 32
+RESERVED_UNITS = [
+    {"kind": "service", "name": "provenza-backend.service", "cgroup": "system.slice/provenza-backend.service"},
+    {"kind": "service", "name": "provenza-proxy.service", "cgroup": "system.slice/provenza-proxy.service"},
+    {"kind": "service", "name": "provenzasensor.service", "cgroup": "system.slice/provenzasensor.service"},
+    {"kind": "service", "name": "systemd-resolved.service", "cgroup": "system.slice/systemd-resolved.service"},
+    {"kind": "service", "name": "ssh.service", "cgroup": "system.slice/ssh.service"},
+    {"kind": "service", "name": "polkit.service", "cgroup": "system.slice/polkit.service"},
+    {"kind": "service", "name": "docker.service", "cgroup": "system.slice/docker.service"},
+    {"kind": "container", "runtime": "podman", "id": PODMAN[:12], "name": "provenza-try-backend-1",
+     "cgroup": f"machine.slice/libpod-{PODMAN}.scope"},
+]
+
+
+@pytest.mark.asyncio
+async def test_provenza_and_the_hosts_core_services_are_never_offered_or_attached(client, admin_token):
+    """Enforcing on them would cut the network of Provenza itself or of the host."""
+    agent = await _agent(client, admin_token, name="net-attach-reserved")
+    sensor = await _host(client, admin_token, "attach-reserved-s", units=RESERVED_UNITS + UNITS[:1])
+    net = await _network(client, admin_token, agent["id"])
+    host = next(h for h in net["hosts"] if h["sensor_id"] == sensor["id"])
+    assert [u["cgroup"] for u in host["units"]] == ["system.slice/billing-agent.service"]
+    for unit in RESERVED_UNITS:
+        r = await client.post(f"{A}/{agent['id']}/network/attach", headers=auth_headers(admin_token),
+                              json={"sensor_id": sensor["id"], "cgroup": unit["cgroup"]})
+        assert r.status_code == 422 and r.json()["detail"] == "agent_network.unit_reserved", (unit, r.text)
+    r = await client.get(f"{S}/config", headers={"X-Sensor-Key": sensor["api_key"]})
+    pw = next(x for x in r.json()["workloads"] if x["id"] == net["workload"]["id"])
+    assert pw["cgroup_patterns"] == []
+
+
+def test_which_units_are_reserved():
+    from app.services.agent_network import reserved_unit
+
+    for cgroup in ("system.slice/provenza-caddy.service", "system.slice/provenzasensor-bpf-lsm.service",
+                   "system.slice/systemd-journald.service", "system.slice/sshd.service",
+                   "system.slice/dbus-broker.service", "system.slice/containerd.service",
+                   # the rest of a real host's list (Ubuntu 24.04 on a KVM VPS)
+                   "system.slice/cron.service", "system.slice/dbus.service", "system.slice/multipathd.service",
+                   "system.slice/polkit.service", "system.slice/qemu-guest-agent.service",
+                   "system.slice/rsyslog.service", "system.slice/ssh.service", "system.slice/udisks2.service",
+                   "system.slice/systemd-udevd.service", "system.slice/provenza-agent.service",
+                   "system.slice/serial-getty@ttyS0.service", "system.slice/cloud-init-local.service"):
+        assert reserved_unit({"kind": "service", "cgroup": cgroup}), cgroup
+    for cgroup in ("system.slice/billing-agent.service", "system.slice/my-provenza-bot.service",
+                   "system.slice/sshd-helper-agent.service", "system.slice/dockerized-agent.service"):
+        assert not reserved_unit({"kind": "service", "cgroup": cgroup}), cgroup
+    container = {"kind": "container", "cgroup": f"system.slice/docker-{DOCKER}.scope"}
+    assert reserved_unit({**container, "name": "Provenza-Try-Worker-1"})
+    assert not reserved_unit({**container, "name": "support-bot"})
+    assert not reserved_unit(container)  # a container whose name the sensor could not read
 
 
 @pytest.mark.asyncio
