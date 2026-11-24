@@ -171,3 +171,26 @@ class TestThroughPolicyEngine:
         assert (await _policy(client, admin_token, a["id"], [CORP_EMAIL])).status_code == 200
         r = await _check(client, admin_token, a, "email.send", {"subject": "hello"})
         assert r["decision"] == "denied" and "missing" in r["reason"]
+
+
+def test_the_nested_quantifier_check_is_one_pass():
+    """The check that refuses (a+)+ and the like is a scan, not a regular
+    expression (CodeQL py/polynomial-redos): it finds exactly what the
+    expression it replaced found, and stays fast on any input."""
+    import random
+    import re
+    import time
+
+    from app.services.argument_rules import _has_nested_quantifier
+
+    replaced = re.compile(r"\([^)]*[+*][^)]*\)\s*[+*{]")
+    rnd = random.Random(7)
+    for _ in range(50_000):
+        s = "".join(rnd.choice("()+*{ a\n\\") for _ in range(rnd.randint(0, 14)))
+        assert _has_nested_quantifier(s) == bool(replaced.search(s)), repr(s)
+    for s, want in (("(a+)+$", True), ("(x*y) *", True), ("(a|b+){2,}", True), ("(ab)+", False),
+                    ("a+(b)*", False), ("(a)(b+c)*", True)):
+        assert _has_nested_quantifier(s) is want, s
+    t = time.monotonic()
+    _has_nested_quantifier("(" * 50_000 + "*" * 50_000)
+    assert time.monotonic() - t < 1
